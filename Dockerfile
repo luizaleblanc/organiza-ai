@@ -1,16 +1,16 @@
-# --- Etapa 1: build ---
+# Build stage
 FROM eclipse-temurin:17-jdk-jammy AS build
 WORKDIR /app
 
-COPY gradlew ./
-COPY gradle ./gradle
+COPY gradlew .
+COPY gradle gradle
 COPY build.gradle settings.gradle ./
 RUN chmod +x gradlew && ./gradlew dependencies --no-daemon || true
 
-COPY src ./src
+COPY src src
 RUN ./gradlew bootJar --no-daemon -x test
 
-# --- Etapa 2: runtime ---
+# Run stage
 FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 
