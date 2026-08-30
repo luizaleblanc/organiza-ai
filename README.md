@@ -20,6 +20,8 @@ O pipeline permite que o usuário registre movimentações financeiras apenas fa
 
 O usuário acessa tudo isso por uma interface web própria (splash → login/cadastro → gravação de voz → resumo financeiro), protegida por autenticação com JWT.
 
+> 📄 **Para desenvolvedores:** as decisões arquiteturais e de negócio do projeto (o "porquê" por trás de cada escolha técnica) estão documentadas em [`DECISIONS.md`](./DECISIONS.md), atualizado a cada fase e a cada commit relevante. O estado atual da implementação está em [`PROJECT_STATUS.md`](./PROJECT_STATUS.md).
+
 ---
 
 ## Pipeline de Inteligência Artificial
