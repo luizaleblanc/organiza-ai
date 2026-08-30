@@ -1,0 +1,13 @@
+record User(String id, String name, Float monthlySalary)
+
+record Envelope(String id, String userId, String categoryName, Float limitAmount, Float currentSpent)
+
+record Transaction(String id, String envelopeId, String userId, Float amount, String description, String date)
+
+record LoginRequest(String email, String password)
+
+record LoginResponse(String token)
+
+record ChatMessageRequest(String message)
+
+record ChatMessageResponse(String reply, Float dailyPulse)

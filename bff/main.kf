@@ -1,0 +1,9 @@
+main() {
+    var app = web.app()
+
+    app.get("/health") {
+        return "OK"
+    }
+
+    app.listen(3000)
+}
