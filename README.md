@@ -45,7 +45,7 @@ Organiza IA é um organizador de gastos inteligente projetado para separar as fi
 
 ## Modelagem de Dados
 
-O modelo relacional completo está disponível em: https://organiza-ai-docs.vercel.app
+O modelo relacional completo está disponível em: [docs/DATA_MODEL.md](docs/DATA_MODEL.md)
 
 Resumo das entidades principais: **User** (dados do usuário e salário mensal), **Envelope** (tetos de gastos por categoria) e **Transaction** (movimentações financeiras associadas a um envelope e a um usuário).
 
