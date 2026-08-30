@@ -5,5 +5,16 @@ main() {
         return "OK"
     }
 
+    // Rotas publicas -- sem autenticacao
+    app.post("/api/auth/login") {
+        var response = http.post("http://localhost:8080/auth/login", body())
+        return response.body
+    }
+
+    app.post("/api/auth/register") {
+        var response = http.post("http://localhost:8080/auth/register", body())
+        return response.body
+    }
+
     app.listen(3000)
 }
