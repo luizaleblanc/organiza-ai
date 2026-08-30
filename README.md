@@ -1,18 +1,18 @@
 # Organiza IA
 
-**O unico app de financas que conversa com voce, entende seu salario e te diz o que fazer hoje.**
+**O único app de finanças que conversa com você, entende seu salário e te diz o que fazer hoje.**
 
-Organiza IA e um organizador de gastos inteligente projetado para separar as financas de uma pessoa com base no salario que ela ganha. Ao contrario de agregadores passivos de mercado, ele atua como um coach financeiro proativo.
+Organiza IA é um organizador de gastos inteligente projetado para separar as finanças de uma pessoa com base no salário que ela ganha. Ao contrário de agregadores passivos de mercado, ele atua como um coach financeiro proativo.
 
 ---
 
 ## Diferenciais
 
-**Abordagem Hibrida** -- combina a simplicidade da regra 50/30/20 com a personalizacao do metodo de Envelopes. O sistema sugere a divisao inicial, mas permite que o usuario crie tetos de gastos personalizados dentro de cada bucket.
+**Abordagem Híbrida** -- combina a simplicidade da regra 50/30/20 com a personalização do método de Envelopes. O sistema sugere a divisão inicial, mas permite que o usuário crie tetos de gastos personalizados dentro de cada bucket.
 
-**Coach Financeiro com IA** -- a IA classifica os gastos automaticamente nos buckets corretos, alerta sobre a proximidade dos limites e gera insights acionaveis para orientar o futuro financeiro do usuario. Nao mostra so o que voce gastou; diz o que fazer com o dinheiro que voce tem hoje.
+**Coach Financeiro com IA** -- a IA classifica os gastos automaticamente nos buckets corretos, alerta sobre a proximidade dos limites e gera insights acionáveis para orientar o futuro financeiro do usuário. Não mostra só o que você gastou; diz o que fazer com o dinheiro que você tem hoje.
 
-**Zero Barreira de Entrada** -- nao exige conexao bancaria (Open Finance), eliminando o atrito e o receio de compartilhamento de dados. A entrada e ativa e simplificada, podendo ser feita de forma manual ou por comandos de voz.
+**Zero Barreira de Entrada** -- não exige conexão bancária (Open Finance), eliminando o atrito e o receio de compartilhamento de dados. A entrada é ativa e simplificada, podendo ser feita de forma manual ou por comandos de voz.
 
 ## Stack
 
@@ -21,7 +21,7 @@ Organiza IA e um organizador de gastos inteligente projetado para separar as fin
 | Front-end | KOF (kof.ui) -- linguagem compilada para JVM, renderiza via KofJS em webview |
 | Back-end (BFF) | KOF (kof.web) -- servidor HTTP desacoplado, servindo dados estruturados para o front-end |
 | Back-end (API) | Java 17, Spring Boot 3.3.x, Spring AI (GPT-4o-mini via tool calling) |
-| Banco de Dados | MySQL no Render (modelo relacional) com cronjob de ping para estabilidade continua |
+| Banco de Dados | MySQL no Render (modelo relacional) com cronjob de ping para estabilidade contínua |
 | Build | Gradle (backend), kof-cli (frontend/BFF) |
 
 ## Arquitetura
@@ -30,41 +30,41 @@ Organiza IA e um organizador de gastos inteligente projetado para separar as fin
 ┌─────────────────────────┐     ┌─────────────────────────┐     ┌─────────────────────────┐
 │  KOF Frontend (kof.ui)  │     │  KOF BFF (kof.web)      │     │  Spring Boot (Backend)  │
 │                         │     │                         │     │                         │
-│  Telas e componentes    │────>│  Proxy autenticado      │────>│  Logica de negocio      │
+│  Telas e componentes    │────>│  Proxy autenticado      │────>│  Lógica de negócio      │
 │  compilados para JVM    │ JWT │  Rotas desacopladas     │ HTTP│  Spring AI (coach IA)   │
 │  Renderiza via webview  │     │  Servidor HTTP na JVM   │     │  MySQL (Render)         │
 └─────────────────────────┘     └─────────────────────────┘     └─────────────────────────┘
 ```
 
-## Modelo de Negocio
+## Modelo de Negócio
 
-| Tier | Preco | Inclui |
+| Tier | Preço | Inclui |
 |---|---|---|
-| Free | R$0 | Chat com IA (30 msgs/mes), pulso diario, 3 envelopes |
-| Premium | R$9,90/mes | Chat ilimitado, voz, insights semanais, simulador, envelopes ilimitados |
+| Free | R$0 | Chat com IA (30 msgs/mês), pulso diário, 3 envelopes |
+| Premium | R$9,90/mês | Chat ilimitado, voz, insights semanais, simulador, envelopes ilimitados |
 
 ## Modelagem de Dados
 
-O modelo relacional completo esta disponivel em: https://organiza-ai-docs.vercel.app
+O modelo relacional completo está disponível em: https://organiza-ai-docs.vercel.app
 
-Resumo das entidades principais: **User** (dados do usuario e salario mensal), **Envelope** (tetos de gastos por categoria) e **Transaction** (movimentacoes financeiras associadas a um envelope e a um usuario).
+Resumo das entidades principais: **User** (dados do usuário e salário mensal), **Envelope** (tetos de gastos por categoria) e **Transaction** (movimentações financeiras associadas a um envelope e a um usuário).
 
 ## Roadmap
 
-| Fase | Foco | Entregavel |
+| Fase | Foco | Entregável |
 |---|---|---|
-| **1 -- Design** | Modelagem visual (Mermaid.js), aprovacao de fluxo | Diagramas ER e de fluxo validados |
-| **2 -- Desenvolvimento** | Implementacao full-stack (KOF + Spring Boot) | MVP funcional: chat + pulso diario + envelopes |
-| **3 -- Code Review** | PRs rigorosos para a comunidade open source | Produto estavel com contribuicoes externas |
+| **1 -- Design** | Modelagem visual (Mermaid.js), aprovação de fluxo | Diagramas ER e de fluxo validados |
+| **2 -- Desenvolvimento** | Implementação full-stack (KOF + Spring Boot) | MVP funcional: chat + pulso diário + envelopes |
+| **3 -- Code Review** | PRs rigorosos para a comunidade open source | Produto estável com contribuições externas |
 
 ## Como Contribuir
 
-Veja [CONTRIBUTING.md](CONTRIBUTING.md) para o guia completo de setup, padroes de codigo e fluxo de PR.
+Veja [CONTRIBUTING.md](CONTRIBUTING.md) para o guia completo de setup, padrões de código e fluxo de PR.
 
 ## Tecnologia
 
-O Organiza IA usa a linguagem **KOF** -- uma linguagem de programacao geral, fortemente tipada e compilada para JVM (https://github.com/KofLang/Kof4j). Usamos KOF tanto no front-end (kof.ui) quanto no BFF (kof.web), eliminando Node.js e Flutter do stack e unificando tudo na JVM.
+O Organiza IA usa a linguagem **KOF** -- uma linguagem de programação geral, fortemente tipada e compilada para JVM (https://github.com/KofLang/Kof4j). Usamos KOF tanto no front-end (kof.ui) quanto no BFF (kof.web), eliminando Node.js e Flutter do stack e unificando tudo na JVM.
 
-## Licenca
+## Licença
 
 MIT License. Veja [LICENSE](LICENSE).
