@@ -1,16 +1,17 @@
 package dio.budgeting.infrastructure.http;
 
+import org.springframework.ai.audio.transcription.AudioTranscriptionPrompt;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.memory.InMemoryChatMemory;
+import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
+import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.openai.OpenAiAudioSpeechModel;
 import org.springframework.ai.openai.OpenAiAudioSpeechOptions;
 import org.springframework.ai.openai.OpenAiAudioTranscriptionModel;
 import org.springframework.ai.openai.OpenAiAudioTranscriptionOptions;
 import org.springframework.ai.openai.api.OpenAiAudioApi;
 import org.springframework.ai.openai.audio.speech.SpeechPrompt;
-import org.springframework.ai.openai.audio.transcription.AudioTranscriptionPrompt;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
@@ -39,10 +40,12 @@ public class VoiceCommandController {
                                    OpenAiAudioSpeechModel speechModel) throws IOException {
         this.transcriptionModel = transcriptionModel;
         this.speechModel = speechModel;
-        this.chatMemory = new InMemoryChatMemory();
+        this.chatMemory = MessageWindowChatMemory.builder()
+                .chatMemoryRepository(new InMemoryChatMemoryRepository())
+                .build();
         this.chatClient = chatClientBuilder
                 .defaultSystem(systemPrompt.getContentAsString(Charset.defaultCharset()))
-                .defaultFunctions("persistTransactionUseCase", "listTransactionsByCategoryUseCase", "getTotalByCategoryUseCase")
+                .defaultToolNames("persistTransactionUseCase", "listTransactionsByCategoryUseCase", "getTotalByCategoryUseCase")
                 .build();
     }
 
@@ -80,7 +83,7 @@ public class VoiceCommandController {
 
     private byte[] processVoiceCommand(Resource audioResource, String sessionId) {
         var transcriptionOptions = OpenAiAudioTranscriptionOptions.builder()
-                .withLanguage("pt")
+                .language("pt")
                 .build();
         var transcriptionPrompt = new AudioTranscriptionPrompt(audioResource, transcriptionOptions);
         String userText = transcriptionModel.call(transcriptionPrompt).getResult().getOutput();
@@ -89,15 +92,16 @@ public class VoiceCommandController {
 
         String aiTextResponse = chatClient.prompt()
                 .user(promptPersonalizado)
-                .advisors(new MessageChatMemoryAdvisor(this.chatMemory, sessionId, 10))
+                .advisors(MessageChatMemoryAdvisor.builder(this.chatMemory).build())
+                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, sessionId))
                 .call()
                 .content();
 
         var speechOptions = OpenAiAudioSpeechOptions.builder()
-                .withModel("tts-1")
-                .withVoice(OpenAiAudioApi.SpeechRequest.Voice.NOVA)
-                .withResponseFormat(OpenAiAudioApi.SpeechRequest.AudioResponseFormat.MP3)
-                .withSpeed(1.0f)
+                .model("tts-1")
+                .voice(OpenAiAudioApi.SpeechRequest.Voice.NOVA)
+                .responseFormat(OpenAiAudioApi.SpeechRequest.AudioResponseFormat.MP3)
+                .speed(1.0f)
                 .build();
         var speechPrompt = new SpeechPrompt(aiTextResponse, speechOptions);
 

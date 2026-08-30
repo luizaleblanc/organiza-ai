@@ -44,3 +44,11 @@ out/
 
 # Node (nao deveria existir na raiz do backend, mas por seguranca)
 node_modules/
+
+# Build e arquivos gerados
+build/
+.gradle/
+*.zip
+organiza-ia-skills/
+organiza-ia-docs/
+organiza-ia-plano/
