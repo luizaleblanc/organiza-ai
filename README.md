@@ -45,36 +45,9 @@ Organiza IA e um organizador de gastos inteligente projetado para separar as fin
 
 ## Modelagem de Dados
 
-```mermaid
-erDiagram
-    USER ||--o{ ENVELOPE : gerencia
-    USER ||--o{ TRANSACTION : realiza
-    ENVELOPE ||--o{ TRANSACTION : contem
+O modelo relacional completo esta disponivel em: https://organiza-ai-docs.vercel.app
 
-    USER {
-        string id PK
-        string name
-        float monthly_salary
-        datetime created_at
-    }
-
-    ENVELOPE {
-        string id PK
-        string user_id FK
-        string category_name "Ex: Moradia (50%)"
-        float limit_amount
-        float current_spent
-    }
-
-    TRANSACTION {
-        string id PK
-        string envelope_id FK
-        string user_id FK
-        float amount
-        string description
-        datetime date
-    }
-```
+Resumo das entidades principais: **User** (dados do usuario e salario mensal), **Envelope** (tetos de gastos por categoria) e **Transaction** (movimentacoes financeiras associadas a um envelope e a um usuario).
 
 ## Roadmap
 
@@ -90,7 +63,7 @@ Veja [CONTRIBUTING.md](CONTRIBUTING.md) para o guia completo de setup, padroes d
 
 ## Tecnologia
 
-O Organiza IA e o primeiro app de referencia da linguagem **KOF** -- uma linguagem de programacao geral, fortemente tipada e compilada para JVM, criada pela [Melissa (KofLang)](https://github.com/KofLang/Kof4j). Usamos KOF tanto no front-end (kof.ui) quanto no BFF (kof.web), eliminando Node.js e Flutter do stack e unificando tudo na JVM.
+O Organiza IA usa a linguagem **KOF** -- uma linguagem de programacao geral, fortemente tipada e compilada para JVM (https://github.com/KofLang/Kof4j). Usamos KOF tanto no front-end (kof.ui) quanto no BFF (kof.web), eliminando Node.js e Flutter do stack e unificando tudo na JVM.
 
 ## Licenca
 
