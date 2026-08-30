@@ -52,3 +52,23 @@ build/
 organiza-ia-skills/
 organiza-ia-docs/
 organiza-ia-plano/
+
+# Build e dependencias
+build/
+.gradle/
+node_modules/
+
+# Arquivos gerados pelo plano
+organiza-ia-skills/
+organiza-ia-docs/
+organiza-ia-plano/
+*.zip
+
+# Env
+.env
+.env.local
+
+# IDE
+.idea/
+*.iml
+.vscode/
