@@ -1,6 +1,7 @@
 package dio.budgeting.infrastructure.persistence.entity;
 
 import dio.budgeting.domain.Role;
+import dio.budgeting.domain.Tier;
 import dio.budgeting.domain.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -11,6 +12,8 @@ import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import java.math.BigDecimal;
 
 @Entity
 @Table(name = "users")
@@ -32,8 +35,15 @@ public class UserEntity {
     @Column(nullable = false)
     private Role role;
 
+    @Column(precision = 10, scale = 2)
+    private BigDecimal salary;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private Tier tier = Tier.FREE;
+
     public static UserEntity from(User user) {
-        return new UserEntity(user.getId(), user.getEmail(), user.getPassword(), user.getRole());
+        return new UserEntity(user.getId(), user.getEmail(), user.getPassword(), user.getRole(), null, Tier.FREE);
     }
 
     public User toDomain() {

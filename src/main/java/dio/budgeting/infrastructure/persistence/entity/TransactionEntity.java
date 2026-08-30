@@ -1,6 +1,8 @@
 package dio.budgeting.infrastructure.persistence.entity;
 
+import dio.budgeting.domain.Bucket;
 import dio.budgeting.domain.Category;
+import dio.budgeting.domain.Source;
 import dio.budgeting.domain.Transaction;
 import dio.budgeting.domain.TransactionId;
 import jakarta.persistence.Column;
@@ -32,6 +34,14 @@ public class TransactionEntity {
 
     private String userId;
 
+    @Enumerated(EnumType.STRING)
+    @Column(length = 16)
+    private Bucket bucket;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 32, nullable = false)
+    private Source source = Source.MANUAL;
+
     public static TransactionEntity from(Transaction transaction) {
         return new TransactionEntity(
                 transaction.getId().uuid(),
@@ -39,7 +49,9 @@ public class TransactionEntity {
                 transaction.getAmount(),
                 transaction.getCategory(),
                 transaction.getCurrency(),
-                transaction.getUserId());
+                transaction.getUserId(),
+                null,
+                Source.MANUAL);
     }
 
     public Transaction toDomain() {
