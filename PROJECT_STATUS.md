@@ -12,17 +12,14 @@
 - Auth: JWT + Spring Security + jjwt
 - Redis: spring-boot-starter-data-redis adicionado (sem uso ainda)
 - Docker: compose.yml para MySQL local
-- Arquitetura: Clean Architecture (application/domain/infrastructure)
-- Modulos pendentes: reestruturacao para monolito modular
+- Arquitetura: monolito modular (com.organiza.mod_auth, mod_user, mod_transaction, mod_budget, mod_ai_coach, shared) -- reestruturado a partir da Clean Architecture original (dio.budgeting.application/domain/infrastructure)
 
-## Estado do Frontend (ATUAL)
-- Next.js 16 (App Router), TypeScript, Tailwind CSS v4
-- BFF com cookie httpOnly
-- Telas: splash, login/cadastro, gravacao de voz, dashboard (grafico pizza Recharts)
-- Deploy: Vercel (dio-voice-assistant.vercel.app)
-
-## Estado do Flutter
-- NAO INICIADO
+## Estado do Frontend + BFF (ATUAL)
+- **DESCONTINUADO (2026-08-30): Next.js (`frontend-voice/`) como BFF, e Flutter como app mobile.** Ver DECISIONS.md ADR-015.
+- Novo alvo: **KOF** (linguagem propria) -- `kof.ui` para o frontend (`frontend/*.kf`), `kof.web` para o BFF (`bff/*.kf`). Backend Java continua inalterado.
+- `frontend-voice/` (Next.js) permanece no repo com deploy ativo no Vercel (dio-voice-assistant.vercel.app), mas SEM trabalho novo -- nao adicionar features nem manter alem do que ja existe. Destino final (arquivar/remover do repo) ainda nao decidido.
+- Flutter: NUNCA foi iniciado (nenhum arquivo `.dart` chegou a ser criado) -- item removido do roadmap.
+- Consulte `KOF_REFERENCE.md` (raiz) antes de escrever qualquer codigo `.kf`.
 
 ## Schema atual (tabelas existentes)
 - users: id (String/UUID), email, password, role, salary (novo), tier (novo, default FREE)
@@ -50,15 +47,18 @@
 - [x] Deploy funcional (Vercel + Aiven)
 
 ## O que falta (por fase)
-- [ ] FASE 0: Modularizar backend, upgrade Spring Boot/AI, scaffold Flutter, migrations
-- [ ] FASE 1: Chat mobile (texto), pulso diario, onboarding com salario, budget 50/30/20
-- [ ] FASE 2: Dashboard Flutter, envelopes, remanejamento
-- [ ] FASE 3: Voz no mobile, leitura de notificacoes bancarias
+- [x] FASE 0 (back-end): Modularizar backend, upgrade Spring Boot/AI, Redis, migrations -- **back-end 100% concluido**
+- [ ] FASE 0 (frontend/BFF): scaffold KOF (`frontend/`, `bff/`) -- checklist original pedia Flutter + rota Next.js; reescrever para KOF (ver DECISIONS.md ADR-015)
+- [ ] FASE 1: Chat KOF (texto), pulso diario, onboarding com salario, budget 50/30/20
+- [ ] FASE 2: Dashboard KOF, envelopes, remanejamento
+- [ ] FASE 3: Voz no KOF, leitura de notificacoes bancarias
 - [ ] FASE 4: Insights semanais, simulador, push notifications (FCM)
-- [ ] FASE 5: Paywall, RevenueCat, rate limiting (Redis)
+- [ ] FASE 5: Paywall, RevenueCat (ou equivalente), rate limiting (Redis)
+
+> Nota: os specs em `specs/PHASE_X_*.md` ainda descrevem os itens de frontend/BFF em termos de Flutter/Next.js -- tratar como desatualizado para essas partes (ver DECISIONS.md ADR-015); os itens de back-end desses specs continuam valendo como estao escritos.
 
 ## Decisoes tomadas
-- Mobile-first com Flutter (Next.js mantido como BFF)
+- Frontend + BFF em KOF (kof.ui / kof.web) -- substitui Flutter e Next.js (ADR-015, 2026-08-30)
 - Manter monolito modular (nao microsservicos)
 - Modelo de negocio: hibrido 50/30/20 + Envelopes
 - Posicionamento: "Coach de Bolso" (IA conversacional first)

@@ -21,6 +21,8 @@ O pipeline permite que o usuário registre movimentações financeiras apenas fa
 O usuário acessa tudo isso por uma interface web própria (splash → login/cadastro → gravação de voz → resumo financeiro), protegida por autenticação com JWT.
 
 > 📄 **Para desenvolvedores:** as decisões arquiteturais e de negócio do projeto (o "porquê" por trás de cada escolha técnica) estão documentadas em [`DECISIONS.md`](./DECISIONS.md), atualizado a cada fase e a cada commit relevante. O estado atual da implementação está em [`PROJECT_STATUS.md`](./PROJECT_STATUS.md).
+>
+> ⚠️ **Aviso (2026-08-30):** o frontend/BFF em Next.js descrito abaixo (`frontend-voice/`) foi descontinuado para novos desenvolvimentos — o projeto está migrando para **KOF** (`kof.ui`/`kof.web`) como frontend e BFF. Ver `DECISIONS.md` (ADR-015) e `KOF_REFERENCE.md`. As seções de Backend permanecem válidas.
 
 ---
 
@@ -54,8 +56,8 @@ O processamento ocorre de forma assíncrona em três etapas principais.
 | Tecnologia | Descrição |
 |------------|-----------|
 | Java 17 | Linguagem principal |
-| Spring Boot 3.2.5 | Framework backend |
-| Spring AI 1.0.0-M1 | Integração com modelos de IA |
+| Spring Boot 3.3.13 | Framework backend |
+| Spring AI 1.0.8 | Integração com modelos de IA |
 | Spring Security + JWT (jjwt) | Autenticação e autorização com papéis (roles) |
 | Apache HttpClient5 | Cliente HTTP para chamadas à API da OpenAI |
 | JUnit 5 & Mockito | Testes unitários e mocks |
@@ -138,41 +140,27 @@ A interface web fica disponível em `http://localhost:3000`.
 
 ### Backend
 
-O backend segue princípios de **Clean Architecture**, promovendo separação de responsabilidades entre as camadas.
+O backend é um **monolito modular**: cada módulo de domínio tem seu próprio pacote com `controller/`, `service/`, `repository/`, `dto/` e `model/`. Cross-cutting concerns (configuração, segurança, tratamento de exceções) ficam em `shared/`.
 
 ```text
-src
-├── application
-│   ├── usecases
-│   └── functions
-│
-├── domain
-│   ├── entities
-│   └── repositories
-│
-└── infrastructure
-    ├── controllers
-    ├── persistence
-    ├── security
-    └── configurations
+src/main/java/com/organiza/
+├── shared/              # Config global, security (JWT filter, CORS), exception handler
+├── mod_auth/            # Login, registro, emissão/validação de token
+├── mod_user/            # Usuário, papéis (roles), tier (free/premium)
+├── mod_transaction/     # CRUD de transações, categorização, dashboard
+├── mod_budget/          # Orçamentos mensais (persistência; regras de negócio na Fase 1+)
+└── mod_ai_coach/        # Pipeline de voz (transcrição, chat, TTS), histórico de conversas
 ```
 
-#### Application
+Cada módulo contém:
 
-Responsável pelos casos de uso da aplicação, validações de regras de negócio (cláusulas de guarda) e pelas implementações da interface `Function`, permitindo que a IA interaja diretamente com as operações do sistema.
+- `controller/` — endpoints REST;
+- `service/` — casos de uso e regras de negócio, incluindo as implementações usadas via Tool Calling pela IA;
+- `repository/` — contratos de persistência e suas implementações Spring Data JPA;
+- `dto/` — objetos de entrada/saída dos endpoints e casos de uso;
+- `model/` — entidades de domínio e entidades JPA.
 
-#### Domain
-
-Contém as entidades e os contratos de repositório, representando o núcleo da aplicação.
-
-#### Infrastructure
-
-Implementa os adaptadores externos, incluindo:
-
-- Controllers REST com suporte a CORS;
-- Autenticação e autorização (JWT, filtros de segurança, papéis de usuário);
-- Persistência de dados utilizando Spring Data JPA;
-- Configurações e integrações com serviços externos.
+Ver [`DECISIONS.md`](./DECISIONS.md) (ADR-012) para o racional completo dessa reestruturação, incluindo por que alguns componentes (config REST, segurança, exception handler) vivem em `shared/` em vez de dentro de um módulo específico.
 
 ### Frontend
 

@@ -29,11 +29,11 @@ Formato de cada entrada:
 
 ## ADR-002: Mobile-first com Flutter; Next.js mantido como BFF
 - Data: 2026 (decisão de produto)
-- Status: Aceita
+- Status: **Supersedida por ADR-015** (2026-08-30) — frontend e BFF passam a ser KOF, não Flutter/Next.js.
 - Contexto: o produto original nasceu como app de voz com frontend Next.js. A visão de produto evoluiu para "coach de bolso" mobile-first.
 - Decisão: Flutter é a plataforma principal (app mobile). O Next.js existente não é descontinuado — passa a atuar como BFF (Backend-for-Frontend), incluindo autenticação mobile via `/api/auth/mobile` (JWT bearer, sem cookie).
 - Alternativas consideradas: reescrever tudo em Flutter incluindo o papel do BFF (descartado — o Next.js já resolve auth web e não há necessidade de duplicar); manter só a versão web (descartado — a visão de produto é conversacional e proativa, que pede notificações push e presença constante, natural em mobile).
-- Consequências: dois clientes (Flutter mobile + Next.js web) consumindo a mesma API Java. A API precisa suportar dois modos de autenticação (cookie httpOnly para web, bearer token para mobile).
+- Consequências: dois clientes (Flutter mobile + Next.js web) consumindo a mesma API Java. A API precisa suportar dois modos de autenticação (cookie httpOnly para web, bearer token para mobile). **Nenhum código Flutter chegou a ser criado** — a troca para KOF aconteceu ainda durante a Fase 0, antes do scaffold do app mobile.
 
 ## ADR-003: Monolito modular (não microsserviços)
 - Data: 2026 (decisão de produto/arquitetura)
@@ -106,3 +106,35 @@ Formato de cada entrada:
 - Decisão: não reescrever o histórico (via `git filter-repo`/BFG) para purgar esses blobs antigos agora. O `.git` está em ~2,1MB, não crítico. A regra de "nunca commitar arquivo pesado/gerado" passa a ser aplicada rigidamente **a partir de agora** (ver Regra Inviolável 10 no CLAUDE.md), não retroativamente.
 - Alternativas consideradas: reescrever o histórico com `git filter-repo` e forçar push — descartada por ser destrutiva (reescreve todos os hashes de commit) sem benefício proporcional ao tamanho atual do problema (2,1MB).
 - Consequências: se o repositório crescer muito no `.git` no futuro (ex.: novos arquivos binários grandes acumulando), este ADR deve ser revisitado — reescrever o histórico fica mais caro quanto mais tempo passar (mais commits depois dos blobs problemáticos).
+
+## ADR-012: Reestruturação de pacotes para monolito modular (`dio.budgeting` → `com.organiza.mod_*`/`shared`)
+- Data: 2026-08-29
+- Status: Aceita
+- Contexto: o spec da Fase 0 pede a migração do backend de Clean Architecture por camada técnica (`dio.budgeting.{application,domain,infrastructure}`) para um monolito modular por domínio (`com.organiza.mod_auth`, `mod_user`, `mod_transaction`, `mod_budget`, `mod_ai_coach`), cada um com `controller/service/repository/dto/model`. O spec não menciona explicitamente onde ficam componentes cross-cutting (configuração REST, filtro/config de segurança, exception handler global) — só o CLAUDE.md, na árvore-alvo completa do projeto, cita um pacote `shared/` para isso.
+- Decisão: criar `com.organiza.shared` para os componentes que não pertencem a nenhum módulo de domínio específico: `RestClientConfig` (config), `GlobalExceptionHandler` (exception), `SecurityConfigurations`/`SecurityFilter`/`AuthenticatedUser`/`CurrentUserService` (security). `TokenService` e `AuthorizationService` foram para `mod_auth/service` por serem lógica específica de autenticação (geração/validação de token, `UserDetailsService`), não infraestrutura genérica. O endpoint de voz (`VoiceCommandController`, hoje em `/transactions/ai*`) foi movido para `mod_ai_coach/controller`, mantendo o path HTTP inalterado (mudança de pacote é interna, não é contrato de API). A classe principal (`BudgetingApplication`) moveu para a raiz `com.organiza` para manter o component-scan cobrindo todos os módulos.
+- Alternativas consideradas: colocar `TokenService`/`AuthorizationService`/`SecurityFilter`/etc. todos dentro de `mod_auth` (sem `shared`) — descartada porque `CurrentUserService` e `AuthenticatedUser` são consumidos por múltiplos módulos (`mod_transaction`, futuramente `mod_budget`) para identificar o usuário autenticado, e não fazem sentido como dependência de um módulo de domínio para outro; renomear a classe principal e o `group`/`description` do `build.gradle` (de `dio`/`budgeting` para algo com "organiza") — descartada por não estar no escopo pedido pelo spec (só pacotes Java, não metadados do Gradle).
+- Consequências: mudança puramente mecânica de namespace — nenhum comportamento, contrato de API ou schema de banco foi alterado. Validada com `./gradlew compileJava` e `./gradlew test` (todas as 6 classes de teste, mesmas asserções, passando). Feita como commit único (ver Regra Inviolável 11 no CLAUDE.md) por ser uma renomeação atômica onde estados intermediários não compilariam sem pacotes-ponte descartáveis.
+
+## ADR-013: Back-end sempre finalizado antes do front-end/BFF, fase a fase
+- Data: 2026-08-29
+- Status: Aceita
+- Contexto: os specs de fase intercalam itens de back-end (Java) e front-end (Flutter)/BFF (Next.js) na mesma fase (ex.: Fase 0 tem tanto reestruturação de packages quanto scaffold Flutter e rota `/api/auth/mobile`). Sem uma regra explícita de ordem, haveria risco de começar trabalho de front-end com contratos de API do back-end ainda instáveis.
+- Decisão: dentro de cada fase, todo item de back-end do checklist é concluído antes de iniciar qualquer item de front-end (Flutter) ou do BFF (Next.js) daquela mesma fase.
+- Alternativas consideradas: trabalhar back-end e front-end em paralelo dentro da mesma fase — descartada pelo risco de retrabalho no front-end caso o contrato de API mude durante o desenvolvimento do back-end.
+- Consequências: a rota `/api/auth/mobile` do BFF só foi implementada depois que todos os itens de back-end da Fase 0 (packages, Spring Boot/AI, Redis, migrations) estavam concluídos e validados. O scaffold Flutter é o último item da Fase 0, por ser puramente front-end.
+
+## ADR-014: Rota `/api/auth/mobile` valida por build+lint, não end-to-end
+- Data: 2026-08-29
+- Status: **Supersedida por ADR-015** (2026-08-30) — a rota foi revertida (nunca commitada) porque o BFF passou a ser KOF (`kof.web`), não Next.js.
+- Contexto: a rota `/api/auth/mobile` (Next.js) delega para `POST {API_BASE_URL}/auth/login` no backend Java e devolve `{ token }` no corpo da resposta, sem setar cookie — espelhando o padrão já usado em `loginBFF` (`frontend-voice/src/app/actions/auth.ts`), que seta cookie httpOnly. Testar de ponta a ponta exigiria backend Java + MySQL rodando (via Docker), indisponível nesta sessão.
+- Decisão: validar a rota apenas com `npm run lint` e `npm run build` (que inclui checagem de tipos TypeScript e confirma a rota registrada em `Route (app)`), sem chamada real contra o backend.
+- Alternativas consideradas: subir Docker Desktop + `./gradlew bootRun` + `npm run dev` para um teste manual real — descartada por indisponibilidade de Docker nesta sessão; o padrão de código é idêntico ao de uma rota já testada em produção (`loginBFF`), reduzindo o risco.
+- Consequências: a rota chegou a ser implementada e validada por build+lint, mas nunca foi commitada — foi removida do working tree assim que o ADR-015 definiu o BFF como KOF. O equivalente em `kof.web` (rota de login mobile) fica como item pendente da Fase 0.
+
+## ADR-015: Frontend e BFF migram para KOF (kof.ui/kof.web), substituindo Flutter e Next.js
+- Data: 2026-08-30
+- Status: Aceita
+- Contexto: KOF é uma linguagem própria (compilada para JVM, com alvo KofJS para UI via webview) desenvolvida no âmbito do curso/produto Melissa/KofLang. O usuário decidiu adotar o Organiza IA como app de referência dessa linguagem, substituindo tanto o plano de app mobile em Flutter (ADR-002, ainda não iniciado) quanto o BFF em Next.js (`frontend-voice/`, existente e com deploy ativo no Vercel).
+- Decisão: todo trabalho novo de UI é em `.kf` usando `kof.ui` (`frontend/`), e todo trabalho novo de BFF é em `.kf` usando `kof.web` (`bff/`). O backend Java/Spring Boot permanece inalterado (KOF não o substitui). `frontend-voice/` (Next.js) é descontinuado — nenhum trabalho novo acontece nele; o rota `/api/auth/mobile` que havia sido implementada ali (ADR-014) foi revertida antes de ser commitada.
+- Alternativas consideradas: manter Next.js como BFF e adicionar KOF só para o app mobile (ADR-002 original) — descartada pelo usuário em favor de uma stack única (KOF) para frontend+BFF; manter Flutter para o app mobile — descartada pelo mesmo motivo.
+- Consequências: `specs/PHASE_X_*.md` ainda referenciam Flutter/Next.js em alguns pontos — essas referências devem ser tratadas como desatualizadas para front-end/BFF; os itens de back-end desses specs continuam válidos. `KOF_REFERENCE.md` (raiz do projeto) é a referência técnica para escrever código `.kf` corretamente. Falta ainda: (1) decidir o que fazer fisicamente com `frontend-voice/` (arquivar, remover do repo, ou deixar rodando em produção sem manutenção — não decidido nesta sessão); (2) reescrever os itens de front-end/BFF pendentes da Fase 0 (antes "scaffold Flutter" e rota `/api/auth/mobile` em Next.js) como seus equivalentes KOF.
