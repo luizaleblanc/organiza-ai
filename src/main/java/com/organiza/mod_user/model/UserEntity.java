@@ -39,8 +39,14 @@ public class UserEntity {
     @Column(nullable = false)
     private Tier tier = Tier.FREE;
 
+    @Column(name = "has_variable_income", nullable = false)
+    private Boolean hasVariableIncome = false;
+
+    @Column(name = "emergency_fund_goal", precision = 10, scale = 2)
+    private BigDecimal emergencyFundGoal;
+
     public static UserEntity from(User user) {
-        return new UserEntity(user.getId(), user.getEmail(), user.getPassword(), user.getRole(), null, Tier.FREE);
+        return new UserEntity(user.getId(), user.getEmail(), user.getPassword(), user.getRole(), null, Tier.FREE, false, null);
     }
 
     public User toDomain() {
