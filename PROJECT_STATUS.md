@@ -1,6 +1,6 @@
 # PROJECT_STATUS.md -- Organiza IA
 
-> Atualizado em: 29/08/2026
+> Atualizado em: 31/08/2026
 > Fase atual: 0 -- Foundation (nao iniciada)
 
 ## Estado do Backend (ATUAL)
@@ -45,6 +45,12 @@
 - [x] Testes unitarios (JUnit 5 + Mockito)
 - [x] Docker Compose para MySQL
 - [x] Deploy funcional (Vercel + Aiven)
+- [x] Modelos de orçamento adaptativos (BudgetModelType, IncomeType)
+- [x] Endpoint de onboarding com sugestão de modelo
+- [x] Tool calling atualizado (registerIncome, suggestModelChange)
+- [x] System prompt anti-alucinação
+- [x] Rotas BFF para onboarding e renda
+- [x] Documentação atualizada (README, DATA_MODEL, CONTRIBUTING, CLAUDE.md)
 
 ## O que falta (por fase)
 - [x] FASE 0 (back-end): Modularizar backend, upgrade Spring Boot/AI, Redis, migrations -- **back-end 100% concluido**
