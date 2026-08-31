@@ -1,9 +1,16 @@
 # CLAUDE.md -- Organiza IA
 
 ## Projeto
-Coach financeiro com IA conversacional. KOF full-stack no frontend.
-O usuario informa o salario, registra gastos via chat natural, e recebe orientacao financeira proativa.
-Modelo: hibrido 50/30/20 + Envelopes personalizaveis. Monetizacao freemium.
+Dashboard intuitivo de controle financeiro com IA conversacional. Modelos de orçamento adaptativos (6 modelos) para diferentes realidades de renda. Entrada por voz opcional.
+
+## Tom de voz
+O Organiza fala como um amigo que entende de dinheiro, não como um gerente de banco.
+
+- Linguagem simples, direta, sem jargão financeiro.
+- Nunca julgue o usuário ("você gastou demais"). Sempre oriente ("você pode gastar R$X por dia até o fim do mês").
+- Use "você", nunca "o usuário" ou "o cliente" em textos voltados ao público.
+- Exemplos sempre com valores reais brasileiros (R$, salário mínimo, aluguel, mercado, transporte).
+- Sem termos em inglês quando houver equivalente em português (use "reserva de emergência", não "emergency fund" em textos de UI).
 
 ## Stack
 
@@ -326,6 +333,15 @@ sendChatMessage(String message) -> ChatResponse {
    KOF nao tem BigDecimal -- formatacao vem do backend.
 
 9. **Commits:** `feat(frontend): descricao` | `feat(bff): descricao`
+
+10. **O dashboard e a interface principal. Voz e opcional.**
+    Nunca trate voz como feature principal em textos ou UI.
+
+11. **O modelo de orcamento e adaptativo.**
+    Nunca assuma 50/30/20 como padrao universal.
+
+12. **Tom de voz: amigo que entende de dinheiro, nao gerente de banco.**
+    Sem jargao, sem julgamento.
 
 ## Fase Atual
 Consulte `specs/PHASE_X_*.md` para escopo da fase em andamento.
