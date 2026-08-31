@@ -1,5 +1,6 @@
 package com.organiza.mod_user.model;
 
+import com.organiza.mod_budget.model.BudgetModelType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -45,8 +46,20 @@ public class UserEntity {
     @Column(name = "emergency_fund_goal", precision = 10, scale = 2)
     private BigDecimal emergencyFundGoal;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "budget_model", nullable = false, length = 32)
+    private BudgetModelType budgetModel = BudgetModelType.STANDARD_503020;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "income_type", nullable = false, length = 16)
+    private IncomeType incomeType = IncomeType.FIXED;
+
+    @Column(name = "has_debt", nullable = false)
+    private Boolean hasDebt = false;
+
     public static UserEntity from(User user) {
-        return new UserEntity(user.getId(), user.getEmail(), user.getPassword(), user.getRole(), null, Tier.FREE, false, null);
+        return new UserEntity(user.getId(), user.getEmail(), user.getPassword(), user.getRole(), null, Tier.FREE, false, null,
+                BudgetModelType.STANDARD_503020, IncomeType.FIXED, false);
     }
 
     public User toDomain() {
