@@ -29,6 +29,9 @@ erDiagram
         float monthly_salary
         boolean has_variable_income
         float emergency_fund_goal
+        string budget_model "Um dos 6 modelos adaptativos"
+        string income_type "FIXED ou VARIABLE"
+        boolean has_debt
         datetime created_at
     }
 
@@ -111,3 +114,27 @@ flowchart TD
     C --> E[Atualiza progresso da reserva]
     D --> F[Distribui nos envelopes]
 ```
+
+## Fluxo: onboarding com sugestão de modelo
+
+```mermaid
+flowchart TD
+    A["Quanto você ganha por mês?"] --> D[Motor de sugestão]
+    B["Sua renda é fixa ou variável?"] --> D
+    C["Você tem dívidas em atraso?"] --> D
+    D -->|Renda variável| E[Modelo Freelancer Base Zero]
+    D -->|Com dívida| F[Modelo Anti-Dívida 70/10/20]
+    D -->|Renda baixa, sem dívida| G[Modelo Sobrevivência 70/20/10]
+    D -->|Renda alta, sem dívida| H[Modelo Padrão 50/30/20]
+```
+
+## Modelos de orçamento adaptativos
+
+| Modelo | Percentuais / categorias | Público-alvo |
+|---|---|---|
+| **Padrão (STANDARD_503020)** | 50% Necessidades / 30% Desejos / 20% Futuro | Renda fixa acima de 2 salários mínimos, sem dívidas em atraso |
+| **Sobrevivência (SURVIVAL_702010)** | 70% Necessidades / 20% Folga / 10% Guarda | Renda fixa até 2 salários mínimos (R$ 3.242), sem dívidas em atraso |
+| **Anti-Dívida (ANTI_DEBT_701020)** | 70% Necessidades / 10% Pessoal / 20% Quitação de Dívida | Qualquer renda fixa, com dívidas em atraso |
+| **Simplificado (SIMPLE_8020)** | 80% Viver / 20% Guardar | Quem quer simplicidade, sem categorizar cada gasto |
+| **Kakeibo** | Essencial / Cultura / Lazer / Extras, com reflexão semanal | Quem quer refletir sobre os próprios hábitos de consumo |
+| **Freelancer Base Zero** | Alocação por entrada (sem percentual fixo mensal) | Renda variável -- freelancer, PJ, artista |
