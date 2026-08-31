@@ -20,12 +20,15 @@ A simplicidade é intencional: um dev que olha o diagrama entende o sistema inte
 erDiagram
     USER ||--o{ ENVELOPE : gerencia
     USER ||--o{ TRANSACTION : realiza
+    USER ||--o{ VARIABLE_INCOME : recebe
     ENVELOPE ||--o{ TRANSACTION : contem
 
     USER {
         string id PK
         string name
         float monthly_salary
+        boolean has_variable_income
+        float emergency_fund_goal
         datetime created_at
     }
 
@@ -35,6 +38,8 @@ erDiagram
         string category_name "Ex: Moradia (50%)"
         float limit_amount
         float current_spent
+        string limit_type "FIXED ou MOVING_AVERAGE"
+        int moving_average_months
     }
 
     TRANSACTION {
@@ -43,6 +48,15 @@ erDiagram
         string user_id FK
         float amount
         string description
+        datetime date
+    }
+
+    VARIABLE_INCOME {
+        string id PK
+        string user_id FK
+        float amount
+        string source "Ex: freela, show, mentoria"
+        string destination "EMERGENCY_FUND ou BUDGET_5030020"
         datetime date
     }
 ```
@@ -85,4 +99,15 @@ flowchart TD
     F --> G["Moradia: R$ 1.200"]
     F --> H["Mercado: R$ 500"]
     F --> I["Transporte: R$ 300"]
+```
+
+## Fluxo: renda variável
+
+```mermaid
+flowchart TD
+    A[Usuário registra renda extra] --> B{Meta de reserva atingida?}
+    B -->|Não| C[100% para reserva de emergência]
+    B -->|Sim| D[Aplica 50/30/20 na renda extra]
+    C --> E[Atualiza progresso da reserva]
+    D --> F[Distribui nos envelopes]
 ```
