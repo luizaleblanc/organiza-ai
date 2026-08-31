@@ -5,12 +5,14 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
@@ -42,6 +44,9 @@ public class EnvelopeEntity {
     @Column(name = "moving_average_months", nullable = false)
     private Integer movingAverageMonths = 3;
 
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
     public EnvelopeEntity(String userId, String categoryName, BigDecimal limitAmount) {
         this.id = UUID.randomUUID().toString();
         this.userId = userId;
@@ -50,5 +55,13 @@ public class EnvelopeEntity {
         this.currentSpent = BigDecimal.ZERO;
         this.limitType = EnvelopeLimitType.FIXED;
         this.movingAverageMonths = 3;
+    }
+
+    @PrePersist
+    public void prePersist() {
+        if (this.id == null) {
+            this.id = UUID.randomUUID().toString();
+        }
+        this.createdAt = LocalDateTime.now();
     }
 }
