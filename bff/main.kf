@@ -16,5 +16,19 @@ main() {
         return response.body
     }
 
+    // Rotas protegidas -- repassam o header Authorization para o backend validar o JWT
+    app.post("/api/variable-income") {
+        var response = http.post("http://localhost:8080/api/variable-income", body(),
+            headers: {"Authorization": header("Authorization")})
+        return response.body
+    }
+
+    app.get("/api/variable-income") {
+        var userId = query("userId")
+        var response = http.get("http://localhost:8080/api/variable-income?userId=" + userId,
+            headers: {"Authorization": header("Authorization")})
+        return response.body
+    }
+
     app.listen(3000)
 }

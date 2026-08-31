@@ -11,3 +11,5 @@ record LoginResponse(String token)
 record ChatMessageRequest(String message)
 
 record ChatMessageResponse(String reply, Float dailyPulse)
+
+record VariableIncome(String id, String userId, Float amount, String source, String destination, String date)
