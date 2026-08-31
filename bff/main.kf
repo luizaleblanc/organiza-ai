@@ -30,5 +30,18 @@ main() {
         return response.body
     }
 
+    app.post("/api/users/onboarding") {
+        var response = http.post("http://localhost:8080/api/users/onboarding", body(),
+            headers: {"Authorization": header("Authorization")})
+        return response.body
+    }
+
+    // Repassa para o mesmo endpoint de registro de renda do backend (/api/variable-income)
+    app.post("/api/income") {
+        var response = http.post("http://localhost:8080/api/variable-income", body(),
+            headers: {"Authorization": header("Authorization")})
+        return response.body
+    }
+
     app.listen(3000)
 }

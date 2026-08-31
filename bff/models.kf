@@ -13,3 +13,9 @@ record ChatMessageRequest(String message)
 record ChatMessageResponse(String reply, Float dailyPulse)
 
 record VariableIncome(String id, String userId, Float amount, String source, String destination, String date)
+
+record OnboardingRequest(Float salary, String incomeType, Boolean hasDebt)
+
+record OnboardingResponse(String suggestedModel, String modelDescription)
+
+record BucketSummary(String name, Int percentage, Float amount)
