@@ -8,13 +8,11 @@ Organiza IA é um organizador de gastos inteligente projetado para separar as fi
 
 ## Diferenciais
 
-**Abordagem Híbrida** -- combina a simplicidade da regra 50/30/20 com a personalização do método de Envelopes. O sistema sugere a divisão inicial, mas permite que o usuário crie tetos de gastos personalizados dentro de cada bucket.
+**Modelos adaptativos** -- o Organiza não força um modelo único. Com base na sua renda, tipo de trabalho e situação financeira, o sistema sugere o modelo que faz sentido pra você: 50/30/20 (padrão), 70/20/10 (sobrevivência), Anti-Dívida, 80/20 (simplificado), Kakeibo (reflexivo) ou Base Zero (freelancer). Você pode trocar a qualquer momento.
 
-**Coach Financeiro com IA** -- a IA classifica os gastos automaticamente nos buckets corretos, alerta sobre a proximidade dos limites e gera insights acionáveis para orientar o futuro financeiro do usuário. Não mostra só o que você gastou; diz o que fazer com o dinheiro que você tem hoje.
+**Renda fixa + variável** -- diferente de concorrentes que só orçam sobre o fixo, o Organiza separa automaticamente renda variável (freela, shows, mentorias) e direciona para reserva de emergência até atingir sua meta.
 
-**Zero Barreira de Entrada** -- não exige conexão bancária (Open Finance), eliminando o atrito e o receio de compartilhamento de dados. A entrada é ativa e simplificada, podendo ser feita de forma manual ou por comandos de voz.
-
-**Renda Fixa + Variável** -- diferente de concorrentes que só orçam sobre o fixo, o Organiza separa automaticamente renda variável (freela, shows, mentorias) e direciona 100% para reserva de emergência até atingir a meta. Depois disso, aplica 50/30/20 normalmente. Uma aba própria de renda variável permite ao usuário acompanhar cada entrada extra e o progresso da reserva de emergência.
+**Dashboard intuitivo** -- o foco é o dashboard de controle financeiro. Entrada por voz é um atalho opcional, não pré-requisito. O app foi desenhado para ser simples a ponto de não precisar de tutorial.
 
 ## Stack
 
