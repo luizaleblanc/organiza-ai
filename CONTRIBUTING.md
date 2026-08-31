@@ -10,7 +10,7 @@ Para mantermos o projeto organizado e escalável, todos os contribuidores devem 
 |---|---|---|
 | **Front-end** | KOF (kof.ui) | Interface compilada utilizando o compilador/linguagem KOF para a JVM. Renderiza via KofJS em webview |
 | **Back-end (BFF)** | KOF (kof.web) | Arquitetura Backend-For-Frontend desacoplada, servindo dados estruturados para o front-end |
-| **Back-end (API)** | Java 17, Spring Boot 3.3.x, Spring AI | Lógica de negócio, IA conversacional, autenticação. O backend suporta dois modelos de renda: fixa (salário mensal com divisão 50/30/20) e variável (entradas extras direcionadas por regra para reserva de emergência ou orçamento). Ver docs/DATA_MODEL.md para o modelo completo. |
+| **Back-end (API)** | Java 17, Spring Boot 3.3.x, Spring AI | Lógica de negócio, IA conversacional, autenticação. O backend suporta dois modelos de renda: fixa (salário mensal com divisão 50/30/20) e variável (entradas extras direcionadas por regra para reserva de emergência ou orçamento). Ver docs/DATA_MODEL.md para o modelo completo. O backend suporta 6 modelos de orçamento adaptativos, selecionados automaticamente no onboarding com base em renda, tipo de renda e situação de dívida. O motor de sugestão está em BudgetModelSuggestionService. Ver docs/DATA_MODEL.md para o diagrama completo dos modelos. |
 | **Banco de Dados** | MySQL no Render | Modelo relacional com cronjob de ping para estabilidade contínua, sem dependência de bancos temporários |
 
 ```
@@ -177,6 +177,10 @@ kof run --target=js main.kf
 - Estado mutável: campos `static` em classe de estado
 - Composição: Window > View(Style) > Column/Row > widgets
 - Target: sempre `--target=js` para UI
+
+### Tom de voz
+
+Textos voltados ao usuário seguem o tom de voz da marca: linguagem simples, sem jargão financeiro, sem julgamento. Consulte a seção "Tom de voz" no CLAUDE.md.
 
 ---
 
