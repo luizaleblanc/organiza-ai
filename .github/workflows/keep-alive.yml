@@ -1,0 +1,14 @@
+name: Keep backend alive
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping /actuator/health
+        run: |
+          curl -sS -o /dev/null -w "HTTP %{http_code}\n" https://organiza-ai-5qzv.onrender.com/actuator/health
