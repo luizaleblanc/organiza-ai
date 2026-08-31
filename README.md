@@ -59,7 +59,7 @@ Resumo das entidades principais: **User** (dados do usuário e salário mensal),
 
 ## Como Contribuir
 
-Veja [CONTRIBUTING.md](CONTRIBUTING.md) para o guia completo de setup, padrões de código e fluxo de PR.
+Veja [CONTRIBUTING.md](CONTRIBUTING.md) para o guia completo de setup, padrões de código e fluxo de PR. Todo participante deve seguir o [Código de Conduta](CODE_OF_CONDUCT.md).
 
 ## Tecnologia
 

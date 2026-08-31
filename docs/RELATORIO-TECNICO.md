@@ -1,6 +1,8 @@
 # Relatório Técnico — Organiza IA (Voice-Driven Budgeting API)
 
 > Documento de preparação para entrevistas técnicas. Cobre arquitetura, estrutura de pastas, decisões de design, trade-offs e os bugs reais encontrados e corrigidos durante o desenvolvimento.
+>
+> ⚠️ **Histórico:** este documento descreve uma versão anterior do projeto -- pacotes `dio.budgeting` (hoje `com.organiza.mod_*`, ver `DECISIONS.md` ADR-012), Spring Boot 3.2.5/Spring AI 1.0.0-M1 (hoje 3.3.13/1.0.8) e o frontend em Next.js (`frontend-voice/`, descontinuado em favor de KOF, ver ADR-015). Os caminhos de arquivo e trechos de código aqui **não refletem o estado atual do repositório**. Mantido como registro histórico das decisões e bugs reais da fase inicial do projeto -- para a arquitetura atual, ver `README.md` e `DECISIONS.md`.
 
 ---
 

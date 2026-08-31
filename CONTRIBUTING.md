@@ -97,6 +97,8 @@ Regras rigorosas de PRs (Pull Requests) para garantir a qualidade do código rec
 ```bash
 git clone https://github.com/luizaleblanc/organiza-ai.git
 cd organiza-ai
+cp .env.example .env
+# preencha .env com sua chave da OpenAI e um API_SECURITY_TOKEN_SECRET novo
 ```
 
 ### 2. Instalar o KOF

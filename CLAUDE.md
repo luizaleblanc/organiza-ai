@@ -108,7 +108,7 @@ organiza-ai/
       bankreader/
       shared/
 
-  specs/                      # Specs por fase (local, nao sobe no Git)
+  specs/                      # Specs por fase (versionado no Git)
   CLAUDE.md                   # Este arquivo (local)
   PROJECT_STATUS.md           # Handoff entre sessoes (local)
 ```

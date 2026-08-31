@@ -1,67 +1,63 @@
 # Guia de Deploy — Organiza IA
 
-Este guia cobre o deploy do backend (Spring Boot + MySQL) no **Railway** e do frontend (Next.js) na **Vercel** — ambos com camada gratuita e sem necessidade de cartão de crédito para o uso descrito aqui (verifique os termos atuais no momento do cadastro, já que planos de provedores mudam com o tempo).
+Este guia cobre o deploy do backend (Spring Boot) no **Render** e do banco (MySQL) na **Aiven** — ambos com camada gratuita e sem necessidade de cartão de crédito para o uso descrito aqui (verifique os termos atuais no momento do cadastro, já que planos de provedores mudam com o tempo).
 
 Tudo que dependia só de código já foi preparado no projeto:
-- `Dockerfile` na raiz do backend (build multi-stage, testado localmente).
-- `application.properties` lendo porta e credenciais do banco via variáveis de ambiente (com fallback pro `localhost` de sempre).
-- CORS do backend configurável via `APP_CORS_ALLOWED_ORIGINS`.
-- Frontend usando `API_BASE_URL` (em `frontend-voice/src/lib/api.ts`) em vez de `localhost:8080` fixo.
+- `Dockerfile` na raiz (build multi-stage, testado localmente).
+- `application.properties` lendo porta e credenciais do banco via variáveis de ambiente (com fallback pro `localhost` de sempre, usado com `docker compose` local).
+- `management.health.redis.enabled=false` (ver `DECISIONS.md`, ADR-016) -- o projeto tem a dependência do Redis para uso futuro (Fase 5), mas nenhuma instância real precisa existir em produção hoje.
 
 O que falta é o que só você pode fazer: criar as contas e conectar os serviços.
 
 ---
 
-## Parte 1 — Backend + banco no Railway
+## Parte 1 — Banco de dados na Aiven
 
-1. Acesse [railway.app](https://railway.app) e crie uma conta (dá pra usar login do GitHub).
-2. **New Project → Deploy from GitHub repo** → selecione o repositório `dio-voice-assistant` (ou o nome que você deu ao repositório no seu GitHub).
-   - Se o Railway perguntar qual pasta usar (monorepo), aponte pra `05-spring-ai` (onde está o `Dockerfile`).
-3. O Railway vai detectar o `Dockerfile` automaticamente e buildar a imagem.
-4. **Adicionar o banco**: dentro do mesmo projeto, clique em **New → Database → Add MySQL**. O Railway cria um serviço MySQL e gera as credenciais automaticamente.
-5. **Configurar variáveis de ambiente** no serviço do backend (aba *Variables*):
-
-   | Variável | Valor |
-   |---|---|
-   | `OPENAI_API_KEY` | sua chave da OpenAI |
-   | `SPRING_DATASOURCE_URL` | `jdbc:mysql://${{MySQL.MYSQL_URL}}?useUnicode=true&characterEncoding=UTF-8` (o Railway permite referenciar variáveis de outro serviço do mesmo projeto — ajuste conforme o formato exato que o Railway mostrar na aba do serviço MySQL) |
-   | `SPRING_DATASOURCE_USERNAME` | usuário gerado pelo MySQL do Railway |
-   | `SPRING_DATASOURCE_PASSWORD` | senha gerada pelo MySQL do Railway |
-   | `API_SECURITY_TOKEN_SECRET` | **gere uma chave nova e forte** (ex: `openssl rand -base64 48`) — nunca use o valor padrão do código em produção |
-   | `APP_CORS_ALLOWED_ORIGINS` | a URL do seu frontend na Vercel (ex: `https://organiza-ia.vercel.app`) — preencha depois de fazer o deploy do frontend na Parte 2 |
-
-   O Railway já injeta `PORT` automaticamente — não precisa configurar isso.
-6. Faça o deploy (o Railway costuma fazer isso automaticamente a cada push). Depois de subir, copie a URL pública gerada (algo como `https://seu-projeto.up.railway.app`) — você vai precisar dela na Parte 2.
-7. **Teste**: acesse `https://sua-url-do-railway/actuator/health` — se responder (mesmo que seja 403, já que a rota exige autenticação), o backend está no ar.
+1. Acesse [console.aiven.io](https://console.aiven.io) e crie uma conta (não precisa de cartão para o plano Free).
+2. **Create service → MySQL**, escolha o plano **Free** (não um trial com crédito -- o plano Free é permanente, sem prazo de expiração; ver `DECISIONS.md` ADR-016/017 sobre o incidente que motivou essa recomendação).
+3. Escolha uma região e crie o serviço. Aguarde o status ficar "Running".
+4. Na aba **Overview** do serviço, copie: `Host`, `Port`, `User` (geralmente `avnadmin`), `Password` e o nome do banco padrão (`defaultdb`).
+5. Monte a URL JDBC no formato:
+   ```
+   jdbc:mysql://<HOST>:<PORT>/defaultdb?useUnicode=true&characterEncoding=UTF-8&sslMode=REQUIRED
+   ```
+   (a Aiven exige SSL por padrão -- `sslMode=REQUIRED` é necessário.)
+6. **Atenção a inatividade**: serviços no plano Free da Aiven podem ser desligados (`powered off`) automaticamente após um período sem uso. Isso não apaga os dados (só depois de 180 dias desligado), mas a aplicação para de conseguir conectar até você reativar manualmente no console. O workflow `.github/workflows/keep-alive.yml` deste repositório ajuda a mitigar isso gerando tráfego periódico contra o backend (que por sua vez consulta o banco no boot).
 
 ---
 
-## Parte 2 — Frontend na Vercel
+## Parte 2 — Backend no Render
 
-1. Acesse [vercel.com](https://vercel.com) e crie uma conta (login com GitHub facilita).
-2. **Add New → Project** → selecione o mesmo repositório do GitHub.
-3. Em **Root Directory**, aponte para `05-spring-ai/frontend-voice` (é um monorepo — a Vercel precisa saber que o projeto Next.js não está na raiz).
-4. Em **Environment Variables**, adicione:
+1. Acesse [render.com](https://render.com) e crie uma conta (login com GitHub facilita).
+2. **New → Web Service** → conecte o repositório GitHub.
+3. O Render detecta o `Dockerfile` na raiz automaticamente e builda a imagem a partir dele -- não é necessário configurar build/start command manualmente.
+4. Escolha o plano **Free**.
+5. Em **Environment**, adicione as variáveis:
 
    | Variável | Valor |
    |---|---|
-   | `API_BASE_URL` | a URL do backend que você copiou do Railway na Parte 1 (ex: `https://seu-projeto.up.railway.app`) |
+   | `SPRING_DATASOURCE_URL` | a URL JDBC montada na Parte 1 |
+   | `SPRING_DATASOURCE_USERNAME` | usuário da Aiven (Parte 1) |
+   | `SPRING_DATASOURCE_PASSWORD` | senha da Aiven (Parte 1) |
+   | `OPENAI_API_KEY` | sua chave da OpenAI |
+   | `API_SECURITY_TOKEN_SECRET` | **gere uma chave nova e forte** (ex: `openssl rand -hex 32`) -- nunca use um valor de exemplo em produção |
 
-5. Clique em **Deploy**. A Vercel builda e publica automaticamente.
-6. Copie a URL final (ex: `https://organiza-ia.vercel.app`) e volte no Railway pra preencher `APP_CORS_ALLOWED_ORIGINS` com essa URL (Parte 1, passo 5) — redeploy o backend depois de mudar essa variável.
+   O Render já injeta `PORT` automaticamente -- não precisa configurar isso (`server.port=${PORT:8080}` em `application.properties` já lida com isso).
+6. Clique em **Deploy**. O Render builda a imagem Docker e sobe o serviço (esse processo pode levar alguns minutos na primeira vez).
+7. **Teste**: acesse `https://sua-url.onrender.com/actuator/health` -- esperado: `{"status":"UP","groups":["liveness","readiness"]}`.
 
 ---
 
 ## Checklist final
 
-- [ ] Backend responde em `https://.../actuator/health` (Railway).
-- [ ] Frontend abre em `https://....vercel.app` e mostra a splash screen.
-- [ ] Consegue se cadastrar e logar (testa o fluxo completo: cadastro → login → gravação → dashboard).
-- [ ] `API_SECURITY_TOKEN_SECRET` foi trocado pro valor gerado (não é o padrão do código).
-- [ ] `APP_CORS_ALLOWED_ORIGINS` aponta pra URL real da Vercel (não ficou em `*` por padrão).
+- [ ] Aiven MySQL no plano **Free** (não trial), status "Running".
+- [ ] Backend responde `UP` em `https://.../actuator/health`.
+- [ ] `API_SECURITY_TOKEN_SECRET` foi trocado pro valor gerado (não é um valor de exemplo).
+- [ ] Workflow `.github/workflows/keep-alive.yml` ativo (aba **Actions** do repositório no GitHub) para reduzir o risco de o serviço dormir por inatividade.
 
 ## Observações importantes
 
-- **MySQL do Railway em plano gratuito costuma ter um limite de uso/tempo ativo** — se o projeto ficar muito tempo sem tráfego, o banco (ou o serviço) pode hibernar/reiniciar. Isso é normal em camadas gratuitas e não indica bug na aplicação.
-- **Custos**: confirme o plano atual do Railway/Vercel no momento do cadastro — políticas de camada gratuita mudam com frequência nesses provedores.
-- Se preferir usar AWS/Azure/GCP no lugar do Railway, a mesma imagem Docker (`Dockerfile` na raiz) funciona em qualquer serviço que rode containers (ECS, App Service, Cloud Run) — só muda a forma de configurar as variáveis de ambiente listadas acima.
+- **MySQL da Aiven em plano Free tem 1GB de storage/RAM** e pode hibernar por inatividade (ver Parte 1, passo 6) -- normal em camadas gratuitas, não indica bug na aplicação. Ver `DECISIONS.md` ADR-016/017 para o histórico de um incidente real causado por isso.
+- **Render Free** também hiberna o serviço web após um período sem tráfego (cold start no próximo request) -- o mesmo workflow de keep-alive ajuda a mitigar isso.
+- **Custos**: confirme o plano atual do Render/Aiven no momento do cadastro -- políticas de camada gratuita mudam com frequência nesses provedores.
+- **Frontend e BFF (KOF)**: o frontend (`kof.ui`) e o BFF (`kof.web`) ainda não têm um guia de deploy documentado -- ambos rodam localmente hoje (`kof run` / `kof serve`, ver `CONTRIBUTING.md`). Este guia cobre só o backend Java, que é o único componente em produção no momento.

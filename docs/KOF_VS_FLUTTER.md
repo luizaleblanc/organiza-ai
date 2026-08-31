@@ -1,8 +1,8 @@
 # Relatorio Tecnico: KOF vs Flutter
 
-> Documento de feedback construtivo para a equipe KOF (Melissa).
-> Objetivo: mapear lacunas do kof.ui em relacao ao Flutter para que o Organiza
-> seja o primeiro app mobile real construido inteiramente em KOF.
+> Documento de feedback construtivo para a equipe do KOF.
+> Objetivo: mapear lacunas do kof.ui em relacao ao Flutter para orientar o
+> desenvolvimento do frontend do Organiza IA inteiramente em KOF.
 > Gerado em: 30/08/2026
 
 ---
