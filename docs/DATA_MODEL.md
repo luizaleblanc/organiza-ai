@@ -1,16 +1,16 @@
 # Modelagem de Dados -- Organiza IA
 
-## Decisoes de simplificacao
+## Decisões de simplificação
 
-O modelo foi desenhado para facilitar a adocao pelo KOF e permitir que qualquer contribuidor entenda visualmente como os dados se relacionam no banco hospedado no Render.
+O modelo foi desenhado para facilitar a adoção pelo KOF e permitir que qualquer contribuidor entenda visualmente como os dados se relacionam no banco hospedado no Render.
 
-Tres entidades cobrem todo o dominio:
+Três entidades cobrem todo o domínio:
 
-- **USER** e o centro. Tem salario mensal, que e a base de calculo para tudo.
-- **ENVELOPE** pertence ao User e representa um teto de gastos por categoria (ex: "Moradia -- 50%"). O campo `current_spent` e desnormalizado propositalmente para consulta rapida sem precisar agregar transacoes a cada request.
-- **TRANSACTION** pertence ao User e opcionalmente a um Envelope. E o registro de cada gasto ou receita.
+- **USER** é o centro. Tem salário mensal, que é a base de cálculo para tudo.
+- **ENVELOPE** pertence ao User e representa um teto de gastos por categoria (ex: "Moradia -- 50%"). O campo `current_spent` é desnormalizado propositadamente para consulta rápida sem precisar agregar transações a cada request.
+- **TRANSACTION** pertence ao User e opcionalmente a um Envelope. É o registro de cada gasto ou receita.
 
-A simplicidade e intencional: um dev que olha o diagrama entende o sistema inteiro em 30 segundos.
+A simplicidade é intencional: um dev que olha o diagrama entende o sistema inteiro em 30 segundos.
 
 ---
 
@@ -53,35 +53,35 @@ erDiagram
 
 ```mermaid
 flowchart TD
-    A[Usuario digita: gastei 50 no uber] --> B[KOF BFF]
+    A["Usuário digita: 'gastei 50 no Uber'"] --> B[KOF BFF]
     B --> C[Spring Boot - ChatController]
     C --> D[Spring AI - Tool Calling]
     D --> E[registerExpense]
     E --> F[Classifica: Transporte - Envelope adequado]
     F --> G[Salva Transaction no MySQL]
     G --> H[Atualiza current_spent do Envelope]
-    H --> I[Calcula Pulso Diario]
-    I --> J[Retorna: Registrei R$50 em Transporte. Pulso: R$92/dia]
+    H --> I[Calcula Pulso Diário]
+    I --> J["Retorna: 'Registrei R$50 em Transporte. Pulso: R$92/dia'"]
 ```
 
-## Fluxo: calculo do pulso diario
+## Fluxo: cálculo do pulso diário
 
 ```mermaid
 flowchart LR
-    A[monthly_salary] --> B[Soma de todas as Transactions do mes]
+    A[monthly_salary] --> B[Soma de todas as Transactions do mês]
     B --> C["pulso = (salary - total_spent) / dias_restantes"]
     C --> D["R$ 92,00 por dia"]
 ```
 
-## Fluxo: criacao automatica de envelopes
+## Fluxo: criação automática de envelopes
 
 ```mermaid
 flowchart TD
-    A[Usuario informa salario: R$ 4.000] --> B[Sistema cria Budget 50/30/20]
+    A[Usuário informa salário: R$ 4.000] --> B[Sistema cria Budget 50/30/20]
     B --> C["Necessidades: R$ 2.000 (50%)"]
     B --> D["Desejos: R$ 1.200 (30%)"]
-    B --> E["Poupanca: R$ 800 (20%)"]
-    C --> F[Usuario personaliza envelopes dentro de cada bucket]
+    B --> E["Poupança: R$ 800 (20%)"]
+    C --> F[Usuário personaliza envelopes dentro de cada bucket]
     F --> G["Moradia: R$ 1.200"]
     F --> H["Mercado: R$ 500"]
     F --> I["Transporte: R$ 300"]
