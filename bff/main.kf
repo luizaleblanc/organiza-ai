@@ -1,14 +1,16 @@
-// KOF_REFERENCE.md nao documenta uma forma de definir o status HTTP da resposta
-// a partir de uma rota (nao ha response.status() ou equivalente na referencia).
-// Por isso, quando o token esta ausente, a rota protegida retorna a mensagem de
-// erro "Token nao informado" como corpo da resposta, em vez de um status 401 literal.
-requireAuth() -> String {
-    var token = header("Authorization")
-    if (token == null || token == "") {
-        return ""
-    }
-    return token
-}
+// Sintaxe validada contra training/ do Kof4j e o codigo-fonte do compilador
+// (KofWeb.java, KofHttp.java). Ver KOF_WEB_REFERENCE.md na raiz do projeto.
+//
+// http.get/post/put/delete/patch/options retornam String pura (o corpo da
+// resposta) -- nao existe objeto de resposta com .body. Headers sao uma
+// String "Nome: valor" passada como ultimo argumento de http.*, o que
+// permite repassar o Authorization recebido para o backend Spring Boot.
+
+String authHeader(String token) = "Authorization: " + token
+
+// header("Authorization") retorna null (nao "") quando o header nao existe
+// -- confirmado rodando o BFF real: kof_web_header repassa null do runtime.
+Bool missingToken(String token) = token == null || token == ""
 
 main() {
     var app = web.app()
@@ -19,139 +21,113 @@ main() {
 
     // Rotas publicas -- sem autenticacao
     app.post("/api/auth/login") {
-        var response = http.post("http://localhost:8080/auth/login", body())
-        return response.body
+        return http.post("http://localhost:8080/auth/login", body())
     }
 
     app.post("/api/auth/register") {
-        var response = http.post("http://localhost:8080/auth/register", body())
-        return response.body
+        return http.post("http://localhost:8080/auth/register", body())
     }
 
-    // Rotas protegidas -- exigem Authorization e repassam o header para o backend validar o JWT
+    // Rotas protegidas -- exigem Authorization, repassado ao backend
 
     app.post("/api/variable-income") {
-        var token = requireAuth()
-        if (token == "") {
-            return "Token não informado"
+        var token = header("Authorization")
+        if (missingToken(token)) {
+            return status(401, "Token não informado")
         }
-        var response = http.post("http://localhost:8080/api/variable-income", body(),
-            headers: {"Authorization": token})
-        return response.body
+        return http.post("http://localhost:8080/api/variable-income", body(), authHeader(token))
     }
 
     app.get("/api/variable-income") {
-        var token = requireAuth()
-        if (token == "") {
-            return "Token não informado"
+        var token = header("Authorization")
+        if (missingToken(token)) {
+            return status(401, "Token não informado")
         }
         var userId = query("userId")
-        var response = http.get("http://localhost:8080/api/variable-income?userId=" + userId,
-            headers: {"Authorization": token})
-        return response.body
+        return http.get("http://localhost:8080/api/variable-income?userId=" + userId, authHeader(token))
     }
 
     app.post("/api/users/onboarding") {
-        var token = requireAuth()
-        if (token == "") {
-            return "Token não informado"
+        var token = header("Authorization")
+        if (missingToken(token)) {
+            return status(401, "Token não informado")
         }
-        var response = http.post("http://localhost:8080/api/users/onboarding", body(),
-            headers: {"Authorization": token})
-        return response.body
+        return http.post("http://localhost:8080/api/users/onboarding", body(), authHeader(token))
     }
 
     // Repassa para o mesmo endpoint de registro de renda do backend (/api/variable-income)
     app.post("/api/income") {
-        var token = requireAuth()
-        if (token == "") {
-            return "Token não informado"
+        var token = header("Authorization")
+        if (missingToken(token)) {
+            return status(401, "Token não informado")
         }
-        var response = http.post("http://localhost:8080/api/variable-income", body(),
-            headers: {"Authorization": token})
-        return response.body
+        return http.post("http://localhost:8080/api/variable-income", body(), authHeader(token))
     }
 
     app.post("/api/chat/message") {
-        var token = requireAuth()
-        if (token == "") {
-            return "Token não informado"
+        var token = header("Authorization")
+        if (missingToken(token)) {
+            return status(401, "Token não informado")
         }
-        var response = http.post("http://localhost:8080/chat/message", body(),
-            headers: {"Authorization": token})
-        return response.body
+        return http.post("http://localhost:8080/chat/message", body(), authHeader(token))
     }
 
     app.get("/api/transactions") {
-        var token = requireAuth()
-        if (token == "") {
-            return "Token não informado"
+        var token = header("Authorization")
+        if (missingToken(token)) {
+            return status(401, "Token não informado")
         }
         var month = query("month")
-        var response = http.get("http://localhost:8080/transactions?month=" + month,
-            headers: {"Authorization": token})
-        return response.body
+        return http.get("http://localhost:8080/transactions?month=" + month, authHeader(token))
     }
 
     app.post("/api/transactions") {
-        var token = requireAuth()
-        if (token == "") {
-            return "Token não informado"
+        var token = header("Authorization")
+        if (missingToken(token)) {
+            return status(401, "Token não informado")
         }
-        var response = http.post("http://localhost:8080/transactions", body(),
-            headers: {"Authorization": token})
-        return response.body
+        return http.post("http://localhost:8080/transactions", body(), authHeader(token))
     }
 
     app.get("/api/budgets/daily-pulse") {
-        var token = requireAuth()
-        if (token == "") {
-            return "Token não informado"
+        var token = header("Authorization")
+        if (missingToken(token)) {
+            return status(401, "Token não informado")
         }
-        var response = http.get("http://localhost:8080/budgets/daily-pulse",
-            headers: {"Authorization": token})
-        return response.body
+        return http.get("http://localhost:8080/budgets/daily-pulse", authHeader(token))
     }
 
     app.get("/api/envelopes") {
-        var token = requireAuth()
-        if (token == "") {
-            return "Token não informado"
+        var token = header("Authorization")
+        if (missingToken(token)) {
+            return status(401, "Token não informado")
         }
         var userId = query("userId")
-        var response = http.get("http://localhost:8080/api/envelopes?userId=" + userId,
-            headers: {"Authorization": token})
-        return response.body
+        return http.get("http://localhost:8080/api/envelopes?userId=" + userId, authHeader(token))
     }
 
     app.post("/api/envelopes") {
-        var token = requireAuth()
-        if (token == "") {
-            return "Token não informado"
+        var token = header("Authorization")
+        if (missingToken(token)) {
+            return status(401, "Token não informado")
         }
-        var response = http.post("http://localhost:8080/api/envelopes", body(),
-            headers: {"Authorization": token})
-        return response.body
+        return http.post("http://localhost:8080/api/envelopes", body(), authHeader(token))
     }
 
     app.put("/api/envelopes/:id") {
-        var token = requireAuth()
-        if (token == "") {
-            return "Token não informado"
+        var token = header("Authorization")
+        if (missingToken(token)) {
+            return status(401, "Token não informado")
         }
-        var response = http.put("http://localhost:8080/api/envelopes/" + param("id"), body(),
-            headers: {"Authorization": token})
-        return response.body
+        return http.put("http://localhost:8080/api/envelopes/" + param("id"), body(), authHeader(token))
     }
 
     app.delete("/api/envelopes/:id") {
-        var token = requireAuth()
-        if (token == "") {
-            return "Token não informado"
+        var token = header("Authorization")
+        if (missingToken(token)) {
+            return status(401, "Token não informado")
         }
-        var response = http.delete("http://localhost:8080/api/envelopes/" + param("id"),
-            headers: {"Authorization": token})
-        return response.body
+        return http.delete("http://localhost:8080/api/envelopes/" + param("id"), authHeader(token))
     }
 
     app.listen(3000)
