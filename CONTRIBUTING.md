@@ -262,6 +262,79 @@ Antes de começar uma issue aberta, consulte [docs/ISSUES_GUIDE.md](docs/ISSUES_
 
 Consulte [KOF_REFERENCE.md](KOF_REFERENCE.md) (raiz do projeto) para a referência completa da linguagem, kof.ui e kof.web.
 
+## Como configurar sua IA para codar em KOF
+
+O KOF é uma linguagem nova e a maioria das LLMs (ChatGPT, Claude, Gemini, Copilot) não a conhece nativamente. Sem contexto, a IA vai inventar sintaxe que não existe e gerar código que não compila. Para evitar isso, siga estes passos antes de pedir para a IA escrever código KOF:
+
+### 1. Alimentar com o corpus de training
+
+O repositório do compilador KOF tem uma pasta `training/` com documentação estruturada especificamente para LLMs:
+
+```bash
+git clone https://github.com/KofLang/Kof4j.git
+```
+
+Os arquivos essenciais para alimentar a IA:
+
+| Arquivo | O que ensina |
+|---|---|
+| `training/language/syntax.md` | Sintaxe completa da linguagem |
+| `training/language/types.md` | Sistema de tipos |
+| `training/language/io.md` | HTTP, JSON, filesystem |
+| `training/language/ui.md` | Componentes de interface (kof.ui) |
+| `training/examples/web.kf` | Exemplo real de servidor HTTP |
+| `training/idioms/architecture.md` | Como estruturar projetos |
+| `training/anti-patterns/fake-idioms.md` | O que a IA NÃO deve inventar |
+| `training/migration/java-to-kof.md` | Como migrar de Java para KOF |
+
+### 2. Incluir na primeira mensagem
+
+Antes de pedir qualquer código KOF para a IA, cole o conteúdo dos arquivos relevantes como contexto. Exemplo de prompt:
+
+```
+Aqui está a documentação oficial da linguagem KOF (versão 0.2.6-beta),
+extraída da pasta training/ do compilador. Use APENAS a sintaxe confirmada
+nestes arquivos -- nunca invente métodos, tipos ou palavras-chave de outras
+linguagens (Java, Kotlin, JavaScript etc.) só porque parecem fazer sentido.
+
+[cole aqui training/language/syntax.md]
+[cole aqui training/anti-patterns/fake-idioms.md]
+[cole aqui os demais arquivos relevantes para a tarefa]
+
+Tarefa: [descreva a rota, a tela ou a função que você precisa implementar]
+```
+
+### 3. Usar os arquivos de referência do projeto
+
+Este repositório tem dois arquivos de referência que a IA deve ler:
+
+- `KOF_REFERENCE.md` -- referência geral da linguagem
+- `KOF_WEB_REFERENCE.md` -- referência específica de kof.web e HTTP client
+
+Se estiver usando o Claude Code, esses arquivos são lidos automaticamente
+via `CLAUDE.md`.
+
+### 4. Validar SEMPRE antes de confiar
+
+Regra de ouro: **código KOF gerado por IA deve ser compilado antes de ser commitado.**
+
+```bash
+kof run arquivo.kf
+```
+
+Se não compilar, a IA inventou sintaxe. Corrija alimentando o erro de volta
+com o trecho relevante do `training/anti-patterns/fake-idioms.md`.
+
+### 5. Regras rápidas para a IA
+
+Se a IA insistir em gerar código errado, cole estas regras:
+
+- KOF não tem: array literals `[1, 2, 3]`, Option/Optional, lambda com `->` em função nomeada, `for x in xs` sem `var`
+- `http.get/post/put/delete/patch` existem e retornam String (não objeto Response)
+- Headers são passados como String `"Nome: valor"`, não como Map
+- Status codes usam `status(code, body)` dentro da rota
+- `header("Nome")` retorna `null` do Java quando o header não existe, não String vazia
+
 ## Links
 
 - [KOF GitHub](https://github.com/KofLang/Kof4j)

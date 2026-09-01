@@ -91,35 +91,59 @@ interface Falante {
 
 ## 2. kof.web -- Servidor HTTP (BFF)
 
+> Fonte: `KOF_WEB_REFERENCE.md`, gerado a partir de `training/` do repositorio
+> [KofLang/Kof4j](https://github.com/KofLang/Kof4j) e verificado contra o
+> codigo-fonte do compilador (`KofWeb.java`, `KofHttp.java`). Versao 0.2.6-beta.
+
 ### Criar servidor
 ```kof
 main() {
     var app = web.app()
 
-    app.get("/rota") {
-        return "resposta"
-    }
+    app.get("/users") { return json.encode(users) }
+    app.get("/users/:id") { return param("id") }
+    app.post("/users") { var u = json.decode<User>(body()); return json.encode(u) }
+    app.put("/users/:id") { return "atualizado" }
+    app.delete("/users/:id") { return "removido" }
+    app.patch("/users/:id") { return "parcial" }
+    app.options("/users") { return "" }
 
-    app.post("/rota") {
-        var dados = body()           // corpo da requisicao (String)
-        return json.encode(resposta)
-    }
+    app.use { /* logica de middleware */ }
+    app.ws("/chat") { wsSend("echo: " + wsMessage()) }
+    app.sse("/events") { sse.send("tick"); sse.event("ev", "dados"); sse.close() }
 
     app.listen(8080)
+    app.listenSecure(8443)   // TLS
 }
 ```
 
+Metodos de rota confirmados: `get, post, put, delete, patch, options, ws, sse`
+-- todos os seis verbos HTTP existem em `app.*`, nao apenas `get`/`post`.
+Assinatura `(path: String, handler: () -> String)`, exceto `ws`/`sse` que tem
+protocolo proprio (`wsSend`/`wsMessage`, `sse.send/event/close`).
+Suportado na JVM (`kof serve` / `kof run` target JVM); Native/JS reportam
+gaps (`WEB001`-`WEB004`).
+
 ### Funcoes disponiveis nas rotas
 ```kof
-body()              // corpo da requisicao (String)
-param("id")         // path parameter (:id)
-header("Authorization")  // header HTTP
-query("page")       // query string (?page=1)
+body()                     // corpo da requisicao (String), 0 args
+param("id")                // path parameter (:id), String
+header("Authorization")    // header HTTP, String
+query("page")              // query string (?page=1), String
+method()                   // verbo HTTP da requisicao, String
+path()                     // path da requisicao, String
+
+status(201, json.encode(u))       // define status code E retorna o body -- usar em return
+headerSet("X-Custom", "value")    // define header de resposta customizado
 ```
+
+**IMPORTANTE:** `header("Authorization")` retorna `null` (nao `""`) quando o
+header nao existe -- confirmado rodando o BFF real. Verificar sempre com
+`token == null || token == ""`, nunca so `token == ""`.
 
 ### Middleware
 ```kof
-app.use(middleware_fn())
+app.use { /* logica de middleware */ }
 ```
 
 ### JSON
@@ -135,15 +159,50 @@ var user = json.decode<User>(jsonString)
 
 ### HTTP Client
 ```kof
-// GET
-var response = http.get("https://api.example.com/data")
+// GET -- retorna String pura (corpo da resposta), NAO um objeto com .body
+var resposta = http.get("https://api.example.com/data")
+
+// GET com headers -- headers e uma String "Nome: valor", nunca um mapa
+var pagina = http.get(url, "Accept: text/html")
 
 // POST
-var response = http.post("https://api.example.com/data", jsonBody)
+var resposta = http.post("https://api.example.com/data", jsonBody)
 
-// Com headers
-var response = http.post(url, body, headers: {"Authorization": "Bearer " + token})
+// POST com headers
+var resposta = http.post(url, jsonBody, "Content-Type: application/json")
+
+// PUT / DELETE / PATCH -- existem, mesma forma de get/post
+var resposta = http.put(url, jsonBody, "Authorization: " + token)
+var resposta = http.delete(url, "Authorization: " + token)
+var resposta = http.patch(url, jsonBody, "Authorization: " + token)
+
+// Status HTTP de uma URL (chamada GET separada, retorna Int)
+if (http.status(url) == 404) { }
+
+// Resiliencia
+http.timeout(30)     // ms, timeout global
+http.retry(3)        // repete em excecao + HTTP 5xx
+http.circuit(5)      // abre circuito apos N falhas por 30s; circuit(0) recupera
 ```
+
+Verbos confirmados no dispatch table do compilador:
+`get/post/put/delete/patch/options` + `status/timeout/retry/circuit`.
+`get/delete/options` aceitam 1 arg (url) ou 2 (url, headers);
+`post/put/patch` aceitam 2 args (url, body) ou 3 (url, body, headers).
+Todos retornam `String` -- **nunca** um objeto de resposta com
+`.body`/`.status`/`.headers`.
+
+### Headers -- sintaxe confirmada
+
+Headers sao uma unica `String`, uma linha `Nome: valor` por header:
+
+```kof
+var headers = "Authorization: " + token + "\nContent-Type: application/json"
+var resp = http.post(url, body(), headers)
+```
+
+Nao existe sintaxe de mapa/objeto para headers (`headers: {"Authorization": token}`)
+-- essa forma nao compila.
 
 ### Rodar
 ```bash
@@ -384,6 +443,27 @@ main() {
 - `kof run arquivo.kf` -> roda na JVM (UI nao renderiza)
 - `kof run --target=js arquivo.kf` -> compila para JS e abre no webview (UI FUNCIONA)
 - `kof serve arquivo.kf` -> levanta servidor HTTP (BFF, sem UI)
+
+### NAO inventar sintaxe de kof.web / kof.http (confirmado no compilador)
+- NAO declarar funcao nomeada com `foo() -> Tipo { }` -- essa e sintaxe de
+  **lambda**. Funcao nomeada e `foo(): Tipo { }` ou `Tipo foo() { }`
+  (ex.: `add(Int a, Int b): Int { return a + b }`).
+- NAO tratar o retorno de `http.get/post/put/delete/patch/options` como
+  objeto (`response.body`, `response.status`) -- e uma `String` pura com o
+  corpo da resposta.
+- NAO passar headers como mapa/objeto nomeado
+  (`headers: {"Authorization": token}`) -- headers e uma unica `String`
+  `"Nome: valor"` (multiplos headers: linhas separadas por `\n`).
+- NAO checar `header("Authorization")` so com `== ""` para detectar
+  ausencia -- o runtime retorna `null` quando o header nao existe; checar
+  `token == null || token == ""`.
+- NAO evitar `app.put`/`app.delete`/`http.put`/`http.delete` achando que nao
+  existem -- os seis verbos (`get/post/put/delete/patch/options`) existem
+  tanto em `app.*` (rotas) quanto em `http.*` (client).
+- NAO inventar `Thread`/`Executor` -- usar `spawn`/`await` com `Handle<T>`.
+- NAO usar `Option<T>` generico -- usar `String?`/`Int?`.
+- NAO usar array literais `[1,2,3]`/`{1,2,3}` -- usar `new Int[n]` ou `listOf(...)`.
+- NAO usar `for (x in xs)` sem `var` -- precisa ser `for (var x in xs)`.
 
 ### NAO mutar estado via closure
 ```kof

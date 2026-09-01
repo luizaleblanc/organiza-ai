@@ -343,6 +343,14 @@ sendChatMessage(String message) -> ChatResponse {
 12. **Tom de voz: amigo que entende de dinheiro, nao gerente de banco.**
     Sem jargao, sem julgamento.
 
+## Leitura obrigatória
+Antes de escrever ou revisar codigo KOF (frontend ou BFF), leia:
+- `KOF_REFERENCE.md` -- referencia geral da linguagem, kof.ui e kof.web
+- `KOF_WEB_REFERENCE.md` -- referencia especifica de kof.web e do HTTP client (rotas, headers, status codes)
+
+Essas referencias existem porque o KOF e uma linguagem nova: sem elas, a IA
+inventa sintaxe que nao existe e gera codigo que nao compila.
+
 ## Fase Atual
 Consulte `specs/PHASE_X_*.md` para escopo da fase em andamento.
 Consulte `PROJECT_STATUS.md` para estado atual do projeto.
