@@ -14,6 +14,8 @@ Organiza IA é um organizador de gastos inteligente projetado para separar as fi
 
 **Dashboard intuitivo** -- o foco é o dashboard de controle financeiro. Entrada por voz é um atalho opcional, não pré-requisito. O app foi desenhado para ser simples a ponto de não precisar de tutorial.
 
+**Anti-alucinação** -- o coach de IA usa tool calling para consultar seus dados reais (transações, envelopes, pulso diário) antes de responder. A IA nunca inventa números: ela fala sobre o que existe de fato no seu histórico financeiro.
+
 ## Stack
 
 | Camada | Tecnologia |
