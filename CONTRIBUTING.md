@@ -143,7 +143,12 @@ docker compose up -d
 
 ### 5. Rodar o BFF
 
+O BFF valida o JWT localmente (issue #1, `bff/middleware/auth.kf`) com o
+mesmo secret do backend -- exporte a mesma variável usada no `.env` antes de
+rodar (o BFF é um processo separado do Spring Boot e não lê `.env` sozinho):
+
 ```bash
+export API_SECURITY_TOKEN_SECRET=<o mesmo valor do seu .env>
 cd bff
 kof serve main.kf --port 3000
 # http://localhost:3000

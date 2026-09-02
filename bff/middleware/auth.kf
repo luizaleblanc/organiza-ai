@@ -1,0 +1,56 @@
+package middleware
+
+// Middleware de autenticacao JWT do BFF (issue #1, docs/ISSUES_GUIDE.md).
+
+record AuthClaims(String sub, String iss)
+
+String expectedIssuer() {
+    return "QUAK"
+}
+
+List<String> publicPaths() {
+    return listOf("/health", "/api/auth/login", "/api/auth/register")
+}
+
+Bool isPublicPath(String path) {
+    return publicPaths().contains(path)
+}
+
+String jwtSecret() {
+    return secrets.get("API_SECURITY_TOKEN_SECRET")
+}
+
+String? extractBearerToken(String? authHeader) {
+    if (authHeader == null || authHeader == "") {
+        return null
+    }
+    if (!authHeader.startsWith("Bearer ")) {
+        return null
+    }
+    var token = authHeader.substring(7).trim()
+    if (token == "") {
+        return null
+    }
+    return token
+}
+
+Bool hasBearerToken() {
+    return extractBearerToken(header("Authorization")) != null
+}
+
+AuthClaims requireAuth() {
+    var token = extractBearerToken(header("Authorization"))
+    if (token == null) {
+        throw "Token não informado"
+    }
+    try {
+        var claimsJson = jwt.verify(token, jwtSecret())
+        var claims = json.decode<AuthClaims>(claimsJson)
+        if (claims.iss() != expectedIssuer()) {
+            throw "Token com issuer inválido"
+        }
+        return claims
+    } catch (String e) {
+        throw "Token inválido ou expirado"
+    }
+}
