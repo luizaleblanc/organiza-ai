@@ -46,7 +46,7 @@ public class VoiceCommandController {
         this.chatClient = chatClientBuilder
                 .defaultSystem(systemPrompt.getContentAsString(Charset.defaultCharset()))
                 .defaultToolNames("persistTransactionUseCase", "listTransactionsByCategoryUseCase", "getTotalByCategoryUseCase",
-                        "registerIncomeFunction", "suggestModelChangeFunction")
+                        "registerIncomeFunction", "suggestModelChangeFunction", "getDailyPulseFunction", "getBalanceFunction")
                 .build();
     }
 

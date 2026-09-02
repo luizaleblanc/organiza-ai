@@ -8,7 +8,9 @@ import jakarta.persistence.Id;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -37,6 +39,10 @@ public class TransactionEntity {
     @Column(length = 32, nullable = false)
     private Source source = Source.MANUAL;
 
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    private Instant createdAt;
+
     public static TransactionEntity from(Transaction transaction) {
         return new TransactionEntity(
                 transaction.getId().uuid(),
@@ -46,7 +52,8 @@ public class TransactionEntity {
                 transaction.getCurrency(),
                 transaction.getUserId(),
                 null,
-                Source.MANUAL);
+                Source.MANUAL,
+                null);
     }
 
     public Transaction toDomain() {
