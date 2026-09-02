@@ -7,4 +7,6 @@ import java.util.List;
 
 public interface ChatMessageEntityRepository extends JpaRepository<ChatMessageEntity, String> {
     List<ChatMessageEntity> findAllByUserIdOrderByCreatedAtAsc(String userId);
+
+    List<ChatMessageEntity> findTop20ByUserIdOrderByCreatedAtDesc(String userId);
 }
