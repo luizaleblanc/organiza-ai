@@ -3,7 +3,9 @@ package com.organiza.mod_ai_coach.controller;
 import com.organiza.mod_ai_coach.model.ChatMessageEntity;
 import com.organiza.mod_ai_coach.model.ChatRole;
 import com.organiza.mod_ai_coach.repository.ChatMessageEntityRepository;
+import com.organiza.shared.exception.TierLimitExceededException;
 import com.organiza.shared.security.CurrentUserService;
+import com.organiza.shared.service.TierEnforcementService;
 import org.springframework.ai.audio.transcription.AudioTranscriptionPrompt;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
@@ -22,6 +24,7 @@ import org.springframework.ai.openai.audio.speech.SpeechPrompt;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -50,17 +53,20 @@ public class VoiceCommandController {
     private final ChatMemory chatMemory;
     private final ChatMessageEntityRepository chatMessageRepository;
     private final CurrentUserService currentUserService;
+    private final TierEnforcementService tierEnforcementService;
 
     public VoiceCommandController(@Value("classpath:prompts/system-message.st") Resource systemPrompt,
                                    ChatClient.Builder chatClientBuilder,
                                    OpenAiAudioTranscriptionModel transcriptionModel,
                                    OpenAiAudioSpeechModel speechModel,
                                    ChatMessageEntityRepository chatMessageRepository,
-                                   CurrentUserService currentUserService) throws IOException {
+                                   CurrentUserService currentUserService,
+                                   TierEnforcementService tierEnforcementService) throws IOException {
         this.transcriptionModel = transcriptionModel;
         this.speechModel = speechModel;
         this.chatMessageRepository = chatMessageRepository;
         this.currentUserService = currentUserService;
+        this.tierEnforcementService = tierEnforcementService;
         // Cache em memória exigido pelo MessageChatMemoryAdvisor do Spring AI;
         // é ressincronizado com o banco a cada interação em syncChatMemoryFromDatabase.
         this.chatMemory = MessageWindowChatMemory.builder()
@@ -99,12 +105,17 @@ public class VoiceCommandController {
             String responseBase64 = Base64.getEncoder().encodeToString(responseAudio);
 
             return ResponseEntity.ok(Map.of("audioBase64", responseBase64));
+        } catch (TierLimitExceededException e) {
+            return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED).body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body("Erro ao processar áudio: " + e.getMessage());
         }
     }
 
     private byte[] processVoiceCommand(Resource audioResource) {
+        tierEnforcementService.enforceVoiceAllowed();
+        tierEnforcementService.enforceCanSendMessage();
+
         String userId = currentUserService.getCurrentUserId();
 
         var transcriptionOptions = OpenAiAudioTranscriptionOptions.builder()
