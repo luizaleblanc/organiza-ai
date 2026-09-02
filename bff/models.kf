@@ -19,3 +19,5 @@ record OnboardingRequest(Float salary, String incomeType, Boolean hasDebt)
 record OnboardingResponse(String suggestedModel, String modelDescription)
 
 record BucketSummary(String name, Int percentage, Float amount)
+
+record TierStatus(String tier, Int messagesUsed, Boolean voiceEnabled, Boolean canSendMessage)
