@@ -79,6 +79,13 @@ Regras rigorosas de PRs (Pull Requests) para garantir a qualidade do código rec
 - Aprovação de pelo menos 1 maintainer
 - Checklist de qualidade validado
 
+#### Fase 4 -- Deploy e CI/CD
+- Backend: deploy no Render via push na main. Cronjob de ping ativo.
+- BFF KOF: deploy manual via kof serve (automação futura com Docker).
+- Build deve compilar limpo: ./gradlew build (backend), kof run bff/main.kf (BFF).
+- Merge na main somente via PR aprovado.
+- Todo PR segue checklist: testes, compilação, acentuação, PROJECT_STATUS atualizado.
+
 ---
 
 ## Pré-requisitos
@@ -263,6 +270,12 @@ Antes de começar uma issue aberta, consulte [docs/ISSUES_GUIDE.md](docs/ISSUES_
 Consulte [KOF_REFERENCE.md](KOF_REFERENCE.md) (raiz do projeto) para a referência completa da linguagem, kof.ui e kof.web.
 
 ## Como configurar sua IA para codar em KOF
+
+### Por que isso é necessário?
+KOF é uma linguagem compilada para JVM lançada em 2026. Nenhuma LLM
+foi treinada com volume significativo de código KOF. Sem contexto,
+a IA inventa sintaxe que não compila. Este projeto já sofreu com isso.
+Regra de ouro: se a IA gerou código KOF, compile antes de confiar.
 
 O KOF é uma linguagem nova e a maioria das LLMs (ChatGPT, Claude, Gemini, Copilot) não a conhece nativamente. Sem contexto, a IA vai inventar sintaxe que não existe e gerar código que não compila. Para evitar isso, siga estes passos antes de pedir para a IA escrever código KOF:
 
