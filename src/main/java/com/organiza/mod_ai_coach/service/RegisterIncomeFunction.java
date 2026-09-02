@@ -10,11 +10,16 @@ import com.organiza.shared.security.CurrentUserService;
 import org.springframework.context.annotation.Description;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.function.Function;
 
 @Service
 @Description("Registra uma renda do usuario, fixa ou variavel, e direciona o valor automaticamente para a reserva de emergencia ou para o orcamento")
 public class RegisterIncomeFunction implements Function<RegisterIncomeInput, RegisterIncomeOutput> {
+
+    private static final List<String> FIXED_INCOME_TERMS = List.of(
+            "salári", "salario", "fixo", "clt", "mensal"
+    );
 
     private final VariableIncomeService variableIncomeService;
     private final UserEntityRepository userEntityRepository;
@@ -30,7 +35,10 @@ public class RegisterIncomeFunction implements Function<RegisterIncomeInput, Reg
 
     @Override
     public RegisterIncomeOutput apply(RegisterIncomeInput input) {
-        if ("salário".equalsIgnoreCase(input.source()) || "salario".equalsIgnoreCase(input.source())) {
+        boolean isFixedIncome = FIXED_INCOME_TERMS.stream()
+                .anyMatch(term -> input.source().toLowerCase().contains(term));
+
+        if (isFixedIncome) {
             return new RegisterIncomeOutput("SALARY",
                     "Beleza, essa é a sua renda fixa. Ela já está considerada no seu orçamento mensal.");
         }
