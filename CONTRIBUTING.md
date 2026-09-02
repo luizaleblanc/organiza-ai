@@ -202,7 +202,7 @@ Toda branch de feature nasce a partir do commit mais recente (HEAD) de `main` --
 ```bash
 git checkout main
 git pull origin main
-git checkout -b feature/<numero-da-issue>-descricao-curta
+git checkout -b feature/<número-da-issue>-descrição-curta
 # Exemplos (branches já criadas para as issues abertas):
 # feature/1-jwt-middleware
 # feature/2-chat-proxy

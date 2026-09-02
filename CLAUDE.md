@@ -15,19 +15,18 @@ O Organiza fala como um amigo que entende de dinheiro, não como um gerente de b
 ## Stack
 
 ### Frontend + BFF: KOF (linguagem compilada para JVM)
-- Linguagem: Kof (.kf) -- estaticamente tipada, compilada, zero cerimonia
+- Linguagem: Kof (.kf) -- estaticamente tipada, compilada, zero cerimônia
 - UI: kof.ui (Window, Label, Button, Input, Column, Row, View, Style, Color, Theme)
-- Renderizacao: KofJS -> ES Modules -> webview nativo (WebKitGTK desktop, Android WebView mobile)
+- Renderização: KofJS -> ES Modules -> webview nativo (WebKitGTK desktop, Android WebView mobile)
 - BFF: kof.web (web.app(), rotas, middleware, JSON tipado, HTTP server embutido)
 - Compilador: kof-cli (kof run, kof build, kof serve)
-- Documentacao: https://koflang.github.io/docs
-- Repositorio: https://github.com/KofLang/Kof4j
+- Documentação e Repositório: https://github.com/KofLang/Kof4j
 
 ### Backend: Java/Spring Boot
 - Java 17, Spring Boot 3.3.x, Spring AI (GPT-4o-mini)
 - MySQL (Aiven), Redis (cache)
 - Build: Gradle (./gradlew)
-- Arquitetura: monolito modular
+- Arquitetura: monólito modular
 
 ## Comandos
 
@@ -66,7 +65,7 @@ O Organiza fala como um amigo que entende de dinheiro, não como um gerente de b
              v
 ┌─────────────────────────────────┐
 │  Spring Boot (Backend)          │
-│  Modulos: auth, user,           │
+│  Módulos: auth, user,           │
 │  transaction, budget, coach,    │
 │  notification, bank-reader      │
 │  Spring AI (tool calling)       │
@@ -82,26 +81,26 @@ organiza-ai/
     main.kf                   # Entrypoint: monta Window, rotas de tela
     screens/
       onboarding.kf           # Tela de salario
-      chat.kf                 # Chat principal + pulso diario
+      chat.kf                 # Chat principal + pulso diário
       dashboard.kf            # Barras de progresso por bucket
       envelopes.kf            # CRUD de envelopes
-      history.kf              # Lista de transacoes
-      settings.kf             # Configuracoes, perfil
+      history.kf              # Lista de transações
+      settings.kf             # Configurações, perfil
     components/
-      pulse_card.kf           # Widget do pulso diario
+      pulse_card.kf           # Widget do pulso diário
       bucket_bar.kf           # Barra de progresso de um bucket
       envelope_card.kf        # Card de um envelope
       message_bubble.kf       # Bolha de mensagem do chat
-      nav_bar.kf              # Barra de navegacao inferior
+      nav_bar.kf              # Barra de navegação inferior
     theme/
-      app_theme.kf            # Theme.dark(), cores, estilos padrao
+      app_theme.kf            # Theme.dark(), cores, estilos padrão
     api/
       http_client.kf          # Chamadas HTTP ao BFF (http.get/post)
 
   bff/                        # KOF BFF (kof.web)
     main.kf                   # web.app() + todas as rotas
     middleware/
-      auth.kf                 # Validacao JWT
+      auth.kf                 # Validação JWT
       cors.kf                 # CORS headers
 
   src/                        # Backend Spring Boot (Java)
@@ -117,17 +116,17 @@ organiza-ai/
 
   specs/                      # Specs por fase (versionado no Git)
   CLAUDE.md                   # Este arquivo (local)
-  PROJECT_STATUS.md           # Handoff entre sessoes (local)
+  PROJECT_STATUS.md           # Handoff entre sessões (local)
 ```
 
-## Referencia Rapida: kof.ui
+## Referência Rápida: kof.ui
 
-### Componentes disponiveis
+### Componentes disponíveis
 
 ```kof
 // Janela (container raiz)
-var w = Window("Titulo")
-w.title = "Novo Titulo"
+var w = Window("Título")
+w.title = "Novo Título"
 w.size(360, 640)
 w.theme = Theme.dark()
 w.bind(widget)
@@ -140,11 +139,11 @@ l.fontSize = 16
 l.bold = true
 l.color = Palette.white
 
-// Button (com acao via lambda)
+// Button (com ação via lambda)
 var b = Button("Clique", () -> fazAlgo())
 b.text = "Novo texto"
 
-// Input (campo editavel)
+// Input (campo editável)
 var i = Input("placeholder")
 i.text = "valor preenchido"
 i.text()  // le valor atual
@@ -159,7 +158,7 @@ var style = Style(Palette.black, Palette.white, 16, 8)
 var view = View(style)
 view.bind(col)
 
-// Composicao
+// Composição
 w.bind(view)  // monta view na janela
 ```
 
@@ -183,24 +182,24 @@ dark.primary()      // Color
 dark.isDark()       // true
 ```
 
-### Estado mutavel
+### Estado mutável
 
 ```kof
-// Estado entre cliques vive em campos estaticos
+// Estado entre cliques vive em campos estáticos
 class AppState {
     static Int count = 0
     static String currentScreen = "chat"
 }
 
 // Lambda captura foto somente-leitura do escopo
-// Para mutar: usar campos estaticos da classe
+// Para mutar: usar campos estáticos da classe
 w.bind(Button("+1", () -> {
     AppState.count = AppState.count + 1
     label.text = "total: " + AppState.count
 }))
 ```
 
-### Execucao da UI
+### Execução da UI
 
 ```bash
 # Compilar e abrir no webview
@@ -209,11 +208,11 @@ kof run --target=js main.kf
 # Fluxo interno:
 # 1. Compila para Default.mjs + kof-runtime.mjs
 # 2. Executa no runner embarcado (GraalJS)
-# 3. Gera index.html + modulos
+# 3. Gera index.html + módulos
 # 4. Abre no webview nativo (WebKitGTK) ou browser do sistema
 ```
 
-## Referencia Rapida: kof.web (BFF)
+## Referência Rápida: kof.web (BFF)
 
 ```kof
 main() {
@@ -242,16 +241,16 @@ main() {
 }
 ```
 
-## Convencoes KOF
+## Convenções KOF
 
-### Nomeacao
+### Nomeação
 - Arquivos: snake_case.kf (pulse_card.kf, chat_screen.kf)
 - Classes: PascalCase (AppState, ChatMessage)
-- Funcoes: camelCase (sendMessage, getDailyPulse)
-- Constantes: SCREAMING_SNAKE em campos estaticos
+- Funções: camelCase (sendMessage, getDailyPulse)
+- Constantes: SCREAMING_SNAKE em campos estáticos
 
-### Organizacao de tela
-Cada tela e uma funcao que retorna ou monta widgets num Window/View:
+### Organização de tela
+Cada tela é uma função que retorna ou monta widgets num Window/View:
 
 ```kof
 // screens/chat.kf
@@ -298,50 +297,50 @@ sendChatMessage(String message) -> ChatResponse {
 }
 ```
 
-## Regras Inviolaveis
+## Regras Invioláveis
 
-1. **Frontend e KOF (kof.ui), nao Flutter, nao React.**
-   Toda tela, componente e interacao e escrita em .kf usando kof.ui.
+1. **Frontend é KOF (kof.ui), não Flutter, não React.**
+   Toda tela, componente e interação é escrita em .kf usando kof.ui.
 
-2. **BFF e KOF (kof.web), nao Next.js.**
-   O proxy HTTP e servidor BFF e escrito em .kf usando web.app().
+2. **BFF é KOF (kof.web), não Next.js.**
+   O proxy HTTP e servidor BFF é escrito em .kf usando web.app().
 
 3. **Backend permanece Java/Spring Boot.**
-   Spring AI, JPA, MySQL, auth -- tudo no backend. KOF nao substitui o backend.
+   Spring AI, JPA, MySQL, auth -- tudo no backend. KOF não substitui o backend.
 
 4. **UI roda via KofJS (target JS).**
    Compilar com `kof run --target=js`. Renderiza no webview/browser.
    JVM e Native renderizam no-op (sem UI).
 
-5. **Estado mutavel em campos estaticos de classe.**
+5. **Estado mutável em campos estáticos de classe.**
    Lambdas capturam foto somente-leitura. Para mutar entre cliques,
    usar campos static da classe de estado (ex: AppState, ChatState).
 
-6. **Composicao e hierarquica: Window > View > Column/Row > widgets.**
-   Nao pular niveis. Sempre montar via .bind().
+6. **Composição é hierárquica: Window > View > Column/Row > widgets.**
+   Não pular níveis. Sempre montar via .bind().
 
-7. **kof.ui NAO tem (ainda):**
-   - ListView scrollavel (usar Column com itens fixos por enquanto)
+7. **kof.ui NÃO tem (ainda):**
+   - ListView scrollável (usar Column com itens fixos por enquanto)
    - Image widget (usar Label como placeholder)
-   - Navegacao entre telas (simular via show/hide de Views)
+   - Navegação entre telas (simular via show/hide de Views)
    - BottomNavigationBar (construir com Row + Buttons)
    - Dialog/Modal (construir com View overlay)
-   Quando a API Mobile da Melissa entregar esses componentes,
-   atualizar esta secao.
+   Quando a API Mobile do KOF (https://github.com/KofLang/Kof4j) entregar
+   esses componentes, atualizar esta seção.
 
-8. **Valores monetarios:** usar String formatada ("R$ 1.234,56").
-   KOF nao tem BigDecimal -- formatacao vem do backend.
+8. **Valores monetários:** usar String formatada ("R$ 1.234,56").
+   KOF não tem BigDecimal -- formatação vem do backend.
 
-9. **Commits:** `feat(frontend): descricao` | `feat(bff): descricao`
+9. **Commits:** `feat(frontend): descrição` | `feat(bff): descrição`
 
-10. **O dashboard e a interface principal. Voz e opcional.**
+10. **O dashboard é a interface principal. Voz é opcional.**
     Nunca trate voz como feature principal em textos ou UI.
 
-11. **O modelo de orcamento e adaptativo.**
-    Nunca assuma 50/30/20 como padrao universal.
+11. **O modelo de orçamento é adaptativo.**
+    Nunca assuma 50/30/20 como padrão universal.
 
-12. **Tom de voz: amigo que entende de dinheiro, nao gerente de banco.**
-    Sem jargao, sem julgamento.
+12. **Tom de voz: amigo que entende de dinheiro, não gerente de banco.**
+    Sem jargão, sem julgamento.
 
 13. **Código KOF: antes de escrever qualquer .kf, ler a pasta training/
     do KOF (https://github.com/KofLang/Kof4j/tree/main/training).**
@@ -367,12 +366,12 @@ Para tarefas 100% Java, o treinamento não é necessário.
 - Commit feito manualmente, nunca pelo Claude Code.
 
 ## Leitura obrigatória
-Antes de escrever ou revisar codigo KOF (frontend ou BFF), leia:
-- `KOF_REFERENCE.md` -- referencia geral da linguagem, kof.ui e kof.web
-- `KOF_WEB_REFERENCE.md` -- referencia especifica de kof.web e do HTTP client (rotas, headers, status codes)
+Antes de escrever ou revisar código KOF (frontend ou BFF), leia:
+- `KOF_REFERENCE.md` -- referência geral da linguagem, kof.ui e kof.web
+- `KOF_WEB_REFERENCE.md` -- referência específica de kof.web e do HTTP client (rotas, headers, status codes)
 
-Essas referencias existem porque o KOF e uma linguagem nova: sem elas, a IA
-inventa sintaxe que nao existe e gera codigo que nao compila.
+Essas referências existem porque o KOF é uma linguagem nova: sem elas, a IA
+inventa sintaxe que não existe e gera código que não compila.
 
 ## Fase Atual
 Consulte `specs/PHASE_X_*.md` para escopo da fase em andamento.

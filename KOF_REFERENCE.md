@@ -1,8 +1,9 @@
-# KOF_REFERENCE.md -- Referencia Tecnica para IA
+# KOF_REFERENCE.md -- Referência Técnica para IA
 
 > Este documento orienta modelos de linguagem (Claude Code, etc.) a escrever
-> codigo KOF correto para o projeto Organiza IA. Baseado na documentacao
-> oficial do KOF 0.2.0-beta e no capitulo 35 (kof.ui) do curso.
+> código KOF correto para o projeto Organiza IA. Baseado na documentação
+> oficial do KOF 0.2.0-beta e na pasta `training/` do repositório
+> [KofLang/Kof4j](https://github.com/KofLang/Kof4j).
 
 ---
 
@@ -12,17 +13,17 @@
 ```kof
 Int          // inteiro
 Float        // ponto flutuante
-String       // texto (imutavel)
+String       // texto (imutável)
 Boolean      // true / false
 ```
 
-### Variaveis
+### Variáveis
 ```kof
-var x = 10              // mutavel
-val y = "constante"     // imutavel (se suportado; usar var por padrao)
+var x = 10              // mutável
+val y = "constante"     // imutável (se suportado; usar var por padrão)
 ```
 
-### Funcoes
+### Funções
 ```kof
 soma(Int a, Int b) -> Int {
     return a + b
@@ -43,18 +44,18 @@ var u = User("Luiza", "luiza@email.com")
 println(u.name)
 ```
 
-### Records (dados imutaveis)
+### Records (dados imutáveis)
 ```kof
 record Transaction(Float amount, String category, String description)
 ```
 
 ### Enums
 ```kof
-// Comparacao com == por conteudo
+// Comparação com == por conteudo
 // Switch exaustivo
 ```
 
-### Colecoes
+### Coleções
 ```kof
 var list = listOf("a", "b", "c")
 list.map((item) -> item + "!")
@@ -64,20 +65,20 @@ list.reduce((acc, item) -> acc + item)
 
 ### Lambdas
 ```kof
-var fn = () -> println("acao")
+var fn = () -> println("ação")
 var soma = (Int a, Int b) -> a + b
 
 // Com captura (foto somente-leitura do escopo externo)
 var nome = "Kof"
-var saudacao = () -> println("Ola " + nome)
+var saudação = () -> println("Ola " + nome)
 ```
 
 ### Null safety
 ```kof
-String? nullable = null     // tipo anulavel com ?
+String? nullable = null     // tipo anulável com ?
 ```
 
-### Heranca e interfaces
+### Herança e interfaces
 ```kof
 class Animal(String nome)
 class Cachorro(String nome, String raca) : Animal(nome)
@@ -91,9 +92,9 @@ interface Falante {
 
 ## 2. kof.web -- Servidor HTTP (BFF)
 
-> Fonte: `KOF_WEB_REFERENCE.md`, gerado a partir de `training/` do repositorio
+> Fonte: `KOF_WEB_REFERENCE.md`, gerado a partir de `training/` do repositório
 > [KofLang/Kof4j](https://github.com/KofLang/Kof4j) e verificado contra o
-> codigo-fonte do compilador (`KofWeb.java`, `KofHttp.java`). Versao 0.2.6-beta.
+> código-fonte do compilador (`KofWeb.java`, `KofHttp.java`). Versão 0.2.6-beta.
 
 ### Criar servidor
 ```kof
@@ -108,7 +109,7 @@ main() {
     app.patch("/users/:id") { return "parcial" }
     app.options("/users") { return "" }
 
-    app.use { /* logica de middleware */ }
+    app.use { /* lógica de middleware */ }
     app.ws("/chat") { wsSend("echo: " + wsMessage()) }
     app.sse("/events") { sse.send("tick"); sse.event("ev", "dados"); sse.close() }
 
@@ -118,32 +119,32 @@ main() {
 ```
 
 Metodos de rota confirmados: `get, post, put, delete, patch, options, ws, sse`
--- todos os seis verbos HTTP existem em `app.*`, nao apenas `get`/`post`.
+-- todos os seis verbos HTTP existem em `app.*`, não apenas `get`/`post`.
 Assinatura `(path: String, handler: () -> String)`, exceto `ws`/`sse` que tem
-protocolo proprio (`wsSend`/`wsMessage`, `sse.send/event/close`).
+protocolo próprio (`wsSend`/`wsMessage`, `sse.send/event/close`).
 Suportado na JVM (`kof serve` / `kof run` target JVM); Native/JS reportam
 gaps (`WEB001`-`WEB004`).
 
-### Funcoes disponiveis nas rotas
+### Funções disponíveis nas rotas
 ```kof
-body()                     // corpo da requisicao (String), 0 args
+body()                     // corpo da requisição (String), 0 args
 param("id")                // path parameter (:id), String
 header("Authorization")    // header HTTP, String
 query("page")              // query string (?page=1), String
-method()                   // verbo HTTP da requisicao, String
-path()                     // path da requisicao, String
+method()                   // verbo HTTP da requisição, String
+path()                     // path da requisição, String
 
 status(201, json.encode(u))       // define status code E retorna o body -- usar em return
 headerSet("X-Custom", "value")    // define header de resposta customizado
 ```
 
-**IMPORTANTE:** `header("Authorization")` retorna `null` (nao `""`) quando o
-header nao existe -- confirmado rodando o BFF real. Verificar sempre com
+**IMPORTANTE:** `header("Authorization")` retorna `null` (não `""`) quando o
+header não existe -- confirmado rodando o BFF real. Verificar sempre com
 `token == null || token == ""`, nunca so `token == ""`.
 
 ### Middleware
 ```kof
-app.use { /* logica de middleware */ }
+app.use { /* lógica de middleware */ }
 ```
 
 ### JSON
@@ -159,10 +160,10 @@ var user = json.decode<User>(jsonString)
 
 ### HTTP Client
 ```kof
-// GET -- retorna String pura (corpo da resposta), NAO um objeto com .body
+// GET -- retorna String pura (corpo da resposta), NÃO um objeto com .body
 var resposta = http.get("https://api.example.com/data")
 
-// GET com headers -- headers e uma String "Nome: valor", nunca um mapa
+// GET com headers -- headers é uma String "Nome: valor", nunca um mapa
 var pagina = http.get(url, "Accept: text/html")
 
 // POST
@@ -181,8 +182,8 @@ if (http.status(url) == 404) { }
 
 // Resiliencia
 http.timeout(30)     // ms, timeout global
-http.retry(3)        // repete em excecao + HTTP 5xx
-http.circuit(5)      // abre circuito apos N falhas por 30s; circuit(0) recupera
+http.retry(3)        // repete em exceção + HTTP 5xx
+http.circuit(5)      // abre circuito após N falhas por 30s; circuit(0) recupera
 ```
 
 Verbos confirmados no dispatch table do compilador:
@@ -194,15 +195,15 @@ Todos retornam `String` -- **nunca** um objeto de resposta com
 
 ### Headers -- sintaxe confirmada
 
-Headers sao uma unica `String`, uma linha `Nome: valor` por header:
+Headers são uma unica `String`, uma linha `Nome: valor` por header:
 
 ```kof
 var headers = "Authorization: " + token + "\nContent-Type: application/json"
 var resp = http.post(url, body(), headers)
 ```
 
-Nao existe sintaxe de mapa/objeto para headers (`headers: {"Authorization": token}`)
--- essa forma nao compila.
+Não existe sintaxe de mapa/objeto para headers (`headers: {"Authorization": token}`)
+-- essa forma não compila.
 
 ### Rodar
 ```bash
@@ -213,16 +214,16 @@ kof serve main.kf --port 3000
 
 ## 3. kof.ui -- Interface Grafica
 
-### IMPORTANTE: Paradigma de renderizacao
+### IMPORTANTE: Paradigma de renderização
 - kof.ui compila para KofJS (ES Modules)
 - Renderiza no webview nativo (WebKitGTK/Android WebView) ou browser
 - Compilar com: `kof run --target=js arquivo.kf`
-- JVM e Native: handles sao no-ops (nao renderizam)
+- JVM e Native: handles são no-ops (não renderizam)
 
 ### Window (container raiz)
 ```kof
-var w = Window("Titulo da Janela")
-w.title = "Novo Titulo"          // bind do titulo
+var w = Window("Título da Janela")
+w.title = "Novo Título"          // bind do título
 w.size(360, 640)                 // largura x altura (mobile: 360x640)
 w.theme = Theme.dark()           // aplica tema
 w.bind(widget)                   // monta widget na janela
@@ -232,30 +233,30 @@ w.close()                        // fecha
 
 ### Label (texto)
 ```kof
-var l = Label("Texto visivel")
+var l = Label("Texto visível")
 l.text = "Texto atualizado"     // bind reativo
 l.fontSize = 18                  // tamanho em px
 l.bold = true                    // negrito
 l.color = Palette.white          // cor do texto
 l.text()                         // le o texto atual
-l.remove()                       // remove da arvore
+l.remove()                       // remove da árvore
 ```
 
-### Button (botao com acao)
+### Button (botão com ação)
 ```kof
-var b = Button("Texto do botao", () -> {
-    // acao ao clicar
+var b = Button("Texto do botão", () -> {
+    // ação ao clicar
     println("clicou")
 })
 b.text = "Novo texto"           // atualiza label
 ```
 
-### Input (campo de texto editavel)
+### Input (campo de texto editável)
 ```kof
 var i = Input("placeholder")
 i.text = "valor inicial"        // bind do valor
-i.text()                         // le valor digitado pelo usuario
-i.remove()                       // remove da arvore
+i.text()                         // le valor digitado pelo usuário
+i.remove()                       // remove da árvore
 ```
 
 ### Column (layout vertical)
@@ -323,9 +324,9 @@ dark.background()     // Color (rgb(18, 18, 18))
 dark.primary()        // Color
 ```
 
-### Composicao hierarquica (arvore de widgets)
+### Composição hierarquica (árvore de widgets)
 ```kof
-// Padrao de montagem:
+// Padrão de montagem:
 // Window > View(Style) > Column/Row > widgets
 
 main() {
@@ -339,8 +340,8 @@ main() {
     titulo.bold = true
     titulo.color = Theme.dark().primary()
 
-    var input = Input("Quanto voce ganha?")
-    var btn = Button("Comecar", () -> {
+    var input = Input("Quanto você ganha?")
+    var btn = Button("Começar", () -> {
         var salario = input.text()
         println("Salario: " + salario)
     })
@@ -366,9 +367,9 @@ main() {
 
 ---
 
-## 4. Padrao de estado (State Management)
+## 4. Padrão de estado (State Management)
 
-KOF usa campos estaticos de classe para estado mutavel entre interacoes:
+KOF usa campos estáticos de classe para estado mutável entre interações:
 
 ```kof
 class ChatState {
@@ -378,14 +379,14 @@ class ChatState {
 }
 
 // Lambda captura foto somente-leitura do escopo
-// Para mutar: acessar campos estaticos
+// Para mutar: acessar campos estáticos
 Button("Enviar", () -> {
     ChatState.messageCount = ChatState.messageCount + 1
     label.text = "Mensagens: " + ChatState.messageCount
 })
 ```
 
-### Padrao recomendado para telas
+### Padrão recomendado para telas
 
 ```kof
 // Cada tela tem sua classe de estado
@@ -404,9 +405,9 @@ class DashboardState {
 
 ---
 
-## 5. Simulacao de navegacao entre telas
+## 5. Simulação de navegação entre telas
 
-kof.ui tem uma unica Window. Para simular navegacao, usar o padrao
+kof.ui tem uma unica Window. Para simular navegação, usar o padrão
 show/hide com Views:
 
 ```kof
@@ -421,59 +422,59 @@ main() {
 
     // Montar todas as telas como Views
     // Controlar visibilidade via NavState
-    // Cada botao de navegacao atualiza NavState.currentScreen
-    // e reconstroi a arvore de widgets
+    // Cada botão de navegação atualiza NavState.currentScreen
+    // e reconstroi a árvore de widgets
 }
 ```
 
 ---
 
-## 6. O que NAO fazer (limites atuais)
+## 6. O que NÃO fazer (limites atuais)
 
-### NAO disponivel em kof.ui (ate API Mobile chegar)
-- NAO usar Image (nao existe widget de imagem)
-- NAO assumir ListView scrollavel (usar Column com itens limitados)
-- NAO assumir BottomNavigationBar nativo (construir com Row + Buttons)
-- NAO assumir Dialog/Modal nativo (construir com View overlay)
-- NAO assumir animacoes/transicoes (CSS transitions futuras)
-- NAO tentar acessar APIs nativas do device (camera, mic, GPS) pelo kof.ui
+### NÃO disponível em kof.ui (ate API Mobile chegar)
+- NÃO usar Image (não existe widget de imagem)
+- NÃO assumir ListView scrollável (usar Column com itens limitados)
+- NÃO assumir BottomNavigationBar nativo (construir com Row + Buttons)
+- NÃO assumir Dialog/Modal nativo (construir com View overlay)
+- NÃO assumir animações/transições (CSS transitions futuras)
+- NÃO tentar acessar APIs nativas do device (camera, mic, GPS) pelo kof.ui
   -- essas virao via API Mobile
 
-### NAO confundir targets
-- `kof run arquivo.kf` -> roda na JVM (UI nao renderiza)
+### NÃO confundir targets
+- `kof run arquivo.kf` -> roda na JVM (UI não renderiza)
 - `kof run --target=js arquivo.kf` -> compila para JS e abre no webview (UI FUNCIONA)
 - `kof serve arquivo.kf` -> levanta servidor HTTP (BFF, sem UI)
 
-### NAO inventar sintaxe de kof.web / kof.http (confirmado no compilador)
-- NAO declarar funcao nomeada com `foo() -> Tipo { }` -- essa e sintaxe de
-  **lambda**. Funcao nomeada e `foo(): Tipo { }` ou `Tipo foo() { }`
+### NÃO inventar sintaxe de kof.web / kof.http (confirmado no compilador)
+- NÃO declarar função nomeada com `foo() -> Tipo { }` -- essa e sintaxe de
+  **lambda**. Função nomeada é `foo(): Tipo { }` ou `Tipo foo() { }`
   (ex.: `add(Int a, Int b): Int { return a + b }`).
-- NAO tratar o retorno de `http.get/post/put/delete/patch/options` como
-  objeto (`response.body`, `response.status`) -- e uma `String` pura com o
+- NÃO tratar o retorno de `http.get/post/put/delete/patch/options` como
+  objeto (`response.body`, `response.status`) -- é uma `String` pura com o
   corpo da resposta.
-- NAO passar headers como mapa/objeto nomeado
-  (`headers: {"Authorization": token}`) -- headers e uma unica `String`
-  `"Nome: valor"` (multiplos headers: linhas separadas por `\n`).
-- NAO checar `header("Authorization")` so com `== ""` para detectar
-  ausencia -- o runtime retorna `null` quando o header nao existe; checar
+- NÃO passar headers como mapa/objeto nomeado
+  (`headers: {"Authorization": token}`) -- headers é uma única `String`
+  `"Nome: valor"` (múltiplos headers: linhas separadas por `\n`).
+- NÃO checar `header("Authorization")` só com `== ""` para detectar
+  ausência -- o runtime retorna `null` quando o header não existe; checar
   `token == null || token == ""`.
-- NAO evitar `app.put`/`app.delete`/`http.put`/`http.delete` achando que nao
+- NÃO evitar `app.put`/`app.delete`/`http.put`/`http.delete` achando que não
   existem -- os seis verbos (`get/post/put/delete/patch/options`) existem
   tanto em `app.*` (rotas) quanto em `http.*` (client).
-- NAO inventar `Thread`/`Executor` -- usar `spawn`/`await` com `Handle<T>`.
-- NAO usar `Option<T>` generico -- usar `String?`/`Int?`.
-- NAO usar array literais `[1,2,3]`/`{1,2,3}` -- usar `new Int[n]` ou `listOf(...)`.
-- NAO usar `for (x in xs)` sem `var` -- precisa ser `for (var x in xs)`.
+- NÃO inventar `Thread`/`Executor` -- usar `spawn`/`await` com `Handle<T>`.
+- NÃO usar `Option<T>` genérico -- usar `String?`/`Int?`.
+- NÃO usar array literais `[1,2,3]`/`{1,2,3}` -- usar `new Int[n]` ou `listOf(...)`.
+- NÃO usar `for (x in xs)` sem `var` -- precisa ser `for (var x in xs)`.
 
-### NAO mutar estado via closure
+### NÃO mutar estado via closure
 ```kof
-// ERRADO: var local nao muta entre cliques
+// ERRADO: var local não muta entre cliques
 var count = 0
 Button("+1", () -> {
-    count = count + 1    // NAO funciona -- captura foto
+    count = count + 1    // NÃO funciona -- captura foto
 })
 
-// CERTO: campo estatico muta entre cliques
+// CERTO: campo estático muta entre cliques
 class S { static Int count = 0 }
 Button("+1", () -> {
     S.count = S.count + 1    // funciona
@@ -504,14 +505,14 @@ kof serve bff/main.kf --port 3000
 
 ---
 
-## 8. Checklist de validacao para cada tela
+## 8. Checklist de validação para cada tela
 
 Ao implementar uma tela em kof.ui, validar:
 
 - [ ] Window com tamanho mobile (360x640)
 - [ ] Theme.dark() aplicado
-- [ ] Todos os textos visiveis com fontSize e color definidos
+- [ ] Todos os textos visíveis com fontSize e color definidos
 - [ ] Inputs com placeholder descritivo
-- [ ] Buttons com lambda funcional (usando campos estaticos para estado)
+- [ ] Buttons com lambda funcional (usando campos estáticos para estado)
 - [ ] Layout montado hierarquicamente: Window > View(Style) > Column/Row > widgets
 - [ ] Compilar com `kof run --target=js` e verificar no webview
