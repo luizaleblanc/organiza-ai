@@ -29,9 +29,13 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.nio.charset.Charset;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.TextStyle;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @RestController
@@ -113,7 +117,12 @@ public class VoiceCommandController {
 
         String promptPersonalizado = userText + " (Obrigatório: Responda em português do Brasil de forma amigável e natural informando o resultado da operação).";
 
+        LocalDate hoje = LocalDate.now();
+        String currentDate = hoje.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+        String currentDayOfWeek = hoje.getDayOfWeek().getDisplayName(TextStyle.FULL, new Locale("pt", "BR"));
+
         String aiTextResponse = chatClient.prompt()
+                .system(s -> s.param("currentDate", currentDate).param("currentDayOfWeek", currentDayOfWeek))
                 .user(promptPersonalizado)
                 .advisors(MessageChatMemoryAdvisor.builder(this.chatMemory).build())
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, userId))
