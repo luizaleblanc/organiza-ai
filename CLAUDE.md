@@ -343,6 +343,29 @@ sendChatMessage(String message) -> ChatResponse {
 12. **Tom de voz: amigo que entende de dinheiro, nao gerente de banco.**
     Sem jargao, sem julgamento.
 
+13. **Código KOF: antes de escrever qualquer .kf, ler a pasta training/
+    do KOF (https://github.com/KofLang/Kof4j/tree/main/training).**
+    Se algo não está documentado, NÃO inventar. Parar e reportar.
+
+14. **Training é a fonte de verdade.** Se houver conflito entre o que
+    você "sabe" sobre KOF e o que está no training/, o training/ vence.
+
+15. **Compilação obrigatória.** Todo código KOF testado com kof run
+    antes de apresentar como concluído.
+
+## Regras de sessão com Claude Code
+
+### Treinamento obrigatório
+Antes de qualquer tarefa com código .kf, o primeiro prompt deve ser:
+"Leia o README do repositório https://github.com/KofLang/Kof4j.
+Leia o README da pasta training. Faça os treinamentos e aprenda KOF."
+Para tarefas 100% Java, o treinamento não é necessário.
+
+### Gerenciamento de tokens
+- 1 sessão = 1 tarefa = 1 commit.
+- Nunca mais de 1 tarefa por sessão.
+- Commit feito manualmente, nunca pelo Claude Code.
+
 ## Leitura obrigatória
 Antes de escrever ou revisar codigo KOF (frontend ou BFF), leia:
 - `KOF_REFERENCE.md` -- referencia geral da linguagem, kof.ui e kof.web
