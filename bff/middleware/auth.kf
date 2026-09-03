@@ -1,0 +1,79 @@
+package middleware
+
+// Middleware de autenticacao JWT do BFF (issue #1, docs/ISSUES_GUIDE.md).
+//
+// O backend Spring Boot emite o token (mod_auth/TokenService, DECISIONS.md
+// ADR-012): HS256, subject = e-mail do usuario, issuer = "QUAK", expiracao
+// de 2h, SEM claim de audience (TokenService.generateToken so define
+// .subject/.issuer/.expiration/.signWith).
+//
+// Este middleware valida o MESMO token localmente com kof.security.jwt
+// (docs/kof4j/security.md) -- sem round-trip ao backend so para validar.
+// Como o backend nao emite audience, verificamos so assinatura+expiracao
+// via jwt.verify(token, secret) (forma de 2 args, opcional segundo
+// docs/security.md do Kof4j: "jwt.verify(token, secret[, iss, aud])") e
+// conferimos o issuer na mao, como defesa em profundidade.
+//
+// O "userId" disponibilizado aqui e o e-mail (claims.sub()) -- e o que o
+// token carrega. O id interno (UUID) continua resolvido no backend a
+// partir desse e-mail (CurrentUserService/SecurityFilter); o BFF nao
+// duplica essa resolucao.
+//
+// Exceptions em Kof sao Strings (docs/kof4j/modules-and-errors.md):
+// jwt.verify lanca em token invalido/expirado/malformado; capturamos e
+// relancamos com uma mensagem estavel para quem chama requireAuth().
+
+record AuthClaims(String sub, String iss)
+
+
+String expectedIssuer() {
+    return "QUAK"
+}
+
+List<String> publicPaths() {
+    return listOf("/health", "/api/auth/login", "/api/auth/register")
+}
+
+Bool isPublicPath(String path) {
+    return publicPaths().contains(path)
+}
+
+String jwtSecret() {
+    return secrets.get("API_SECURITY_TOKEN_SECRET")
+}
+
+String? extractBearerToken(String? authHeader) {
+    if (authHeader == null || authHeader == "") {
+        return null
+    }
+    if (!authHeader.startsWith("Bearer ")) {
+        return null
+    }
+    var token = authHeader.substring(7).trim()
+    if (token == "") {
+        return null
+    }
+    return token
+}
+
+Bool hasBearerToken() {
+    return extractBearerToken(header("Authorization")) != null
+}
+
+AuthClaims requireAuth() {
+    var token = extractBearerToken(header("Authorization"))
+    if (token == null) {
+        throw "Token não informado"
+    }
+    try {
+        var claimsJson = jwt.verify(token, jwtSecret())
+        var claims = json.decode<AuthClaims>(claimsJson)
+        if (claims.iss() != expectedIssuer()) {
+            throw "Token com issuer inválido"
+        }
+        println("BFF auth: userId=" + claims.sub())
+        return claims
+    } catch (String e) {
+        throw "Token inválido ou expirado"
+    }
+}
