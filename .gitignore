@@ -72,3 +72,6 @@ organiza-ia-plano/
 .idea/
 *.iml
 .vscode/
+
+# Legado Next.js/Node (removido, ver CLAUDE.md)
+frontend-voice/
