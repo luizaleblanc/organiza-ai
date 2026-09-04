@@ -58,11 +58,11 @@ public class UserEntity {
     private Boolean hasDebt = false;
 
     public static UserEntity from(User user) {
-        return new UserEntity(user.getId(), user.getEmail(), user.getPassword(), user.getRole(), null, Tier.FREE, false, null,
+        return new UserEntity(user.getId(), user.getEmail(), user.getPassword(), user.getRole(), user.getSalary(), Tier.FREE, false, null,
                 BudgetModelType.STANDARD_503020, IncomeType.FIXED, false);
     }
 
     public User toDomain() {
-        return new User(id, email, password, role);
+        return new User(id, email, password, role, salary);
     }
 }
