@@ -192,6 +192,21 @@ Outras variações usadas nas telas:
 - Label: 16px/600, ocupa o espaço flexível
 - Radio à direita: círculo 20px, borda 1.5px muted (ou cyan se selecionado) com ponto interno cyan de 10px quando selecionado
 
+### 3.7.1 Gráfico de pizza (dashboard)
+
+- Diâmetro: 200px, centralizado horizontalmente
+- 3 fatias proporcionais aos gastos de cada bucket
+- Cores: Necessidades (`#00D4FF`), Desejos (`#0066FF`), Futuro (`#00E5A0`)
+- Espaço de 2px entre fatias (separação visual)
+- Centro: círculo `#0A0D18` com percentual total usado (24px, bold, `#F0F0F0`)
+- Fatia com uso > 80%: cor muda para `#FFB800` (alerta)
+- Fatia com uso > 90%: cor muda para `#FF4A6E` (perigo)
+- Interação:
+  - Tap na fatia: fatia destaca (desloca 8px na direção radial), mostra label
+  - Label: "Necessidades: R$ 1.640 de R$ 2.000" (14px, `#F0F0F0`)
+  - Segundo tap na fatia destacada: abre lista dos envelopes do bucket
+  - Tap fora: volta ao estado normal
+
 ### 3.8 Indicadores de progresso (dots de onboarding)
 
 - 4 pontos de 8px, `border-radius` 50%, `gap` 12px, centralizados
@@ -273,7 +288,7 @@ Outras variações usadas nas telas:
 ### Tela 7 — Dashboard
 - Cabeçalho: "Olá, Luiza" + botão de engrenagem (configurações)
 - Card de pulso diário: "Você pode gastar hoje" → "R$ 92,00" → "Faltam 12 dias"
-- Seção "Seus buckets": 3 barras de progresso (Necessidades 82% · R$ 1.640 de R$ 2.000; Desejos 65% · R$ 780 de R$ 1.200; Futuro 33% · R$ 266 de R$ 800)
+- Seção "Seus buckets": gráfico de pizza (ver seção 3.7.1) com as 3 fatias (Necessidades 82% · R$ 1.640 de R$ 2.000; Desejos 65% · R$ 780 de R$ 1.200; Futuro 33% · R$ 266 de R$ 800)
 - Seção "Últimas transações": lista de tx-cards (Uber -R$ 22 · Transporte; iFood -R$ 45 · Alimentação; Mercado -R$ 180 · Compras)
 - Nav bar inferior com "Dashboard" ativo
 
@@ -300,3 +315,11 @@ Outras variações usadas nas telas:
 - KOF não tem `BottomNavigationBar` nativa — construir a nav bar com `Row` + `Button`s, replicando o estado ativo (cor cyan) via campo estático de tela atual.
 - Valores monetários devem ser strings já formatadas vindas do backend (KOF não tem `BigDecimal`).
 - Cores devem ser definidas via `Color.rgba()` ou `Color(r,g,b)` usando os hex/rgba documentados acima.
+
+---
+
+## Mapeamento de componentes para KOF
+
+| Componente do Design System | Suporte em kof.ui | Ação |
+|---|---|---|
+| Gráfico de pizza | NÃO EXISTE | Reportar para equipe KOF |
