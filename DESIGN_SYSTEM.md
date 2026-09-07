@@ -67,6 +67,21 @@ Todas as telas têm ondas SVG em cyan quase imperceptíveis atrás do conteúdo 
 - `stroke-opacity`: entre `0.06` e `0.13`
 - `stroke-width`: `1.5`–`2.5`
 
+### 1.1 Marca (logomark)
+
+- Conceito: **3 ondas** horizontais fluidas, com amplitude e opacidade decrescentes de cima para baixo (1 / .7 / .45). Lê-se como "as finanças começam bagunçadas e terminam calmas e organizadas", reaproveitando o mesmo motivo das ondas de fundo já usadas em todo o app — a marca é literalmente um recorte da textura de fundo do produto. Sem círculo, sem moldura — só as 3 ondas.
+- Construção: `viewBox` 40×40, 3 paths horizontais em curva suave (`stroke-width` 2.6px, `stroke-linecap: round`)
+- Cor: gradiente de marca `linear-gradient(135deg, #00D4FF, #0066FF)` (mesmo gradiente do botão primário) aplicado ao `stroke` de todos os elementos — uma única definição de gradiente reutilizada em todas as instâncias da marca na interface
+- **Variante mono**: mesma construção, mas com `stroke: currentColor` em vez do gradiente — usada quando a marca aparece sobre um fundo já colorido (ex.: ícone de app na notificação), garantindo contraste em vez de competir com o próprio gradiente de fundo
+- **A marca é sempre isolada nas telas do app** — sem o wordmark "OrganizaIA" ao lado. O wordmark existe apenas como referência de documentação (seção "Marca" do design system), nunca pareado com o símbolo dentro do produto
+- Tamanhos de uso: 68px (logo de Login), 52px (logo compacto de Cadastro), 30px (cabeçalho do Chat), 22px (ícone da notificação, variante mono), 44px (documentação do design system)
+
+### 1.2 Arte de boas-vindas (hero)
+
+- Versão ampliada das 3 ondas da marca, ocupando a largura útil da tela (~230px), mesmas proporções de amplitude/opacidade decrescente (1 / .7 / .45), mesmo gradiente de marca — é a própria marca, só que grande, sem nenhum elemento adicional sobreposto
+- Composição da Tela 1: arte hero (3 ondas grandes) → slogan abaixo, sem a marca pequena repetida — a arte já comunica a marca sozinha
+- Slogan com a tipografia de **Legenda** (ver seção 2 — Tipografia, mesmo estilo de "ATUALIZADO HÁ 2 MIN"): 14px/400/texto secundário, `letter-spacing` .08em, caixa alta, `max-width` 240px, centralizado — "SUA GRANA ORGANIZADA E SEM ESTRESSE."
+
 ---
 
 ## 2. Tipografia
@@ -143,6 +158,7 @@ Outras variações usadas nas telas:
 - Fundo: gradiente `135deg, #12162A → #1A1F3A`
 - Borda: 1px `rgba(0,212,255,.15)`
 - Conteúdo: eyebrow em caps (12px/600/texto secundário/letter-spacing .1em), linha de contexto (16px/texto secundário), valor grande (32px/600/cyan), rodapé (13px/muted)
+- Dica de economia (opcional): divisor 1px na cor da borda do card + linha de texto 13px/600/accent apontando uma categoria específica para cortar gastos (ex.: "Dica: economize em Uber para cortar gastos.") — mesma lógica de gatilho da notificação (seção 3.9), só que sempre visível no dashboard em vez de pop-up
 
 **Card de transação**
 - `border-radius`: 12px
@@ -212,6 +228,20 @@ Outras variações usadas nas telas:
 - 4 pontos de 8px, `border-radius` 50%, `gap` 12px, centralizados
 - Estados: `active` (cyan sólido), `visited` (cyan a 40% de opacidade), `inactive` (branco a 15% de opacidade)
 
+### 3.9 Notificação push (mobile)
+
+- Apresentação: pop-up isolado (estilo toast do Steam/Epic Games), não uma tela de bloqueio completa — o resto da tela fica escurecido (`rgba(0,0,0,.55)`) atrás do card, reforçando que é um artefato do sistema operacional sobreposto ao app
+- Card: largura máx. 300px, `border-radius` 10px, padding 14px, fundo cinza-escuro translúcido `rgba(40,42,48,.82)` com `backdrop-filter: blur(16px)`, borda `rgba(255,255,255,.08)`, sombra `0 12px 32px rgba(0,0,0,.5)`
+- Cores do card são fixas (não seguem o tema claro/escuro do app) — é um elemento do SO, igual a um toast do Steam ou da Epic Games Store
+- Botão de fechar "×" no canto superior direito, discreto (`rgba(255,255,255,.4)`)
+- Ícone do app: 40×40px, `border-radius` 8px, gradiente cyan→azul, com a marca Organiza (ver seção 1.1) em 22px na variante mono (`stroke: currentColor`), cor accent-contrast
+- Cabeçalho: "ORGANIZA" em caixa alta (12px/700) à esquerda + "agora" (11px/muted) à direita
+- Título da notificação: 14px/700, cor de texto principal
+- Corpo: 13px/400/texto secundário, até 2 linhas
+- Gatilho: gerado quando uma caixinha ultrapassa 80–90% do limite (mesmo threshold de alerta das barras de progresso e do gráfico de pizza)
+- Tom de voz: descontraído e direto, sem jargão financeiro, para atingir qualquer público — não é um alerta de banco, é um toque de amigo (ver `CLAUDE.md`)
+- Exemplo de conteúdo: "Ô psit, dá um trégua no delivery" / "Já foi 90% da caixinha esse mês. Pede uma vez a menos essa semana e o mês fecha redondo, sem dívida e sem drama."
+
 ---
 
 ## 4. Layout
@@ -241,64 +271,71 @@ Outras variações usadas nas telas:
 
 ---
 
-## 5. Especificação das 9 telas
+## 5. Especificação das 11 telas
 
-### Tela 1 — Login
-- Logo "Organiza IA" centralizado no topo (hero, 28px/600), grande respiro vertical (padding 64px 0 48px)
+### Tela 1 — Boas-vindas (pré-login)
+- Tela principal exibida antes de qualquer autenticação — primeiro contato com a marca
+- Ondas no fundo
+- Centro: arte de boas-vindas (ver seção 1.2) — as 3 ondas grandes da marca + slogan "SUA GRANA ORGANIZADA E SEM ESTRESSE." (tipografia de legenda), sem o wordmark "OrganizaIA"
+- Rodapé: botão primário "Criar conta" + botão secundário "Já tenho conta" (empilhados, gap 12px), com respiro extra (`padding-bottom` 40px) para não colar na borda/home indicator
+- Não tem dots de progresso nem botão de voltar — é o ponto de entrada do app
+
+### Tela 2 — Login
+- Apenas a marca isolada (68px, sem wordmark) centralizada no topo, grande respiro vertical
 - Formulário: campo "E-mail" + campo "Senha" (com ícone de olho)
 - Espaço flexível empurra o conteúdo seguinte para o rodapé
-- Botão primário "Entrar"
-- Rodapé: "Não tem conta?" + link em destaque cyan "Cadastre-se"
+- Botão primário "Entrar", com respiro extra até a borda inferior (`padding-bottom` 32px)
+- Rodapé: "Não tem conta?" em uma linha + link em destaque cyan "Cadastre-se" na linha abaixo
 
-### Tela 2 — Cadastro
-- Logo compacto no topo (padding 32px 0 32px)
+### Tela 3 — Cadastro
+- Apenas a marca isolada (52px, sem wordmark) no topo
 - Formulário: "Nome", "E-mail", "Senha" (com olho), "Confirmar senha" (com olho)
-- Botão primário "Criar conta"
-- Rodapé: "Já tem conta?" + link cyan "Entre"
+- Botão primário "Criar conta", com respiro extra até a borda inferior (`padding-bottom` 36px)
+- Rodapé: "Já tem conta?" em uma linha + link cyan "Entre" na linha abaixo
 
-### Tela 3 — Onboarding: Salário
+### Tela 4 — Onboarding: Salário
 - Dots de progresso: 1º ativo, demais inativos
 - Título: "Quanto você ganha por mês?"
 - Subtítulo: "Vamos adaptar tudo ao seu salário"
-- Campo de valor centralizado verticalmente: prefixo "R$" + valor grande editável (ex. "3.000") + cursor piscante cyan
+- Campo de valor centralizado horizontal e verticalmente (uma cor só, accent): prefixo "R$" + valor grande editável (ex. "3.000") + cursor piscante cyan
 - Dica abaixo do campo: "Pode ser aproximado — dá pra ajustar depois"
 - Botão primário "Próximo"
 
-### Tela 4 — Onboarding: Tipo de renda
+### Tela 5 — Onboarding: Tipo de renda
 - Dots: 1º visitado, 2º ativo
 - Título: "Sua renda é fixa ou variável?"
 - Subtítulo: "Isso muda como calculamos seu dia a dia"
 - Duas choice cards: "Fixa (CLT, salário todo mês)" e "Variável (freela, PJ, bicos)"
 - Botão "Próximo" fica **desabilitado** até selecionar uma opção
 
-### Tela 5 — Onboarding: Dívidas
+### Tela 6 — Onboarding: Dívidas
 - Dots: 1º e 2º visitados, 3º ativo
 - Título: "Você tem dívidas em atraso?"
 - Subtítulo: "Isso ajuda a escolher o melhor modelo pra você"
 - Choice cards: "Sim, tenho dívidas" / "Não, estou em dia"
 - Botão primário "Próximo"
 
-### Tela 6 — Onboarding: Resultado
+### Tela 7 — Onboarding: Resultado
 - Dots: 1º, 2º, 3º visitados, 4º ativo
 - Título: "Seu modelo: Anti-Dívida"
 - Texto explicativo: "70% para necessidades, 10% para o mínimo pessoal, 20% para quitar suas dívidas."
 - Três buckets com barra de progresso e valor: Necessidades (70% · R$ 2.100), Pessoal (10% · R$ 300), Quitação (20% · R$ 600)
 - Botão primário "Começar a organizar" (encerra o onboarding)
 
-### Tela 7 — Dashboard
+### Tela 8 — Dashboard
 - Cabeçalho: "Olá, Luiza" + botão de engrenagem (configurações)
-- Card de pulso diário: "Você pode gastar hoje" → "R$ 92,00" → "Faltam 12 dias"
+- Card de pulso diário: "Você pode gastar hoje" → "R$ 92,00" → "Faltam 12 dias para acabar o mês" → divisor + dica de economia ("Dica: economize em Uber para cortar gastos.", 13px/600/accent)
 - Seção "Seus buckets": gráfico de pizza (ver seção 3.7.1) com as 3 fatias (Necessidades 82% · R$ 1.640 de R$ 2.000; Desejos 65% · R$ 780 de R$ 1.200; Futuro 33% · R$ 266 de R$ 800)
 - Seção "Últimas transações": lista de tx-cards (Uber -R$ 22 · Transporte; iFood -R$ 45 · Alimentação; Mercado -R$ 180 · Compras)
 - Nav bar inferior com "Dashboard" ativo
 
-### Tela 8 — Chat
-- Cabeçalho centralizado: "OrganizaIA"
-- Mensagens: bolha IA ("Olá! Como posso te ajudar hoje?"), bolha usuário ("gastei 35 no almoço"), bolha IA com resposta longa confirmando o registro e dando orientação de gasto diário
+### Tela 9 — Chat
+- Cabeçalho centralizado: apenas a marca isolada (46px, sem wordmark)
+- Mensagens: bolha IA ("Olá! Como posso te ajudar hoje?"), bolha usuário ("gastei R$ 35 no almoço, R$ 359 no mercado e R$ 75 no pet shop."), bolha IA com resposta descontraída confirmando o registro e dando orientação de gasto diário
 - Campo de digitação com placeholder "Digite seu gasto..." + ícone de microfone + botão de enviar cyan
 - Nav bar inferior com "Chat" ativo
 
-### Tela 9 — Caixinhas (envelopes)
+### Tela 10 — Caixinhas (envelopes)
 - Cabeçalho: "Suas caixinhas" + botão "+" (adicionar caixinha)
 - Agrupado por categoria macro (mesmos buckets do modelo adaptativo):
   - **Necessidades**: Moradia (80% · R$ 1.200 de R$ 1.500, alerta), Mercado (64% · R$ 320 de R$ 500), Transporte (43% · R$ 130 de R$ 300)
@@ -306,6 +343,11 @@ Outras variações usadas nas telas:
   - **Futuro**: Reserva (33% · R$ 266 de R$ 800)
 - Cada card de caixinha tem chip de ícone colorido por categoria (ver seção 1)
 - Nav bar inferior com "Caixinhas" ativo
+
+### Tela 11 — Notificação (push)
+- Pop-up isolado sobre fundo escurecido (não é uma tela navegável do app — ver seção 3.9)
+- Notificação do Organiza sugerindo economia na caixinha que está no limite, em tom descontraído
+- Não faz parte do fluxo de navegação do app — é um artefato do sistema operacional (ver mapeamento KOF)
 
 ---
 
@@ -323,3 +365,4 @@ Outras variações usadas nas telas:
 | Componente do Design System | Suporte em kof.ui | Ação |
 |---|---|---|
 | Gráfico de pizza | NÃO EXISTE | Reportar para equipe KOF |
+| Notificação push (nativa) | NÃO EXISTE | Depende da API Mobile (`kof.mobile.onPush`, ver `KOF_VS_FLUTTER.md` seção 5) — reportar para equipe KOF |
