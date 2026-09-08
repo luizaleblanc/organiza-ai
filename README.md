@@ -51,6 +51,12 @@ O modelo relacional completo está disponível em: [docs/DATA_MODEL.md](docs/DAT
 
 Resumo das entidades principais: **User** (dados do usuário, salário mensal, indicador de renda variável e meta de reserva de emergência), **Envelope** (tetos de gastos por categoria, com limite fixo ou por média móvel), **Transaction** (movimentações financeiras associadas a um envelope e a um usuário) e **VariableIncome** (entradas extras -- freela, show, mentoria -- direcionadas automaticamente para reserva de emergência ou para o orçamento 50/30/20).
 
+## Design System
+
+Identidade visual completa (paleta, tipografia, marca, componentes, ícones, badges, estados de erro/perigo, modelos de notificação e especificação das 11 telas) documentada em [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md).
+
+Protótipo interativo (responsivo mobile/desktop, dark e light mode): [Protótipo Organiza IA](https://claude.ai/code/artifact/6befd748-2c5d-4261-9069-8ea9a12291de).
+
 ## Roadmap
 
 | Fase | Foco | Entregável |
