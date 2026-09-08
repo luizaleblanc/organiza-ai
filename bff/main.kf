@@ -173,8 +173,10 @@ main() {
 
     app.get("/api/users/tier-status") {
         var token = header("Authorization")
-        if (missingToken(token)) {
-            return status(401, "Token não informado")
+        try {
+            requireAuth()
+        } catch (String e) {
+            return status(401, "{\"error\":\"" + e + "\"}")
         }
         return http.get("http://localhost:8080/api/users/tier-status", authHeader(token))
     }
