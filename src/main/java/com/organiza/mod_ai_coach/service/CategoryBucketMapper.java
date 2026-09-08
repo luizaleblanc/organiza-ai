@@ -1,5 +1,6 @@
 package com.organiza.mod_ai_coach.service;
 
+import com.organiza.mod_budget.model.BudgetModelType;
 import com.organiza.mod_transaction.model.Bucket;
 import com.organiza.mod_transaction.model.Category;
 
@@ -26,6 +27,28 @@ final class CategoryBucketMapper {
 
     static Bucket toStandardBucket(Category category) {
         return NEEDS.contains(category) ? Bucket.NEEDS : Bucket.WANTS;
+    }
+
+    /**
+     * Bucket (enum) de uma categoria, no contexto do modelo de orcamento do
+     * usuario -- usado por SuggestModelChangeFunction para comparar gasto real
+     * vs. percentual do modelo, bucket a bucket. Reaproveita toKakeiboBucket
+     * (mesma fonte de verdade de GetBalanceFunction) em vez de duplicar a
+     * categorizacao do Kakeibo.
+     * <p>
+     * DEBT_PAYMENT (ANTI_DEBT_701020) e SAVINGS nunca sao retornados aqui --
+     * ver limitacao documentada em Bucket.
+     */
+    static Bucket toBucket(BudgetModelType model, Category category) {
+        if (model == BudgetModelType.KAKEIBO) {
+            return switch (toKakeiboBucket(category)) {
+                case "Cultura" -> Bucket.CULTURAL;
+                case "Lazer" -> Bucket.LEISURE;
+                case "Extras" -> Bucket.EXTRAS;
+                default -> Bucket.NEEDS; // "Essencial"
+            };
+        }
+        return toStandardBucket(category);
     }
 
     /**
