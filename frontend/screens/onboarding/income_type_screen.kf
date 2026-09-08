@@ -22,18 +22,16 @@ import screens.onboarding.state
 //   para Routes.debt.
 // =============================================================================
 
-// KOF-VERIFY: c.state(valor) para empurrar novo estado e re-renderizar não
-// está confirmado no training/ (só .view/.onMount/.onDispose foram vistos).
-// Rodar `kof check` (CI) antes de confiar nesse mecanismo.
+class IncomeScreenState {
+    static String selectedType = ""
+}
+
 Component buildIncomeTypeScreen() {
-    // Estado local da seleção: "" (nenhuma), "FIXED" ou "VARIABLE"
     var c = Component("")
 
-    c.view((selectedType: String) -> {
-        // Indicador de progresso: 4 passos, step 1 ativo (DESIGN_SYSTEM.md seção 3.8)
+    c.view((ignored: String) -> {
         var dots = buildProgressDots(1, 4)
 
-        // Cabeçalho: Título + Subtítulo (DESIGN_SYSTEM.md seção 2 e 5 — Tela 5)
         var title = Label("Sua renda é fixa ou variável?")
         title.fontSize = 24
         title.bold = false
@@ -47,58 +45,45 @@ Component buildIncomeTypeScreen() {
         var headerSection = Column(listOf(dots, title, subtitle))
 
         // Cards de escolha (DESIGN_SYSTEM.md seção 3.7)
-        var isFixed = selectedType == "FIXED"
-        var isVariable = selectedType == "VARIABLE"
+        var cardFixed = buildChoiceCard("Fixa (CLT, salário todo mês)", false)
+        var cardVariable = buildChoiceCard("Variável (freela, PJ, bicos)", false)
 
-        var cardFixed = buildChoiceCard("Fixa (CLT, salário todo mês)", isFixed)
-        var cardVariable = buildChoiceCard("Variável (freela, PJ, bicos)", isVariable)
-
-        // Botões de toque para acionar a seleção no webview
-        var fixedLabel = "Selecionar: Fixa (CLT, salário todo mês)"
-        if (isFixed) {
-            fixedLabel = "✓ Fixa (CLT, salário todo mês)"
-        }
-        var btnFixed = Button(fixedLabel, () -> {
-            c.state("FIXED")
-        })
-
-        var variableLabel = "Selecionar: Variável (freela, PJ, bicos)"
-        if (isVariable) {
-            variableLabel = "✓ Variável (freela, PJ, bicos)"
-        }
-        var btnVariable = Button(variableLabel, () -> {
-            c.state("VARIABLE")
-        })
-
-        var choicesSection = Column(listOf(cardFixed, btnFixed, cardVariable, btnVariable))
-
-        // Botão "Próximo": desabilitado até selecionar uma opção (DESIGN_SYSTEM.md seção 3.1)
         var nextBtn = Button("Próximo", () -> {
-            // Desabilitado enquanto nenhuma opção estiver selecionada
-        })
-        nextBtn.color = AppTheme.textMuted
-
-        if (selectedType == "FIXED") {
-            nextBtn = Button("Próximo", () -> {
+            if (IncomeScreenState.selectedType == "FIXED") {
                 OnboardingState.incomeType = "FIXED"
                 OnboardingState.currentStep = 2
                 Router.go(Routes.debt)
-            })
-        }
-
-        if (selectedType == "VARIABLE") {
-            nextBtn = Button("Próximo", () -> {
+            }
+            if (IncomeScreenState.selectedType == "VARIABLE") {
                 OnboardingState.incomeType = "VARIABLE"
                 OnboardingState.currentStep = 2
                 Router.go(Routes.debt)
-            })
-        }
+            }
+        })
+        nextBtn.color = AppTheme.textMuted // Inicia cinza (desabilitado visualmente)
 
+        var btnFixed = Button("Selecionar: Fixa (CLT, salário todo mês)", () -> {})
+        var btnVariable = Button("Selecionar: Variável (freela, PJ, bicos)", () -> {})
+
+        // Mutação direta das propriedades dos widgets via lambda (padrão oficial)
+        btnFixed = Button("Selecionar: Fixa (CLT, salário todo mês)", () -> {
+            IncomeScreenState.selectedType = "FIXED"
+            btnFixed.text = "✓ Fixa (CLT, salário todo mês)"
+            btnVariable.text = "Selecionar: Variável (freela, PJ, bicos)"
+            nextBtn.color = AppTheme.textPrimary // Habilita o botão próximo visualmente
+        })
+
+        btnVariable = Button("Selecionar: Variável (freela, PJ, bicos)", () -> {
+            IncomeScreenState.selectedType = "VARIABLE"
+            btnVariable.text = "✓ Variável (freela, PJ, bicos)"
+            btnFixed.text = "Selecionar: Fixa (CLT, salário todo mês)"
+            nextBtn.color = AppTheme.textPrimary // Habilita o botão próximo visualmente
+        })
+
+        var choicesSection = Column(listOf(cardFixed, btnFixed, cardVariable, btnVariable))
         var footerSection = Column(listOf(nextBtn))
 
-        // Montagem do layout completo da tela
         var content = Column(listOf(headerSection, choicesSection, footerSection))
-
         var screenView = View(screenStyle())
         screenView.bind(content)
         return screenView

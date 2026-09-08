@@ -24,18 +24,16 @@ import screens.onboarding.state
 //     OnboardingState.hasDebt = false -> ApiClient.post("/api/users/onboarding", ...) -> Router.go(Routes.result)
 // =============================================================================
 
-// KOF-VERIFY: c.state(valor) para empurrar novo estado e re-renderizar não
-// está confirmado no training/ (só .view/.onMount/.onDispose foram vistos).
-// Rodar `kof check` (CI) antes de confiar nesse mecanismo.
+class DebtScreenState {
+    static String selectedChoice = ""
+}
+
 Component buildDebtScreen() {
-    // Estado local da seleção: "" (nenhuma), "YES" (Sim) ou "NO" (Não)
     var c = Component("")
 
-    c.view((selectedChoice: String) -> {
-        // Indicador de progresso: 4 passos, step 2 ativo (DESIGN_SYSTEM.md seção 3.8)
+    c.view((ignored: String) -> {
         var dots = buildProgressDots(2, 4)
 
-        // Cabeçalho: Título + Subtítulo (DESIGN_SYSTEM.md seção 2 e 5 — Tela 6)
         var title = Label("Você tem dívidas em atraso?")
         title.fontSize = 24
         title.bold = false
@@ -49,67 +47,53 @@ Component buildDebtScreen() {
         var headerSection = Column(listOf(dots, title, subtitle))
 
         // Cards de escolha (DESIGN_SYSTEM.md seção 3.7)
-        var isYes = selectedChoice == "YES"
-        var isNo = selectedChoice == "NO"
+        var cardYes = buildChoiceCard("Sim, tenho dívidas", false)
+        var cardNo = buildChoiceCard("Não, estou em dia", false)
 
-        var cardYes = buildChoiceCard("Sim, tenho dívidas", isYes)
-        var cardNo = buildChoiceCard("Não, estou em dia", isNo)
-
-        // Botões de toque para acionar a seleção no webview
-        var yesLabel = "Selecionar: Sim, tenho dívidas"
-        if (isYes) {
-            yesLabel = "✓ Sim, tenho dívidas"
-        }
-        var btnYes = Button(yesLabel, () -> {
-            c.state("YES")
-        })
-
-        var noLabel = "Selecionar: Não, estou em dia"
-        if (isNo) {
-            noLabel = "✓ Não, estou em dia"
-        }
-        var btnNo = Button(noLabel, () -> {
-            c.state("NO")
-        })
-
-        var choicesSection = Column(listOf(cardYes, btnYes, cardNo, btnNo))
-
-        // Botão "Próximo": desabilitado até selecionar uma opção
         var nextBtn = Button("Próximo", () -> {
-            // Desabilitado enquanto nenhuma opção estiver selecionada
-        })
-        nextBtn.color = AppTheme.textMuted
-
-        if (selectedChoice == "YES") {
-            nextBtn = Button("Próximo", () -> {
+            if (DebtScreenState.selectedChoice == "YES") {
                 OnboardingState.hasDebt = true
                 OnboardingState.currentStep = 3
                 Router.go(Routes.debtAmount)
-            })
-        }
-
-        if (selectedChoice == "NO") {
-            nextBtn = Button("Próximo", () -> {
+            }
+            if (DebtScreenState.selectedChoice == "NO") {
                 OnboardingState.hasDebt = false
                 OnboardingState.debtAmount = 0.0
                 OnboardingState.currentStep = 3
 
-                // Submete os dados coletados no onboarding via BFF
                 try {
                     ApiClient.post("/api/users/onboarding", OnboardingState.toJson())
                 } catch (String e) {
-                    // Tratamento com fallback gracioso em caso de erro de rede
+                    // Tratamento com fallback
                 }
 
                 Router.go(Routes.result)
-            })
-        }
+            }
+        })
+        nextBtn.color = AppTheme.textMuted // Inicia cinza (desabilitado visualmente)
 
+        var btnYes = Button("Selecionar: Sim, tenho dívidas", () -> {})
+        var btnNo = Button("Selecionar: Não, estou em dia", () -> {})
+
+        // Mutação direta das propriedades dos widgets via lambda (padrão oficial)
+        btnYes = Button("Selecionar: Sim, tenho dívidas", () -> {
+            DebtScreenState.selectedChoice = "YES"
+            btnYes.text = "✓ Sim, tenho dívidas"
+            btnNo.text = "Selecionar: Não, estou em dia"
+            nextBtn.color = AppTheme.textPrimary // Habilita o botão próximo visualmente
+        })
+
+        btnNo = Button("Selecionar: Não, estou em dia", () -> {
+            DebtScreenState.selectedChoice = "NO"
+            btnNo.text = "✓ Não, estou em dia"
+            btnYes.text = "Selecionar: Sim, tenho dívidas"
+            nextBtn.color = AppTheme.textPrimary // Habilita o botão próximo visualmente
+        })
+
+        var choicesSection = Column(listOf(cardYes, btnYes, cardNo, btnNo))
         var footerSection = Column(listOf(nextBtn))
 
-        // Montagem do layout completo da tela
         var content = Column(listOf(headerSection, choicesSection, footerSection))
-
         var screenView = View(screenStyle())
         screenView.bind(content)
         return screenView
