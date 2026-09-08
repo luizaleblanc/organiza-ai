@@ -40,7 +40,7 @@ View buildTransactionItem(String name, String category, String amount, String ti
     amountLabel.color = AppTheme.textPrimary
 
     var row = Row(listOf(infoCol, amountLabel))
-    var cardView = View(Style(AppTheme.card, AppTheme.textPrimary, 12, 12))
+    var cardView = View(cardStyle())
     cardView.bind(row)
     return cardView
 }
@@ -95,7 +95,7 @@ View buildBucketChart() {
     var chartRow = Row(listOf(canvas, legends))
     var chartCol = Column(listOf(chartTitle, chartRow))
     
-    var chartBox = View(Style(AppTheme.card, AppTheme.textPrimary, 16, 12))
+    var chartBox = View(cardStyle())
     chartBox.bind(chartCol)
     return chartBox
 }
@@ -123,7 +123,7 @@ Component buildDashboardScreen() {
             "Faltam 12 dias para acabar o mês",
             "Dica: economize em Uber para cortar gastos."
         )
-        var pulseCardView = View(Style(AppTheme.cardSecondary, AppTheme.textPrimary, 16, 16))
+        var pulseCardView = View(cardStyle())
         pulseCardView.bind(pulseContent)
 
         // 3. Seção "Seus buckets" (DESIGN_SYSTEM.md seção 3.7.1)
