@@ -63,7 +63,19 @@
 - [x] Especificação de 11 telas (boas-vindas, login, cadastro, onboarding salário, tipo de renda, dívidas, valor da dívida, resultado, dashboard, chat, caixinhas, notificação)
 - [x] Mapeamento de componentes para KOF (`kof.ui`)
 
-### Documentação
+## 📍 Roadmap — Arquitetura Monolítica Modular em KOF
+
+- [x] **Etapa 0**: Estabelecer base de conhecimento (DESIGN_SYSTEM.md, KOF_REFERENCE.md)
+- [x] **Etapa 1**: Estrutura de Pastas (core/, models/, components/, screens/)
+- [x] **Etapa 2**: DTOs e Modelos Base
+- [x] **Etapa 3**: Design System base em componentes reutilizáveis
+- [x] **Etapa 4**: Core (Theme, Router, HTTP Client, Service Locator)
+- [x] **Etapa 5**: Telas Core (Welcome, Autenticação)
+- [x] **Etapa 6**: Telas Onboarding (Salary, Income, Debt, Debt Amount, Result)
+- [x] **Etapa 7**: Telas Principais (Dashboard, Chat, Envelopes)
+- [x] **Etapa 8**: Auditoria de Sintaxe KOF e Resolução de Erros de CI
+
+## Documentação
 - [x] Todos os arquivos `.md` atualizados (README, CLAUDE.md, CONTRIBUTING.md, DATA_MODEL.md, ARCHITECTURE_DECISIONS.md, PROJECT_STATUS.md, DESIGN_SYSTEM.md)
 
 ## O que está pendente
