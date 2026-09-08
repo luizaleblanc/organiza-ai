@@ -1,0 +1,89 @@
+package screens.onboarding
+
+import kof.ui
+import core.theme
+import core.router_config
+import components.progress_dots
+import components.bucket_bar
+import components.primary_button
+import screens.onboarding.state
+
+// =============================================================================
+// Tela 7 — Onboarding: Resultado do Modelo Adaptativo
+// DESIGN_SYSTEM.md seção 3.1, 3.4, 3.8, 5 (Tela 7)
+// =============================================================================
+// - Indicador de progresso: step 3 ativo (etapa final de resultado)
+// - Título: "Seu modelo: Anti-Dívida" ou "Seu modelo: 50/30/20"
+// - Texto explicativo com a repartição percentual calculada
+// - 3 barras de progresso de buckets (Necessidades, Desejos/Pessoal, Futuro/Quitação)
+// - Botão primário "Começar a organizar": encerra o onboarding e navega para Routes_dashboard
+// =============================================================================
+
+Component buildResultScreen() {
+    var c = Component("ResultScreen")
+
+    c.state("ready")
+
+    c.view { state ->
+        // Indicador de progresso: 4 passos, etapa final ativa (DESIGN_SYSTEM.md seção 3.8)
+        var dots = buildProgressDots(3, 4)
+
+        // Determinação do modelo com base no estado do onboarding
+        var modelName = "50/30/20"
+        var description = "50% para necessidades, 30% para desejos pessoais, 20% para o seu futuro financeiro."
+
+        var bar1 = buildBucketBar("Necessidades", 50, "R$ 0", "50% · R$ 1.500")
+        var bar2 = buildBucketBar("Desejos Pessoais", 30, "R$ 0", "30% · R$ 900")
+        var bar3 = buildBucketBar("Futuro e Reserva", 20, "R$ 0", "20% · R$ 600")
+
+        if (OnboardingState_hasDebt) {
+            modelName = "Anti-Dívida"
+            description = "70% para necessidades, 10% para o mínimo pessoal, 20% para quitar suas dívidas."
+
+            bar1 = buildBucketBar("Necessidades", 70, "R$ 0", "70% · R$ 2.100")
+            bar2 = buildBucketBar("Mínimo Pessoal", 10, "R$ 0", "10% · R$ 300")
+            bar3 = buildBucketBar("Quitação de Dívidas", 20, "R$ 0", "20% · R$ 600")
+        }
+
+        // Cabeçalho: Título + Explicação (DESIGN_SYSTEM.md seção 2 e 5 — Tela 7)
+        var title = Label("Seu modelo: " + modelName)
+        title.fontSize = 24
+        title.bold = true
+        title.color = AppTheme_textPrimary
+
+        var descLabel = Label(description)
+        descLabel.fontSize = 16
+        descLabel.bold = false
+        descLabel.color = AppTheme_textSecondary
+
+        var headerSection = Column(listOf(dots, title, descLabel))
+
+        // Seção das 3 barras de progresso dos buckets (DESIGN_SYSTEM.md seção 3.4)
+        var bucketsSection = Column(listOf(bar1, bar2, bar3))
+
+        // Botão de conclusão do onboarding (DESIGN_SYSTEM.md seção 3.1)
+        var startBtn = buildPrimaryButton("Começar a organizar", () -> {
+            Router.go(Routes_dashboard)
+        })
+
+        var footerSection = Column(listOf(startBtn))
+
+        // Montagem do layout completo da tela
+        var content = Column(listOf(headerSection, bucketsSection, footerSection))
+
+        var screenView = View(screenStyle())
+        screenView.bind(content)
+        return screenView
+    }
+
+    c.onMount {
+        // Marca o passo final no OnboardingState
+        OnboardingState_currentStep = 3
+    }
+
+    c.onDispose {
+        // Limpeza de recursos da tela
+    }
+
+    return c
+}

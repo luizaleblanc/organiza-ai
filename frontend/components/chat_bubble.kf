@@ -1,0 +1,25 @@
+package components
+
+import kof.ui
+import core.theme
+
+// =============================================================================
+// Chat Bubble — bolha de mensagem (IA à esquerda, Usuário à direita)
+// DESIGN_SYSTEM.md seção 3.6
+// =============================================================================
+// IA: fundo #1A1F3A, texto principal, alinhada à esquerda
+// Usuário: fundo cyan, texto accent-contrast, peso 600, alinhada à direita
+// Largura máxima: 78%
+
+View buildChatBubble(String content, String role) {
+    var label = Label(content)
+
+    if (role == "assistant") {
+        // Bolha IA — fundo card-secondary, alinhada à esquerda
+        return View(Style(AppTheme_cardSecondary, AppTheme_textPrimary, 12, 12))
+    }
+
+    // Bolha Usuário — fundo cyan, alinhada à direita
+    return View(Style(AppTheme_accent, AppTheme_accentContrast, 12, 12))
+}
+

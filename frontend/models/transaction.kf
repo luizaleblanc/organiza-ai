@@ -1,0 +1,14 @@
+package models
+
+// =============================================================================
+// Models de Transação e Pulso Diário — DTOs compartilhados
+// =============================================================================
+
+class DailyPulse(String availableToday, String daysRemaining, String? tip)
+
+class Transaction(String id, String name, String category, String formattedAmount, String time)
+
+class TransactionList(List<Transaction> transactions)
+
+class BucketSummary(String name, Int percentage, String spent, String limit, String status)
+

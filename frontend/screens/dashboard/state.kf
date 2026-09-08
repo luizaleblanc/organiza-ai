@@ -1,0 +1,26 @@
+package screens.dashboard
+
+// =============================================================================
+// Estado do Dashboard — campos estáticos compartilhados
+// DESIGN_SYSTEM.md seção 3.3, 5 (Tela 8)
+// =============================================================================
+// Armazena as informações exibidas no dashboard principal:
+// - availableToday: valor monetário formatado disponível para gasto no dia
+// - daysRemaining: legenda de dias restantes no mês corrente
+// - tip: dica contextual de economia opcional (ex.: "Dica: economize em Uber")
+// - transactions: lista de identificadores/descrições de transações recentes
+// =============================================================================
+
+String DashboardState_availableToday     = "R$ 0,00"
+String DashboardState_daysRemaining      = ""
+String? DashboardState_tip               = null
+List<String> DashboardState_transactions = listOf()
+// -------------------------------------------------------------------------
+// Reinicia o estado do dashboard para os valores padrão
+// -------------------------------------------------------------------------
+DashboardState_reset() {
+DashboardState_availableToday = "R$ 0,00"
+DashboardState_daysRemaining = ""
+DashboardState_tip = null
+DashboardState_transactions = listOf()
+}

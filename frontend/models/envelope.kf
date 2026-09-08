@@ -1,0 +1,19 @@
+package models
+
+// =============================================================================
+// Models de Envelope (Caixinha) — DTOs compartilhados
+// =============================================================================
+
+class Envelope(
+    String id,
+    String name,
+    String category,
+    Int percentage,
+    String spent,
+    String limit,
+    String status,
+    String bucketName
+)
+
+class EnvelopeGroup(String bucketName, List<Envelope> envelopes)
+

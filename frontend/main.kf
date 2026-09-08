@@ -1,0 +1,57 @@
+import kof.ui
+import core.theme
+import core.constants
+import core.router_config
+import core.service_locator
+
+import screens.welcome.screen
+import screens.auth.login_screen
+import screens.auth.register_screen
+import screens.onboarding.salary_screen
+import screens.onboarding.income_type_screen
+import screens.onboarding.debt_screen
+import screens.onboarding.debt_amount_screen
+import screens.onboarding.result_screen
+import screens.dashboard.screen
+import screens.chat.screen
+import screens.envelopes.screen
+
+// =============================================================================
+// Organiza IA — Frontend KOF (Monolito Modular)
+// =============================================================================
+// Entrypoint da aplicação. Responsabilidades:
+// 1. Inicializar o ServiceLocator (BFF URL)
+// 2. Configurar o tema dark
+// 3. Registrar todas as rotas no Router
+// 4. Exibir a tela inicial (welcome)
+// =============================================================================
+
+main() {
+    // 1. Inicializar serviços
+    ServiceLocator_init("http://localhost:3000")
+
+    // 2. Criar janela com tema dark
+    var window = Window("Organiza IA")
+    window.size(Layout_screenWidth, Layout_screenHeight)
+    window.theme = Theme.dark()
+
+    // 3. Registrar rotas (cada screen é um Component)
+    Router.route(Routes_welcome,     buildWelcomeScreen())
+    Router.route(Routes_login,       buildLoginScreen())
+    Router.route(Routes_register,    buildRegisterScreen())
+    Router.route(Routes_onboarding,  buildSalaryScreen())
+    Router.route(Routes_incomeType,  buildIncomeTypeScreen())
+    Router.route(Routes_debt,        buildDebtScreen())
+    Router.route(Routes_debtAmount,  buildDebtAmountScreen())
+    Router.route(Routes_result,      buildResultScreen())
+    Router.route(Routes_dashboard,   buildDashboardScreen())
+    Router.route(Routes_chat,        buildChatScreen())
+    Router.route(Routes_envelopes,   buildEnvelopesScreen())
+
+    // 4. Navegar para a tela inicial
+    Router.go(Routes_welcome)
+
+    // 5. Exibir
+    window.show()
+}
+

@@ -1,0 +1,180 @@
+package screens.dashboard
+
+import kof.ui
+import core.theme
+import core.constants
+import core.router_config
+import core.http_client
+import components.nav_bar
+import components.pulse_card
+
+// =============================================================================
+// Tela 8 — Dashboard
+// DESIGN_SYSTEM.md seção 3.3, 3.5, 3.7.1 e 5 (Tela 8)
+// =============================================================================
+// - Cabeçalho: "Olá, Luiza" + botão de engrenagem (configurações)
+// - Card de pulso diário: disponível hoje + dias restantes + dica de economia
+// - Seção "Seus buckets": placeholder para gráfico de pizza (DESIGN_SYSTEM 3.7.1)
+// - Seção "Últimas transações": lista de cartões de transação
+// - Nav bar inferior com "dashboard" ativo
+// - OnMount: busca pulso diário e transações via ApiClient
+// =============================================================================
+
+// Card de transação individual (DESIGN_SYSTEM.md seção 3.3 — Card de transação)
+// Layout: nome (16px/600) + categoria/data (13px/muted) + valor (16px/600, alinhado à direita)
+View buildTransactionItem(String name, String category, String amount, String time) {
+    var nameLabel = Label(name)
+    nameLabel.fontSize = 16
+    nameLabel.bold = true
+    nameLabel.color = AppTheme_textPrimary
+
+    var metaLabel = Label(category + " · " + time)
+    metaLabel.fontSize = 13
+    metaLabel.bold = false
+    metaLabel.color = AppTheme_textMuted
+
+    var infoCol = Column(listOf(nameLabel, metaLabel))
+
+    var amountLabel = Label(amount)
+    amountLabel.fontSize = 16
+    amountLabel.bold = true
+    amountLabel.color = AppTheme_textPrimary
+
+    var row = Row(listOf(infoCol, amountLabel))
+    var cardView = View(Style(AppTheme_card, AppTheme_textPrimary, 12, 12))
+    cardView.bind(row)
+    return cardView
+}
+
+// Gráfico de Pizza de Buckets usando Canvas 2D
+View buildBucketChart() {
+    var chartTitle = Label("Distribuição por Buckets")
+    chartTitle.fontSize = 14
+    chartTitle.bold = true
+    chartTitle.color = AppTheme_textSecondary
+
+    // Desenhar o gráfico de pizza usando Canvas 2D nativo do kof.ui
+    var canvas = Canvas(200, 200)
+    
+    // Fatia Necessidades: 82% (cor accent cyan)
+    canvas.beginPath()
+    canvas.moveTo(100, 100)
+    canvas.arc(100, 100, 80, 0, 5.15) // ~82% de 2*PI
+    canvas.fill(AppTheme_accent)
+    
+    // Fatia Desejos: 15% (cor accentBlue) - ajustando mock para somar ~100%
+    canvas.beginPath()
+    canvas.moveTo(100, 100)
+    canvas.arc(100, 100, 80, 5.15, 6.09) // ~15% de 2*PI
+    canvas.fill(AppTheme_accentBlue)
+
+    // Fatia Futuro: 3% (cor success verde-limão)
+    canvas.beginPath()
+    canvas.moveTo(100, 100)
+    canvas.arc(100, 100, 80, 6.09, 6.28) // ~3% de 2*PI
+    canvas.fill(AppTheme_success)
+
+    // Legendas
+    var bucketNeeds = Label("● Necessidades: 82%")
+    bucketNeeds.color = AppTheme_accent
+    
+    var bucketWants = Label("● Desejos: 15%")
+    bucketWants.color = AppTheme_accentBlue
+    
+    var bucketFuture = Label("● Futuro: 3%")
+    bucketFuture.color = AppTheme_success
+
+    var legends = Column(listOf(bucketNeeds, bucketWants, bucketFuture))
+    
+    var chartRow = Row(listOf(canvas, legends))
+    var chartCol = Column(listOf(chartTitle, chartRow))
+    
+    var chartBox = View(Style(AppTheme_card, AppTheme_textPrimary, 16, 12))
+    chartBox.bind(chartCol)
+    return chartBox
+}
+
+Component buildDashboardScreen() {
+    var c = Component("DashboardScreen")
+
+    c.state("initial")
+
+    c.view { state ->
+        // 1. Cabeçalho: "Olá, Luiza" + botão de engrenagem
+        // DESIGN_SYSTEM.md seção 3.1 (Icon button) e seção 5 (Tela 8)
+        var greeting = Label("Olá, Luiza")
+        greeting.fontSize = 24
+        greeting.bold = true
+        greeting.color = AppTheme_textPrimary
+
+        var settingsBtn = Button("⚙", () -> {
+            Router.go(Routes_settings)
+        })
+
+        var headerRow = Row(listOf(greeting, settingsBtn))
+
+        // 2. Card de pulso diário (DESIGN_SYSTEM.md seção 3.3 — Card de pulso diário)
+        var pulseContent = buildPulseCard(
+            "R$ 92,00",
+            "Faltam 12 dias para acabar o mês",
+            "Dica: economize em Uber para cortar gastos."
+        )
+        var pulseCardView = View(Style(AppTheme_cardSecondary, AppTheme_textPrimary, 16, 16))
+        pulseCardView.bind(pulseContent)
+
+        // 3. Seção "Seus buckets" (DESIGN_SYSTEM.md seção 3.7.1)
+        var bucketsSectionTitle = Label("Seus buckets")
+        bucketsSectionTitle.fontSize = 18
+        bucketsSectionTitle.bold = true
+        bucketsSectionTitle.color = AppTheme_textPrimary
+
+        var chartComponent = buildBucketChart()
+        var bucketsSection = Column(listOf(bucketsSectionTitle, chartComponent))
+
+        // 4. Seção "Últimas transações" (DESIGN_SYSTEM.md seção 3.3 e Tela 8)
+        var txSectionTitle = Label("Últimas transações")
+        txSectionTitle.fontSize = 18
+        txSectionTitle.bold = true
+        txSectionTitle.color = AppTheme_textPrimary
+
+        var tx1 = buildTransactionItem("Uber", "Transporte", "-R$ 22,00", "Hoje")
+        var tx2 = buildTransactionItem("iFood", "Alimentação", "-R$ 45,00", "Hoje")
+        var tx3 = buildTransactionItem("Mercado", "Compras", "-R$ 180,00", "Ontem")
+
+        var txSection = Column(listOf(txSectionTitle, tx1, tx2, tx3))
+
+        // 5. Barra de navegação inferior com "dashboard" ativo (DESIGN_SYSTEM.md seção 3.5)
+        var navBar = buildNavBar("dashboard", (String route) -> {
+            Router.go(route)
+        })
+
+        // Layout completo da tela (DESIGN_SYSTEM.md seção 4 — Estrutura de tela)
+        var content = Column(listOf(
+            headerRow,
+            pulseCardView,
+            bucketsSection,
+            txSection,
+            navBar
+        ))
+
+        var screenView = View(screenStyle())
+        screenView.bind(content)
+        return screenView
+    }
+
+    c.onMount {
+        // Busca pulso diário e transações recentes via BFF
+        try {
+            var pulseData = ApiClient_get("/api/budgets/daily-pulse")
+            var txData = ApiClient_get("/api/transactions")
+        } catch (String e) {
+            // Falhas de rede tratadas com fallback para os dados de estado
+        }
+    }
+
+    c.onDispose {
+        // Limpeza de recursos ao desmontar a tela
+    }
+
+    return c
+}

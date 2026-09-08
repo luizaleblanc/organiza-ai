@@ -1,0 +1,98 @@
+package screens.auth
+
+import kof.ui
+import core.theme
+import core.router_config
+import core.http_client
+import components.primary_button
+
+// =============================================================================
+// Tela 2 — Login
+// DESIGN_SYSTEM.md seção 1.1, 3.1, 3.2, 5 (Tela 2)
+// =============================================================================
+// - Marca isolada (68px, sem wordmark) centralizada no topo com respiro vertical
+// - Formulário: campo "E-mail" + campo "Senha" com ícone de olho (mostrar/ocultar)
+// - Botão primário "Entrar" com respiro até a borda inferior
+// - Rodapé: "Não tem conta?" em uma linha + link cyan "Cadastre-se" na linha abaixo
+// - Submissão: ApiClient_post("/api/auth/login", json) -> save token -> Router.go(Routes_dashboard)
+// =============================================================================
+
+// Marca — 3 ondas horizontais compactas (68px de largura, proporção 2:1)
+// DESIGN_SYSTEM.md seção 1.1 e 5 (Tela 2)
+View buildBrandLogo68() {
+    var wave1 = View(Style(AppTheme_accent, AppTheme_accent, 0, 1))
+    var wave2 = View(Style(Color.rgba(0, 212, 255, 0.70), Color.rgba(0, 212, 255, 0.70), 0, 1))
+    var wave3 = View(Style(Color.rgba(0, 212, 255, 0.45), Color.rgba(0, 212, 255, 0.45), 0, 1))
+
+    var wavesCol = Column(listOf(wave1, wave2, wave3))
+    var brandContainer = View(Style(Color.rgba(0, 0, 0, 0), AppTheme_accent, 4, 0))
+    brandContainer.bind(wavesCol)
+    return brandContainer
+}
+
+Component buildLoginScreen() {
+    var c = Component("LoginScreen")
+
+    c.state("idle")
+
+    c.view { state ->
+        // Marca centralizada (68px)
+        var brand = buildBrandLogo68()
+        var brandSection = Column(listOf(brand))
+
+        // Campos do formulário (DESIGN_SYSTEM.md seção 3.2)
+        var emailInput = Input("E-mail")
+
+        var passwordInput = Input("Senha")
+        var eyeIcon = Button("👁", () -> {
+            // Alternar visibilidade da senha
+        })
+        var passwordField = Row(listOf(passwordInput, eyeIcon))
+
+        var formSection = Column(listOf(emailInput, passwordField))
+
+        // Botão de submissão "Entrar" (DESIGN_SYSTEM.md seção 3.1)
+        var submitBtn = buildPrimaryButton("Entrar", () -> {
+            var email = emailInput.text()
+            var password = passwordInput.text()
+            var json = "{\"email\":\"" + email + "\",\"password\":\"" + password + "\"}"
+
+            try {
+                var token = ApiClient_post("/api/auth/login", json)
+                ApiClient_setToken(token)
+                Router.go(Routes_dashboard)
+            } catch (String e) {
+                // Erro na autenticação
+            }
+        })
+
+        // Rodapé: "Não tem conta?" + link cyan "Cadastre-se"
+        var noAccountLabel = Label("Não tem conta?")
+        noAccountLabel.fontSize = 14
+        noAccountLabel.bold = false
+        noAccountLabel.color = AppTheme_textSecondary
+
+        var registerLink = Button("Cadastre-se", () -> {
+            Router.go(Routes_register)
+        })
+
+        var footerSection = Column(listOf(submitBtn, noAccountLabel, registerLink))
+
+        // Montagem da tela completa
+        var content = Column(listOf(brandSection, formSection, footerSection))
+
+        var screenView = View(screenStyle())
+        screenView.bind(content)
+        return screenView
+    }
+
+    c.onMount {
+        // Lifecycle hook: montagem da tela de login
+    }
+
+    c.onDispose {
+        // Lifecycle hook: limpeza de recursos da tela
+    }
+
+    return c
+}

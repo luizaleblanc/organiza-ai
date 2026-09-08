@@ -1,0 +1,21 @@
+package components
+
+import kof.ui
+import core.theme
+
+// =============================================================================
+// Nav Bar — navegação inferior com 3 itens
+// DESIGN_SYSTEM.md seção 3.5
+// =============================================================================
+// Altura: 64px, radius 16px topo, fundo card, borda superior
+// 3 itens: Dashboard, Chat, Caixinhas
+// Ativo: cyan; Inativo: texto secundário
+
+Row buildNavBar(String activeRoute, (String) -> onNavigate) {
+    var dashBtn = Button("Dashboard", () -> onNavigate("dashboard"))
+    var chatBtn = Button("Chat", () -> onNavigate("chat"))
+    var envBtn  = Button("Caixinhas", () -> onNavigate("envelopes"))
+
+    return Row(listOf(dashBtn, chatBtn, envBtn))
+}
+

@@ -1,0 +1,25 @@
+package components
+
+import kof.ui
+import core.theme
+
+// =============================================================================
+// Pulse Card — card de pulso diário do dashboard
+// DESIGN_SYSTEM.md seção 3.3 (Card de pulso diário)
+// =============================================================================
+// Gradiente 135deg #12162A → #1A1F3A, borda rgba(0,212,255,.15)
+// Conteúdo: eyebrow + contexto + valor grande + rodapé + dica
+
+Column buildPulseCard(String availableToday, String daysRemaining, String? tip) {
+    var eyebrow = Label("VOCÊ PODE GASTAR HOJE")
+    var value = Label(availableToday)
+    var footer = Label(daysRemaining)
+
+    var items = listOf(eyebrow, value, footer)
+
+    // TODO: adicionar dica de economia se tip != null
+    // "Dica: economize em Uber para cortar gastos." (13px/600/accent)
+
+    return Column(items)
+}
+

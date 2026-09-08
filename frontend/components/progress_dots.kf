@@ -1,0 +1,37 @@
+package components
+
+import kof.ui
+import core.theme
+
+// =============================================================================
+// Progress Dots — indicadores de progresso do onboarding
+// DESIGN_SYSTEM.md seção 3.8
+// =============================================================================
+// 4 pontos de 8px, radius 50%, gap 12px, centralizados
+// active: cyan sólido
+// visited: cyan 40% opacidade
+// inactive: branco 15% opacidade
+
+Row buildProgressDots(Int currentStep, Int totalSteps) {
+    var dots = listOf(
+        _buildDot(0, currentStep),
+        _buildDot(1, currentStep),
+        _buildDot(2, currentStep),
+        _buildDot(3, currentStep)
+    )
+    return Row(dots)
+}
+
+View _buildDot(Int index, Int currentStep) {
+    if (index == currentStep) {
+        // Ativo: cyan sólido
+        return View(Style(AppTheme_accent, AppTheme_accent, 0, 4))
+    }
+    if (index < currentStep) {
+        // Visitado: cyan 40%
+        return View(Style(Color.rgba(0, 212, 255, 0.4), Color.rgba(0, 212, 255, 0.4), 0, 4))
+    }
+    // Inativo: branco 15%
+    return View(Style(Color.rgba(255, 255, 255, 0.15), Color.rgba(255, 255, 255, 0.15), 0, 4))
+}
+

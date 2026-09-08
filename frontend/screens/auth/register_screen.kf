@@ -1,0 +1,107 @@
+package screens.auth
+
+import kof.ui
+import core.theme
+import core.router_config
+import core.http_client
+import components.primary_button
+
+// =============================================================================
+// Tela 3 — Cadastro
+// DESIGN_SYSTEM.md seção 1.1, 3.1, 3.2, 5 (Tela 3)
+// =============================================================================
+// - Marca compacta isolada (52px, sem wordmark) no topo
+// - Formulário: "Nome", "E-mail", "Senha" (olho), "Confirmar senha" (olho)
+// - Botão primário "Criar conta" com respiro até a borda inferior
+// - Rodapé: "Já tem conta?" em uma linha + link cyan "Entre" na linha abaixo
+// - Submissão: ApiClient_post("/api/auth/register", json) -> Router.go(Routes_onboarding)
+// =============================================================================
+
+// Marca — 3 ondas compactas (52px de largura, proporção 2:1)
+// DESIGN_SYSTEM.md seção 1.1 e 5 (Tela 3)
+View buildBrandLogo52() {
+    var wave1 = View(Style(AppTheme_accent, AppTheme_accent, 0, 1))
+    var wave2 = View(Style(Color.rgba(0, 212, 255, 0.70), Color.rgba(0, 212, 255, 0.70), 0, 1))
+    var wave3 = View(Style(Color.rgba(0, 212, 255, 0.45), Color.rgba(0, 212, 255, 0.45), 0, 1))
+
+    var wavesCol = Column(listOf(wave1, wave2, wave3))
+    var brandContainer = View(Style(Color.rgba(0, 0, 0, 0), AppTheme_accent, 4, 0))
+    brandContainer.bind(wavesCol)
+    return brandContainer
+}
+
+Component buildRegisterScreen() {
+    var c = Component("RegisterScreen")
+
+    c.state("idle")
+
+    c.view { state ->
+        // Marca isolada no topo (52px)
+        var brand = buildBrandLogo52()
+        var brandSection = Column(listOf(brand))
+
+        // Campos do formulário (DESIGN_SYSTEM.md seção 3.2)
+        var nameInput = Input("Nome")
+        var emailInput = Input("E-mail")
+
+        var passwordInput = Input("Senha")
+        var eyeIconPassword = Button("👁", () -> {
+            // Alternar visibilidade da senha
+        })
+        var passwordField = Row(listOf(passwordInput, eyeIconPassword))
+
+        var confirmPasswordInput = Input("Confirmar senha")
+        var eyeIconConfirm = Button("👁", () -> {
+            // Alternar visibilidade da confirmação de senha
+        })
+        var confirmPasswordField = Row(listOf(confirmPasswordInput, eyeIconConfirm))
+
+        var formSection = Column(listOf(nameInput, emailInput, passwordField, confirmPasswordField))
+
+        // Botão de submissão "Criar conta" (DESIGN_SYSTEM.md seção 3.1)
+        var submitBtn = buildPrimaryButton("Criar conta", () -> {
+            var name = nameInput.text()
+            var email = emailInput.text()
+            var password = passwordInput.text()
+            var confirmPassword = confirmPasswordInput.text()
+
+            var json = "{\"name\":\"" + name + "\",\"email\":\"" + email + "\",\"password\":\"" + password + "\",\"confirmPassword\":\"" + confirmPassword + "\"}"
+
+            try {
+                ApiClient_post("/api/auth/register", json)
+                Router.go(Routes_onboarding)
+            } catch (String e) {
+                // Erro no cadastro
+            }
+        })
+
+        // Rodapé: "Já tem conta?" + link cyan "Entre"
+        var hasAccountLabel = Label("Já tem conta?")
+        hasAccountLabel.fontSize = 14
+        hasAccountLabel.bold = false
+        hasAccountLabel.color = AppTheme_textSecondary
+
+        var loginLink = Button("Entre", () -> {
+            Router.go(Routes_login)
+        })
+
+        var footerSection = Column(listOf(submitBtn, hasAccountLabel, loginLink))
+
+        // Montagem da tela completa
+        var content = Column(listOf(brandSection, formSection, footerSection))
+
+        var screenView = View(screenStyle())
+        screenView.bind(content)
+        return screenView
+    }
+
+    c.onMount {
+        // Lifecycle hook: montagem da tela de cadastro
+    }
+
+    c.onDispose {
+        // Lifecycle hook: limpeza de recursos da tela
+    }
+
+    return c
+}

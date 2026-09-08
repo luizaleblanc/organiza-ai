@@ -1,0 +1,20 @@
+package models
+
+// =============================================================================
+// Models de Usuário — DTOs compartilhados
+// =============================================================================
+
+class UserProfile(String id, String email, String name)
+
+class LoginRequest(String email, String password)
+
+class LoginResponse(String token)
+
+class RegisterRequest(String name, String email, String password, String confirmPassword)
+
+class OnboardingData(Float salary, String incomeType, Boolean hasDebt, Float? debtAmount)
+
+class OnboardingResult(String modelName, String description, List<BucketAllocation> buckets)
+
+class BucketAllocation(String name, Int percentage, String formattedValue)
+

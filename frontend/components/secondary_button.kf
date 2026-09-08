@@ -1,0 +1,19 @@
+package components
+
+import kof.ui
+import core.theme
+import core.constants
+
+// =============================================================================
+// Botão Secundário — borda cyan, fundo transparente
+// DESIGN_SYSTEM.md seção 3.1
+// =============================================================================
+
+Button buildSecondaryButton(String label, () -> callback) {
+    var btn = Button(label, callback)
+    // Mesma altura/radius do primário
+    // Fundo transparente, borda 1.5px cyan
+    // Texto: 16px / 600 / cyan
+    return btn
+}
+

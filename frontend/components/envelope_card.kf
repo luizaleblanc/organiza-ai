@@ -1,0 +1,23 @@
+package components
+
+import kof.ui
+import core.theme
+
+// =============================================================================
+// Envelope Card — card de caixinha com chip colorido
+// DESIGN_SYSTEM.md seção 3.3 (Card de caixinha)
+// =============================================================================
+
+Row buildEnvelopeCard(String name, String category, Int percentage, String spent, String limit) {
+    // Chip de ícone: 36x36px, radius 10px, fundo translúcido cor da categoria
+    var chip = View(Style(AppTheme_card, AppTheme_textSecondary, 8, 10))
+
+    var info = Column(listOf(
+        Label(name),
+        Label("" + percentage + "%"),
+        Label(spent + " de " + limit)
+    ))
+
+    return Row(listOf(chip, info))
+}
+

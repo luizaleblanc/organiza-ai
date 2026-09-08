@@ -1,0 +1,21 @@
+package components
+
+import kof.ui
+import core.theme
+
+// =============================================================================
+// Currency Input — campo "R$ 3.000" com cursor piscante
+// DESIGN_SYSTEM.md seção 3.2 (campo de valor do onboarding)
+// =============================================================================
+
+// Prefixo "R$" (24px/400/cyan) + valor editável (24px/400/cyan) + cursor cyan
+// Centralizado horizontal e verticalmente
+
+Row buildCurrencyInput(String currentValue) {
+    var prefix = Label("R$ ")
+    var amount = Label(currentValue)
+    var cursor = Label("|")
+
+    return Row(listOf(prefix, amount, cursor))
+}
+

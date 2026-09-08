@@ -1,0 +1,28 @@
+package components
+
+import kof.ui
+import core.theme
+
+// =============================================================================
+// Choice Card — card de escolha do onboarding (radio button)
+// DESIGN_SYSTEM.md seção 3.7
+// =============================================================================
+// Altura: 72px, radius 12px, padding horizontal 16px
+// Normal: fundo card, borda card
+// Selecionado: borda cyan + fundo rgba(0,212,255,.08)
+// Radio à direita: 20px, com ponto interno quando selecionado
+
+Row buildChoiceCard(String label, Boolean selected, () -> onSelect) {
+    var text = Label(label)
+
+    // Radio circle: 20px, borda 1.5px
+    var radio = View(Style(AppTheme_card, AppTheme_textMuted, 0, 10))
+
+    var card = Row(listOf(text, radio))
+
+    // TODO: ao clicar, invocar onSelect()
+    // TODO: se selected, aplicar borda cyan + fundo translúcido
+
+    return card
+}
+

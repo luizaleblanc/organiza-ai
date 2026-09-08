@@ -1,0 +1,19 @@
+package core
+
+// =============================================================================
+// Service Locator — registry de serviços singleton
+// =============================================================================
+// Padrão necessário porque KOF não tem IoC/DI nativo.
+// Inicializado uma vez em main.kf via ServiceLocator_init()
+// =============================================================================
+
+Boolean ServiceLocator_initialized = false
+ServiceLocator_init(String bffBaseUrl) {
+ServiceLocator_ApiClient_setBaseUrl(bffBaseUrl)
+ServiceLocator_initialized = true
+
+    static Boolean isReady() {
+        return ServiceLocator_initialized
+    }
+}
+

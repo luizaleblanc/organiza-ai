@@ -1,0 +1,19 @@
+package core
+
+// =============================================================================
+// Constantes de Rotas — paths usados pelo Router
+// =============================================================================
+
+String Routes_welcome       = "welcome"
+String Routes_login         = "login"
+String Routes_register      = "register"
+String Routes_onboarding    = "onboarding"
+String Routes_incomeType    = "income-type"
+String Routes_debt          = "debt"
+String Routes_debtAmount    = "debt-amount"
+String Routes_result        = "result"
+String Routes_dashboard     = "dashboard"
+String Routes_chat          = "chat"
+String Routes_envelopes     = "envelopes"
+String Routes_settings      = "settings"
+

@@ -1,0 +1,135 @@
+package screens.chat
+
+import kof.ui
+import core.theme
+import core.constants
+import core.router_config
+import core.http_client
+import components.nav_bar
+import components.chat_bubble
+import screens.chat.state
+
+// =============================================================================
+// Tela 9 — Chat com IA
+// DESIGN_SYSTEM.md seção 1.1, 3.1, 3.6 e 5 (Tela 9)
+// =============================================================================
+// - Cabeçalho: marca isolada (46px) centralizada
+// - Área de mensagens com bolhas de chat (IA à esquerda, Usuário à direita)
+// - Campo de digitação: placeholder "Digite seu gasto..." + mic + enviar cyan
+// - OnMount: exibe mensagem inicial de boas-vindas da IA
+// - Ao enviar: envia POST para /api/chat/message e exibe a resposta
+// - Nav bar inferior com "chat" ativo
+// =============================================================================
+
+// Marca isolada para cabeçalho do Chat (46px, proporção 2:1)
+// DESIGN_SYSTEM.md seção 1.1 (largura 46px, 3 ondas com opacidade decrescente)
+View buildBrandHeader() {
+    var wave1 = View(Style(AppTheme_accent, AppTheme_accent, 0, 2))
+    var wave2 = View(Style(Color.rgba(0, 212, 255, 0.70), Color.rgba(0, 212, 255, 0.70), 0, 2))
+    var wave3 = View(Style(Color.rgba(0, 212, 255, 0.45), Color.rgba(0, 212, 255, 0.45), 0, 2))
+
+    var wavesCol = Column(listOf(wave1, wave2, wave3))
+    var brandContainer = View(Style(Color.rgba(0, 0, 0, 0), AppTheme_accent, 4, 0))
+    brandContainer.bind(wavesCol)
+    return brandContainer
+}
+
+// Bolha de mensagem estilizada (DESIGN_SYSTEM.md seção 3.6)
+// IA: fundo cardSecondary (#1A1F3A), texto principal (#F0F0F0)
+// Usuário: fundo cyan (#00D4FF), texto contrast (#06121C), peso 600
+View renderChatBubble(String text, String role) {
+    var msgLabel = Label(text)
+    msgLabel.fontSize = 15
+
+    if (role == "assistant") {
+        msgLabel.bold = false
+        msgLabel.color = AppTheme_textPrimary
+        var aiBubble = View(Style(AppTheme_cardSecondary, AppTheme_textPrimary, 12, 12))
+        aiBubble.bind(msgLabel)
+        return aiBubble
+    }
+
+    msgLabel.bold = true
+    msgLabel.color = AppTheme_accentContrast
+    var userBubble = View(Style(AppTheme_accent, AppTheme_accentContrast, 12, 12))
+    userBubble.bind(msgLabel)
+    return userBubble
+}
+
+Component buildChatScreen() {
+    var c = Component("ChatScreen")
+
+    c.state("initial")
+
+    c.view { state ->
+        // 1. Cabeçalho centralizado com a marca (46px)
+        // DESIGN_SYSTEM.md seção 1.1 e 5 (Tela 9)
+        var brand = buildBrandHeader()
+        var headerSection = Column(listOf(brand))
+
+        // 2. Área de mensagens com histórico de conversa
+        // DESIGN_SYSTEM.md seção 3.6 (Bolhas de chat)
+        var msg1 = renderChatBubble("Olá! Como posso te ajudar hoje?", "assistant")
+        var msg2 = renderChatBubble("gastei R$ 35 no almoço, R$ 359 no mercado e R$ 75 no pet shop.", "user")
+        var msg3 = renderChatBubble("Registrado! Descontado dos seus limites. Você ainda pode gastar R$ 85,00 hoje.", "assistant")
+
+        var messagesArea = Column(listOf(msg1, msg2, msg3))
+
+        // 3. Campo de entrada com placeholder, ícone de microfone e botão de envio
+        // DESIGN_SYSTEM.md seção 3.1, 3.2 e 3.6
+        var chatInput = Input("Digite seu gasto...")
+
+        var micButton = Button("🎙", () -> {
+            // Comando por voz opcional (CLAUDE.md regra 10: voz é opcional)
+        })
+
+        var sendButton = Button("➤", () -> {
+            var text = chatInput.text()
+            if (text != null && text != "") {
+                ChatState_addMessage("user", text)
+                chatInput.text = ""
+                ChatState_loading = true
+
+                try {
+                    var jsonBody = "{\"message\":\"" + text + "\"}"
+                    var response = ApiClient_post("/api/chat/message", jsonBody)
+                    ChatState_addMessage("assistant", response)
+                } catch (String e) {
+                    ChatState_addMessage("assistant", "Erro ao comunicar com o assistente: " + e)
+                } finally {
+                    ChatState_loading = false
+                }
+            }
+        })
+
+        var inputRow = Row(listOf(chatInput, micButton, sendButton))
+
+        // 4. Barra de navegação inferior com "chat" ativo (DESIGN_SYSTEM.md seção 3.5)
+        var navBar = buildNavBar("chat", (String route) -> {
+            Router.go(route)
+        })
+
+        // Layout completo da tela (DESIGN_SYSTEM.md seção 4)
+        var content = Column(listOf(
+            headerSection,
+            messagesArea,
+            inputRow,
+            navBar
+        ))
+
+        var screenView = View(screenStyle())
+        screenView.bind(content)
+        return screenView
+    }
+
+    c.onMount {
+        // Exibe mensagem de boas-vindas da IA no ChatState
+        ChatState_addMessage("assistant", "Olá! Como posso te ajudar hoje?")
+    }
+
+    c.onDispose {
+        // Limpeza de recursos ao desmontar tela de chat
+    }
+
+    return c
+}

@@ -1,0 +1,14 @@
+package screens.envelopes
+
+// =============================================================================
+// Envelopes State — Gerenciamento de Estado das Caixinhas
+// DESIGN_SYSTEM.md seção 3.3 e 5 (Tela 10 — Caixinhas)
+// =============================================================================
+// Em KOF, o estado mutável vive em campos estáticos de classe.
+// =============================================================================
+
+List<String> EnvelopesState_groups = listOf()
+// Reseta a lista de grupos de caixinhas para o estado inicial
+EnvelopesState_reset() {
+EnvelopesState_groups = listOf()
+}

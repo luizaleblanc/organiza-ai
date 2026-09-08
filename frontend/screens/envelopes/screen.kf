@@ -1,0 +1,110 @@
+package screens.envelopes
+
+import kof.ui
+import core.theme
+import core.constants
+import core.router_config
+import core.http_client
+import components.nav_bar
+import components.envelope_card
+import screens.envelopes.state
+
+// =============================================================================
+// Tela 10 — Caixinhas (Envelopes)
+// DESIGN_SYSTEM.md seção 3.3, 3.5 e 5 (Tela 10)
+// =============================================================================
+// - Cabeçalho: "Suas caixinhas" + botão "+" (adicionar caixinha)
+// - Agrupado por categoria macro (Necessidades, Desejos, Futuro)
+// - Cards de envelopes com chip colorido de categoria e barra de limites
+// - OnMount: busca caixinhas via ApiClient_get("/api/envelopes")
+// - Nav bar inferior com "envelopes" ativo
+// =============================================================================
+
+// Helper para títulos de grupo (DESIGN_SYSTEM.md seção 2 — Subtítulo 18px)
+Label buildGroupHeader(String title) {
+    var lbl = Label(title)
+    lbl.fontSize = 18
+    lbl.bold = true
+    lbl.color = AppTheme_textPrimary
+    return lbl
+}
+
+// Wrapper para card de caixinha com container estilizado (DESIGN_SYSTEM.md seção 3.3)
+View buildEnvelopeItem(String name, String category, Int percentage, String spent, String limit) {
+    var cardRow = buildEnvelopeCard(name, category, percentage, spent, limit)
+    var cardView = View(Style(AppTheme_card, AppTheme_textPrimary, 12, 12))
+    cardView.bind(cardRow)
+    return cardView
+}
+
+Component buildEnvelopesScreen() {
+    var c = Component("EnvelopesScreen")
+
+    c.state("initial")
+
+    c.view { state ->
+        // 1. Cabeçalho: "Suas caixinhas" + botão de adicionar "+"
+        // DESIGN_SYSTEM.md seção 3.1 (Icon button) e seção 5 (Tela 10)
+        var title = Label("Suas caixinhas")
+        title.fontSize = 24
+        title.bold = true
+        title.color = AppTheme_textPrimary
+
+        var addBtn = Button("+", () -> {
+            // Ação de criação de nova caixinha (modal/overlay)
+        })
+
+        var headerRow = Row(listOf(title, addBtn))
+
+        // 2. Grupo 1: Necessidades (Moradia, Mercado, Transporte)
+        var titleNeeds = buildGroupHeader("Necessidades")
+        var envMoradia = buildEnvelopeItem("Moradia", "moradia", 80, "R$ 1.200", "R$ 1.500")
+        var envMercado = buildEnvelopeItem("Mercado", "mercado", 64, "R$ 320", "R$ 500")
+        var envTransporte = buildEnvelopeItem("Transporte", "transporte", 43, "R$ 130", "R$ 300")
+        var groupNeeds = Column(listOf(titleNeeds, envMoradia, envMercado, envTransporte))
+
+        // 3. Grupo 2: Desejos (Delivery, Lazer)
+        var titleWants = buildGroupHeader("Desejos")
+        var envDelivery = buildEnvelopeItem("Delivery", "delivery", 90, "R$ 270", "R$ 300")
+        var envLazer = buildEnvelopeItem("Lazer", "lazer", 40, "R$ 120", "R$ 300")
+        var groupWants = Column(listOf(titleWants, envDelivery, envLazer))
+
+        // 4. Grupo 3: Futuro (Reserva)
+        var titleFuture = buildGroupHeader("Futuro")
+        var envReserva = buildEnvelopeItem("Reserva", "reserva", 33, "R$ 266", "R$ 800")
+        var groupFuture = Column(listOf(titleFuture, envReserva))
+
+        // 5. Barra de navegação inferior com "envelopes" ativo (DESIGN_SYSTEM.md seção 3.5)
+        var navBar = buildNavBar("envelopes", (String route) -> {
+            Router.go(route)
+        })
+
+        // Layout completo da tela (DESIGN_SYSTEM.md seção 4)
+        var content = Column(listOf(
+            headerRow,
+            groupNeeds,
+            groupWants,
+            groupFuture,
+            navBar
+        ))
+
+        var screenView = View(screenStyle())
+        screenView.bind(content)
+        return screenView
+    }
+
+    c.onMount {
+        // Busca envelopes do usuário via BFF
+        try {
+            var envelopesData = ApiClient_get("/api/envelopes")
+        } catch (String e) {
+            // Tratamento de falha de rede ou uso de cache
+        }
+    }
+
+    c.onDispose {
+        // Limpeza de recursos ao desmontar tela de caixinhas
+    }
+
+    return c
+}

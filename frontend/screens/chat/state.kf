@@ -1,0 +1,24 @@
+package screens.chat
+
+// =============================================================================
+// Chat State — Gerenciamento de Estado da Tela de Chat
+// DESIGN_SYSTEM.md seção 3.6 e 5 (Tela 9 — Chat)
+// =============================================================================
+// Em KOF, o estado mutável entre eventos de UI e cliques de botão vive em campos
+// estáticos de classe, pois lambdas capturam escopo de forma somente-leitura.
+// =============================================================================
+
+List<String> ChatState_messages = listOf()
+String ChatState_currentInput   = ""
+Boolean ChatState_loading       = false
+// Reseta o histórico de mensagens e o input para o estado inicial
+ChatState_reset() {
+ChatState_messages = listOf()
+ChatState_currentInput = ""
+ChatState_loading = false
+
+    // Registra nova mensagem com role ("user" ou "assistant") e conteúdo
+    static addMessage(String role, String content) {
+        ChatState_messages.add(role + ":" + content)
+    }
+}

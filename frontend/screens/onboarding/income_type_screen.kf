@@ -1,0 +1,122 @@
+package screens.onboarding
+
+import kof.ui
+import core.theme
+import core.router_config
+import components.progress_dots
+import components.choice_card
+import components.primary_button
+import screens.onboarding.state
+
+// =============================================================================
+// Tela 5 — Onboarding: Tipo de Renda
+// DESIGN_SYSTEM.md seção 3.1, 3.7, 3.8, 5 (Tela 5)
+// =============================================================================
+// - Indicador de progresso: step 1 ativo (1º visitado, 2º ativo, demais inativos)
+// - Título: "Sua renda é fixa ou variável?" (24px / 400 / textPrimary)
+// - Subtítulo: "Isso muda como calculamos seu dia a dia" (16px / 400 / textSecondary)
+// - Duas choice cards:
+//     1. "Fixa (CLT, salário todo mês)"
+//     2. "Variável (freela, PJ, bicos)"
+// - Botão "Próximo": desabilitado até haver uma seleção. Ao clicar, salva o
+//   tipo no OnboardingState_incomeType ("FIXED" ou "VARIABLE") e navega
+//   para Routes_debt.
+// =============================================================================
+
+Component buildIncomeTypeScreen() {
+    var c = Component("IncomeTypeScreen")
+
+    // Estado local da seleção: "" (nenhuma), "FIXED" ou "VARIABLE"
+    c.state("")
+
+    c.view { selectedType ->
+        // Indicador de progresso: 4 passos, step 1 ativo (DESIGN_SYSTEM.md seção 3.8)
+        var dots = buildProgressDots(1, 4)
+
+        // Cabeçalho: Título + Subtítulo (DESIGN_SYSTEM.md seção 2 e 5 — Tela 5)
+        var title = Label("Sua renda é fixa ou variável?")
+        title.fontSize = 24
+        title.bold = false
+        title.color = AppTheme_textPrimary
+
+        var subtitle = Label("Isso muda como calculamos seu dia a dia")
+        subtitle.fontSize = 16
+        subtitle.bold = false
+        subtitle.color = AppTheme_textSecondary
+
+        var headerSection = Column(listOf(dots, title, subtitle))
+
+        // Cards de escolha (DESIGN_SYSTEM.md seção 3.7)
+        var isFixed = selectedType == "FIXED"
+        var isVariable = selectedType == "VARIABLE"
+
+        var cardFixed = buildChoiceCard("Fixa (CLT, salário todo mês)", isFixed, () -> {
+            c.state("FIXED")
+        })
+
+        var cardVariable = buildChoiceCard("Variável (freela, PJ, bicos)", isVariable, () -> {
+            c.state("VARIABLE")
+        })
+
+        // Botões de toque para acionar a seleção no webview
+        var fixedLabel = "Selecionar: Fixa (CLT, salário todo mês)"
+        if (isFixed) {
+            fixedLabel = "✓ Fixa (CLT, salário todo mês)"
+        }
+        var btnFixed = Button(fixedLabel, () -> {
+            c.state("FIXED")
+        })
+
+        var variableLabel = "Selecionar: Variável (freela, PJ, bicos)"
+        if (isVariable) {
+            variableLabel = "✓ Variável (freela, PJ, bicos)"
+        }
+        var btnVariable = Button(variableLabel, () -> {
+            c.state("VARIABLE")
+        })
+
+        var choicesSection = Column(listOf(cardFixed, btnFixed, cardVariable, btnVariable))
+
+        // Botão "Próximo": desabilitado até selecionar uma opção (DESIGN_SYSTEM.md seção 3.1)
+        var nextBtn = Button("Próximo", () -> {
+            // Desabilitado enquanto nenhuma opção estiver selecionada
+        })
+        nextBtn.color = AppTheme_textMuted
+
+        if (selectedType == "FIXED") {
+            nextBtn = buildPrimaryButton("Próximo", () -> {
+                OnboardingState_incomeType = "FIXED"
+                OnboardingState_currentStep = 2
+                Router.go(Routes_debt)
+            })
+        }
+
+        if (selectedType == "VARIABLE") {
+            nextBtn = buildPrimaryButton("Próximo", () -> {
+                OnboardingState_incomeType = "VARIABLE"
+                OnboardingState_currentStep = 2
+                Router.go(Routes_debt)
+            })
+        }
+
+        var footerSection = Column(listOf(nextBtn))
+
+        // Montagem do layout completo da tela
+        var content = Column(listOf(headerSection, choicesSection, footerSection))
+
+        var screenView = View(screenStyle())
+        screenView.bind(content)
+        return screenView
+    }
+
+    c.onMount {
+        // Inicializa o passo atual no OnboardingState
+        OnboardingState_currentStep = 1
+    }
+
+    c.onDispose {
+        // Limpeza de recursos da tela
+    }
+
+    return c
+}

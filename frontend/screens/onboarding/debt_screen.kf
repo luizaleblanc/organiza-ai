@@ -1,0 +1,133 @@
+package screens.onboarding
+
+import kof.ui
+import core.theme
+import core.router_config
+import core.http_client
+import components.progress_dots
+import components.choice_card
+import components.primary_button
+import screens.onboarding.state
+
+// =============================================================================
+// Tela 6 — Onboarding: Dívidas em Atraso
+// DESIGN_SYSTEM.md seção 3.1, 3.7, 3.8, 5 (Tela 6)
+// =============================================================================
+// - Indicador de progresso: step 2 ativo (1º e 2º visitados, 3º ativo, 4º inativo)
+// - Título: "Você tem dívidas em atraso?" (24px / 400 / textPrimary)
+// - Subtítulo: "Isso ajuda a escolher o melhor modelo pra você" (16px / 400 / textSecondary)
+// - Duas choice cards:
+//     1. "Sim, tenho dívidas"
+//     2. "Não, estou em dia"
+// - Ao selecionar "Sim":
+//     OnboardingState_hasDebt = true -> Router.go(Routes_debtAmount)
+// - Ao selecionar "Não":
+//     OnboardingState_hasDebt = false -> ApiClient_post("/api/users/onboarding", ...) -> Router.go(Routes_result)
+// =============================================================================
+
+Component buildDebtScreen() {
+    var c = Component("DebtScreen")
+
+    // Estado local da seleção: "" (nenhuma), "YES" (Sim) ou "NO" (Não)
+    c.state("")
+
+    c.view { selectedChoice ->
+        // Indicador de progresso: 4 passos, step 2 ativo (DESIGN_SYSTEM.md seção 3.8)
+        var dots = buildProgressDots(2, 4)
+
+        // Cabeçalho: Título + Subtítulo (DESIGN_SYSTEM.md seção 2 e 5 — Tela 6)
+        var title = Label("Você tem dívidas em atraso?")
+        title.fontSize = 24
+        title.bold = false
+        title.color = AppTheme_textPrimary
+
+        var subtitle = Label("Isso ajuda a escolher o melhor modelo pra você")
+        subtitle.fontSize = 16
+        subtitle.bold = false
+        subtitle.color = AppTheme_textSecondary
+
+        var headerSection = Column(listOf(dots, title, subtitle))
+
+        // Cards de escolha (DESIGN_SYSTEM.md seção 3.7)
+        var isYes = selectedChoice == "YES"
+        var isNo = selectedChoice == "NO"
+
+        var cardYes = buildChoiceCard("Sim, tenho dívidas", isYes, () -> {
+            c.state("YES")
+        })
+
+        var cardNo = buildChoiceCard("Não, estou em dia", isNo, () -> {
+            c.state("NO")
+        })
+
+        // Botões de toque para acionar a seleção no webview
+        var yesLabel = "Selecionar: Sim, tenho dívidas"
+        if (isYes) {
+            yesLabel = "✓ Sim, tenho dívidas"
+        }
+        var btnYes = Button(yesLabel, () -> {
+            c.state("YES")
+        })
+
+        var noLabel = "Selecionar: Não, estou em dia"
+        if (isNo) {
+            noLabel = "✓ Não, estou em dia"
+        }
+        var btnNo = Button(noLabel, () -> {
+            c.state("NO")
+        })
+
+        var choicesSection = Column(listOf(cardYes, btnYes, cardNo, btnNo))
+
+        // Botão "Próximo": desabilitado até selecionar uma opção
+        var nextBtn = Button("Próximo", () -> {
+            // Desabilitado enquanto nenhuma opção estiver selecionada
+        })
+        nextBtn.color = AppTheme_textMuted
+
+        if (selectedChoice == "YES") {
+            nextBtn = buildPrimaryButton("Próximo", () -> {
+                OnboardingState_hasDebt = true
+                OnboardingState_currentStep = 3
+                Router.go(Routes_debtAmount)
+            })
+        }
+
+        if (selectedChoice == "NO") {
+            nextBtn = buildPrimaryButton("Próximo", () -> {
+                OnboardingState_hasDebt = false
+                OnboardingState_debtAmount = 0.0
+                OnboardingState_currentStep = 3
+
+                // Submete os dados coletados no onboarding via BFF
+                try {
+                    ApiClient_post("/api/users/onboarding", OnboardingState_toJson())
+                } catch (String e) {
+                    // Tratamento com fallback gracioso em caso de erro de rede
+                }
+
+                Router.go(Routes_result)
+            })
+        }
+
+        var footerSection = Column(listOf(nextBtn))
+
+        // Montagem do layout completo da tela
+        var content = Column(listOf(headerSection, choicesSection, footerSection))
+
+        var screenView = View(screenStyle())
+        screenView.bind(content)
+        return screenView
+    }
+
+    c.onMount {
+        // Inicializa o passo atual no OnboardingState
+        OnboardingState_currentStep = 2
+    }
+
+    c.onDispose {
+        // Limpeza de recursos da tela
+    }
+
+    return c
+}

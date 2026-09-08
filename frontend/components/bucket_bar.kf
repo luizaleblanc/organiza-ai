@@ -1,0 +1,33 @@
+package components
+
+import kof.ui
+import core.theme
+
+// =============================================================================
+// Bucket Bar — barra de progresso por bucket
+// DESIGN_SYSTEM.md seção 3.4
+// =============================================================================
+// Trilho: 8px altura, radius 4px, fundo card
+// Fill: cor varia por estado (normal=cyan, alerta=amarelo, perigo=vermelho)
+// Label acima: nome à esquerda + porcentagem à direita
+
+Column buildBucketBar(String name, Int percentage, String spent, String limit) {
+    var header = Row(listOf(
+        Label(name),
+        Label("" + percentage + "%")
+    ))
+
+    // Barra de progresso construída manualmente com View
+    var track = View(Style(AppTheme_card, AppTheme_card, 0, 4))
+    var fill = View(Style(AppTheme_accent, AppTheme_accent, 0, 4))
+
+    // Cor do fill por estado
+    // 0-79%: cyan (#00D4FF)
+    // 80-99%: warning (#FFB800)
+    // >= 100%: danger (#FF4A6E)
+
+    var valueLabel = Label(spent + " de " + limit)
+
+    return Column(listOf(header, track, valueLabel))
+}
+

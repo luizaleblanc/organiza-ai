@@ -1,0 +1,75 @@
+package core
+
+import kof.ui
+
+// =============================================================================
+// Paleta de Cores — DESIGN_SYSTEM.md
+// =============================================================================
+
+// Cores base
+Color _background()      = Color(10, 13, 24)
+Color _card()            = Color(18, 22, 42)
+Color _cardSecondary()   = Color(26, 31, 58)
+Color _borderCard()      = Color.rgba(255, 255, 255, 0.06)
+Color _borderChrome()    = Color.rgba(255, 255, 255, 0.08)
+
+// Cores de destaque (accent)
+Color _accent()          = Color(0, 212, 255)
+Color _accentBlue()      = Color(0, 102, 255)
+Color _accentContrast()  = Color(6, 18, 28)
+
+// Cores de texto
+Color _textPrimary()     = Color(240, 240, 240)
+Color _textSecondary()   = Color(123, 142, 173)
+Color _textMuted()       = Color(74, 85, 120)
+
+// Cores de estado
+Color _success()         = Color(0, 229, 160)
+Color _warning()         = Color(255, 184, 0)
+Color _danger()          = Color(255, 74, 110)
+
+// Cores de categoria (ícones de caixinhas)
+Color _catMoradia()      = Color(124, 140, 255)
+Color _catMercado()      = Color(45, 212, 191)
+Color _catTransporte()   = Color(56, 189, 248)
+Color _catDelivery()     = Color(167, 139, 250)
+Color _catLazer()        = Color(244, 114, 182)
+Color _catReserva()      = Color(163, 230, 53)
+
+// =============================================================================
+// Classe de Tema — ponto único de acesso
+// =============================================================================
+
+// Base
+Color AppTheme_background      = _background()
+Color AppTheme_card             = _card()
+Color AppTheme_cardSecondary    = _cardSecondary()
+Color AppTheme_borderCard       = _borderCard()
+// Accent
+Color AppTheme_accent           = _accent()
+Color AppTheme_accentBlue       = _accentBlue()
+Color AppTheme_accentContrast   = _accentContrast()
+// Texto
+Color AppTheme_textPrimary      = _textPrimary()
+Color AppTheme_textSecondary    = _textSecondary()
+Color AppTheme_textMuted        = _textMuted()
+// Estado
+Color AppTheme_success          = _success()
+Color AppTheme_warning          = _warning()
+Color AppTheme_danger           = _danger()
+// Categoria
+Color AppTheme_catMoradia       = _catMoradia()
+Color AppTheme_catMercado       = _catMercado()
+Color AppTheme_catTransporte    = _catTransporte()
+Color AppTheme_catDelivery      = _catDelivery()
+Color AppTheme_catLazer         = _catLazer()
+Color AppTheme_catReserva       = _catReserva()
+
+// =============================================================================
+// Estilos pré-definidos
+// =============================================================================
+
+Style screenStyle()     = Style(AppTheme_background, AppTheme_textPrimary, 16, 0)
+Style cardStyle()       = Style(AppTheme_card, AppTheme_textPrimary, 16, 12)
+Style inputStyle()      = Style(AppTheme_card, AppTheme_textPrimary, 16, 8)
+
