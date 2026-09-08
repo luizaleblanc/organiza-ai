@@ -1,0 +1,57 @@
+package core
+
+import kof.http
+import kof.security
+
+// =============================================================================
+// HTTP Client — wrapper para chamadas ao BFF (KOF web)
+// =============================================================================
+
+class ApiClient {
+    static String baseUrl = "http://localhost:3000"
+    static String? token = null
+
+    static setBaseUrl(String url) {
+        ApiClient.baseUrl = url
+    }
+
+    static setToken(String t) {
+        ApiClient.token = t
+    }
+
+    static clearToken() {
+        ApiClient.token = null
+    }
+
+    static String _authHeader() {
+        if (ApiClient.token != null) {
+            return "Authorization: Bearer " + ApiClient.token + "\nContent-Type: application/json"
+        }
+        return "Content-Type: application/json"
+    }
+
+    static String get(String path) {
+        return http.get(ApiClient.baseUrl + path, ApiClient._authHeader())
+    }
+
+    static String post(String path, String body) {
+        return http.post(ApiClient.baseUrl + path, body, ApiClient._authHeader())
+    }
+
+    static String put(String path, String body) {
+        return http.put(ApiClient.baseUrl + path, body, ApiClient._authHeader())
+    }
+
+    static String delete(String path) {
+        return http.delete(ApiClient.baseUrl + path, ApiClient._authHeader())
+    }
+
+    static String patch(String path, String body) {
+        return http.patch(ApiClient.baseUrl + path, body, ApiClient._authHeader())
+    }
+
+    static Int status(String path) {
+        return http.status(ApiClient.baseUrl + path)
+    }
+}
+

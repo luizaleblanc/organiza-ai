@@ -1,0 +1,21 @@
+package core
+
+// =============================================================================
+// Constantes de Rotas — paths usados pelo Router
+// =============================================================================
+
+class Routes {
+    static String welcome       = "welcome"
+    static String login         = "login"
+    static String register      = "register"
+    static String onboarding    = "onboarding"
+    static String incomeType    = "income-type"
+    static String debt          = "debt"
+    static String debtAmount    = "debt-amount"
+    static String result        = "result"
+    static String dashboard     = "dashboard"
+    static String chat          = "chat"
+    static String envelopes     = "envelopes"
+    static String settings      = "settings"
+}
+
