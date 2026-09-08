@@ -1,6 +1,6 @@
 # PROJECT_STATUS.md -- Organiza IA
 
-> Atualizado em: 07/09/2026
+> Atualizado em: 08/09/2026
 > Fase atual: 2 -- Desenvolvimento (backend e BFF concluídos, Design System concluído, frontend KOF não iniciado)
 
 ## Estado do Backend (ATUAL)
@@ -16,7 +16,7 @@
 
 ## Estado do Frontend + BFF (ATUAL)
 - BFF em KOF (`kof.web`, `bff/*.kf`): concluído -- health check, rotas públicas, middleware JWT, rotas protegidas e rota de tier-status.
-- Frontend em KOF (`kof.ui`, `frontend/*.kf`): **NÃO INICIADO** -- nenhuma tela foi escrita ainda.
+- Frontend em KOF (`kof.ui`, `frontend/*.kf`): **ARQUITETURA E TELAS CRIADAS** -- Estrutura de Monolito Modular implementada com 35 arquivos (`main.kf`, `core/`, `models/`, `components/`, `screens/`).
 - Design System: **CONCLUÍDO** -- `DESIGN_SYSTEM.md` com paleta de cores, tipografia, 11 telas especificadas, componentes e mapeamento KOF.
 - Frontend legado (`frontend-voice`, Next.js): **REMOVIDO** -- expurgado por vulnerabilidades de segurança (commits `551eec4e`, `af6568eb`).
 - Consulte `KOF_REFERENCE.md` e `KOF_WEB_REFERENCE.md` (raiz) antes de escrever qualquer código `.kf`.
@@ -41,6 +41,18 @@
 - [x] Middleware JWT
 - [x] Rotas protegidas
 - [x] Rota de tier-status
+
+### Frontend KOF (kof.ui) -- Monolito Modular
+- [x] Infraestrutura Core (`core/`: `theme`, `constants`, `router_config`, `http_client`, `service_locator`)
+- [x] Models compartilhados (`models/`: `user`, `transaction`, `envelope`, `chat`)
+- [x] Componentes de UI reutilizáveis (`components/`: `primary_button`, `secondary_button`, `currency_input`, `pulse_card`, `bucket_bar`, `envelope_card`, `chat_bubble`, `nav_bar`, `choice_card`, `progress_dots`)
+- [x] Fluxo de Auth (`screens/auth/`: `login_screen`, `register_screen`)
+- [x] Fluxo de Boas-Vindas (`screens/welcome/`: `screen`)
+- [x] Fluxo de Onboarding (`screens/onboarding/`: `state`, `salary_screen`, `income_type_screen`, `debt_screen`, `debt_amount_screen`, `result_screen`)
+- [x] Dashboard (`screens/dashboard/`: `state`, `screen`)
+- [x] Chat Coach (`screens/chat/`: `state`, `screen`)
+- [x] Caixinhas / Envelopes (`screens/envelopes/`: `state`, `screen`)
+- [x] Entrypoint e Roteador (`main.kf`)
 
 ### Design System
 - [x] Paleta de cores (base, accent, texto, estado, categoria)
@@ -89,4 +101,5 @@
 - Monetização: freemium (R$9,90/mês premium)
 - Dashboard é a interface principal; entrada por voz é opcional
 - Chat persistido no banco de dados, para continuidade do coach entre sessões
-- Tipografia refinada: pesos 400 para títulos/subtítulos/valores (alinhamento visual mais fino)
+- Tipografia refinada: pesos 500 para títulos/subtítulos/choice cards e 600 para valores monetários (alinhamento visual mais fino)
+- Design system fechado com passe de responsividade mobile/desktop, alinhamento entre telas e catálogo de modelos de notificação (ver Changelog em `DESIGN_SYSTEM.md`)

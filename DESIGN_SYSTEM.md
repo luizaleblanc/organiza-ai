@@ -1,7 +1,9 @@
 # Design System — Organiza IA
 
 > Documento de referência visual gerado a partir do protótipo criado no Claude Design
-> (artifact `9b4531f0-a9f9-444e-8555-36c2b92ec978`).
+> (artifact `9b4531f0-a9f9-444e-8555-36c2b92ec978`, revisado e fechado no artifact
+> `6befd748-2c5d-4261-9069-8ea9a12291de` — responsivo mobile/desktop, alinhamento e
+> modelos de notificação consolidados; ver Changelog na seção 6).
 > Identidade: fundo preto-azulado, ondas cyan quase imperceptíveis ao fundo, cyan usado com parcimônia (só em destaques: valores, ações primárias, estado ativo).
 
 ---
@@ -92,11 +94,13 @@ Todas as telas têm ondas SVG em cyan quase imperceptíveis atrás do conteúdo 
 
 | Estilo | Tamanho | Peso | Cor | Uso |
 |---|---|---|---|---|
-| Título | 24px | 400 | Texto principal (`#F0F0F0`) | Títulos de tela (ex.: "Seus gastos essa semana") |
-| Subtítulo | 18px | 400 | Texto principal | Subtítulos de seção (ex.: "Caixinha Mercado") |
+| Título | 24px | 500 | Texto principal (`#F0F0F0`) | Títulos de tela (ex.: "Seus gastos essa semana"); perguntas de onboarding usam o mesmo peso 500 (antes 700 — afinado para reduzir peso visual) |
+| Subtítulo | 18px | 500 | Texto principal | Subtítulos de seção (ex.: "Caixinha Mercado") |
 | Corpo | 16px | 400 | Texto principal | Texto corrido, mensagens de chat, labels de escolha |
 | Legenda | 14px | 400 | Texto secundário (`#7B8EAD`) | Legendas, timestamps, dicas ("ATUALIZADO HÁ 2 MIN") |
-| Valor monetário | 24px | 400 | Accent (`#00D4FF`) | Valores em destaque (pulso diário, resumo) |
+| Valor monetário | 24–32px | 600 | Accent (`#00D4FF`) | Valores em destaque (pulso diário, resumo, campo de salário); peso 600 (não mais 700) para acompanhar o resto da tipografia afinada |
+
+Nas escolhas de onboarding (choice cards), o label também foi afinado de 600 para 500.
 
 Outras variações usadas nas telas:
 - Logo (`Organiza` + `IA`): 28px / 600 / texto principal, duas palavras lado a lado com leve espaçamento negativo.
@@ -185,6 +189,10 @@ Outras variações usadas nas telas:
 - Label acima: nome do bucket (14px/600) à esquerda + porcentagem (14px/texto secundário) à direita
 - Valor absoluto abaixo (opcional): 13–14px/muted ou texto principal, ex. "R$ 1.640 de R$ 2.000"
 
+**Estado de perigo isolado** (fora da barra de progresso)
+- Banner de alerta: `border-radius` 10px, padding 12px 14px, borda 1px `var(--danger)`, fundo `var(--danger-bg)` (tom translúcido do vermelho de perigo — `rgba(255,74,110,.12)` no dark, `rgba(230,57,70,.08)` no light), ícone de aviso + texto 13px/600 na cor de perigo
+- Valor negativo/estourado: mesma cor de perigo, peso 600, alinhado como qualquer valor monetário tabular
+
 ### 3.5 Nav bar (navegação inferior)
 
 - Altura: 64px
@@ -241,9 +249,20 @@ Outras variações usadas nas telas:
 - Cabeçalho: "ORGANIZA" em caixa alta (12px/700) à esquerda + "agora" (11px/muted) à direita
 - Título da notificação: 14px/700, cor de texto principal
 - Corpo: 13px/400/texto secundário, até 2 linhas
-- Gatilho: gerado quando uma caixinha ultrapassa 80–90% do limite (mesmo threshold de alerta das barras de progresso e do gráfico de pizza)
-- Tom de voz: descontraído e direto, sem jargão financeiro, para atingir qualquer público — não é um alerta de banco, é um toque de amigo (ver `CLAUDE.md`)
-- Exemplo de conteúdo: "Ô psit, dá um trégua no delivery" / "Já foi 90% da caixinha esse mês. Pede uma vez a menos essa semana e o mês fecha redondo, sem dívida e sem drama."
+- Gatilho: gerado quando uma caixinha ultrapassa 80–90% do limite (mesmo threshold de alerta das barras de progresso e do gráfico de pizza), ou quando estoura 100%
+- Tom de voz: passivo, descontraído e direto, sem jargão financeiro, sem nunca julgar o usuário — não é um alerta de banco, é um toque de amigo (ver `CLAUDE.md`)
+
+**Modelos de notificação** (catálogo de referência, documentado no design system):
+
+| Modelo | Ícone / cor | Exemplo |
+|---|---|---|
+| Alerta · caixinha estourada | Ícone de aviso (triângulo), fundo `var(--danger)` | "Vamos dar uma segurada nas assinaturas, Luiza" / "Você já gastou R$ 360 de R$ 300 em assinaturas esse mês (120%). Dá uma olhada na caixinha de assinaturas antes que seu orçamento acabe." |
+| Aviso · quase no limite | Ícone de aviso, fundo `var(--warning)` | "Delivery quase no limite" / "Você já gastou R$ 270 de R$ 300 em Delivery esse mês (90%). Ainda dá pra segurar até o fim do mês." |
+| Marca · dica do dia | Logomark original (mono, gradiente) | "Seu pulso de hoje" / "Você pode gastar R$ 92,00 hoje sem sair do combinado. Faltam 12 dias para o fim do mês." |
+| Sucesso · meta batida | Ícone de check, fundo `var(--success)` | "Mês fechado dentro do combinado!" / "Você terminou o mês gastando R$ 2.840 de R$ 3.000. Mandou bem — bora manter o ritmo?" |
+| Lembrete · registro pendente | Ícone de sino, fundo neutro (`var(--card-2)`) | "Não esqueceu de registrar hoje?" / "Você ainda não lançou nenhum gasto hoje. Manda um "gastei R$ X" no chat que eu cuido do resto." |
+
+Só o modelo de **alerta/aviso** usa cor de estado (perigo/atenção) no ícone; os demais mantêm a identidade da marca (gradiente cyan→azul) ou uma cor neutra, reforçando que o Organiza não trata todo aviso como problema.
 
 ---
 
@@ -291,10 +310,11 @@ Outras variações usadas nas telas:
 - Rodapé: "Não tem conta?" em uma linha + link em destaque cyan "Cadastre-se" na linha abaixo
 
 ### Tela 3 — Cadastro
-- Apenas a marca isolada (52px, sem wordmark) no topo
-- Formulário: "Nome", "E-mail", "Senha" (com olho), "Confirmar senha" (com olho)
-- Botão primário "Criar conta", com respiro extra até a borda inferior (`padding-bottom` 36px)
-- Rodapé: "Já tem conta?" em uma linha + link cyan "Entre" na linha abaixo
+- Marca isolada (small, mesma altura de caixa que o Login — 48px — para os dois ficarem alinhados entre si)
+- Formulário: "Nome", "E-mail", "Senha" (com olho), "Confirmar senha" (com olho), gap de 20px entre campos (mais respiro que o padrão de lista de 16px)
+- Espaço mínimo garantido de 20px entre o último campo e o botão "Criar conta" (evita o campo colar no botão em telas com muito conteúdo)
+- Botão primário "Criar conta"
+- Rodapé: "Já tem conta?" em uma linha + link cyan "Entrar" na linha abaixo
 
 ### Tela 4 — Onboarding: Salário
 - Dots de progresso: 1º ativo, demais inativos
@@ -349,15 +369,16 @@ Outras variações usadas nas telas:
 - Cabeçalho: "Suas caixinhas" + botão "+" (adicionar caixinha)
 - Agrupado por categoria macro (mesmos buckets do modelo adaptativo):
   - **Necessidades**: Moradia (80% · R$ 1.200 de R$ 1.500, alerta), Mercado (64% · R$ 320 de R$ 500), Transporte (43% · R$ 130 de R$ 300)
-  - **Desejos**: Delivery (90% · R$ 270 de R$ 300, alerta), Lazer (40% · R$ 120 de R$ 300)
+  - **Desejos**: Delivery (90% · R$ 270 de R$ 300, alerta), Assinaturas (120% · R$ 360 de R$ 300, perigo/estourada), Lazer (40% · R$ 120 de R$ 300)
   - **Futuro**: Reserva (33% · R$ 266 de R$ 800)
 - Cada card de caixinha tem chip de ícone colorido por categoria (ver seção 1)
 - Nav bar inferior com "Caixinhas" ativo
 
 ### Tela 11 — Notificação (push)
 - Pop-up isolado sobre fundo escurecido (não é uma tela navegável do app — ver seção 3.9)
-- Notificação do Organiza sugerindo economia na caixinha que está no limite, em tom descontraído
+- Notificação de exemplo: modelo "Alerta · caixinha estourada", congruente com a caixinha Assinaturas estourada da Tela 10 — "Vamos dar uma segurada nas assinaturas, Luiza" / "Você já gastou R$ 360 de R$ 300 em assinaturas esse mês (120%). Dá uma olhada na caixinha de assinaturas antes que seu orçamento acabe."
 - Não faz parte do fluxo de navegação do app — é um artefato do sistema operacional (ver mapeamento KOF)
+- No mockup de documentação, esse celular usa um contorno (`box-shadow`) mais forte que os demais para destacar a silhueta do aparelho contra o overlay escuro — recurso só do artifact de documentação, não do produto
 
 ---
 
@@ -376,3 +397,17 @@ Outras variações usadas nas telas:
 |---|---|---|
 | Gráfico de pizza | NÃO EXISTE | Reportar para equipe KOF |
 | Notificação push (nativa) | NÃO EXISTE | Depende da API Mobile (`kof.mobile.onPush`, ver `KOF_VS_FLUTTER.md` seção 5) — reportar para equipe KOF |
+
+---
+
+## 6. Changelog
+
+### 2026-09-08 — Fechamento: responsividade, alinhamento e modelos de notificação
+- **Responsivo mobile/desktop**: o protótipo (artifact de documentação) não tinha nenhuma media query; o valor "R$ 3.000" da Tela 4 quebrava ao abrir em celular real. Corrigido com `clamp()` no tamanho da fonte (24–32px) e largura fixa em `ch` no lugar de recálculo por caractere; adicionada media query (`≤420px`) para o mockup do celular se ajustar ao viewport.
+- **Tipografia mais fina**: pesos de título/subtítulo de onboarding e choice cards reduzidos de 700/600 para 500; valores monetários de 700 para 600 (ver seção 2).
+- **Campo de valor da dívida no protótipo** (Tela 6.1): adicionado ao fluxo visual do artifact, espelhando o campo `debtAmount` já existente no backend (`UserEntity`, `OnboardingRequest`, `OnboardingController`).
+- **Alinhamento entre telas**: Login e Cadastro agora usam a mesma altura de bloco de cabeçalho (marca + margem) para os campos começarem exatamente na mesma linha; telas de pergunta (Tipo de renda / Dívidas) usam blocos de altura fixa para as caixas de escolha começarem no mesmo pixel independente de quantas linhas o texto de apoio ocupa.
+- **Exemplo de perigo isolado**: adicionado banner de alerta + valor negativo fora do contexto da barra de progresso (ver seção 3.4).
+- **Caixinha estourada de exemplo**: "Assinaturas" (120%, R$ 360 de R$ 300) adicionada à Tela 10, para existir um exemplo real de estado de perigo no fluxo de caixinhas.
+- **Modelos de notificação**: catálogo de 5 modelos (alerta, aviso, marca/dica, sucesso, lembrete) documentado na seção 3.9, todos com o mesmo tom de voz passivo e amigável do restante do produto.
+- Todas essas mudanças vivem no artifact `6befd748-2c5d-4261-9069-8ea9a12291de` (Claude Artifacts) — este documento é a referência textual; o artifact é a referência visual viva.
