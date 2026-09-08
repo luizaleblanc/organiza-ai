@@ -1,7 +1,7 @@
 # PROJECT_STATUS.md -- Organiza IA
 
-> Atualizado em: 02/09/2026
-> Fase atual: 2 -- Desenvolvimento (backend e BFF concluídos, frontend KOF não iniciado)
+> Atualizado em: 07/09/2026
+> Fase atual: 2 -- Desenvolvimento (backend e BFF concluídos, Design System concluído, frontend KOF não iniciado)
 
 ## Estado do Backend (ATUAL)
 - Java: 17
@@ -17,6 +17,8 @@
 ## Estado do Frontend + BFF (ATUAL)
 - BFF em KOF (`kof.web`, `bff/*.kf`): concluído -- health check, rotas públicas, middleware JWT, rotas protegidas e rota de tier-status.
 - Frontend em KOF (`kof.ui`, `frontend/*.kf`): **NÃO INICIADO** -- nenhuma tela foi escrita ainda.
+- Design System: **CONCLUÍDO** -- `DESIGN_SYSTEM.md` com paleta de cores, tipografia, 11 telas especificadas, componentes e mapeamento KOF.
+- Frontend legado (`frontend-voice`, Next.js): **REMOVIDO** -- expurgado por vulnerabilidades de segurança (commits `551eec4e`, `af6568eb`).
 - Consulte `KOF_REFERENCE.md` e `KOF_WEB_REFERENCE.md` (raiz) antes de escrever qualquer código `.kf`.
 
 ## O que está concluído
@@ -26,6 +28,7 @@
 - [x] CRUD de transações
 - [x] CRUD de envelopes
 - [x] Salary (renda fixa) e onboarding com sugestão automática de modelo de orçamento
+- [x] Onboarding com campo de valor da dívida (`debtAmount`) para modelagem personalizada
 - [x] Renda variável (freela, shows, mentorias) direcionada para reserva de emergência
 - [x] Tools de IA: getDailyPulse, getBalance, suggestModelChange
 - [x] Prompt anti-alucinação com grounding de data no system prompt
@@ -39,23 +42,45 @@
 - [x] Rotas protegidas
 - [x] Rota de tier-status
 
+### Design System
+- [x] Paleta de cores (base, accent, texto, estado, categoria)
+- [x] Tipografia (Manrope, pesos 400/600, 5 estilos)
+- [x] Marca (logomark com 3 ondas, variante mono)
+- [x] Componentes (botões, inputs, cards, barras de progresso, nav bar, bolhas de chat, choice cards, gráfico de pizza, dots, notificação push)
+- [x] Layout (grid 8px, estrutura mobile 360×640)
+- [x] Especificação de 11 telas (boas-vindas, login, cadastro, onboarding salário, tipo de renda, dívidas, valor da dívida, resultado, dashboard, chat, caixinhas, notificação)
+- [x] Mapeamento de componentes para KOF (`kof.ui`)
+
 ### Documentação
-- [x] Todos os arquivos `.md` atualizados (README, CLAUDE.md, CONTRIBUTING.md, DATA_MODEL.md, ARCHITECTURE_DECISIONS.md, PROJECT_STATUS.md)
+- [x] Todos os arquivos `.md` atualizados (README, CLAUDE.md, CONTRIBUTING.md, DATA_MODEL.md, ARCHITECTURE_DECISIONS.md, PROJECT_STATUS.md, DESIGN_SYSTEM.md)
 
 ## O que está pendente
 
 ### Frontend KOF (kof.ui) -- NÃO INICIADO
-- [ ] Onboarding
-- [ ] Dashboard
-- [ ] Chat
-- [ ] Envelopes
+- [ ] Onboarding (4 telas: salário, tipo de renda, dívidas, valor da dívida + resultado)
+- [ ] Dashboard (pulso diário, gráfico de pizza, transações)
+- [ ] Chat (bolhas IA/usuário, campo de digitação com microfone)
+- [ ] Caixinhas (envelopes agrupados por bucket)
 - [ ] Configurações
 
 ### Melhorias futuras
 - [ ] Flyway (substituir Hibernate `ddl-auto=update` por migrations versionadas)
-- [ ] Kakeibo reflexivo (modelo de orçamento)
-- [ ] Migração automática de modelo de orçamento
+- [ ] Kakeibo reflexivo (modelo de orçamento) — Issue #13
+- [ ] Migração automática de modelo de orçamento — Issue #12
+- [ ] Análise real do suggestModelChange — Issue #8
+- [ ] Modelo de renda variável com reserva de emergência — Issue #7
 - [ ] Target Android (APK)
+- [ ] Screenshots da aplicação no README — Issue #16
+
+## Issues abertas no GitHub
+- #7: feat(backend): modelo de renda variável com reserva de emergência
+- #8: feat(backend): implementar análise real do suggestModelChange
+- #9: feat(frontend): tela de onboarding com 3 perguntas
+- #10: feat(frontend): dashboard principal com barras de progresso por bucket
+- #11: feat(frontend): tela de seleção/troca de modelo de orçamento
+- #12: feat(backend): migração automática de modelo quando dívida for quitada
+- #13: feat(coach): perguntas reflexivas semanais do Kakeibo
+- #16: Sugiro add print(s) da aplicação no README
 
 ## Decisões tomadas
 - Frontend + BFF em KOF (kof.ui / kof.web)
@@ -64,3 +89,4 @@
 - Monetização: freemium (R$9,90/mês premium)
 - Dashboard é a interface principal; entrada por voz é opcional
 - Chat persistido no banco de dados, para continuidade do coach entre sessões
+- Tipografia refinada: pesos 400 para títulos/subtítulos/valores (alinhamento visual mais fino)

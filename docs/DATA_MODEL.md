@@ -32,6 +32,7 @@ erDiagram
         string budget_model "Um dos 6 modelos adaptativos"
         string income_type "FIXED ou VARIABLE"
         boolean has_debt
+        float debt_amount
         datetime created_at
     }
 
@@ -121,7 +122,9 @@ flowchart TD
 flowchart TD
     A["Quanto você ganha por mês?"] --> D[Motor de sugestão]
     B["Sua renda é fixa ou variável?"] --> D
-    C["Você tem dívidas em atraso?"] --> D
+    C["Você tem dívidas em atraso?"] --> C2["Qual o valor da sua dívida? (se sim)"]
+    C2 --> D
+    C -->|Não| D
     D -->|Renda variável| E[Modelo Freelancer Base Zero]
     D -->|Com dívida| F[Modelo Anti-Dívida 70/10/20]
     D -->|Renda baixa, sem dívida| G[Modelo Sobrevivência 70/20/10]

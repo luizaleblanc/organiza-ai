@@ -69,17 +69,19 @@ Todas as telas têm ondas SVG em cyan quase imperceptíveis atrás do conteúdo 
 
 ### 1.1 Marca (logomark)
 
-- Conceito: **3 ondas** horizontais fluidas, com amplitude e opacidade decrescentes de cima para baixo (1 / .7 / .45). Lê-se como "as finanças começam bagunçadas e terminam calmas e organizadas", reaproveitando o mesmo motivo das ondas de fundo já usadas em todo o app — a marca é literalmente um recorte da textura de fundo do produto. Sem círculo, sem moldura — só as 3 ondas.
-- Construção: `viewBox` 40×40, 3 paths horizontais em curva suave (`stroke-width` 2.6px, `stroke-linecap: round`)
+- Conceito: **3 ondas** horizontais fluidas, empilhadas com espaçamento vertical uniforme e opacidade decrescente de cima para baixo (1 / .7 / .45). Lê-se como um recorte da textura de ondas de fundo já usada em todo o app.
+- **Amplitude padronizada**: a primeira onda é a referência — as outras duas repetem exatamente a mesma curva (mesma amplitude), só deslocada verticalmente, nunca encolhendo o traço. Isso é proposital: evita que a marca vire 3 arcos concêntricos de tamanhos diferentes (o que lembraria o logo do Spotify) — aqui são 3 ondas idênticas e paralelas, como ondulações reais na água, sem círculo nem moldura.
+- Construção: **um único SVG** (`viewBox` 240×120), reutilizado em toda a interface só com `width`/`height` diferentes — não existem duas versões (ícone pequeno vs. arte grande) com paths distintos; é sempre exatamente o mesmo traçado escalado, garantindo que a marca pequena e a arte da tela de boas-vindas sejam idênticas
+- Proporção fixa 2:1 (largura:altura) — ao redimensionar, sempre `height = width / 2`
 - Cor: gradiente de marca `linear-gradient(135deg, #00D4FF, #0066FF)` (mesmo gradiente do botão primário) aplicado ao `stroke` de todos os elementos — uma única definição de gradiente reutilizada em todas as instâncias da marca na interface
 - **Variante mono**: mesma construção, mas com `stroke: currentColor` em vez do gradiente — usada quando a marca aparece sobre um fundo já colorido (ex.: ícone de app na notificação), garantindo contraste em vez de competir com o próprio gradiente de fundo
 - **A marca é sempre isolada nas telas do app** — sem o wordmark "OrganizaIA" ao lado. O wordmark existe apenas como referência de documentação (seção "Marca" do design system), nunca pareado com o símbolo dentro do produto
-- Tamanhos de uso: 68px (logo de Login), 52px (logo compacto de Cadastro), 30px (cabeçalho do Chat), 22px (ícone da notificação, variante mono), 44px (documentação do design system)
+- Larguras de uso (altura sempre a metade): 120px (logo de Login), 92px (logo compacto de Cadastro), 80px (cabeçalho do Chat), 30px (ícone da notificação, variante mono), 78px (documentação do design system), 230px (arte da tela de boas-vindas)
 
 ### 1.2 Arte de boas-vindas (hero)
 
-- Versão ampliada das 3 ondas da marca, ocupando a largura útil da tela (~230px), mesmas proporções de amplitude/opacidade decrescente (1 / .7 / .45), mesmo gradiente de marca — é a própria marca, só que grande, sem nenhum elemento adicional sobreposto
-- Composição da Tela 1: arte hero (3 ondas grandes) → slogan abaixo, sem a marca pequena repetida — a arte já comunica a marca sozinha
+- É a mesma marca da seção 1.1, só que na largura máxima (230px) — não é uma peça separada, é o mesmo componente
+- Composição da Tela 1: marca em tamanho hero (230px) → slogan abaixo
 - Slogan com a tipografia de **Legenda** (ver seção 2 — Tipografia, mesmo estilo de "ATUALIZADO HÁ 2 MIN"): 14px/400/texto secundário, `letter-spacing` .08em, caixa alta, `max-width` 240px, centralizado — "SUA GRANA ORGANIZADA E SEM ESTRESSE."
 
 ---
@@ -90,11 +92,11 @@ Todas as telas têm ondas SVG em cyan quase imperceptíveis atrás do conteúdo 
 
 | Estilo | Tamanho | Peso | Cor | Uso |
 |---|---|---|---|---|
-| Título | 24px | 600 | Texto principal (`#F0F0F0`) | Títulos de tela (ex.: "Seus gastos essa semana") |
-| Subtítulo | 18px | 600 | Texto principal | Subtítulos de seção (ex.: "Caixinha Mercado") |
+| Título | 24px | 400 | Texto principal (`#F0F0F0`) | Títulos de tela (ex.: "Seus gastos essa semana") |
+| Subtítulo | 18px | 400 | Texto principal | Subtítulos de seção (ex.: "Caixinha Mercado") |
 | Corpo | 16px | 400 | Texto principal | Texto corrido, mensagens de chat, labels de escolha |
 | Legenda | 14px | 400 | Texto secundário (`#7B8EAD`) | Legendas, timestamps, dicas ("ATUALIZADO HÁ 2 MIN") |
-| Valor monetário | 32px | 600 | Accent (`#00D4FF`) | Valores em destaque (pulso diário, resumo) |
+| Valor monetário | 24px | 400 | Accent (`#00D4FF`) | Valores em destaque (pulso diário, resumo) |
 
 Outras variações usadas nas telas:
 - Logo (`Organiza` + `IA`): 28px / 600 / texto principal, duas palavras lado a lado com leve espaçamento negativo.
@@ -234,7 +236,8 @@ Outras variações usadas nas telas:
 - Card: largura máx. 300px, `border-radius` 10px, padding 14px, fundo cinza-escuro translúcido `rgba(40,42,48,.82)` com `backdrop-filter: blur(16px)`, borda `rgba(255,255,255,.08)`, sombra `0 12px 32px rgba(0,0,0,.5)`
 - Cores do card são fixas (não seguem o tema claro/escuro do app) — é um elemento do SO, igual a um toast do Steam ou da Epic Games Store
 - Botão de fechar "×" no canto superior direito, discreto (`rgba(255,255,255,.4)`)
-- Ícone do app: 40×40px, `border-radius` 8px, gradiente cyan→azul, com a marca Organiza (ver seção 1.1) em 22px na variante mono (`stroke: currentColor`), cor accent-contrast
+- Ícone do app: 40×40px, `border-radius` 8px, gradiente cyan→azul, com a marca Organiza (ver seção 1.1) em 30px de largura, variante mono (`stroke: currentColor`), cor accent-contrast
+- **Traço mais grosso nesse tamanho específico** (`stroke-width` 16, contra o padrão 3.5 da marca): em ícones muito pequenos o traço padrão da marca fica fino demais e perde legibilidade — só essa instância usa o traço reforçado, o resto da marca na interface mantém o padrão
 - Cabeçalho: "ORGANIZA" em caixa alta (12px/700) à esquerda + "agora" (11px/muted) à direita
 - Título da notificação: 14px/700, cor de texto principal
 - Corpo: 13px/400/texto secundário, até 2 linhas
@@ -295,9 +298,9 @@ Outras variações usadas nas telas:
 
 ### Tela 4 — Onboarding: Salário
 - Dots de progresso: 1º ativo, demais inativos
-- Título: "Quanto você ganha por mês?"
-- Subtítulo: "Vamos adaptar tudo ao seu salário"
-- Campo de valor centralizado horizontal e verticalmente (uma cor só, accent): prefixo "R$" + valor grande editável (ex. "3.000") + cursor piscante cyan
+- Título: "Quanto você ganha por mês?" (400)
+- Subtítulo: "Vamos adaptar tudo ao seu salário" (400)
+- Campo de valor centralizado horizontal e verticalmente (uma cor só, accent): prefixo "R$" (20px/400/cyan) + valor grande editável (20px/400/cyan) + cursor piscante cyan
 - Dica abaixo do campo: "Pode ser aproximado — dá pra ajustar depois"
 - Botão primário "Próximo"
 
@@ -313,6 +316,13 @@ Outras variações usadas nas telas:
 - Título: "Você tem dívidas em atraso?"
 - Subtítulo: "Isso ajuda a escolher o melhor modelo pra você"
 - Choice cards: "Sim, tenho dívidas" / "Não, estou em dia"
+- Botão primário "Próximo"
+
+### Tela 6.1 — Onboarding: Valor da Dívida (Caso "Sim" na Tela 6)
+- Dots: 1º, 2º e 3º visitados, 4º ativo
+- Título: "Qual o valor aproximado da sua dívida?"
+- Subtítulo: "Isso ajuda a modelar o modelo de economia que mais se adequa a sua realidade"
+- Campo de valor centralizado horizontal e verticalmente (uma cor só, accent): prefixo "R$" (20px/400/cyan) + valor grande editável (ex. "5.000", 20px/400/cyan) + cursor piscante cyan
 - Botão primário "Próximo"
 
 ### Tela 7 — Onboarding: Resultado

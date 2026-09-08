@@ -42,6 +42,7 @@ public class OnboardingController {
         user.setSalary(request.salary());
         user.setIncomeType(request.incomeType());
         user.setHasDebt(request.hasDebt());
+        user.setDebtAmount(request.debtAmount());
         user.setHasVariableIncome(request.incomeType() == IncomeType.VARIABLE);
         user.setBudgetModel(suggestedModel);
         userEntityRepository.save(user);

@@ -4,5 +4,5 @@ import com.organiza.mod_user.model.IncomeType;
 
 import java.math.BigDecimal;
 
-public record OnboardingRequest(BigDecimal salary, IncomeType incomeType, Boolean hasDebt) {
+public record OnboardingRequest(BigDecimal salary, IncomeType incomeType, Boolean hasDebt, BigDecimal debtAmount) {
 }

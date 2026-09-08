@@ -57,9 +57,12 @@ public class UserEntity {
     @Column(name = "has_debt", nullable = false)
     private Boolean hasDebt = false;
 
+    @Column(name = "debt_amount", precision = 10, scale = 2)
+    private BigDecimal debtAmount;
+
     public static UserEntity from(User user) {
         return new UserEntity(user.getId(), user.getEmail(), user.getPassword(), user.getRole(), user.getSalary(), Tier.FREE, false, null,
-                BudgetModelType.STANDARD_503020, IncomeType.FIXED, false);
+                BudgetModelType.STANDARD_503020, IncomeType.FIXED, false, null);
     }
 
     public User toDomain() {
