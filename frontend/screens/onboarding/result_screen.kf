@@ -21,7 +21,7 @@ import screens.onboarding.state
 Component buildResultScreen() {
     var c = Component("ready")
 
-    c.view((state) -> {
+    c.view((state: String) -> {
         // Indicador de progresso: 4 passos, etapa final ativa (DESIGN_SYSTEM.md seção 3.8)
         var dots = buildProgressDots(3, 4)
 

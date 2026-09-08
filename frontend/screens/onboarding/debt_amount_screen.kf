@@ -27,7 +27,7 @@ Component buildDebtAmountScreen() {
     // Estado local com valor inicial sugerido
     var c = Component(5000.0)
 
-    c.view((currentDebt) -> {
+    c.view((currentDebt: Float) -> {
         // Indicador de progresso: 4 passos, step 3 ativo (DESIGN_SYSTEM.md seção 3.8)
         var dots = buildProgressDots(3, 4)
 

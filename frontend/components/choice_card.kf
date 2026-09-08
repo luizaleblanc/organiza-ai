@@ -11,21 +11,21 @@ import core.theme
 // Normal: fundo card, borda card
 // Selecionado: borda cyan + fundo rgba(0,212,255,.08)
 // Radio à direita: 20px, com ponto interno quando selecionado
+//
+// Componente puramente visual (sem callback): nenhuma sintaxe confirmada no
+// corpus oficial do Kof4j declara um parâmetro de função como tipo (só
+// lambdas passadas como VALOR em chamadas). A interação de clique é feita
+// pelo Button construído em cada tela (ver debt_screen.kf/income_type_screen.kf),
+// que já chama Router/estado diretamente.
+// =============================================================================
 
-// KOF-VERIFY: sintaxe de parâmetro com tipo de função (() -> onSelect) não está
-// confirmada no corpus training/ (só lambdas como VALOR, nunca como tipo de
-// parâmetro, foram encontradas). Rodar `kof check` (CI) antes de confiar nisto.
-Row buildChoiceCard(String label, Boolean selected, () -> onSelect) {
+Row buildChoiceCard(String label, Boolean selected) {
     var text = Label(label)
 
     // Radio circle: 20px, borda 1.5px
     var radio = View(Style(AppTheme.card, AppTheme.textMuted, 0, 10))
 
-    var card = Row(listOf(text, radio))
-
-    // TODO: ao clicar, invocar onSelect()
     // TODO: se selected, aplicar borda cyan + fundo translúcido
 
-    return card
+    return Row(listOf(text, radio))
 }
-

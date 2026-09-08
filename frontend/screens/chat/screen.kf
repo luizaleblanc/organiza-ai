@@ -5,7 +5,6 @@ import core.theme
 import core.constants
 import core.router_config
 import core.http_client
-import components.nav_bar
 import components.chat_bubble
 import screens.chat.state
 
@@ -59,7 +58,7 @@ View renderChatBubble(String text, String role) {
 Component buildChatScreen() {
     var c = Component("initial")
 
-    c.view((state) -> {
+    c.view((state: String) -> {
         // 1. Cabeçalho centralizado com a marca (46px)
         // DESIGN_SYSTEM.md seção 1.1 e 5 (Tela 9)
         var brand = buildBrandHeader()
@@ -103,9 +102,10 @@ Component buildChatScreen() {
         var inputRow = Row(listOf(chatInput, micButton, sendButton))
 
         // 4. Barra de navegação inferior com "chat" ativo (DESIGN_SYSTEM.md seção 3.5)
-        var navBar = buildNavBar("chat", (String route) -> {
-            Router.go(route)
-        })
+        var navDashBtn = Button("Dashboard", () -> { Router.go(Routes.dashboard) })
+        var navChatBtn = Button("Chat", () -> { Router.go(Routes.chat) })
+        var navEnvBtn = Button("Caixinhas", () -> { Router.go(Routes.envelopes) })
+        var navBar = Row(listOf(navDashBtn, navChatBtn, navEnvBtn))
 
         // Layout completo da tela (DESIGN_SYSTEM.md seção 4)
         var content = Column(listOf(

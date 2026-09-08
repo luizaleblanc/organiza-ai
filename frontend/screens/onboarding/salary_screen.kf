@@ -22,7 +22,7 @@ import screens.onboarding.state
 Component buildSalaryScreen() {
     var c = Component(3000.0)
 
-    c.view((currentSalary) -> {
+    c.view((currentSalary: Float) -> {
         // Indicador de progresso: 4 passos, step 0 ativo (DESIGN_SYSTEM.md seção 3.8)
         var dots = buildProgressDots(0, 4)
 

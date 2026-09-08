@@ -5,7 +5,6 @@ import core.theme
 import core.constants
 import core.router_config
 import core.http_client
-import components.nav_bar
 import components.envelope_card
 import screens.envelopes.state
 
@@ -40,7 +39,7 @@ View buildEnvelopeItem(String name, String category, Int percentage, String spen
 Component buildEnvelopesScreen() {
     var c = Component("initial")
 
-    c.view((state) -> {
+    c.view((state: String) -> {
         // 1. Cabeçalho: "Suas caixinhas" + botão de adicionar "+"
         // DESIGN_SYSTEM.md seção 3.1 (Icon button) e seção 5 (Tela 10)
         var title = Label("Suas caixinhas")
@@ -73,9 +72,10 @@ Component buildEnvelopesScreen() {
         var groupFuture = Column(listOf(titleFuture, envReserva))
 
         // 5. Barra de navegação inferior com "envelopes" ativo (DESIGN_SYSTEM.md seção 3.5)
-        var navBar = buildNavBar("envelopes", (String route) -> {
-            Router.go(route)
-        })
+        var navDashBtn = Button("Dashboard", () -> { Router.go(Routes.dashboard) })
+        var navChatBtn = Button("Chat", () -> { Router.go(Routes.chat) })
+        var navEnvBtn = Button("Caixinhas", () -> { Router.go(Routes.envelopes) })
+        var navBar = Row(listOf(navDashBtn, navChatBtn, navEnvBtn))
 
         // Layout completo da tela (DESIGN_SYSTEM.md seção 4)
         var content = Column(listOf(

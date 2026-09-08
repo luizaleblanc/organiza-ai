@@ -32,7 +32,7 @@ View buildBrandLogo52() {
 Component buildRegisterScreen() {
     var c = Component("idle")
 
-    c.view((state) -> {
+    c.view((state: String) -> {
         // Marca isolada no topo (52px)
         var brand = buildBrandLogo52()
         var brandSection = Column(listOf(brand))

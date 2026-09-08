@@ -31,7 +31,7 @@ Component buildDebtScreen() {
     // Estado local da seleção: "" (nenhuma), "YES" (Sim) ou "NO" (Não)
     var c = Component("")
 
-    c.view((selectedChoice) -> {
+    c.view((selectedChoice: String) -> {
         // Indicador de progresso: 4 passos, step 2 ativo (DESIGN_SYSTEM.md seção 3.8)
         var dots = buildProgressDots(2, 4)
 
@@ -52,13 +52,8 @@ Component buildDebtScreen() {
         var isYes = selectedChoice == "YES"
         var isNo = selectedChoice == "NO"
 
-        var cardYes = buildChoiceCard("Sim, tenho dívidas", isYes, () -> {
-            c.state("YES")
-        })
-
-        var cardNo = buildChoiceCard("Não, estou em dia", isNo, () -> {
-            c.state("NO")
-        })
+        var cardYes = buildChoiceCard("Sim, tenho dívidas", isYes)
+        var cardNo = buildChoiceCard("Não, estou em dia", isNo)
 
         // Botões de toque para acionar a seleção no webview
         var yesLabel = "Selecionar: Sim, tenho dívidas"

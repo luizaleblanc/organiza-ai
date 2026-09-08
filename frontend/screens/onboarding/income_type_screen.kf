@@ -29,7 +29,7 @@ Component buildIncomeTypeScreen() {
     // Estado local da seleção: "" (nenhuma), "FIXED" ou "VARIABLE"
     var c = Component("")
 
-    c.view((selectedType) -> {
+    c.view((selectedType: String) -> {
         // Indicador de progresso: 4 passos, step 1 ativo (DESIGN_SYSTEM.md seção 3.8)
         var dots = buildProgressDots(1, 4)
 
@@ -50,13 +50,8 @@ Component buildIncomeTypeScreen() {
         var isFixed = selectedType == "FIXED"
         var isVariable = selectedType == "VARIABLE"
 
-        var cardFixed = buildChoiceCard("Fixa (CLT, salário todo mês)", isFixed, () -> {
-            c.state("FIXED")
-        })
-
-        var cardVariable = buildChoiceCard("Variável (freela, PJ, bicos)", isVariable, () -> {
-            c.state("VARIABLE")
-        })
+        var cardFixed = buildChoiceCard("Fixa (CLT, salário todo mês)", isFixed)
+        var cardVariable = buildChoiceCard("Variável (freela, PJ, bicos)", isVariable)
 
         // Botões de toque para acionar a seleção no webview
         var fixedLabel = "Selecionar: Fixa (CLT, salário todo mês)"

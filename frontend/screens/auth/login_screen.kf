@@ -32,7 +32,7 @@ View buildBrandLogo68() {
 Component buildLoginScreen() {
     var c = Component("idle")
 
-    c.view((state) -> {
+    c.view((state: String) -> {
         // Marca centralizada (68px)
         var brand = buildBrandLogo68()
         var brandSection = Column(listOf(brand))
