@@ -42,7 +42,7 @@ class SalaryControllerTest {
         UserEntity user = new UserEntity(USER_ID, "user@teste.com", "hash", Role.USER, null,
                 com.organiza.mod_user.model.Tier.FREE, false, null,
                 com.organiza.mod_budget.model.BudgetModelType.STANDARD_503020,
-                com.organiza.mod_user.model.IncomeType.FIXED, false);
+                com.organiza.mod_user.model.IncomeType.FIXED, false, BigDecimal.ZERO);
 
         when(currentUserService.getCurrentUserId()).thenReturn(USER_ID);
         when(userEntityRepository.findById(USER_ID)).thenReturn(Optional.of(user));
