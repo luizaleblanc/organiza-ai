@@ -6,7 +6,6 @@ import core.router_config
 import core.http_client
 import components.progress_dots
 import components.currency_input
-import components.primary_button
 import screens.onboarding.state
 
 // =============================================================================
@@ -20,17 +19,15 @@ import screens.onboarding.state
 // - Campo de valor CurrencyInput centralizado: prefixo "R$", valor, cursor piscante
 // - Dica de preenchimento abaixo do campo
 // - Botão "Próximo": salva debtAmount no OnboardingState, submete o onboarding
-//   via ApiClient_post("/api/users/onboarding", OnboardingState_toJson())
-//   e navega para Routes_result.
+//   via ApiClient.post("/api/users/onboarding", OnboardingState.toJson())
+//   e navega para Routes.result.
 // =============================================================================
 
 Component buildDebtAmountScreen() {
-    var c = Component("DebtAmountScreen")
-
     // Estado local com valor inicial sugerido
-    c.state(5000.0)
+    var c = Component(5000.0)
 
-    c.view { currentDebt ->
+    c.view((currentDebt) -> {
         // Indicador de progresso: 4 passos, step 3 ativo (DESIGN_SYSTEM.md seção 3.8)
         var dots = buildProgressDots(3, 4)
 
@@ -38,12 +35,12 @@ Component buildDebtAmountScreen() {
         var title = Label("Qual o valor aproximado da sua dívida?")
         title.fontSize = 24
         title.bold = false
-        title.color = AppTheme_textPrimary
+        title.color = AppTheme.textPrimary
 
         var subtitle = Label("Isso ajuda a modelar o modelo de economia que mais se adequa a sua realidade")
         subtitle.fontSize = 16
         subtitle.bold = false
-        subtitle.color = AppTheme_textSecondary
+        subtitle.color = AppTheme.textSecondary
 
         var headerSection = Column(listOf(dots, title, subtitle))
 
@@ -53,22 +50,22 @@ Component buildDebtAmountScreen() {
         var hint = Label("Pode ser aproximado — você poderá detalhar as parcelas depois")
         hint.fontSize = 14
         hint.bold = false
-        hint.color = AppTheme_textMuted
+        hint.color = AppTheme.textMuted
 
         var inputSection = Column(listOf(currencyInput, hint))
 
         // Botão "Próximo": salva dívida, submete ao BFF e navega para tela de resultado
-        var nextBtn = buildPrimaryButton("Próximo", () -> {
-            OnboardingState_debtAmount = 5000.0
-            OnboardingState_currentStep = 3
+        var nextBtn = Button("Próximo", () -> {
+            OnboardingState.debtAmount = 5000.0
+            OnboardingState.currentStep = 3
 
             try {
-                ApiClient_post("/api/users/onboarding", OnboardingState_toJson())
+                ApiClient.post("/api/users/onboarding", OnboardingState.toJson())
             } catch (String e) {
                 // Tratamento com fallback gracioso em caso de erro de rede
             }
 
-            Router.go(Routes_result)
+            Router.go(Routes.result)
         })
 
         var footerSection = Column(listOf(nextBtn))
@@ -79,16 +76,16 @@ Component buildDebtAmountScreen() {
         var screenView = View(screenStyle())
         screenView.bind(content)
         return screenView
-    }
+    })
 
-    c.onMount {
+    c.onMount(() -> {
         // Inicializa o passo atual no OnboardingState
-        OnboardingState_currentStep = 3
-    }
+        OnboardingState.currentStep = 3
+    })
 
-    c.onDispose {
+    c.onDispose(() -> {
         // Limpeza de recursos da tela
-    }
+    })
 
     return c
 }

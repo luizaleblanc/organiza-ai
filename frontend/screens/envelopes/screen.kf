@@ -16,7 +16,7 @@ import screens.envelopes.state
 // - Cabeçalho: "Suas caixinhas" + botão "+" (adicionar caixinha)
 // - Agrupado por categoria macro (Necessidades, Desejos, Futuro)
 // - Cards de envelopes com chip colorido de categoria e barra de limites
-// - OnMount: busca caixinhas via ApiClient_get("/api/envelopes")
+// - OnMount: busca caixinhas via ApiClient.get("/api/envelopes")
 // - Nav bar inferior com "envelopes" ativo
 // =============================================================================
 
@@ -25,30 +25,28 @@ Label buildGroupHeader(String title) {
     var lbl = Label(title)
     lbl.fontSize = 18
     lbl.bold = true
-    lbl.color = AppTheme_textPrimary
+    lbl.color = AppTheme.textPrimary
     return lbl
 }
 
 // Wrapper para card de caixinha com container estilizado (DESIGN_SYSTEM.md seção 3.3)
 View buildEnvelopeItem(String name, String category, Int percentage, String spent, String limit) {
     var cardRow = buildEnvelopeCard(name, category, percentage, spent, limit)
-    var cardView = View(Style(AppTheme_card, AppTheme_textPrimary, 12, 12))
+    var cardView = View(Style(AppTheme.card, AppTheme.textPrimary, 12, 12))
     cardView.bind(cardRow)
     return cardView
 }
 
 Component buildEnvelopesScreen() {
-    var c = Component("EnvelopesScreen")
+    var c = Component("initial")
 
-    c.state("initial")
-
-    c.view { state ->
+    c.view((state) -> {
         // 1. Cabeçalho: "Suas caixinhas" + botão de adicionar "+"
         // DESIGN_SYSTEM.md seção 3.1 (Icon button) e seção 5 (Tela 10)
         var title = Label("Suas caixinhas")
         title.fontSize = 24
         title.bold = true
-        title.color = AppTheme_textPrimary
+        title.color = AppTheme.textPrimary
 
         var addBtn = Button("+", () -> {
             // Ação de criação de nova caixinha (modal/overlay)
@@ -91,20 +89,20 @@ Component buildEnvelopesScreen() {
         var screenView = View(screenStyle())
         screenView.bind(content)
         return screenView
-    }
+    })
 
-    c.onMount {
+    c.onMount(() -> {
         // Busca envelopes do usuário via BFF
         try {
-            var envelopesData = ApiClient_get("/api/envelopes")
+            var envelopesData = ApiClient.get("/api/envelopes")
         } catch (String e) {
             // Tratamento de falha de rede ou uso de cache
         }
-    }
+    })
 
-    c.onDispose {
+    c.onDispose(() -> {
         // Limpeza de recursos ao desmontar tela de caixinhas
-    }
+    })
 
     return c
 }

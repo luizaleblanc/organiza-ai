@@ -25,7 +25,7 @@ Row buildProgressDots(Int currentStep, Int totalSteps) {
 View _buildDot(Int index, Int currentStep) {
     if (index == currentStep) {
         // Ativo: cyan sólido
-        return View(Style(AppTheme_accent, AppTheme_accent, 0, 4))
+        return View(Style(AppTheme.accent, AppTheme.accent, 0, 4))
     }
     if (index < currentStep) {
         // Visitado: cyan 40%

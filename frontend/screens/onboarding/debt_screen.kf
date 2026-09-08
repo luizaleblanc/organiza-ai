@@ -6,7 +6,6 @@ import core.router_config
 import core.http_client
 import components.progress_dots
 import components.choice_card
-import components.primary_button
 import screens.onboarding.state
 
 // =============================================================================
@@ -20,18 +19,19 @@ import screens.onboarding.state
 //     1. "Sim, tenho dívidas"
 //     2. "Não, estou em dia"
 // - Ao selecionar "Sim":
-//     OnboardingState_hasDebt = true -> Router.go(Routes_debtAmount)
+//     OnboardingState.hasDebt = true -> Router.go(Routes.debtAmount)
 // - Ao selecionar "Não":
-//     OnboardingState_hasDebt = false -> ApiClient_post("/api/users/onboarding", ...) -> Router.go(Routes_result)
+//     OnboardingState.hasDebt = false -> ApiClient.post("/api/users/onboarding", ...) -> Router.go(Routes.result)
 // =============================================================================
 
+// KOF-VERIFY: c.state(valor) para empurrar novo estado e re-renderizar não
+// está confirmado no training/ (só .view/.onMount/.onDispose foram vistos).
+// Rodar `kof check` (CI) antes de confiar nesse mecanismo.
 Component buildDebtScreen() {
-    var c = Component("DebtScreen")
-
     // Estado local da seleção: "" (nenhuma), "YES" (Sim) ou "NO" (Não)
-    c.state("")
+    var c = Component("")
 
-    c.view { selectedChoice ->
+    c.view((selectedChoice) -> {
         // Indicador de progresso: 4 passos, step 2 ativo (DESIGN_SYSTEM.md seção 3.8)
         var dots = buildProgressDots(2, 4)
 
@@ -39,12 +39,12 @@ Component buildDebtScreen() {
         var title = Label("Você tem dívidas em atraso?")
         title.fontSize = 24
         title.bold = false
-        title.color = AppTheme_textPrimary
+        title.color = AppTheme.textPrimary
 
         var subtitle = Label("Isso ajuda a escolher o melhor modelo pra você")
         subtitle.fontSize = 16
         subtitle.bold = false
-        subtitle.color = AppTheme_textSecondary
+        subtitle.color = AppTheme.textSecondary
 
         var headerSection = Column(listOf(dots, title, subtitle))
 
@@ -83,30 +83,30 @@ Component buildDebtScreen() {
         var nextBtn = Button("Próximo", () -> {
             // Desabilitado enquanto nenhuma opção estiver selecionada
         })
-        nextBtn.color = AppTheme_textMuted
+        nextBtn.color = AppTheme.textMuted
 
         if (selectedChoice == "YES") {
-            nextBtn = buildPrimaryButton("Próximo", () -> {
-                OnboardingState_hasDebt = true
-                OnboardingState_currentStep = 3
-                Router.go(Routes_debtAmount)
+            nextBtn = Button("Próximo", () -> {
+                OnboardingState.hasDebt = true
+                OnboardingState.currentStep = 3
+                Router.go(Routes.debtAmount)
             })
         }
 
         if (selectedChoice == "NO") {
-            nextBtn = buildPrimaryButton("Próximo", () -> {
-                OnboardingState_hasDebt = false
-                OnboardingState_debtAmount = 0.0
-                OnboardingState_currentStep = 3
+            nextBtn = Button("Próximo", () -> {
+                OnboardingState.hasDebt = false
+                OnboardingState.debtAmount = 0.0
+                OnboardingState.currentStep = 3
 
                 // Submete os dados coletados no onboarding via BFF
                 try {
-                    ApiClient_post("/api/users/onboarding", OnboardingState_toJson())
+                    ApiClient.post("/api/users/onboarding", OnboardingState.toJson())
                 } catch (String e) {
                     // Tratamento com fallback gracioso em caso de erro de rede
                 }
 
-                Router.go(Routes_result)
+                Router.go(Routes.result)
             })
         }
 
@@ -118,16 +118,16 @@ Component buildDebtScreen() {
         var screenView = View(screenStyle())
         screenView.bind(content)
         return screenView
-    }
+    })
 
-    c.onMount {
+    c.onMount(() -> {
         // Inicializa o passo atual no OnboardingState
-        OnboardingState_currentStep = 2
-    }
+        OnboardingState.currentStep = 2
+    })
 
-    c.onDispose {
+    c.onDispose(() -> {
         // Limpeza de recursos da tela
-    }
+    })
 
     return c
 }

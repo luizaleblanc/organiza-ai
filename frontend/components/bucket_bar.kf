@@ -18,8 +18,8 @@ Column buildBucketBar(String name, Int percentage, String spent, String limit) {
     ))
 
     // Barra de progresso construída manualmente com View
-    var track = View(Style(AppTheme_card, AppTheme_card, 0, 4))
-    var fill = View(Style(AppTheme_accent, AppTheme_accent, 0, 4))
+    var track = View(Style(AppTheme.card, AppTheme.card, 0, 4))
+    var fill = View(Style(AppTheme.accent, AppTheme.accent, 0, 4))
 
     // Cor do fill por estado
     // 0-79%: cyan (#00D4FF)

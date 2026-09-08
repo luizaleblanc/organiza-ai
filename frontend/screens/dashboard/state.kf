@@ -11,16 +11,16 @@ package screens.dashboard
 // - transactions: lista de identificadores/descrições de transações recentes
 // =============================================================================
 
-String DashboardState_availableToday     = "R$ 0,00"
-String DashboardState_daysRemaining      = ""
-String? DashboardState_tip               = null
-List<String> DashboardState_transactions = listOf()
-// -------------------------------------------------------------------------
-// Reinicia o estado do dashboard para os valores padrão
-// -------------------------------------------------------------------------
-DashboardState_reset() {
-DashboardState_availableToday = "R$ 0,00"
-DashboardState_daysRemaining = ""
-DashboardState_tip = null
-DashboardState_transactions = listOf()
+class DashboardState {
+    static String availableToday       = "R$ 0,00"
+    static String daysRemaining        = ""
+    static String? tip                 = null
+    static List<String> transactions   = listOf()
+
+    static reset() {
+        DashboardState.availableToday = "R$ 0,00"
+        DashboardState.daysRemaining = ""
+        DashboardState.tip = null
+        DashboardState.transactions = listOf()
+    }
 }

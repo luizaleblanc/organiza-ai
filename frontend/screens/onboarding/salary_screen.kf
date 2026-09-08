@@ -5,7 +5,6 @@ import core.theme
 import core.router_config
 import components.progress_dots
 import components.currency_input
-import components.primary_button
 import screens.onboarding.state
 
 // =============================================================================
@@ -17,15 +16,13 @@ import screens.onboarding.state
 // - Subtítulo: "Vamos adaptar tudo ao seu salário" (16px / 400 / textSecondary)
 // - Campo de valor CurrencyInput centralizado: prefixo "R$", valor, cursor piscante
 // - Dica: "Pode ser aproximado — dá pra ajustar depois" (14px / textMuted)
-// - Botão "Próximo": salva o salário no OnboardingState e navega para Routes_incomeType
+// - Botão "Próximo": salva o salário no OnboardingState e navega para Routes.incomeType
 // =============================================================================
 
 Component buildSalaryScreen() {
-    var c = Component("SalaryScreen")
+    var c = Component(3000.0)
 
-    c.state(3000.0)
-
-    c.view { currentSalary ->
+    c.view((currentSalary) -> {
         // Indicador de progresso: 4 passos, step 0 ativo (DESIGN_SYSTEM.md seção 3.8)
         var dots = buildProgressDots(0, 4)
 
@@ -33,12 +30,12 @@ Component buildSalaryScreen() {
         var title = Label("Quanto você ganha por mês?")
         title.fontSize = 24
         title.bold = false
-        title.color = AppTheme_textPrimary
+        title.color = AppTheme.textPrimary
 
         var subtitle = Label("Vamos adaptar tudo ao seu salário")
         subtitle.fontSize = 16
         subtitle.bold = false
-        subtitle.color = AppTheme_textSecondary
+        subtitle.color = AppTheme.textSecondary
 
         var headerSection = Column(listOf(dots, title, subtitle))
 
@@ -48,15 +45,15 @@ Component buildSalaryScreen() {
         var hint = Label("Pode ser aproximado — dá pra ajustar depois")
         hint.fontSize = 14
         hint.bold = false
-        hint.color = AppTheme_textMuted
+        hint.color = AppTheme.textMuted
 
         var inputSection = Column(listOf(currencyInput, hint))
 
         // Ação de avançar: salva salário no OnboardingState e navega para tipo de renda
-        var nextBtn = buildPrimaryButton("Próximo", () -> {
-            OnboardingState_salary = 3000.0
-            OnboardingState_currentStep = 1
-            Router.go(Routes_incomeType)
+        var nextBtn = Button("Próximo", () -> {
+            OnboardingState.salary = 3000.0
+            OnboardingState.currentStep = 1
+            Router.go(Routes.incomeType)
         })
 
         var footerSection = Column(listOf(nextBtn))
@@ -67,16 +64,16 @@ Component buildSalaryScreen() {
         var screenView = View(screenStyle())
         screenView.bind(content)
         return screenView
-    }
+    })
 
-    c.onMount {
+    c.onMount(() -> {
         // Inicializa o passo atual no OnboardingState
-        OnboardingState_currentStep = 0
-    }
+        OnboardingState.currentStep = 0
+    })
 
-    c.onDispose {
+    c.onDispose(() -> {
         // Limpeza de recursos da tela
-    }
+    })
 
     return c
 }

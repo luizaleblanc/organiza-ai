@@ -65,6 +65,29 @@ Protótipo interativo (responsivo mobile/desktop, dark e light mode): [Protótip
 | **2 -- Desenvolvimento** | Implementação full-stack (KOF + Spring Boot) | MVP funcional: chat + pulso diário + envelopes |
 | **3 -- Code Review** | PRs rigorosos para a comunidade open source | Produto estável com contribuições externas |
 
+## Roadmap — Arquitetura Monolítica Modular em KOF
+
+Auditoria e correção do frontend KOF (`frontend/`, 35 arquivos) contra o
+corpus oficial do [Kof4j](https://github.com/KofLang/Kof4j) (`training/`),
+para eliminar sintaxe inventada ("fake idioms") antes do primeiro deploy.
+Etapas commitáveis, na ordem em que devem ser aplicadas:
+
+| # | Etapa | Status |
+|---|---|---|
+| 0 | CI de segurança: workflow `kof-check.yml` roda `kof check` no `frontend/` (e no `bff/` quando existir) a cada push/PR que toque `.kf` — nada quebrado chega a `main` | ✅ feito |
+| 1 | `core/theme.kf`, `router_config.kf`, `http_client.kf`, `service_locator.kf`, `constants.kf` reescritos como `class X { static ... }` (padrão oficial de estado — `learn/35-kof-ui.md`, `CLAUDE.md` regra 5), no lugar de variáveis soltas em nível de arquivo | ✅ feito |
+| 2 | `chat/state.kf`, `onboarding/state.kf`, `dashboard/state.kf`, `envelopes/state.kf` — mesma conversão para classes com campos estáticos | ✅ feito |
+| 3 | Remoção de `components/primary_button.kf` e `secondary_button.kf` (factories triviais — anti-pattern, `idioms/classes.md`) e uso direto de `Button(...)` nas 8 telas que os chamavam | ✅ feito |
+| 4 | 11 telas: API do `Component` corrigida para a forma confirmada em `learn/35-kof-ui.md` — `Component(estadoInicial)` + `.view((state) -> {...})` + `.onMount(() -> {...})` + `.onDispose(() -> {...})`, no lugar do bloco `{ }` sem parênteses (sintaxe que não existe em KOF) | ✅ feito |
+| 5 | `dashboard/screen.kf`: gráfico de pizza com Canvas 2D corrigido para `canvas.setFill(cor)` → `canvas.fill()` (a API real não aceita cor como argumento de `fill()`) | ✅ feito |
+| 6 | Restauração dos 11 arquivos apagados do disco (10 em `components/` + `core/constants.kf`) a partir do índice do Git | ✅ feito |
+| 7 | Validar com `kof check frontend` (local ou via CI) os 3 pontos marcados `KOF-VERIFY` no código: parâmetro com tipo de função em `choice_card.kf`/`nav_bar.kf`, e `c.state(valor)` para re-renderizar em `debt_screen.kf`/`income_type_screen.kf` — nenhum dos dois está confirmado no corpus oficial | ⏳ pendente (precisa do `kof` CLI rodando) |
+| 8 | Opcional: revisar `models/*.kf` — hoje usam `class X(...)` (alias válido de `record X(...)`); sem urgência, mas `record` é a forma canônica para DTOs imutáveis | ⏳ pendente |
+
+**Regra de segurança:** nenhum push é feito sem autorização explícita —
+cada etapa fica local até revisão. Ver commit sugerido na sessão que gerou
+esta auditoria.
+
 ## Como Contribuir
 
 Veja [CONTRIBUTING.md](CONTRIBUTING.md) para o guia completo de setup, padrões de código e fluxo de PR. Todo participante deve seguir o [Código de Conduta](CODE_OF_CONDUCT.md).

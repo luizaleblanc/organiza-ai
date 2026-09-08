@@ -12,11 +12,14 @@ import core.theme
 // Selecionado: borda cyan + fundo rgba(0,212,255,.08)
 // Radio à direita: 20px, com ponto interno quando selecionado
 
+// KOF-VERIFY: sintaxe de parâmetro com tipo de função (() -> onSelect) não está
+// confirmada no corpus training/ (só lambdas como VALOR, nunca como tipo de
+// parâmetro, foram encontradas). Rodar `kof check` (CI) antes de confiar nisto.
 Row buildChoiceCard(String label, Boolean selected, () -> onSelect) {
     var text = Label(label)
 
     // Radio circle: 20px, borda 1.5px
-    var radio = View(Style(AppTheme_card, AppTheme_textMuted, 0, 10))
+    var radio = View(Style(AppTheme.card, AppTheme.textMuted, 0, 10))
 
     var card = Row(listOf(text, radio))
 

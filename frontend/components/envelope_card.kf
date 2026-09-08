@@ -10,7 +10,7 @@ import core.theme
 
 Row buildEnvelopeCard(String name, String category, Int percentage, String spent, String limit) {
     // Chip de ícone: 36x36px, radius 10px, fundo translúcido cor da categoria
-    var chip = View(Style(AppTheme_card, AppTheme_textSecondary, 8, 10))
+    var chip = View(Style(AppTheme.card, AppTheme.textSecondary, 8, 10))
 
     var info = Column(listOf(
         Label(name),

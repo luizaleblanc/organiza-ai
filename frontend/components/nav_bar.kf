@@ -11,6 +11,8 @@ import core.theme
 // 3 itens: Dashboard, Chat, Caixinhas
 // Ativo: cyan; Inativo: texto secundário
 
+// KOF-VERIFY: mesma ressalva de choice_card.kf — tipo de função como
+// parâmetro não confirmado no training/. Rodar `kof check` (CI) antes de merge.
 Row buildNavBar(String activeRoute, (String) -> onNavigate) {
     var dashBtn = Button("Dashboard", () -> onNavigate("dashboard"))
     var chatBtn = Button("Chat", () -> onNavigate("chat"))

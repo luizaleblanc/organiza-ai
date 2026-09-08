@@ -26,22 +26,22 @@ View buildTransactionItem(String name, String category, String amount, String ti
     var nameLabel = Label(name)
     nameLabel.fontSize = 16
     nameLabel.bold = true
-    nameLabel.color = AppTheme_textPrimary
+    nameLabel.color = AppTheme.textPrimary
 
     var metaLabel = Label(category + " · " + time)
     metaLabel.fontSize = 13
     metaLabel.bold = false
-    metaLabel.color = AppTheme_textMuted
+    metaLabel.color = AppTheme.textMuted
 
     var infoCol = Column(listOf(nameLabel, metaLabel))
 
     var amountLabel = Label(amount)
     amountLabel.fontSize = 16
     amountLabel.bold = true
-    amountLabel.color = AppTheme_textPrimary
+    amountLabel.color = AppTheme.textPrimary
 
     var row = Row(listOf(infoCol, amountLabel))
-    var cardView = View(Style(AppTheme_card, AppTheme_textPrimary, 12, 12))
+    var cardView = View(Style(AppTheme.card, AppTheme.textPrimary, 12, 12))
     cardView.bind(row)
     return cardView
 }
@@ -51,64 +51,69 @@ View buildBucketChart() {
     var chartTitle = Label("Distribuição por Buckets")
     chartTitle.fontSize = 14
     chartTitle.bold = true
-    chartTitle.color = AppTheme_textSecondary
+    chartTitle.color = AppTheme.textSecondary
 
     // Desenhar o gráfico de pizza usando Canvas 2D nativo do kof.ui
+    // (training/learn/35-kof-ui.md: setFill(cor) -> beginPath -> moveTo -> arc -> closePath -> fill())
     var canvas = Canvas(200, 200)
-    
+
     // Fatia Necessidades: 82% (cor accent cyan)
+    canvas.setFill(AppTheme.accent)
     canvas.beginPath()
     canvas.moveTo(100, 100)
     canvas.arc(100, 100, 80, 0, 5.15) // ~82% de 2*PI
-    canvas.fill(AppTheme_accent)
-    
+    canvas.closePath()
+    canvas.fill()
+
     // Fatia Desejos: 15% (cor accentBlue) - ajustando mock para somar ~100%
+    canvas.setFill(AppTheme.accentBlue)
     canvas.beginPath()
     canvas.moveTo(100, 100)
     canvas.arc(100, 100, 80, 5.15, 6.09) // ~15% de 2*PI
-    canvas.fill(AppTheme_accentBlue)
+    canvas.closePath()
+    canvas.fill()
 
     // Fatia Futuro: 3% (cor success verde-limão)
+    canvas.setFill(AppTheme.success)
     canvas.beginPath()
     canvas.moveTo(100, 100)
     canvas.arc(100, 100, 80, 6.09, 6.28) // ~3% de 2*PI
-    canvas.fill(AppTheme_success)
+    canvas.closePath()
+    canvas.fill()
 
     // Legendas
     var bucketNeeds = Label("● Necessidades: 82%")
-    bucketNeeds.color = AppTheme_accent
+    bucketNeeds.color = AppTheme.accent
     
     var bucketWants = Label("● Desejos: 15%")
-    bucketWants.color = AppTheme_accentBlue
+    bucketWants.color = AppTheme.accentBlue
     
     var bucketFuture = Label("● Futuro: 3%")
-    bucketFuture.color = AppTheme_success
+    bucketFuture.color = AppTheme.success
 
     var legends = Column(listOf(bucketNeeds, bucketWants, bucketFuture))
     
     var chartRow = Row(listOf(canvas, legends))
     var chartCol = Column(listOf(chartTitle, chartRow))
     
-    var chartBox = View(Style(AppTheme_card, AppTheme_textPrimary, 16, 12))
+    var chartBox = View(Style(AppTheme.card, AppTheme.textPrimary, 16, 12))
     chartBox.bind(chartCol)
     return chartBox
 }
 
 Component buildDashboardScreen() {
-    var c = Component("DashboardScreen")
+    var c = Component("initial")
 
-    c.state("initial")
-
-    c.view { state ->
+    c.view((state) -> {
         // 1. Cabeçalho: "Olá, Luiza" + botão de engrenagem
         // DESIGN_SYSTEM.md seção 3.1 (Icon button) e seção 5 (Tela 8)
         var greeting = Label("Olá, Luiza")
         greeting.fontSize = 24
         greeting.bold = true
-        greeting.color = AppTheme_textPrimary
+        greeting.color = AppTheme.textPrimary
 
         var settingsBtn = Button("⚙", () -> {
-            Router.go(Routes_settings)
+            Router.go(Routes.settings)
         })
 
         var headerRow = Row(listOf(greeting, settingsBtn))
@@ -119,14 +124,14 @@ Component buildDashboardScreen() {
             "Faltam 12 dias para acabar o mês",
             "Dica: economize em Uber para cortar gastos."
         )
-        var pulseCardView = View(Style(AppTheme_cardSecondary, AppTheme_textPrimary, 16, 16))
+        var pulseCardView = View(Style(AppTheme.cardSecondary, AppTheme.textPrimary, 16, 16))
         pulseCardView.bind(pulseContent)
 
         // 3. Seção "Seus buckets" (DESIGN_SYSTEM.md seção 3.7.1)
         var bucketsSectionTitle = Label("Seus buckets")
         bucketsSectionTitle.fontSize = 18
         bucketsSectionTitle.bold = true
-        bucketsSectionTitle.color = AppTheme_textPrimary
+        bucketsSectionTitle.color = AppTheme.textPrimary
 
         var chartComponent = buildBucketChart()
         var bucketsSection = Column(listOf(bucketsSectionTitle, chartComponent))
@@ -135,7 +140,7 @@ Component buildDashboardScreen() {
         var txSectionTitle = Label("Últimas transações")
         txSectionTitle.fontSize = 18
         txSectionTitle.bold = true
-        txSectionTitle.color = AppTheme_textPrimary
+        txSectionTitle.color = AppTheme.textPrimary
 
         var tx1 = buildTransactionItem("Uber", "Transporte", "-R$ 22,00", "Hoje")
         var tx2 = buildTransactionItem("iFood", "Alimentação", "-R$ 45,00", "Hoje")
@@ -160,21 +165,21 @@ Component buildDashboardScreen() {
         var screenView = View(screenStyle())
         screenView.bind(content)
         return screenView
-    }
+    })
 
-    c.onMount {
+    c.onMount(() -> {
         // Busca pulso diário e transações recentes via BFF
         try {
-            var pulseData = ApiClient_get("/api/budgets/daily-pulse")
-            var txData = ApiClient_get("/api/transactions")
+            var pulseData = ApiClient.get("/api/budgets/daily-pulse")
+            var txData = ApiClient.get("/api/transactions")
         } catch (String e) {
             // Falhas de rede tratadas com fallback para os dados de estado
         }
-    }
+    })
 
-    c.onDispose {
+    c.onDispose(() -> {
         // Limpeza de recursos ao desmontar a tela
-    }
+    })
 
     return c
 }

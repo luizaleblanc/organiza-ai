@@ -4,41 +4,42 @@ package core
 // Constantes de Layout — DESIGN_SYSTEM.md, seção 4
 // =============================================================================
 
-// Grid
-Int Layout_gridBase          = 8
-Int Layout_screenWidth       = 360
-Int Layout_screenHeight      = 640
-Int Layout_marginHorizontal  = 16
-// Componentes
-Int Layout_buttonHeight      = 48
-Int Layout_inputHeight       = 48
-Int Layout_navBarHeight      = 64
-Int Layout_iconButtonSize    = 40
-Int Layout_sendButtonSize    = 48
-// Border radius
-Int Layout_radiusButton      = 12
-Int Layout_radiusCard        = 12
-Int Layout_radiusInput       = 8
-Int Layout_radiusNavBar      = 16
-// Gap / Spacing
-Int Layout_gapItems          = 16
-Int Layout_gapSections       = 24
-Int Layout_gapProgressBars   = 20
-Int Layout_gapOnboardingDots = 12
-// Status bar & home indicator
-Int Layout_statusBarHeight   = 24
-Int Layout_homeIndicatorH    = 24
-// Dots de onboarding
-Int Layout_dotSize           = 8
-Int Layout_totalSteps        = 4
-// Tipografia (tamanhos)
-Int Layout_fontTitle         = 24
-Int Layout_fontSubtitle      = 18
-Int Layout_fontBody          = 16
-Int Layout_fontCaption        = 14
-Int Layout_fontMonetary      = 24
-Int Layout_fontLogo          = 28
-// Tipografia (pesos) — 400 = regular, 600 = semibold
-Int Layout_weightRegular     = 400
-Int Layout_weightSemibold    = 600
-
+class Layout {
+    // Grid
+    static Int gridBase          = 8
+    static Int screenWidth       = 360
+    static Int screenHeight      = 640
+    static Int marginHorizontal  = 16
+    // Componentes
+    static Int buttonHeight      = 48
+    static Int inputHeight       = 48
+    static Int navBarHeight      = 64
+    static Int iconButtonSize    = 40
+    static Int sendButtonSize    = 48
+    // Border radius
+    static Int radiusButton      = 12
+    static Int radiusCard        = 12
+    static Int radiusInput       = 8
+    static Int radiusNavBar      = 16
+    // Gap / Spacing
+    static Int gapItems          = 16
+    static Int gapSections       = 24
+    static Int gapProgressBars   = 20
+    static Int gapOnboardingDots = 12
+    // Status bar & home indicator
+    static Int statusBarHeight   = 24
+    static Int homeIndicatorH    = 24
+    // Dots de onboarding
+    static Int dotSize           = 8
+    static Int totalSteps        = 4
+    // Tipografia (tamanhos)
+    static Int fontTitle         = 24
+    static Int fontSubtitle      = 18
+    static Int fontBody          = 16
+    static Int fontCaption       = 14
+    static Int fontMonetary      = 24
+    static Int fontLogo          = 28
+    // Tipografia (pesos) — 400 = regular, 600 = semibold
+    static Int weightRegular     = 400
+    static Int weightSemibold    = 600
+}

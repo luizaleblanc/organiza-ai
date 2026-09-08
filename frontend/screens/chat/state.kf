@@ -8,17 +8,19 @@ package screens.chat
 // estáticos de classe, pois lambdas capturam escopo de forma somente-leitura.
 // =============================================================================
 
-List<String> ChatState_messages = listOf()
-String ChatState_currentInput   = ""
-Boolean ChatState_loading       = false
-// Reseta o histórico de mensagens e o input para o estado inicial
-ChatState_reset() {
-ChatState_messages = listOf()
-ChatState_currentInput = ""
-ChatState_loading = false
+class ChatState {
+    static List<String> messages   = listOf()
+    static String currentInput     = ""
+    static Boolean loading         = false
+
+    static reset() {
+        ChatState.messages = listOf()
+        ChatState.currentInput = ""
+        ChatState.loading = false
+    }
 
     // Registra nova mensagem com role ("user" ou "assistant") e conteúdo
     static addMessage(String role, String content) {
-        ChatState_messages.add(role + ":" + content)
+        ChatState.messages.add(role + ":" + content)
     }
 }

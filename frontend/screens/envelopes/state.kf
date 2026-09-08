@@ -7,8 +7,10 @@ package screens.envelopes
 // Em KOF, o estado mutável vive em campos estáticos de classe.
 // =============================================================================
 
-List<String> EnvelopesState_groups = listOf()
-// Reseta a lista de grupos de caixinhas para o estado inicial
-EnvelopesState_reset() {
-EnvelopesState_groups = listOf()
+class EnvelopesState {
+    static List<String> groups = listOf()
+
+    static reset() {
+        EnvelopesState.groups = listOf()
+    }
 }

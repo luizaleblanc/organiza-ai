@@ -28,28 +28,28 @@ import screens.envelopes.screen
 
 main() {
     // 1. Inicializar serviços
-    ServiceLocator_init("http://localhost:3000")
+    ServiceLocator.init("http://localhost:3000")
 
     // 2. Criar janela com tema dark
     var window = Window("Organiza IA")
-    window.size(Layout_screenWidth, Layout_screenHeight)
+    window.size(Layout.screenWidth, Layout.screenHeight)
     window.theme = Theme.dark()
 
     // 3. Registrar rotas (cada screen é um Component)
-    Router.route(Routes_welcome,     buildWelcomeScreen())
-    Router.route(Routes_login,       buildLoginScreen())
-    Router.route(Routes_register,    buildRegisterScreen())
-    Router.route(Routes_onboarding,  buildSalaryScreen())
-    Router.route(Routes_incomeType,  buildIncomeTypeScreen())
-    Router.route(Routes_debt,        buildDebtScreen())
-    Router.route(Routes_debtAmount,  buildDebtAmountScreen())
-    Router.route(Routes_result,      buildResultScreen())
-    Router.route(Routes_dashboard,   buildDashboardScreen())
-    Router.route(Routes_chat,        buildChatScreen())
-    Router.route(Routes_envelopes,   buildEnvelopesScreen())
+    Router.route(Routes.welcome,     buildWelcomeScreen())
+    Router.route(Routes.login,       buildLoginScreen())
+    Router.route(Routes.register,    buildRegisterScreen())
+    Router.route(Routes.onboarding,  buildSalaryScreen())
+    Router.route(Routes.incomeType,  buildIncomeTypeScreen())
+    Router.route(Routes.debt,        buildDebtScreen())
+    Router.route(Routes.debtAmount,  buildDebtAmountScreen())
+    Router.route(Routes.result,      buildResultScreen())
+    Router.route(Routes.dashboard,   buildDashboardScreen())
+    Router.route(Routes.chat,        buildChatScreen())
+    Router.route(Routes.envelopes,   buildEnvelopesScreen())
 
     // 4. Navegar para a tela inicial
-    Router.go(Routes_welcome)
+    Router.go(Routes.welcome)
 
     // 5. Exibir
     window.show()

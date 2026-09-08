@@ -5,7 +5,6 @@ import core.theme
 import core.router_config
 import components.progress_dots
 import components.choice_card
-import components.primary_button
 import screens.onboarding.state
 
 // =============================================================================
@@ -19,17 +18,18 @@ import screens.onboarding.state
 //     1. "Fixa (CLT, salário todo mês)"
 //     2. "Variável (freela, PJ, bicos)"
 // - Botão "Próximo": desabilitado até haver uma seleção. Ao clicar, salva o
-//   tipo no OnboardingState_incomeType ("FIXED" ou "VARIABLE") e navega
-//   para Routes_debt.
+//   tipo no OnboardingState.incomeType ("FIXED" ou "VARIABLE") e navega
+//   para Routes.debt.
 // =============================================================================
 
+// KOF-VERIFY: c.state(valor) para empurrar novo estado e re-renderizar não
+// está confirmado no training/ (só .view/.onMount/.onDispose foram vistos).
+// Rodar `kof check` (CI) antes de confiar nesse mecanismo.
 Component buildIncomeTypeScreen() {
-    var c = Component("IncomeTypeScreen")
-
     // Estado local da seleção: "" (nenhuma), "FIXED" ou "VARIABLE"
-    c.state("")
+    var c = Component("")
 
-    c.view { selectedType ->
+    c.view((selectedType) -> {
         // Indicador de progresso: 4 passos, step 1 ativo (DESIGN_SYSTEM.md seção 3.8)
         var dots = buildProgressDots(1, 4)
 
@@ -37,12 +37,12 @@ Component buildIncomeTypeScreen() {
         var title = Label("Sua renda é fixa ou variável?")
         title.fontSize = 24
         title.bold = false
-        title.color = AppTheme_textPrimary
+        title.color = AppTheme.textPrimary
 
         var subtitle = Label("Isso muda como calculamos seu dia a dia")
         subtitle.fontSize = 16
         subtitle.bold = false
-        subtitle.color = AppTheme_textSecondary
+        subtitle.color = AppTheme.textSecondary
 
         var headerSection = Column(listOf(dots, title, subtitle))
 
@@ -81,21 +81,21 @@ Component buildIncomeTypeScreen() {
         var nextBtn = Button("Próximo", () -> {
             // Desabilitado enquanto nenhuma opção estiver selecionada
         })
-        nextBtn.color = AppTheme_textMuted
+        nextBtn.color = AppTheme.textMuted
 
         if (selectedType == "FIXED") {
-            nextBtn = buildPrimaryButton("Próximo", () -> {
-                OnboardingState_incomeType = "FIXED"
-                OnboardingState_currentStep = 2
-                Router.go(Routes_debt)
+            nextBtn = Button("Próximo", () -> {
+                OnboardingState.incomeType = "FIXED"
+                OnboardingState.currentStep = 2
+                Router.go(Routes.debt)
             })
         }
 
         if (selectedType == "VARIABLE") {
-            nextBtn = buildPrimaryButton("Próximo", () -> {
-                OnboardingState_incomeType = "VARIABLE"
-                OnboardingState_currentStep = 2
-                Router.go(Routes_debt)
+            nextBtn = Button("Próximo", () -> {
+                OnboardingState.incomeType = "VARIABLE"
+                OnboardingState.currentStep = 2
+                Router.go(Routes.debt)
             })
         }
 
@@ -107,16 +107,16 @@ Component buildIncomeTypeScreen() {
         var screenView = View(screenStyle())
         screenView.bind(content)
         return screenView
-    }
+    })
 
-    c.onMount {
+    c.onMount(() -> {
         // Inicializa o passo atual no OnboardingState
-        OnboardingState_currentStep = 1
-    }
+        OnboardingState.currentStep = 1
+    })
 
-    c.onDispose {
+    c.onDispose(() -> {
         // Limpeza de recursos da tela
-    }
+    })
 
     return c
 }

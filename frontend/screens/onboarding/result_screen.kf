@@ -5,7 +5,6 @@ import core.theme
 import core.router_config
 import components.progress_dots
 import components.bucket_bar
-import components.primary_button
 import screens.onboarding.state
 
 // =============================================================================
@@ -16,15 +15,13 @@ import screens.onboarding.state
 // - Título: "Seu modelo: Anti-Dívida" ou "Seu modelo: 50/30/20"
 // - Texto explicativo com a repartição percentual calculada
 // - 3 barras de progresso de buckets (Necessidades, Desejos/Pessoal, Futuro/Quitação)
-// - Botão primário "Começar a organizar": encerra o onboarding e navega para Routes_dashboard
+// - Botão primário "Começar a organizar": encerra o onboarding e navega para Routes.dashboard
 // =============================================================================
 
 Component buildResultScreen() {
-    var c = Component("ResultScreen")
+    var c = Component("ready")
 
-    c.state("ready")
-
-    c.view { state ->
+    c.view((state) -> {
         // Indicador de progresso: 4 passos, etapa final ativa (DESIGN_SYSTEM.md seção 3.8)
         var dots = buildProgressDots(3, 4)
 
@@ -36,7 +33,7 @@ Component buildResultScreen() {
         var bar2 = buildBucketBar("Desejos Pessoais", 30, "R$ 0", "30% · R$ 900")
         var bar3 = buildBucketBar("Futuro e Reserva", 20, "R$ 0", "20% · R$ 600")
 
-        if (OnboardingState_hasDebt) {
+        if (OnboardingState.hasDebt) {
             modelName = "Anti-Dívida"
             description = "70% para necessidades, 10% para o mínimo pessoal, 20% para quitar suas dívidas."
 
@@ -49,12 +46,12 @@ Component buildResultScreen() {
         var title = Label("Seu modelo: " + modelName)
         title.fontSize = 24
         title.bold = true
-        title.color = AppTheme_textPrimary
+        title.color = AppTheme.textPrimary
 
         var descLabel = Label(description)
         descLabel.fontSize = 16
         descLabel.bold = false
-        descLabel.color = AppTheme_textSecondary
+        descLabel.color = AppTheme.textSecondary
 
         var headerSection = Column(listOf(dots, title, descLabel))
 
@@ -62,8 +59,8 @@ Component buildResultScreen() {
         var bucketsSection = Column(listOf(bar1, bar2, bar3))
 
         // Botão de conclusão do onboarding (DESIGN_SYSTEM.md seção 3.1)
-        var startBtn = buildPrimaryButton("Começar a organizar", () -> {
-            Router.go(Routes_dashboard)
+        var startBtn = Button("Começar a organizar", () -> {
+            Router.go(Routes.dashboard)
         })
 
         var footerSection = Column(listOf(startBtn))
@@ -74,16 +71,16 @@ Component buildResultScreen() {
         var screenView = View(screenStyle())
         screenView.bind(content)
         return screenView
-    }
+    })
 
-    c.onMount {
+    c.onMount(() -> {
         // Marca o passo final no OnboardingState
-        OnboardingState_currentStep = 3
-    }
+        OnboardingState.currentStep = 3
+    })
 
-    c.onDispose {
+    c.onDispose(() -> {
         // Limpeza de recursos da tela
-    }
+    })
 
     return c
 }

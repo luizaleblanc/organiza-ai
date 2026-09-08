@@ -12,25 +12,23 @@ package screens.onboarding
 // - Step 4: Resultado e modelo de orçamento (Tela 7)
 // =============================================================================
 
-Float OnboardingState_salary        = 0.0
-String OnboardingState_incomeType   = ""
-Boolean OnboardingState_hasDebt     = false
-Float OnboardingState_debtAmount    = 0.0
-Int OnboardingState_currentStep     = 0
-// -------------------------------------------------------------------------
-// Reinicia o estado do onboarding para os valores padrão
-// -------------------------------------------------------------------------
-OnboardingState_reset() {
-OnboardingState_salary = 0.0
-OnboardingState_incomeType = ""
-OnboardingState_hasDebt = false
-OnboardingState_debtAmount = 0.0
-OnboardingState_currentStep = 0
+class OnboardingState {
+    static Float salary        = 0.0
+    static String incomeType   = ""
+    static Boolean hasDebt     = false
+    static Float debtAmount    = 0.0
+    static Int currentStep     = 0
 
-    // -------------------------------------------------------------------------
-    // Serializa o estado para JSON via concatenação manual de strings
-    // -------------------------------------------------------------------------
+    static reset() {
+        OnboardingState.salary = 0.0
+        OnboardingState.incomeType = ""
+        OnboardingState.hasDebt = false
+        OnboardingState.debtAmount = 0.0
+        OnboardingState.currentStep = 0
+    }
+
+    // Serializa o estado para JSON via concatenação de strings
     static String toJson() {
-        return "{\"salary\":" + OnboardingState_salary + ",\"incomeType\":\"" + OnboardingState_incomeType + "\",\"hasDebt\":" + OnboardingState_hasDebt + ",\"debtAmount\":" + OnboardingState_debtAmount + ",\"currentStep\":" + OnboardingState_currentStep + "}"
+        return "{\"salary\":" + OnboardingState.salary + ",\"incomeType\":\"" + OnboardingState.incomeType + "\",\"hasDebt\":" + OnboardingState.hasDebt + ",\"debtAmount\":" + OnboardingState.debtAmount + ",\"currentStep\":" + OnboardingState.currentStep + "}"
     }
 }

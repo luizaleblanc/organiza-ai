@@ -3,8 +3,6 @@ package screens.welcome
 import kof.ui
 import core.theme
 import core.router_config
-import components.primary_button
-import components.secondary_button
 
 // =============================================================================
 // Tela 1 — Boas-vindas (pré-login)
@@ -14,28 +12,26 @@ import components.secondary_button
 // - Marca hero (3 ondas SVG, 230px, proporção 2:1) centralizada
 // - Slogan "SUA GRANA ORGANIZADA E SEM ESTRESSE." (14px/400/textSecondary, uppercase)
 // - Rodapé: botão primário "Criar conta" + secundário "Já tenho conta" (gap 12px)
-// - Ações: "Criar conta" -> Routes_register | "Já tenho conta" -> Routes_login
+// - Ações: "Criar conta" -> Routes.register | "Já tenho conta" -> Routes.login
 // =============================================================================
 
 // Marca — 3 ondas horizontais com opacidade decrescente (1.0 / 0.70 / 0.45)
 // DESIGN_SYSTEM.md seção 1.1 e 1.2 (proporção 2:1, largura 230px)
 View buildBrandHero() {
-    var wave1 = View(Style(AppTheme_accent, AppTheme_accent, 0, 2))
+    var wave1 = View(Style(AppTheme.accent, AppTheme.accent, 0, 2))
     var wave2 = View(Style(Color.rgba(0, 212, 255, 0.70), Color.rgba(0, 212, 255, 0.70), 0, 2))
     var wave3 = View(Style(Color.rgba(0, 212, 255, 0.45), Color.rgba(0, 212, 255, 0.45), 0, 2))
 
     var wavesCol = Column(listOf(wave1, wave2, wave3))
-    var brandContainer = View(Style(Color.rgba(0, 0, 0, 0), AppTheme_accent, 8, 0))
+    var brandContainer = View(Style(Color.rgba(0, 0, 0, 0), AppTheme.accent, 8, 0))
     brandContainer.bind(wavesCol)
     return brandContainer
 }
 
 Component buildWelcomeScreen() {
-    var c = Component("WelcomeScreen")
+    var c = Component("initial")
 
-    c.state("initial")
-
-    c.view { state ->
+    c.view((state) -> {
         // Marca centralizada (230px hero)
         var brand = buildBrandHero()
 
@@ -43,17 +39,17 @@ Component buildWelcomeScreen() {
         var slogan = Label("SUA GRANA ORGANIZADA E SEM ESTRESSE.")
         slogan.fontSize = 14
         slogan.bold = false
-        slogan.color = AppTheme_textSecondary
+        slogan.color = AppTheme.textSecondary
 
         var heroSection = Column(listOf(brand, slogan))
 
         // Botões de ação no rodapé (DESIGN_SYSTEM.md seção 3.1 e 5)
-        var btnRegister = buildPrimaryButton("Criar conta", () -> {
-            Router.go(Routes_register)
+        var btnRegister = Button("Criar conta", () -> {
+            Router.go(Routes.register)
         })
 
-        var btnLogin = buildSecondaryButton("Já tenho conta", () -> {
-            Router.go(Routes_login)
+        var btnLogin = Button("Já tenho conta", () -> {
+            Router.go(Routes.login)
         })
 
         var footerSection = Column(listOf(btnRegister, btnLogin))
@@ -64,15 +60,15 @@ Component buildWelcomeScreen() {
         var screenView = View(screenStyle())
         screenView.bind(content)
         return screenView
-    }
+    })
 
-    c.onMount {
+    c.onMount(() -> {
         // Lifecycle hook: montagem da tela de boas-vindas
-    }
+    })
 
-    c.onDispose {
+    c.onDispose(() -> {
         // Lifecycle hook: limpeza de recursos da tela
-    }
+    })
 
     return c
 }
