@@ -1,32 +1,27 @@
+git add -A
 # CLAUDE.md -- Organiza IA
 
 ## Projeto
-Dashboard intuitivo de controle financeiro com IA conversacional. Modelos de orçamento adaptativos (6 modelos) para diferentes realidades de renda. Entrada por voz opcional.
-
-## Tom de voz
-O Organiza fala como um amigo que entende de dinheiro, não como um gerente de banco.
-
-- Linguagem simples, direta, sem jargão financeiro.
-- Nunca julgue o usuário ("você gastou demais"). Sempre oriente ("você pode gastar R$X por dia até o fim do mês").
-- Use "você", nunca "o usuário" ou "o cliente" em textos voltados ao público.
-- Exemplos sempre com valores reais brasileiros (R$, salário mínimo, aluguel, mercado, transporte).
-- Sem termos em inglês quando houver equivalente em português (use "reserva de emergência", não "emergency fund" em textos de UI).
+Coach financeiro com IA conversacional. KOF full-stack no frontend.
+O usuario informa o salario, registra gastos via chat natural, e recebe orientacao financeira proativa.
+Modelo: hibrido 50/30/20 + Envelopes personalizaveis. Monetizacao freemium.
 
 ## Stack
 
 ### Frontend + BFF: KOF (linguagem compilada para JVM)
-- Linguagem: Kof (.kf) -- estaticamente tipada, compilada, zero cerimônia
+- Linguagem: Kof (.kf) -- estaticamente tipada, compilada, zero cerimonia
 - UI: kof.ui (Window, Label, Button, Input, Column, Row, View, Style, Color, Theme)
-- Renderização: KofJS -> ES Modules -> webview nativo (WebKitGTK desktop, Android WebView mobile)
+- Renderizacao: KofJS -> ES Modules -> webview nativo (WebKitGTK desktop, Android WebView mobile)
 - BFF: kof.web (web.app(), rotas, middleware, JSON tipado, HTTP server embutido)
 - Compilador: kof-cli (kof run, kof build, kof serve)
-- Documentação e Repositório: https://github.com/KofLang/Kof4j
+- Documentacao: https://koflang.github.io/docs
+- Repositorio: https://github.com/KofLang/Kof4j
 
 ### Backend: Java/Spring Boot
 - Java 17, Spring Boot 3.3.x, Spring AI (GPT-4o-mini)
 - MySQL (Aiven), Redis (cache)
 - Build: Gradle (./gradlew)
-- Arquitetura: monólito modular
+- Arquitetura: monolito modular
 
 ## Comandos
 
@@ -65,7 +60,7 @@ O Organiza fala como um amigo que entende de dinheiro, não como um gerente de b
              v
 ┌─────────────────────────────────┐
 │  Spring Boot (Backend)          │
-│  Módulos: auth, user,           │
+│  Modulos: auth, user,           │
 │  transaction, budget, coach,    │
 │  notification, bank-reader      │
 │  Spring AI (tool calling)       │
@@ -81,26 +76,26 @@ organiza-ai/
     main.kf                   # Entrypoint: monta Window, rotas de tela
     screens/
       onboarding.kf           # Tela de salario
-      chat.kf                 # Chat principal + pulso diário
+      chat.kf                 # Chat principal + pulso diario
       dashboard.kf            # Barras de progresso por bucket
       envelopes.kf            # CRUD de envelopes
-      history.kf              # Lista de transações
-      settings.kf             # Configurações, perfil
+      history.kf              # Lista de transacoes
+      settings.kf             # Configuracoes, perfil
     components/
-      pulse_card.kf           # Widget do pulso diário
+      pulse_card.kf           # Widget do pulso diario
       bucket_bar.kf           # Barra de progresso de um bucket
       envelope_card.kf        # Card de um envelope
       message_bubble.kf       # Bolha de mensagem do chat
-      nav_bar.kf              # Barra de navegação inferior
+      nav_bar.kf              # Barra de navegacao inferior
     theme/
-      app_theme.kf            # Theme.dark(), cores, estilos padrão
+      app_theme.kf            # Theme.dark(), cores, estilos padrao
     api/
       http_client.kf          # Chamadas HTTP ao BFF (http.get/post)
 
   bff/                        # KOF BFF (kof.web)
     main.kf                   # web.app() + todas as rotas
     middleware/
-      auth.kf                 # Validação JWT
+      auth.kf                 # Validacao JWT
       cors.kf                 # CORS headers
 
   src/                        # Backend Spring Boot (Java)
@@ -114,19 +109,19 @@ organiza-ai/
       bankreader/
       shared/
 
-  specs/                      # Specs por fase (versionado no Git)
+  specs/                      # Specs por fase (local, nao sobe no Git)
   CLAUDE.md                   # Este arquivo (local)
-  PROJECT_STATUS.md           # Handoff entre sessões (local)
+  PROJECT_STATUS.md           # Handoff entre sessoes (local)
 ```
 
-## Referência Rápida: kof.ui
+## Referencia Rapida: kof.ui
 
-### Componentes disponíveis
+### Componentes disponiveis
 
 ```kof
 // Janela (container raiz)
-var w = Window("Título")
-w.title = "Novo Título"
+var w = Window("Titulo")
+w.title = "Novo Titulo"
 w.size(360, 640)
 w.theme = Theme.dark()
 w.bind(widget)
@@ -139,11 +134,11 @@ l.fontSize = 16
 l.bold = true
 l.color = Palette.white
 
-// Button (com ação via lambda)
+// Button (com acao via lambda)
 var b = Button("Clique", () -> fazAlgo())
 b.text = "Novo texto"
 
-// Input (campo editável)
+// Input (campo editavel)
 var i = Input("placeholder")
 i.text = "valor preenchido"
 i.text()  // le valor atual
@@ -158,7 +153,7 @@ var style = Style(Palette.black, Palette.white, 16, 8)
 var view = View(style)
 view.bind(col)
 
-// Composição
+// Composicao
 w.bind(view)  // monta view na janela
 ```
 
@@ -182,24 +177,24 @@ dark.primary()      // Color
 dark.isDark()       // true
 ```
 
-### Estado mutável
+### Estado mutavel
 
 ```kof
-// Estado entre cliques vive em campos estáticos
+// Estado entre cliques vive em campos estaticos
 class AppState {
     static Int count = 0
     static String currentScreen = "chat"
 }
 
 // Lambda captura foto somente-leitura do escopo
-// Para mutar: usar campos estáticos da classe
+// Para mutar: usar campos estaticos da classe
 w.bind(Button("+1", () -> {
     AppState.count = AppState.count + 1
     label.text = "total: " + AppState.count
 }))
 ```
 
-### Execução da UI
+### Execucao da UI
 
 ```bash
 # Compilar e abrir no webview
@@ -208,11 +203,11 @@ kof run --target=js main.kf
 # Fluxo interno:
 # 1. Compila para Default.mjs + kof-runtime.mjs
 # 2. Executa no runner embarcado (GraalJS)
-# 3. Gera index.html + módulos
+# 3. Gera index.html + modulos
 # 4. Abre no webview nativo (WebKitGTK) ou browser do sistema
 ```
 
-## Referência Rápida: kof.web (BFF)
+## Referencia Rapida: kof.web (BFF)
 
 ```kof
 main() {
@@ -241,16 +236,16 @@ main() {
 }
 ```
 
-## Convenções KOF
+## Convencoes KOF
 
-### Nomeação
+### Nomeacao
 - Arquivos: snake_case.kf (pulse_card.kf, chat_screen.kf)
 - Classes: PascalCase (AppState, ChatMessage)
-- Funções: camelCase (sendMessage, getDailyPulse)
-- Constantes: SCREAMING_SNAKE em campos estáticos
+- Funcoes: camelCase (sendMessage, getDailyPulse)
+- Constantes: SCREAMING_SNAKE em campos estaticos
 
-### Organização de tela
-Cada tela é uma função que retorna ou monta widgets num Window/View:
+### Organizacao de tela
+Cada tela e uma funcao que retorna ou monta widgets num Window/View:
 
 ```kof
 // screens/chat.kf
@@ -297,82 +292,67 @@ sendChatMessage(String message) -> ChatResponse {
 }
 ```
 
-## Regras Invioláveis
+## Regras Inviolaveis
 
-1. **Frontend é KOF (kof.ui), não Flutter, não React.**
-   Toda tela, componente e interação é escrita em .kf usando kof.ui.
+1. **Frontend e KOF (kof.ui), nao Flutter, nao React.**
+   Toda tela, componente e interacao e escrita em .kf usando kof.ui.
 
-2. **BFF é KOF (kof.web), não Next.js.**
-   O proxy HTTP e servidor BFF é escrito em .kf usando web.app().
+2. **BFF e KOF (kof.web), nao Next.js.**
+   O proxy HTTP e servidor BFF e escrito em .kf usando web.app().
 
 3. **Backend permanece Java/Spring Boot.**
-   Spring AI, JPA, MySQL, auth -- tudo no backend. KOF não substitui o backend.
+   Spring AI, JPA, MySQL, auth -- tudo no backend. KOF nao substitui o backend.
 
 4. **UI roda via KofJS (target JS).**
    Compilar com `kof run --target=js`. Renderiza no webview/browser.
    JVM e Native renderizam no-op (sem UI).
 
-5. **Estado mutável em campos estáticos de classe.**
+5. **Estado mutavel em campos estaticos de classe.**
    Lambdas capturam foto somente-leitura. Para mutar entre cliques,
    usar campos static da classe de estado (ex: AppState, ChatState).
 
-6. **Composição é hierárquica: Window > View > Column/Row > widgets.**
-   Não pular níveis. Sempre montar via .bind().
+6. **Composicao e hierarquica: Window > View > Column/Row > widgets.**
+   Nao pular niveis. Sempre montar via .bind().
 
-7. **kof.ui NÃO tem (ainda):**
-   - ListView scrollável (usar Column com itens fixos por enquanto)
+7. **kof.ui NAO tem (ainda):**
+   - ListView scrollavel (usar Column com itens fixos por enquanto)
    - Image widget (usar Label como placeholder)
-   - Navegação entre telas (simular via show/hide de Views)
+   - Navegacao entre telas (simular via show/hide de Views)
    - BottomNavigationBar (construir com Row + Buttons)
    - Dialog/Modal (construir com View overlay)
-   Quando a API Mobile do KOF (https://github.com/KofLang/Kof4j) entregar
-   esses componentes, atualizar esta seção.
+   Quando a API Mobile da Melissa entregar esses componentes,
+   atualizar esta secao.
 
-8. **Valores monetários:** usar String formatada ("R$ 1.234,56").
-   KOF não tem BigDecimal -- formatação vem do backend.
+8. **Valores monetarios:** usar String formatada ("R$ 1.234,56").
+   KOF nao tem BigDecimal -- formatacao vem do backend.
 
-9. **Commits:** `feat(frontend): descrição` | `feat(bff): descrição`
-
-10. **O dashboard é a interface principal. Voz é opcional.**
-    Nunca trate voz como feature principal em textos ou UI.
-
-11. **O modelo de orçamento é adaptativo.**
-    Nunca assuma 50/30/20 como padrão universal.
-
-12. **Tom de voz: amigo que entende de dinheiro, não gerente de banco.**
-    Sem jargão, sem julgamento.
-
-13. **Código KOF: antes de escrever qualquer .kf, ler a pasta training/
-    do KOF (https://github.com/KofLang/Kof4j/tree/main/training).**
-    Se algo não está documentado, NÃO inventar. Parar e reportar.
-
-14. **Training é a fonte de verdade.** Se houver conflito entre o que
-    você "sabe" sobre KOF e o que está no training/, o training/ vence.
-
-15. **Compilação obrigatória.** Todo código KOF testado com kof run
-    antes de apresentar como concluído.
-
-## Regras de sessão com Claude Code
-
-### Treinamento obrigatório
-Antes de qualquer tarefa com código .kf, o primeiro prompt deve ser:
-"Leia o README do repositório https://github.com/KofLang/Kof4j.
-Leia o README da pasta training. Faça os treinamentos e aprenda KOF."
-Para tarefas 100% Java, o treinamento não é necessário.
-
-### Gerenciamento de tokens
-- 1 sessão = 1 tarefa = 1 commit.
-- Nunca mais de 1 tarefa por sessão.
-- Commit feito manualmente, nunca pelo Claude Code.
-
-## Leitura obrigatória
-Antes de escrever ou revisar código KOF (frontend ou BFF), leia:
-- `KOF_REFERENCE.md` -- referência geral da linguagem, kof.ui e kof.web
-- `KOF_WEB_REFERENCE.md` -- referência específica de kof.web e do HTTP client (rotas, headers, status codes)
-
-Essas referências existem porque o KOF é uma linguagem nova: sem elas, a IA
-inventa sintaxe que não existe e gera código que não compila.
+9. **Commits:** `feat(frontend): descricao` | `feat(bff): descricao`
 
 ## Fase Atual
 Consulte `specs/PHASE_X_*.md` para escopo da fase em andamento.
 Consulte `PROJECT_STATUS.md` para estado atual do projeto.
+## Regras de Sessões no Claude Code (Agent Skills e SDLC)
+
+1. **Instalação do Agent Skills:**
+   Inicie instalando os skills da Tech Leads Club globalmente:
+   ``bash
+   npx @tech-leads-club/agent-skills
+   ``
+   Utilize o skill **	lc-spec-driven** para gerenciar as fases do projeto (Specify -> Design -> Tasks -> Implement) e evitar o consumo excessivo de tokens. Este skill ajuda a manter a arquitetura validada e amarrada nas regras de negócio.
+
+2. **Gerenciamento de Esforço e Tokens:**
+   - Trabalhe em sessões curtas e atômicas. Uma funcionalidade/issue por vez.
+   - Utilize o cache de contexto e não carregue logs ou dependências pesadas na árvore de contexto.
+
+3. **Validação Arquitetural Contínua:**
+   - A arquitetura (Monolito Modular Backend + Frontend KOF) deve ser respeitada em 100% das entregas.
+   - O banco de dados e o back-end devem sempre permanecer consistentes e de acordo com o Software Design Document (SDD).
+   - O Software Development Life Cycle (SDLC) deve ser seguido: especificação, aprovação, implementação, testes locais.
+
+4. **Higiene do Repositório (Git):**
+   - Limpe sempre a árvore do Git de arquivos gerados e dependências pesadas.
+   - Mantenha o .gitignore rigorosamente atualizado.
+
+5. **Commits e Push (REGRA ESTRITA):**
+   - Ao final de cada sessão de código e implementação completa, a IA deve **obrigatoriamente** rodar git add . e git commit -m "feat/fix/docs: descricao".
+   - **NUNCA FAÇA GIT PUSH**. Os pushes são sempre **manuais** e executados pela usuária no PowerShell (git push).
