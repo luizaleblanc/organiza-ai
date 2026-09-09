@@ -356,3 +356,7 @@ Consulte `PROJECT_STATUS.md` para estado atual do projeto.
 5. **Commits e Push (REGRA ESTRITA):**
    - Ao final de cada sess√£o de c√≥digo e implementa√ß√£o completa, a IA deve **obrigatoriamente** rodar git add . e git commit -m "feat/fix/docs: descricao".
    - **NUNCA FA√áA GIT PUSH**. Os pushes s√£o sempre **manuais** e executados pela usu√°ria no PowerShell (git push).
+ 
+ # # #   N a v e g a c a o   ( R o u t e r )   e   C o m p o n e n t e s   C u s t o m i z a d o s  
+ I M P O R T A N T E :   O   F r o n t e n d   K O F   u t i l i z a   u m a   A P I   c u s t o m i z a d a   d e   R o u t e r   e   C o m p o n e n t .   E s t e s   n „ o   s „ o   c o n s t r u t o s   e s t r i t o s   d o   K o f J S   b a s e ,   m a s   a b s t r a Á ı e s   a r q u i t e t u r a i s   d o   p r o j e t o   ( v e r   p a s t a s   c o r e /   e   c o m p o n e n t s / ) .   E v i t e   u s a r   V i e w . b i n d ( )   d i r e t a m e n t e   p a r a   n a v e g a Á „ o ;   p r e f i r a   s e m p r e   o   R o u t e r . p u s h .  
+ 
