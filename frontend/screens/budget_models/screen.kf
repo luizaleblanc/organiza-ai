@@ -1,0 +1,121 @@
+package screens.budget_models
+
+import kof.ui
+
+// Visual preview only. Replace this content with API data in the integration feature.
+class BudgetModelsPreview {
+    static Bool light = false
+    static String selected = "Padrão"
+    static String active = "Padrão"
+    static Bool confirming = false
+    static Bool completed = false
+}
+
+budgetLabel(String text, String style): kof.ui.Label {
+    var label = Label(text)
+    label.setClass(style)
+    return label
+}
+
+budgetBox(String style): kof.ui.View {
+    var box = View(Style(Color(18, 22, 42), Color(240, 240, 240), 0, 12))
+    box.setClass(style)
+    return box
+}
+
+refreshBudgetPreview(kof.ui.Component screen) {
+    screen.stateSet(screen.state() + 1)
+}
+
+budgetModelCard(kof.ui.Component screen, String name, String description, String allocation): kof.ui.View {
+    var selected = BudgetModelsPreview.selected == name
+    var active = BudgetModelsPreview.active == name
+    var heading = budgetLabel(name, "bm-card-title")
+    var badge = budgetLabel(if (active) "Ativo · exemplo" else "", "bm-badge")
+    var detail = budgetLabel(description, "bm-description")
+    var split = budgetLabel(allocation, "bm-allocation")
+    var choose = Button(if (selected) "● Selecionado" else "○ Selecionar " + name, () -> {
+        BudgetModelsPreview.selected = name
+        BudgetModelsPreview.confirming = false
+        BudgetModelsPreview.completed = false
+        refreshBudgetPreview(screen)
+    })
+    choose.setClass("bm-select")
+    var card = budgetBox("bm-card")
+    if (selected) { card.setClass("bm-selected") }
+    card.bind(Column(listOf(heading, badge, detail, split, choose)))
+    return card
+}
+
+buildBudgetModelsScreen(): kof.ui.Component {
+    var screen = Component(0)
+    screen.view((revision: Int) -> {
+        var brand = budgetLabel("Organiza IA", "bm-brand")
+        var theme = Button(if (BudgetModelsPreview.light) "☾ Tema escuro" else "☀ Tema claro", () -> {
+            BudgetModelsPreview.light = !BudgetModelsPreview.light
+            refreshBudgetPreview(screen)
+        })
+        theme.setClass("bm-theme")
+        var header = budgetBox("bm-header")
+        header.bind(Row(listOf(brand, theme)))
+        var eyebrow = budgetLabel("SEU PLANEJAMENTO", "bm-eyebrow")
+        var title = budgetLabel("Um orçamento do seu jeito", "bm-title")
+        var subtitle = budgetLabel("Conheça os seis modelos e escolha o que combina com a sua rotina.", "bm-subtitle")
+        var notice = budgetLabel("Prévia visual · conteúdo de demonstração. Nenhuma escolha será salva.", "bm-notice")
+        var models = budgetBox("bm-models")
+        models.bind(Column(listOf(
+            budgetModelCard(screen, "Padrão", "Equilibre as despesas essenciais, os seus desejos e os planos para o futuro.", "50% necessidades · 30% desejos · 20% futuro"),
+            budgetModelCard(screen, "Sobrevivência", "Dê mais espaço ao essencial, mantendo uma folga e um pouco para guardar.", "70% necessidades · 20% folga · 10% guardar"),
+            budgetModelCard(screen, "Anti-Dívida", "Priorize a quitação das dívidas sem deixar de reservar uma parte para você.", "70% necessidades · 10% pessoal · 20% quitação"),
+            budgetModelCard(screen, "Simplificado", "Organize o dinheiro em duas partes, sem precisar categorizar cada gasto.", "80% viver · 20% guardar"),
+            budgetModelCard(screen, "Kakeibo", "Reflita sobre seus gastos e faça escolhas mais conscientes a cada semana.", "Essencial · cultura · lazer · extras"),
+            budgetModelCard(screen, "Base Zero", "Dê um destino a cada entrada de dinheiro, acompanhando o ritmo da renda variável.", "Planejamento por entrada · para freelancers")
+        )))
+        var footer = budgetBox("bm-footer")
+        var summary = budgetLabel("Selecionado: " + BudgetModelsPreview.selected, "bm-summary")
+        var continueButton = Button("Continuar", () -> {
+            BudgetModelsPreview.confirming = true
+            BudgetModelsPreview.completed = false
+            refreshBudgetPreview(screen)
+        })
+        continueButton.setClass("bm-primary")
+        continueButton.setDisabled(BudgetModelsPreview.selected == BudgetModelsPreview.active)
+        footer.bind(Column(listOf(summary, continueButton)))
+        var content = listOf(header, eyebrow, title, subtitle, notice, models, footer)
+        if (BudgetModelsPreview.confirming) {
+            var confirmation = budgetBox("bm-confirmation")
+            var question = budgetLabel("Experimentar " + BudgetModelsPreview.selected + "?", "bm-card-title")
+            var explanation = budgetLabel("Esta confirmação muda apenas a prévia nesta página. Seu orçamento não será alterado.", "bm-description")
+            var confirm = Button("Confirmar na prévia", () -> {
+                BudgetModelsPreview.active = BudgetModelsPreview.selected
+                BudgetModelsPreview.confirming = false
+                BudgetModelsPreview.completed = true
+                refreshBudgetPreview(screen)
+            })
+            confirm.setClass("bm-primary")
+            var cancel = Button("Cancelar", () -> {
+                BudgetModelsPreview.confirming = false
+                refreshBudgetPreview(screen)
+            })
+            cancel.setClass("bm-secondary")
+            confirmation.bind(Column(listOf(question, explanation, confirm, cancel)))
+            content.add(confirmation)
+        }
+        if (BudgetModelsPreview.completed) {
+            var toast = budgetBox("bm-toast")
+            var message = budgetLabel("✓ Prévia atualizada. Nenhuma alteração foi salva.", "bm-toast-text")
+            var dismiss = Button("Fechar aviso", () -> {
+                BudgetModelsPreview.completed = false
+                refreshBudgetPreview(screen)
+            })
+            dismiss.setClass("bm-toast-close")
+            toast.bind(Column(listOf(message, dismiss)))
+            content.add(toast)
+        }
+        var root = budgetBox("bm-screen")
+        if (BudgetModelsPreview.light) { root.setClass("bm-light") }
+        root.bind(Column(content))
+        return root
+    })
+    return screen
+}

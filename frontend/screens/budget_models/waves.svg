@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 30" fill="none">
+  <defs><linearGradient id="brand" x2="1" y2="1"><stop stop-color="#00D4FF"/><stop offset="1" stop-color="#0066FF"/></linearGradient></defs>
+  <g stroke="url(#brand)" stroke-width="1.5" stroke-linecap="round">
+    <path d="M2 7C14 0 26 14 38 7"/>
+    <path d="M2 15C14 8 26 22 38 15"/>
+    <path d="M2 23C14 16 26 30 38 23"/>
+  </g>
+</svg>

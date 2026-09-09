@@ -1,0 +1,46 @@
+// DOM smoke test for the actual KofJS output; no replacement UI or API fixtures.
+import assert from 'node:assert/strict';
+import { JSDOM } from '../build/budget-models-test/node_modules/jsdom/lib/api.js';
+
+const dom = new JSDOM('<!doctype html><html><body><div id="kof-root"></div></body></html>', { url: 'http://localhost/' });
+globalThis.window = dom.window;
+globalThis.document = dom.window.document;
+globalThis.requestAnimationFrame = callback => callback();
+let requests = 0;
+globalThis.fetch = dom.window.fetch = () => { requests++; throw new Error('Preview must not call an API'); };
+await import('../build/budget-models-preview/Default.mjs');
+const query = selector => document.querySelector(selector);
+const click = text => {
+  const button = [...document.querySelectorAll('button')].find(node => node.textContent === text);
+  assert.ok(button, `Missing button: ${text}`);
+  button.click();
+};
+const activeName = () => query('.bm-badge:not(:empty)').closest('.bm-card').querySelector('.bm-card-title').textContent;
+assert.equal(document.querySelectorAll('.bm-card').length, 6);
+assert.equal(activeName(), 'Padrão');
+assert.equal(query('.bm-footer button').disabled, true);
+click('○ Selecionar Kakeibo');
+assert.equal(activeName(), 'Padrão', 'Selection must not change the active model');
+assert.equal(query('.bm-selected .bm-card-title').textContent, 'Kakeibo');
+click('Continuar');
+assert.ok(query('.bm-confirmation'));
+click('Cancelar');
+assert.equal(query('.bm-confirmation'), null);
+assert.equal(activeName(), 'Padrão');
+click('Continuar');
+click('Confirmar na prévia');
+assert.equal(activeName(), 'Kakeibo');
+assert.match(query('.bm-toast').textContent, /Nenhuma alteração foi salva/);
+assert.equal(query('.bm-footer button').disabled, true);
+click('Fechar aviso');
+assert.equal(query('.bm-toast'), null);
+click('☀ Tema claro');
+assert.ok(query('.bm-light'));
+assert.equal(activeName(), 'Kakeibo');
+click('☾ Tema escuro');
+assert.equal(query('.bm-light'), null);
+assert.equal(requests, 0);
+assert.equal(window.localStorage.length, 0);
+assert.equal(window.sessionStorage.length, 0);
+console.log('PASS: six models, selection, cancellation, confirmation, toast, themes; no HTTP or storage.');
+dom.window.close();
