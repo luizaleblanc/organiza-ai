@@ -60,14 +60,14 @@ Bool hasBearerToken() {
     return extractBearerToken(header("Authorization")) != null
 }
 
-AuthClaims requireAuth() {
+requireAuth(): middleware.AuthClaims {
     var token = extractBearerToken(header("Authorization"))
     if (token == null) {
         throw "Token não informado"
     }
     try {
         var claimsJson = jwt.verify(token, jwtSecret())
-        var claims = json.decode<AuthClaims>(claimsJson)
+        var claims = json.decode<middleware.AuthClaims>(claimsJson)
         if (claims.iss() != expectedIssuer()) {
             throw "Token com issuer inválido"
         }

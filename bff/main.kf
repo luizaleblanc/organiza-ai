@@ -1,25 +1,46 @@
-// Sintaxe validada contra training/ do Kof4j e o codigo-fonte do compilador
-// (KofWeb.java, KofHttp.java, KofSecurity.java). Ver KOF_WEB_REFERENCE.md e
-// docs/kof4j/ na raiz do projeto.
-//
-// http.get/post/put/delete/patch/options retornam String pura (o corpo da
-// resposta) -- nao existe objeto de resposta com .body. Headers sao uma
-// String "Nome: valor" passada como ultimo argumento de http.*, o que
-// permite repassar o Authorization recebido para o backend Spring Boot.
+record AuthClaims(String sub, String iss)
 
-import middleware.auth
+String expectedIssuer() {
+    return "QUAK"
+}
 
-String authHeader(String token) = "Authorization: " + token
+List<String> publicPaths() {
+    return listOf("/health", "/api/auth/login", "/api/auth/register")
+}
+
+Bool isPublicPath(String path) {
+    return publicPaths().contains(path)
+}
+
+String jwtSecret() {
+    return secrets.get("API_SECURITY_TOKEN_SECRET")
+}
+
+String? extractBearerToken(String? authHeader) {
+    if (authHeader == null || authHeader == "") {
+        return null
+    }
+    if (!authHeader.startsWith("Bearer ")) {
+        return null
+    }
+    var token = authHeader.substring(7).trim()
+    if (token == "") {
+        return null
+    }
+    return token
+}
+
+Bool hasBearerToken() {
+    return extractBearerToken(header("Authorization")) != null
+}
+
+String authHeader(String token) {
+    return "Authorization: " + token
+}
 
 main() {
     var app = web.app()
 
-    // app.use roda ANTES do roteamento, para TODAS as rotas -- nao tem
-    // escopo por path (docs/kof4j/web.md). Por isso o bypass de rotas
-    // publicas e feito aqui dentro, checando path(). So rejeita cedo
-    // requisicao SEM Authorization; a validacao completa (assinatura,
-    // expiracao, issuer) roda por rota via requireAuth(), antes de
-    // qualquer chamada ao backend -- ver bff/middleware/auth.kf.
     app.use {
         if (isPublicPath(path())) {
             return null
@@ -34,7 +55,6 @@ main() {
         return "OK"
     }
 
-    // Rotas publicas -- sem autenticacao
     app.post("/api/auth/login") {
         return http.post("http://localhost:8080/auth/login", body())
     }
@@ -43,143 +63,77 @@ main() {
         return http.post("http://localhost:8080/auth/register", body())
     }
 
-    // Rotas protegidas -- requireAuth() valida assinatura/expiracao/issuer
-    // e lanca (throw String) em token invalido; capturado abaixo antes de
-    // qualquer chamada ao backend.
-
     app.post("/api/variable-income") {
         var token = header("Authorization")
-        try {
-            requireAuth()
-        } catch (String e) {
-            return status(401, "{\"error\":\"" + e + "\"}")
-        }
         return http.post("http://localhost:8080/api/variable-income", body(), authHeader(token))
     }
 
     app.get("/api/variable-income") {
         var token = header("Authorization")
-        try {
-            requireAuth()
-        } catch (String e) {
-            return status(401, "{\"error\":\"" + e + "\"}")
-        }
         var userId = query("userId")
         return http.get("http://localhost:8080/api/variable-income?userId=" + userId, authHeader(token))
     }
 
     app.post("/api/users/onboarding") {
         var token = header("Authorization")
-        try {
-            requireAuth()
-        } catch (String e) {
-            return status(401, "{\"error\":\"" + e + "\"}")
-        }
         return http.post("http://localhost:8080/api/users/onboarding", body(), authHeader(token))
     }
 
-    // Repassa para o mesmo endpoint de registro de renda do backend (/api/variable-income)
     app.post("/api/income") {
         var token = header("Authorization")
-        try {
-            requireAuth()
-        } catch (String e) {
-            return status(401, "{\"error\":\"" + e + "\"}")
-        }
         return http.post("http://localhost:8080/api/variable-income", body(), authHeader(token))
     }
 
     app.post("/api/chat/message") {
         var token = header("Authorization")
-        try {
-            requireAuth()
-        } catch (String e) {
-            return status(401, "{\"error\":\"" + e + "\"}")
-        }
         return http.post("http://localhost:8080/chat/message", body(), authHeader(token))
     }
 
     app.get("/api/transactions") {
         var token = header("Authorization")
-        try {
-            requireAuth()
-        } catch (String e) {
-            return status(401, "{\"error\":\"" + e + "\"}")
-        }
         var month = query("month")
         return http.get("http://localhost:8080/transactions?month=" + month, authHeader(token))
     }
 
     app.post("/api/transactions") {
         var token = header("Authorization")
-        try {
-            requireAuth()
-        } catch (String e) {
-            return status(401, "{\"error\":\"" + e + "\"}")
-        }
         return http.post("http://localhost:8080/transactions", body(), authHeader(token))
     }
 
     app.get("/api/budgets/daily-pulse") {
         var token = header("Authorization")
-        try {
-            requireAuth()
-        } catch (String e) {
-            return status(401, "{\"error\":\"" + e + "\"}")
-        }
         return http.get("http://localhost:8080/budgets/daily-pulse", authHeader(token))
     }
 
     app.get("/api/envelopes") {
         var token = header("Authorization")
-        try {
-            requireAuth()
-        } catch (String e) {
-            return status(401, "{\"error\":\"" + e + "\"}")
-        }
         var userId = query("userId")
         return http.get("http://localhost:8080/api/envelopes?userId=" + userId, authHeader(token))
     }
 
     app.post("/api/envelopes") {
         var token = header("Authorization")
-        try {
-            requireAuth()
-        } catch (String e) {
-            return status(401, "{\"error\":\"" + e + "\"}")
-        }
         return http.post("http://localhost:8080/api/envelopes", body(), authHeader(token))
     }
 
     app.put("/api/envelopes/:id") {
         var token = header("Authorization")
-        try {
-            requireAuth()
-        } catch (String e) {
-            return status(401, "{\"error\":\"" + e + "\"}")
-        }
         return http.put("http://localhost:8080/api/envelopes/" + param("id"), body(), authHeader(token))
     }
 
     app.delete("/api/envelopes/:id") {
         var token = header("Authorization")
-        try {
-            requireAuth()
-        } catch (String e) {
-            return status(401, "{\"error\":\"" + e + "\"}")
-        }
         return http.delete("http://localhost:8080/api/envelopes/" + param("id"), authHeader(token))
     }
 
     app.get("/api/users/tier-status") {
         var token = header("Authorization")
-        try {
-            requireAuth()
-        } catch (String e) {
-            return status(401, "{\"error\":\"" + e + "\"}")
-        }
         return http.get("http://localhost:8080/api/users/tier-status", authHeader(token))
     }
 
+    println("==========================================")
+    println("  BFF Organiza AI rodando na porta 3000")
+    println("  Health check: http://localhost:3000/health")
+    println("==========================================")
     app.listen(3000)
 }
