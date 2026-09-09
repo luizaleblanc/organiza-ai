@@ -1,8 +1,8 @@
 # PHASE 0 -- Foundation
 
 ## Contexto
-O Organiza IA existe como um app de voz com backend Spring Boot (Clean Architecture) e frontend Next.js.
-Esta fase reestrutura o backend em modulos, atualiza o schema e cria o scaffold Flutter.
+O Organiza IA existe como um app com backend Spring Boot e frontend KOF.
+Esta fase reestrutura o backend em modulos, atualiza o schema e cria o scaffold do Frontend KOF.
 
 ## Escopo EXATO desta fase
 
@@ -16,10 +16,10 @@ Esta fase reestrutura o backend em modulos, atualiza o schema e cria o scaffold 
 - [ ] Criar tabelas `budgets` e `chat_messages`
 - [ ] Adicionar campos `bucket` e `source` na tabela `transactions`
 
-### Flutter
-- [ ] Criar projeto Flutter: `organiza_ia`
-- [ ] Arquitetura: `lib/core/`, `lib/features/`, `lib/shared/`
-- [ ] Configurar: get_it, injectable, dio, go_router, flutter_bloc
+### Frontend e BFF (KOF)
+- [ ] Criar projeto Frontend KOF
+- [ ] Arquitetura: `frontend/` e `bff/`
+- [ ] Configurar: componentes de UI nativos KOF e proxy HTTP
 - [ ] Design tokens: cores, tipografia, espacamento (tema escuro como padrao)
 - [ ] Tela placeholder de login (JWT)
 

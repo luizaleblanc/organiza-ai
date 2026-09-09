@@ -1,7 +1,7 @@
 # PROJECT_STATUS.md -- Organiza IA
 
 > Atualizado em: 08/09/2026
-> Fase atual: 2 -- Desenvolvimento (backend e BFF concluídos, Design System concluído, frontend KOF não iniciado)
+> Fase atual: 2 -- Desenvolvimento (backend e BFF concluídos, Design System concluído, frontend KOF arquitetado e em andamento)
 
 ## Estado do Backend (ATUAL)
 - Java: 17
