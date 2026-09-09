@@ -99,3 +99,14 @@ O Organiza IA usa a linguagem **KOF** -- uma linguagem de programação geral, f
 ## Licença
 
 MIT License. Veja [LICENSE](LICENSE).
+
+## Comunidade e Evolução KOF (Sugestões de PRs)
+
+Sendo o Organiza AI um dos projetos pioneiros a implementar a arquitetura **Full-Stack JVM (Spring Boot + BFF Kof + Frontend Kof)** em grande escala, somos os melhores *beta testers* da linguagem criada pela Melissa. 
+
+Contribuidores são bem-vindos para implementar as issues documentadas em PROJECT_STATUS.md. Além disso, encorajamos que as dores que encontramos aqui sejam levadas como propostas de Pull Requests para o repositório oficial do [Kof4j](https://github.com/KofLang/Kof4j):
+
+1. **Suporte CI Headless:** Lançar uma flag --headless ou --ci no CLI do KOF para evitar crashes da máquina virtual Java no GitHub Actions.
+2. **Mensagens de Erro Semânticas:** Traduzir erros agressivos de geração de bytecode da JVM (ex: ArrayIndexOutOfBoundsException no ASM COMPUTE_FRAMES) para *SyntaxErrors* humanos apontando linha/coluna no parser.
+3. **Router Nativo (kof.ui.Router):** Absorver nativamente nossas abstrações customizadas de roteamento para garantir uma geração de bytecode mais fluida nas trocas de tela.
+4. **Estado Reativo (State<T>):** Prover suporte oficial a variáveis de estado reativo, reduzindo nossa dependência de instâncias *static* nas classes da arquitetura.
