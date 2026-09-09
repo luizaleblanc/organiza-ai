@@ -6,7 +6,8 @@ import com.organiza.mod_ai_coach.repository.ChatMessageEntityRepository;
 import com.organiza.shared.exception.TierLimitExceededException;
 import com.organiza.shared.security.CurrentUserService;
 import com.organiza.shared.service.TierEnforcementService;
-import org.springframework.ai.audio.transcription.AudioTranscriptionPrompt;
+import com.organiza.mod_ai_coach.service.GeminiAudioService;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -15,14 +16,7 @@ import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
-import org.springframework.ai.openai.OpenAiAudioSpeechModel;
-import org.springframework.ai.openai.OpenAiAudioSpeechOptions;
-import org.springframework.ai.openai.OpenAiAudioTranscriptionModel;
-import org.springframework.ai.openai.OpenAiAudioTranscriptionOptions;
-import org.springframework.ai.openai.api.OpenAiAudioApi;
-import org.springframework.ai.openai.audio.speech.SpeechPrompt;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -49,8 +43,7 @@ public class VoiceCommandController {
     private static final int HISTORY_LIMIT = 20;
 
     private final ChatClient chatClient;
-    private final OpenAiAudioTranscriptionModel transcriptionModel;
-    private final OpenAiAudioSpeechModel speechModel;
+    private final GeminiAudioService audioService;
     private final ChatMemory chatMemory;
     private final ChatMessageEntityRepository chatMessageRepository;
     private final CurrentUserService currentUserService;
@@ -58,13 +51,11 @@ public class VoiceCommandController {
 
     public VoiceCommandController(@Value("classpath:prompts/system-message.st") Resource systemPrompt,
                                    ChatClient.Builder chatClientBuilder,
-                                   OpenAiAudioTranscriptionModel transcriptionModel,
-                                   OpenAiAudioSpeechModel speechModel,
+                                   GeminiAudioService audioService,
                                    ChatMessageEntityRepository chatMessageRepository,
                                    CurrentUserService currentUserService,
                                    TierEnforcementService tierEnforcementService) throws IOException {
-        this.transcriptionModel = transcriptionModel;
-        this.speechModel = speechModel;
+        this.audioService = audioService;
         this.chatMessageRepository = chatMessageRepository;
         this.currentUserService = currentUserService;
         this.tierEnforcementService = tierEnforcementService;
@@ -81,11 +72,12 @@ public class VoiceCommandController {
                 .build();
     }
 
-    @PostMapping(value = "/ai", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = "audio/mpeg")
+    @PostMapping(value = "/ai", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = "audio/wav")
     public ResponseEntity<byte[]> processAudioCommand(
             @RequestParam("file") MultipartFile file) throws IOException {
 
-        byte[] responseAudio = processVoiceCommand(file.getResource());
+        byte[] responseAudio = processVoiceCommand(file.getBytes(),
+                file.getContentType() == null ? "audio/webm" : file.getContentType());
         return ResponseEntity.ok(responseAudio);
     }
 
@@ -93,37 +85,33 @@ public class VoiceCommandController {
     public ResponseEntity<?> processAiTransactionBase64(@RequestBody Map<String, String> payload) {
         try {
             String base64Audio = payload.get("audioBase64");
+            if (base64Audio == null || base64Audio.length() > 14_000_000) {
+                throw new IllegalArgumentException("Áudio base64 ausente ou muito grande.");
+            }
 
             byte[] audioBytes = Base64.getDecoder().decode(base64Audio);
-            Resource audioResource = new ByteArrayResource(audioBytes) {
-                @Override
-                public String getFilename() {
-                    return "voice-command.webm";
-                }
-            };
-
-            byte[] responseAudio = processVoiceCommand(audioResource);
+            byte[] responseAudio = processVoiceCommand(audioBytes, payload.getOrDefault("mimeType", "audio/webm"));
             String responseBase64 = Base64.getEncoder().encodeToString(responseAudio);
 
-            return ResponseEntity.ok(Map.of("audioBase64", responseBase64));
+            return ResponseEntity.ok(Map.of("audioBase64", responseBase64, "mimeType", "audio/wav"));
         } catch (TierLimitExceededException e) {
             return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED).body(Map.of("error", e.getMessage()));
+        } catch (ResponseStatusException e) {
+            return ResponseEntity.status(e.getStatusCode()).body(Map.of("error", e.getReason()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Áudio ou base64 inválido."));
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().body("Erro ao processar áudio: " + e.getMessage());
+            return ResponseEntity.internalServerError().body("Erro ao processar áudio. Tente novamente mais tarde.");
         }
     }
 
-    private byte[] processVoiceCommand(Resource audioResource) {
+    private byte[] processVoiceCommand(byte[] audio, String mimeType) {
         tierEnforcementService.enforceVoiceAllowed();
         tierEnforcementService.enforceCanSendMessage();
 
         String userId = currentUserService.getCurrentUserId();
 
-        var transcriptionOptions = OpenAiAudioTranscriptionOptions.builder()
-                .language("pt")
-                .build();
-        var transcriptionPrompt = new AudioTranscriptionPrompt(audioResource, transcriptionOptions);
-        String userText = transcriptionModel.call(transcriptionPrompt).getResult().getOutput();
+        String userText = audioService.transcribe(audio, mimeType);
 
         syncChatMemoryFromDatabase(userId);
 
@@ -144,15 +132,7 @@ public class VoiceCommandController {
         chatMessageRepository.save(new ChatMessageEntity(userId, ChatRole.USER, userText));
         chatMessageRepository.save(new ChatMessageEntity(userId, ChatRole.ASSISTANT, aiTextResponse));
 
-        var speechOptions = OpenAiAudioSpeechOptions.builder()
-                .model("tts-1")
-                .voice(OpenAiAudioApi.SpeechRequest.Voice.NOVA)
-                .responseFormat(OpenAiAudioApi.SpeechRequest.AudioResponseFormat.MP3)
-                .speed(1.0f)
-                .build();
-        var speechPrompt = new SpeechPrompt(aiTextResponse, speechOptions);
-
-        return speechModel.call(speechPrompt).getResult().getOutput();
+        return audioService.speak(aiTextResponse);
     }
 
     /**

@@ -34,6 +34,7 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
     implementation platform("org.springframework.ai:spring-ai-bom:1.0.8")
+    // Protocol adapter for Google's Gemini OpenAI-compatible endpoint (not the OpenAI service).
     implementation 'org.springframework.ai:spring-ai-starter-model-openai'
     implementation 'org.apache.httpcomponents.client5:httpclient5'
     developmentOnly 'org.springframework.boot:spring-boot-docker-compose'
