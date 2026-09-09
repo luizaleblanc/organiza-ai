@@ -39,7 +39,7 @@ O que falta é o que só você pode fazer: criar as contas e conectar os serviç
    | `SPRING_DATASOURCE_URL` | a URL JDBC montada na Parte 1 |
    | `SPRING_DATASOURCE_USERNAME` | usuário da Aiven (Parte 1) |
    | `SPRING_DATASOURCE_PASSWORD` | senha da Aiven (Parte 1) |
-   | `OPENAI_API_KEY` | sua chave da OpenAI |
+   | `GEMINI_API_KEY` | chave Gemini Developer API criada no Google AI Studio |
    | `API_SECURITY_TOKEN_SECRET` | **gere uma chave nova e forte** (ex: `openssl rand -hex 32`) -- nunca use um valor de exemplo em produção |
 
    O Render já injeta `PORT` automaticamente -- não precisa configurar isso (`server.port=${PORT:8080}` em `application.properties` já lida com isso).

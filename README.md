@@ -22,7 +22,7 @@ Organiza IA é um organizador de gastos inteligente projetado para separar as fi
 |---|---|
 | Front-end | KOF (kof.ui) -- linguagem compilada para JVM, renderiza via KofJS em webview |
 | Back-end (BFF) | KOF (kof.web) -- servidor HTTP desacoplado, servindo dados estruturados para o front-end |
-| Back-end (API) | Java 17, Spring Boot 3.3.x, Spring AI (GPT-4o-mini via tool calling) |
+| Back-end (API) | Java 17, Spring Boot 3.3.x, Spring AI (Gemini via tool calling) |
 | Banco de Dados | MySQL no Render (modelo relacional) com cronjob de ping para estabilidade contínua |
 | Build | Gradle (backend), kof-cli (frontend/BFF) |
 
@@ -52,6 +52,11 @@ O modelo relacional completo está disponível em: [docs/DATA_MODEL.md](docs/DAT
 Resumo das entidades principais: **User** (dados do usuário, salário mensal, indicador de renda variável e meta de reserva de emergência), **Envelope** (tetos de gastos por categoria, com limite fixo ou por média móvel), **Transaction** (movimentações financeiras associadas a um envelope e a um usuário) e **VariableIncome** (entradas extras -- freela, show, mentoria -- direcionadas automaticamente para reserva de emergência ou para o orçamento 50/30/20).
 
 ## Design System
+
+Configuração do provedor de IA e cotas gratuitas: [Gemini Developer API](docs/GEMINI.md).
+
+Prévia independente da [tela de modelos de orçamento](previews/budget_models/README.md)
+(issue #11): KofJS, temas claro/escuro e interações demonstrativas, sem integração com API.
 
 Identidade visual completa (paleta, tipografia, marca, componentes, ícones, badges, estados de erro/perigo, modelos de notificação e especificação das 11 telas) documentada em [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md).
 
