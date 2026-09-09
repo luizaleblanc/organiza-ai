@@ -42,7 +42,8 @@ import java.util.Locale;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/transactions")
+@RequestMapping("/api/coach")
+@SuppressWarnings("null")
 public class VoiceCommandController {
 
     private static final int HISTORY_LIMIT = 20;
