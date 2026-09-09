@@ -78,33 +78,25 @@
 ## Documentação
 - [x] Todos os arquivos `.md` atualizados (README, CLAUDE.md, CONTRIBUTING.md, DATA_MODEL.md, ARCHITECTURE_DECISIONS.md, PROJECT_STATUS.md, DESIGN_SYSTEM.md)
 
-## O que está pendente
-
-### Frontend KOF (kof.ui) -- NÃO INICIADO
-- [ ] Onboarding (4 telas: salário, tipo de renda, dívidas, valor da dívida + resultado)
-- [ ] Dashboard (pulso diário, gráfico de pizza, transações)
-- [ ] Chat (bolhas IA/usuário, campo de digitação com microfone)
-- [ ] Caixinhas (envelopes agrupados por bucket)
-- [ ] Configurações
-
-### Melhorias futuras
-- [ ] Flyway (substituir Hibernate `ddl-auto=update` por migrations versionadas)
-- [ ] Kakeibo reflexivo (modelo de orçamento) — Issue #13
-- [ ] Migração automática de modelo de orçamento — Issue #12
-- [ ] Análise real do suggestModelChange — Issue #8
-- [ ] Modelo de renda variável com reserva de emergência — Issue #7
-- [ ] Target Android (APK)
-- [ ] Screenshots da aplicação no README — Issue #16
-
-## Issues abertas no GitHub
-- #7: feat(backend): modelo de renda variável com reserva de emergência
-- #8: feat(backend): implementar análise real do suggestModelChange
-- #9: feat(frontend): tela de onboarding com 3 perguntas
-- #10: feat(frontend): dashboard principal com barras de progresso por bucket
-- #11: feat(frontend): tela de seleção/troca de modelo de orçamento
-- #12: feat(backend): migração automática de modelo quando dívida for quitada
-- #13: feat(coach): perguntas reflexivas semanais do Kakeibo
-- #16: Sugiro add print(s) da aplicação no README
+## O que está pendente (Features para Contribuidores)
+  
+  ### Frontend KOF (Integração API)
+  - [ ] **Integração de Login/Sessão**: Ligar a tela de Login ao endpoint BFF (`/auth`), armazenar o Token no estado global (`SessionState`) e aplicar em todas as requisições subsequentes.
+  - [ ] **Integração do Dashboard**: Conectar os limites dos envelopes (Buckets) resgatados da API de orçamento aos widgets do KOF (atualizando barras de progresso e gráfico de pizza dinamicamente).
+  - [ ] **Fluxo Onboarding -> SuggestModel**: Integrar a captura das perguntas (salário, renda variável, dívidas) e submeter ao `/api/users/me/onboarding`, aplicando o modelo de orçamento sugerido pela IA ao state local.
+  - [ ] **Motor de Ação do Chat**: Integrar o input de texto/voz do `ChatScreen` com a rota recém-movida `/api/coach` (ou `/transactions`), renderizando o fluxo de bolhas com base na resposta de persistência do backend.
+  
+  ### Melhorias futuras
+  - [ ] Flyway (substituir Hibernate `ddl-auto=update` por migrations versionadas)
+  - [ ] Target Android (APK) usando a compilação cruzada do KOF
+  - [ ] Screenshots da aplicação no README - Issue #16
+  
+  ## Issues abertas no GitHub (Backend)
+  - #7: feat(backend): modelo de renda variável com reserva de emergência
+  - #8: feat(backend): implementar análise real do suggestModelChange
+  - #12: feat(backend): migração automática de modelo de orçamento
+  - #13: feat(backend): Kakeibo reflexivo (modelo de orçamento)
+  - #16: Sugiro add print(s) da aplicação no README
 
 ## Decisões tomadas
 - Frontend + BFF em KOF (kof.ui / kof.web)
