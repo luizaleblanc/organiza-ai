@@ -123,6 +123,42 @@ Este projeto adota regras rígidas para o uso de assistentes de IA (Claude Code,
 - **Antigravity IDE** — recomendado para estudantes e contribuidores iniciantes
 - Qualquer LLM pode ser usado como consulta, mas o código commitado é de responsabilidade do contribuidor
 
+### Gerenciamento de Skills: tech-leads-club/agent-skills
+
+Este projeto utiliza o registry **tech-leads-club/agent-skills** (https://github.com/tech-leads-club/agent-skills) para padronizar as capacidades dos agentes de IA.
+
+**Instalação:**
+
+```bash
+npx @tech-leads-club/agent-skills
+```
+
+**Skills obrigatórias para contribuidores:**
+
+| Skill | Função | Obrigatório |
+|-------|--------|-------------|
+| tlc-spec-driven | SDLC em 4 fases com memória persistente | Sim |
+| security-best-practices | Detecção de vulnerabilidades | Sim |
+
+**Instalação direta:**
+
+```bash
+agent-skills install -s tlc-spec-driven -a claude-code
+agent-skills install -s security-best-practices -a claude-code
+```
+
+Para Antigravity IDE:
+
+```bash
+agent-skills install -s tlc-spec-driven -a antigravity
+```
+
+Mantenha as skills atualizadas:
+
+```bash
+agent-skills update
+```
+
 ### Regras de Commit e Push
 
 1. **Push é sempre manual.** Nenhum agente de IA tem permissão para executar `git push`. Inclua no CLAUDE.md ou prompt do agente: *NUNCA faça git push*
