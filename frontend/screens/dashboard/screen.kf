@@ -45,16 +45,12 @@ View buildTransactionItem(String name, String category, String amount, String ti
     return cardView
 }
 
-// Gráfico de Pizza de Buckets usando Canvas 2D
-View buildBucketChart() {
-    var chartTitle = Label("Distribuição por Buckets")
-    chartTitle.fontSize = 14
-    chartTitle.bold = true
-    chartTitle.color = AppTheme.textSecondary
-
-    // Desenhar o gráfico de pizza usando Canvas 2D nativo do kof.ui
+// Desenha as 3 fatias do grafico de pizza (extraido de buildBucketChart --
+// COMP002/ASM Frame.merge crash no compilador 0.3.1-beta quando as 3 fatias
+// + legendas + composicao Row/Column viviam na mesma funcao; ver run de CI
+// 34292116608 do kof-check).
+void drawBucketSlices(Canvas canvas) {
     // (training/learn/35-kof-ui.md: setFill(cor) -> beginPath -> moveTo -> arc -> closePath -> fill())
-    var canvas = Canvas(200, 200)
 
     // Fatia Necessidades: 82% (cor accent cyan)
     canvas.setFill(AppTheme.accent)
@@ -79,22 +75,37 @@ View buildBucketChart() {
     canvas.arc(100, 100, 80, 6.09, 6.28) // ~3% de 2*PI
     canvas.closePath()
     canvas.fill()
+}
 
-    // Legendas
+// Legendas do grafico (extraido de buildBucketChart -- ver drawBucketSlices)
+Column buildBucketLegends() {
     var bucketNeeds = Label("● Necessidades: 82%")
     bucketNeeds.color = AppTheme.accent
-    
+
     var bucketWants = Label("● Desejos: 15%")
     bucketWants.color = AppTheme.accentBlue
-    
+
     var bucketFuture = Label("● Futuro: 3%")
     bucketFuture.color = AppTheme.success
 
-    var legends = Column(listOf(bucketNeeds, bucketWants, bucketFuture))
-    
+    return Column(listOf(bucketNeeds, bucketWants, bucketFuture))
+}
+
+// Gráfico de Pizza de Buckets usando Canvas 2D
+View buildBucketChart() {
+    var chartTitle = Label("Distribuição por Buckets")
+    chartTitle.fontSize = 14
+    chartTitle.bold = true
+    chartTitle.color = AppTheme.textSecondary
+
+    var canvas = Canvas(200, 200)
+    drawBucketSlices(canvas)
+
+    var legends = buildBucketLegends()
+
     var chartRow = Row(listOf(canvas, legends))
     var chartCol = Column(listOf(chartTitle, chartRow))
-    
+
     var chartBox = View(cardStyle())
     chartBox.bind(chartCol)
     return chartBox
