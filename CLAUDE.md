@@ -1,4 +1,4 @@
-git add -A
+﻿git add -A
 # CLAUDE.md -- Organiza IA
 
 ## Projeto
@@ -41,31 +41,31 @@ Modelo: hibrido 50/30/20 + Envelopes personalizaveis. Monetizacao freemium.
 ## Arquitetura
 
 ```
-┌─────────────────────────────────┐
-│  KOF Frontend (kof.ui)          │
-│  Target: KofJS -> webview       │
-│  Telas: onboarding, chat,      │
-│  dashboard, envelopes, config   │
-│  Arquivos: frontend/*.kf        │
-└────────────┬────────────────────┘
-             │ HTTP + JWT
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚  KOF Frontend (kof.ui)          â”‚
+â”‚  Target: KofJS -> webview       â”‚
+â”‚  Telas: onboarding, chat,      â”‚
+â”‚  dashboard, envelopes, config   â”‚
+â”‚  Arquivos: frontend/*.kf        â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+             â”‚ HTTP + JWT
              v
-┌─────────────────────────────────┐
-│  KOF BFF (kof.web)              │
-│  Target: JVM                    │
-│  Proxy autenticado + rotas      │
-│  Arquivo: bff/main.kf           │
-└────────────┬────────────────────┘
-             │ HTTP
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚  KOF BFF (kof.web)              â”‚
+â”‚  Target: JVM                    â”‚
+â”‚  Proxy autenticado + rotas      â”‚
+â”‚  Arquivo: bff/main.kf           â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+             â”‚ HTTP
              v
-┌─────────────────────────────────┐
-│  Spring Boot (Backend)          │
-│  Modulos: auth, user,           │
-│  transaction, budget, coach,    │
-│  notification, bank-reader      │
-│  Spring AI (tool calling)       │
-│  MySQL + Redis                  │
-└─────────────────────────────────┘
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚  Spring Boot (Backend)          â”‚
+â”‚  Modulos: auth, user,           â”‚
+â”‚  transaction, budget, coach,    â”‚
+â”‚  notification, bank-reader      â”‚
+â”‚  Spring AI (tool calling)       â”‚
+â”‚  MySQL + Redis                  â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 ## Estrutura do Projeto
@@ -331,32 +331,27 @@ sendChatMessage(String message) -> ChatResponse {
 ## Fase Atual
 Consulte `specs/PHASE_X_*.md` para escopo da fase em andamento.
 Consulte `PROJECT_STATUS.md` para estado atual do projeto.
-## Regras de Sessões no Claude Code (Agent Skills e SDLC)
 
-1. **Instalação do Agent Skills:**
-   Inicie instalando os skills da Tech Leads Club globalmente:
-   ``bash
-   npx @tech-leads-club/agent-skills
-   ``
-   Utilize o skill **	lc-spec-driven** para gerenciar as fases do projeto (Specify -> Design -> Tasks -> Implement) e evitar o consumo excessivo de tokens. Este skill ajuda a manter a arquitetura validada e amarrada nas regras de negócio.
+## Regras de Sessao (SDLC Estrito)
 
-2. **Gerenciamento de Esforço e Tokens:**
-   - Trabalhe em sessões curtas e atômicas. Uma funcionalidade/issue por vez.
-   - Utilize o cache de contexto e não carregue logs ou dependências pesadas na árvore de contexto.
+1. **Commits atomicos e semanticos.** Nunca agrupe mudancas de features diferentes.
+   Formatos: `feat(frontend): desc` | `fix(bff): desc` | `docs: desc`
 
-3. **Validação Arquitetural Contínua:**
-   - A arquitetura (Monolito Modular Backend + Frontend KOF) deve ser respeitada em 100% das entregas.
-   - O banco de dados e o back-end devem sempre permanecer consistentes e de acordo com o Software Design Document (SDD).
-   - O Software Development Life Cycle (SDLC) deve ser seguido: especificação, aprovação, implementação, testes locais.
+2. **A IA NUNCA executa `git push`.** O push e SEMPRE manual pela usuaria no PowerShell.
 
-4. **Higiene do Repositório (Git):**
-   - Limpe sempre a árvore do Git de arquivos gerados e dependências pesadas.
-   - Mantenha o .gitignore rigorosamente atualizado.
+3. **A IA NAO faz `git add .` automaticamente.** Sempre revisar `git status` primeiro e
+   adicionar apenas os arquivos intencionais.
 
-5. **Commits e Push (REGRA ESTRITA):**
-   - Ao final de cada sessão de código e implementação completa, a IA deve **obrigatoriamente** rodar git add . e git commit -m "feat/fix/docs: descricao".
-   - **NUNCA FAÇA GIT PUSH**. Os pushes são sempre **manuais** e executados pela usuária no PowerShell (git push).
- 
- # # #   N a v e g a c a o   ( R o u t e r )   e   C o m p o n e n t e s   C u s t o m i z a d o s  
- I M P O R T A N T E :   O   F r o n t e n d   K O F   u t i l i z a   u m a   A P I   c u s t o m i z a d a   d e   R o u t e r   e   C o m p o n e n t .   E s t e s   n � o   s � o   c o n s t r u t o s   e s t r i t o s   d o   K o f J S   b a s e ,   m a s   a b s t r a � � e s   a r q u i t e t u r a i s   d o   p r o j e t o   ( v e r   p a s t a s   c o r e /   e   c o m p o n e n t s / ) .   E v i t e   u s a r   V i e w . b i n d ( )   d i r e t a m e n t e   p a r a   n a v e g a � � o ;   p r e f i r a   s e m p r e   o   R o u t e r . p u s h .  
- 
+4. **Arvore limpa.** Sem binarios, sem lock files pesados, sem scratchpads residuais.
+   Verificar `.gitignore` antes de commitar.
+
+5. **Antes de escrever qualquer .kf:** ler KOF_REFERENCE.md e KOF_WEB_REFERENCE.md locais.
+   Consultar training/ do repositorio oficial (github.com/KofLang/Kof4j) em caso de duvida.
+
+6. **kof.security (anti-padroes proibidos):**
+   - `sha256(password)` para armazenar senha -- use `passwords.hash()` e `passwords.verify()`.
+   - `==` para comparar tokens/hashes -- use `security.constantTimeEquals(a, b)`.
+   - Secrets em logs -- use `secrets.get("KEY")` e `secrets.redact()`.
+
+7. **Gerenciamento de tokens (LLM):** Sub-agentes com modelos leves (flash/haiku) para leitura
+   de docs e investigacao. Modelo principal apenas para arquitetura e codigo complexo.
