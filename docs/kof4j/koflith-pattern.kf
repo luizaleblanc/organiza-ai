@@ -1,0 +1,423 @@
+// ============================================================================
+// KOFLITH — Padrao Arquitetural: Monolito Modular em Kof (0.3.5-beta)
+// ============================================================================
+//
+// Estrutura de diretorios:
+//
+//   src/
+//   ├── main.kf                  # bootstrap unico — wiring + listen
+//   ├── domain/
+//   │   ├── user/
+//   │   │   ├── User.kf          # entity + records de dominio
+//   │   │   ├── UserModule.kf    # funcoes de negocio (sem classe Service)
+//   │   │   └── UserRoutes.kf    # rotas HTTP do modulo
+//   │   ├── product/
+//   │   │   ├── Product.kf
+//   │   │   ├── ProductModule.kf
+//   │   │   └── ProductRoutes.kf
+//   │   └── order/
+//   │       ├── Order.kf
+//   │       ├── OrderModule.kf
+//   │       └── OrderRoutes.kf
+//   └── shared/
+//       ├── Errors.kf            # erros de dominio
+//       └── Pagination.kf        # records reutilizaveis
+//
+// Principios:
+//   1. Cada modulo e um pacote com entity + funcoes + rotas
+//   2. Fronteiras internas = funcoes/records (portavel p/ microservico)
+//   3. Fronteiras externas = HTTP/JSON (contrato unico)
+//   4. Zero ceremony: sem Controller/Service/Repository quando nao resolve problema real
+//   5. Dados imutaveis = record | Dados mutaveis = class com fields + constructor
+//   6. Ausencia = T? + narrowing | Erro = throw String
+//
+
+// ============================================================================
+// shared/Errors.kf — erros de dominio como funcoes (sem hierarquia de classes)
+// ============================================================================
+
+String notFound(String resource, String id) {
+    throw resource + " not found: " + id
+}
+
+String conflict(String msg) {
+    throw "conflict: " + msg
+}
+
+String badRequest(String msg) {
+    throw "bad request: " + msg
+}
+
+// ============================================================================
+// shared/Pagination.kf — records reutilizaveis entre modulos
+// ============================================================================
+
+record Page(Int page, Int size, Int total, List<String> items)
+
+Page paginate(List<String> all, Int page, Int size) {
+    var start = page * size
+    if (start >= all.size) {
+        return Page(page, size, all.size, listOf())
+    }
+    var end = math.min(start + size, all.size)
+    var items = listOf()
+    for (var i = start; i < end; i++) {
+        items.add(all.get(i))
+    }
+    return Page(page, size, all.size, items)
+}
+
+// ============================================================================
+// domain/user/User.kf — entity + DTOs do modulo
+// ============================================================================
+
+entity User {
+    id: Long generated
+    name: String
+    email: String
+    role: String
+    active: Bool
+}
+
+record CreateUserRequest(String name, String email, String role)
+record UpdateUserRequest(String name, String email)
+record UserSummary(Long id, String name, String role)
+
+// ============================================================================
+// domain/user/UserModule.kf — logica de negocio (funcoes top-level)
+// ============================================================================
+
+// Regra: funcoes recebem db como parametro — sem singleton, sem estado global.
+// Cada funcao e uma operacao atomica de dominio.
+
+User createUser(Db db, CreateUserRequest req) {
+    var existing = orm.where<User>(db, "email", req.email)
+    if (existing.size > 0) {
+        conflict("email already registered: " + req.email)
+    }
+    if (!validation.isEmail(req.email)) {
+        badRequest("invalid email: " + req.email)
+    }
+    var allowed = setOf("admin", "editor", "viewer")
+    if (!allowed.contains(req.role)) {
+        badRequest("invalid role: " + req.role)
+    }
+    return orm.save(db, User(0, req.name, req.email, req.role, true))
+}
+
+User findUser(Db db, Long id) {
+    var u = orm.find<User>(db, id)
+    if (u == null) {
+        notFound("User", String.valueOf(id))
+    }
+    return u
+}
+
+List<User> listActiveUsers(Db db) {
+    return orm.where<User>(db, "active", true)
+}
+
+User updateUser(Db db, Long id, UpdateUserRequest req) {
+    var u = findUser(db, id)
+    return orm.save(db, User(u.id, req.name, req.email, u.role, u.active))
+}
+
+User deactivateUser(Db db, Long id) {
+    var u = findUser(db, id)
+    return orm.save(db, User(u.id, u.name, u.email, u.role, false))
+}
+
+List<UserSummary> userSummaries(Db db) {
+    var users = listActiveUsers(db)
+    return users.map((u: User) -> UserSummary(u.id, u.name, u.role))
+}
+
+// ============================================================================
+// domain/user/UserRoutes.kf — rotas HTTP isoladas do modulo
+// ============================================================================
+
+// Padrao: funcao que recebe app + db e registra as rotas do modulo.
+// Fronteira externa = HTTP/JSON. Se o modulo virar microservico,
+// esta funcao vira o main() do novo servico — zero reescrita.
+
+registerUserRoutes(App app, Db db) {
+
+    app.get("/api/users") {
+        var users = userSummaries(db)
+        return json.encode(users)
+    }
+
+    app.get("/api/users/:id") {
+        try {
+            var u = findUser(db, param("id").toLong())
+            return json.encode(u)
+        } catch (String e) {
+            if (e.startsWith("User not found")) {
+                return status(404, json.encode(mapOf("error", e)))
+            }
+            throw e
+        }
+    }
+
+    app.post("/api/users") {
+        try {
+            var req = json.decode<CreateUserRequest>(body())
+            var u = createUser(db, req)
+            return status(201, json.encode(u))
+        } catch (String e) {
+            if (e.startsWith("conflict")) {
+                return status(409, json.encode(mapOf("error", e)))
+            }
+            if (e.startsWith("bad request")) {
+                return status(400, json.encode(mapOf("error", e)))
+            }
+            throw e
+        }
+    }
+
+    app.put("/api/users/:id") {
+        try {
+            var req = json.decode<UpdateUserRequest>(body())
+            var u = updateUser(db, param("id").toLong(), req)
+            return json.encode(u)
+        } catch (String e) {
+            if (e.startsWith("User not found")) {
+                return status(404, json.encode(mapOf("error", e)))
+            }
+            throw e
+        }
+    }
+
+    app.delete("/api/users/:id") {
+        try {
+            deactivateUser(db, param("id").toLong())
+            return status(204, "")
+        } catch (String e) {
+            if (e.startsWith("User not found")) {
+                return status(404, json.encode(mapOf("error", e)))
+            }
+            throw e
+        }
+    }
+}
+
+// ============================================================================
+// domain/product/Product.kf — segundo modulo (mesma estrutura)
+// ============================================================================
+
+entity Product {
+    id: Long generated
+    name: String
+    price: Double
+    stock: Int
+    categoryId: Long
+}
+
+record CreateProductRequest(String name, Double price, Int stock, Long categoryId)
+
+Product createProduct(Db db, CreateProductRequest req) {
+    if (req.price <= 0.0) {
+        badRequest("price must be positive")
+    }
+    if (req.stock < 0) {
+        badRequest("stock cannot be negative")
+    }
+    return orm.save(db, Product(0, req.name, req.price, req.stock, req.categoryId))
+}
+
+Product findProduct(Db db, Long id) {
+    var p = orm.find<Product>(db, id)
+    if (p == null) {
+        notFound("Product", String.valueOf(id))
+    }
+    return p
+}
+
+List<Product> listProducts(Db db) {
+    return orm.all<Product>(db)
+}
+
+registerProductRoutes(App app, Db db) {
+
+    app.get("/api/products") {
+        return json.encode(listProducts(db))
+    }
+
+    app.get("/api/products/:id") {
+        try {
+            return json.encode(findProduct(db, param("id").toLong()))
+        } catch (String e) {
+            if (e.startsWith("Product not found")) {
+                return status(404, json.encode(mapOf("error", e)))
+            }
+            throw e
+        }
+    }
+
+    app.post("/api/products") {
+        try {
+            var req = json.decode<CreateProductRequest>(body())
+            var p = createProduct(db, req)
+            return status(201, json.encode(p))
+        } catch (String e) {
+            if (e.startsWith("bad request")) {
+                return status(400, json.encode(mapOf("error", e)))
+            }
+            throw e
+        }
+    }
+}
+
+// ============================================================================
+// domain/order/Order.kf — modulo que CONSOME outros modulos
+// ============================================================================
+
+entity Order {
+    id: Long generated
+    userId: Long
+    productId: Long
+    quantity: Int
+    total: Double
+    status: String
+}
+
+record CreateOrderRequest(Long userId, Long productId, Int quantity)
+record OrderView(Long id, String userName, String productName, Int quantity, Double total, String status)
+
+// Fronteira entre modulos = chamada de funcao direta (mesma JVM).
+// Se virar microservico, troca por http.get + json.decode.
+
+Order createOrder(Db db, CreateOrderRequest req) {
+    var user = findUser(db, req.userId)
+    if (!user.active) {
+        badRequest("user is deactivated: " + String.valueOf(req.userId))
+    }
+    var product = findProduct(db, req.productId)
+    if (product.stock < req.quantity) {
+        conflict("insufficient stock for product: " + product.name)
+    }
+    var total = product.price * req.quantity
+    // atualiza estoque
+    orm.save(db, Product(product.id, product.name, product.price, product.stock - req.quantity, product.categoryId))
+    return orm.save(db, Order(0, req.userId, req.productId, req.quantity, total, "pending"))
+}
+
+OrderView enrichOrder(Db db, Order o) {
+    var user = findUser(db, o.userId)
+    var product = findProduct(db, o.productId)
+    return OrderView(o.id, user.name, product.name, o.quantity, o.total, o.status)
+}
+
+registerOrderRoutes(App app, Db db) {
+
+    app.get("/api/orders") {
+        var orders = orm.all<Order>(db)
+        var views = orders.map((o: Order) -> enrichOrder(db, o))
+        return json.encode(views)
+    }
+
+    app.post("/api/orders") {
+        try {
+            var req = json.decode<CreateOrderRequest>(body())
+            var o = createOrder(db, req)
+            return status(201, json.encode(enrichOrder(db, o)))
+        } catch (String e) {
+            if (e.startsWith("bad request") || e.startsWith("conflict")) {
+                return status(400, json.encode(mapOf("error", e)))
+            }
+            if (e.contains("not found")) {
+                return status(404, json.encode(mapOf("error", e)))
+            }
+            throw e
+        }
+    }
+}
+
+// ============================================================================
+// main.kf — bootstrap: wiring + middleware + listen
+// ============================================================================
+//
+// O main() e o unico ponto de composicao. Ele:
+//   1. Conecta o banco
+//   2. Cria as tabelas (orm.create)
+//   3. Configura middleware global
+//   4. Registra rotas de cada modulo
+//   5. Escuta
+//
+// Nenhuma logica de negocio vive aqui.
+
+main() {
+    var db = db.connect("jdbc:h2:mem:koflith;DB_CLOSE_DELAY=-1")
+
+    // schema — cada modulo declara sua entity, o orm cria as tabelas
+    orm.create<User>(db)
+    orm.create<Product>(db)
+    orm.create<Order>(db)
+
+    var app = web.app()
+
+    // middleware global: logging
+    app.use {
+        println(method() + " " + path())
+        return null  // null = passa adiante
+    }
+
+    // middleware global: CORS
+    app.use {
+        headerSet("Access-Control-Allow-Origin", "*")
+        headerSet("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+        headerSet("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        if (method() == "OPTIONS") {
+            return status(204, "")
+        }
+        return null
+    }
+
+    // middleware global: auth basica (exemplo)
+    app.use {
+        if (path().startsWith("/api/")) {
+            var token = header("Authorization")
+            if (token == null || token == "") {
+                return status(401, json.encode(mapOf("error", "unauthorized")))
+            }
+            try {
+                jwt.verify(token, secrets.get("JWT_SECRET", "dev-secret"), "koflith", "api")
+            } catch (String e) {
+                return status(401, json.encode(mapOf("error", "invalid token")))
+            }
+        }
+        return null
+    }
+
+    // health check (fora do auth)
+    app.get("/health") {
+        return json.encode(mapOf("status", "ok", "version", "0.3.5"))
+    }
+
+    // registro de modulos — cada um adiciona suas rotas ao mesmo app
+    registerUserRoutes(app, db)
+    registerProductRoutes(app, db)
+    registerOrderRoutes(app, db)
+
+    println("koflith running on :8080")
+    app.listen(8080)
+}
+
+// ============================================================================
+// Portabilidade: monolito → microservicos
+// ============================================================================
+//
+// Para extrair o modulo "order" como microservico:
+//
+//   1. Copia domain/order/ para um novo diretorio
+//   2. O main() do novo servico:
+//      - db.connect() proprio
+//      - orm.create<Order>(db)
+//      - registerOrderRoutes(app, db)
+//      - app.listen(8081)
+//   3. Troca chamadas diretas (findUser, findProduct) por HTTP:
+//      - var user = json.decode<UserSummary>(http.get("http://user-svc/api/users/" + id))
+//   4. Zero mudanca nas rotas, nos records, nos handlers
+//
+// A fronteira interna (funcoes) vira fronteira externa (HTTP/JSON).
+// O contrato e o mesmo.
