@@ -113,6 +113,88 @@ esta auditoria.
 
 Veja [CONTRIBUTING.md](CONTRIBUTING.md) para o guia completo de setup, padrões de código e fluxo de PR. Todo participante deve seguir o [Código de Conduta](CODE_OF_CONDUCT.md).
 
+## Guideline de Uso de IA
+
+Este projeto adota regras rígidas para o uso de assistentes de IA (Claude Code, Antigravity IDE, Copilot ou qualquer LLM). O objetivo é garantir autoria humana, árvore de commits limpa e reproducibilidade.
+
+### IDEs e Ferramentas Permitidas
+
+- **Claude Code** (CLI) — modelo principal para tarefas complexas
+- **Antigravity IDE** — recomendado para estudantes e contribuidores iniciantes
+- Qualquer LLM pode ser usado como consulta, mas o código commitado é de responsabilidade do contribuidor
+
+### Regras de Commit e Push
+
+1. **Push é sempre manual.** Nenhum agente de IA tem permissão para executar `git push`. Inclua no CLAUDE.md ou prompt do agente: *NUNCA faça git push*
+2. **Zero Co-Authored-By de IA em commits de contribuidores externos.** Commits gerados por agentes locais não devem conter linhas `Co-Authored-By` a menos que a ferramenta do contribuidor exija por padrão
+3. **Árvore limpa antes de push.** Rode `git status` antes de cada push. Nenhum arquivo untracked indesejado, nenhuma pasta de configuração de IA (`.claude/`, `.antigravity/`, `.cursor/`) deve ir para o remoto
+4. **Gitignore atualizado a cada push.** Antes de dar push, confirme que o `.gitignore` contém no mínimo:
+
+```
+.claude/
+.antigravity/
+.cursor/
+.copilot/
+CLAUDE.md
+*.log
+.env
+node_modules/
+build/
+.gradle/
+```
+
+5. **Nenhuma pasta corrompida ou pesada.** Agentes de IA podem gerar pastas grandes (cache, embeddings, checkpoints). Verifique com `git diff --stat` antes do push. Se um arquivo ultrapassa 1MB sem ser código, ele não entra no repositório
+
+### Metodologia: Spec-Driven SDLC
+
+O desenvolvimento segue um workflow de 4 fases rígidas, com memória persistente entre sessões. IA participa como ferramenta, não como decisor:
+
+| Fase | Responsável | IA pode |
+|------|------------|---------|
+| F1 Design | Maintainer | Gerar diagramas Mermaid, sugerir specs — maintainer aprova |
+| F2 Desenvolvimento | Contribuidor | Gerar código, rodar testes, sugerir refactors — contribuidor revisa e commita |
+| F3 Code Review | Maintainer | Analisar diff, apontar problemas — maintainer decide merge |
+| F4 Deploy | CI/CD | Build automático — nenhum agente faz deploy manual |
+
+**A IA nunca decide merge, nunca aprova PR, nunca faz push, nunca faz deploy.**
+
+### Treinamento KOF para Agentes de IA
+
+KOF é uma linguagem relativamente nova e pouco representada em corpora de treinamento de LLMs. Antes de pedir código KOF a qualquer agente:
+
+1. Consulte o repositório oficial: [KofLang/Kof4j](https://github.com/KofLang/Kof4j)
+2. Alimente o agente com os materiais de treinamento na ordem: `README.md` do repositório, `training/README.md`, arquivos em `training/` (reference, idioms, patterns, migration, examples), `learn/` (capítulos), `docs/stdlib-web.md` e `docs/stdlib-db.md`
+3. Valide com `kof check` antes de commitar qualquer arquivo `.kf`
+4. Anti-patterns KOF que agentes cometem com frequência:
+   - Usar `fun`/`fn`/`func` (funções em KOF não têm keyword)
+   - Usar `async`/`await` (KOF usa `spawn`/`await`)
+   - Usar `var` em assinatura de função no lugar do tipo real
+   - Gerar getters/setters Java-style (KOF acessa campos direto)
+   - Usar `.equals()` em vez de `==` para comparação de strings
+
+### Prompt Base para Agentes
+
+Todo agente de IA usado no projeto deve receber este contexto mínimo:
+
+```
+Você é um agente de código no projeto organiza-ai.
+Stack: Java 17 / Spring Boot 3.3.x (backend), KOF (BFF + frontend), MySQL.
+REGRAS ABSOLUTAS:
+1. NUNCA faça git push
+2. Commits seguem Conventional Commits: tipo(escopo): descrição
+3. Rode ./gradlew test (backend) ou kof check (KOF) antes de commitar
+4. Não crie arquivos na raiz do projeto
+5. Não adicione dependências sem aprovação
+```
+
+### Delegação por Modelo
+
+| Complexidade | Modelo | Exemplos |
+|-------------|--------|----------|
+| Baixa | Haiku | Fix de teste, docs, rename, formatação |
+| Média | Sonnet | Refactor null safety, CRUD, migrations |
+| Alta | Opus | Arquitetura KOF, integração BFF, features novas |
+
 ## Tecnologia
 
 O Organiza IA usa a linguagem **KOF** -- uma linguagem de programação geral, fortemente tipada e compilada para JVM (https://github.com/KofLang/Kof4j). Usamos KOF tanto no front-end (kof.ui) quanto no BFF (kof.web), eliminando Node.js e Flutter do stack e unificando tudo na JVM.
