@@ -6,6 +6,27 @@ Organiza IA é um organizador de gastos inteligente projetado para separar as fi
 
 ---
 
+## Screenshots
+
+Conheça a interface do Organiza IA:
+
+| Tela | Descrição |
+|---|---|
+| **Onboarding** | Configuração inicial de salário e modelo de orçamento |
+| **Chat** | Coach de IA conversacional com pulso diário |
+| **Dashboard** | Visão geral dos envelopes e gastos |
+| **Envelopes** | Gerenciamento de categorias e limites de gastos |
+| **Histórico** | Lista de transações com filtros |
+| **Configurações** | Perfil e preferências do usuário |
+
+> **📌 Para adicionar screenshots:**
+> 1. Capture imagens das telas em HD (360×640px para mobile)
+> 2. Nomeie como: `screenshot-onboarding.png`, `screenshot-chat.png`, etc.
+> 3. Coloque em `docs/screenshots/`
+> 4. Atualize a tabela acima com links: `![Onboarding](docs/screenshots/screenshot-onboarding.png)`
+
+---
+
 ## Diferenciais
 
 **Modelos adaptativos** -- o Organiza não força um modelo único. Com base na sua renda, tipo de trabalho e situação financeira, o sistema sugere o modelo que faz sentido pra você: 50/30/20 (padrão), 70/20/10 (sobrevivência), Anti-Dívida, 80/20 (simplificado), Kakeibo (reflexivo) ou Base Zero (freelancer). Você pode trocar a qualquer momento.
