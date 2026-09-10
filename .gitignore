@@ -79,3 +79,4 @@ organiza-ia-plano/
 
 # Legado Next.js/Node (removido, ver CLAUDE.md)
 frontend-voice/
+.claude/
