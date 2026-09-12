@@ -36,7 +36,9 @@ main() {
 
     // Rotas publicas -- sem autenticacao
     app.post("/api/auth/login") {
-        return http.post("http://localhost:8080/auth/login", body())
+        var rawJson = http.post("http://localhost:8080/auth/login", body())
+        var resp = json.decode<LoginResponse>(rawJson)
+        return resp.token
     }
 
     app.post("/api/auth/register") {

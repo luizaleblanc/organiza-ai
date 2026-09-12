@@ -81,7 +81,7 @@
 ## O que está pendente (Features para Contribuidores)
   
   ### Frontend KOF (Integração API)
-  - [ ] **Integração de Login/Sessão**: Ligar a tela de Login ao endpoint BFF (`/auth`), armazenar o Token no estado global (`SessionState`) e aplicar em todas as requisições subsequentes.
+  - [x] **Integração de Login/Sessão**: Ligar a tela de Login ao endpoint BFF (`/auth`), armazenar o Token no estado global (`SessionState`) e aplicar em todas as requisições subsequentes.
   - [ ] **Integração do Dashboard**: Conectar os limites dos envelopes (Buckets) resgatados da API de orçamento aos widgets do KOF (atualizando barras de progresso e gráfico de pizza dinamicamente).
   - [ ] **Fluxo Onboarding -> SuggestModel**: Integrar a captura das perguntas (salário, renda variável, dívidas) e submeter ao `/api/users/me/onboarding`, aplicando o modelo de orçamento sugerido pela IA ao state local.
   - [ ] **Motor de Ação do Chat**: Integrar o input de texto/voz do `ChatScreen` com a rota recém-movida `/api/coach` (ou `/transactions`), renderizando o fluxo de bolhas com base na resposta de persistência do backend.

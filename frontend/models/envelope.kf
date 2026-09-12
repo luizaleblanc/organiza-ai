@@ -4,7 +4,7 @@ package models
 // Models de Envelope (Caixinha) — DTOs compartilhados
 // =============================================================================
 
-class Envelope(
+record Envelope(
     String id,
     String name,
     String category,
@@ -15,5 +15,5 @@ class Envelope(
     String bucketName
 )
 
-class EnvelopeGroup(String bucketName, List<Envelope> envelopes)
+record EnvelopeGroup(String bucketName, List<Envelope> envelopes)
 

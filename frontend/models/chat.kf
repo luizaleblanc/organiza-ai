@@ -4,9 +4,9 @@ package models
 // Models de Chat — DTOs compartilhados
 // =============================================================================
 
-class ChatMessage(String role, String content, String? timestamp)
+record ChatMessage(String role, String content, String? timestamp)
 
-class ChatRequest(String message)
+record ChatRequest(String message)
 
-class ChatResponse(String reply)
+record ChatResponse(String reply)
 

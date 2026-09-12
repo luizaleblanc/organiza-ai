@@ -62,10 +62,16 @@ Component buildRegisterScreen() {
             var password = passwordInput.text()
             var confirmPassword = confirmPasswordInput.text()
 
-            var json = "{\"name\":\"" + name + "\",\"email\":\"" + email + "\",\"password\":\"" + password + "\",\"confirmPassword\":\"" + confirmPassword + "\"}"
+            var jsonRegister = "{\"name\":\"" + name + "\",\"email\":\"" + email + "\",\"password\":\"" + password + "\",\"confirmPassword\":\"" + confirmPassword + "\"}"
+            var jsonLogin = "{\"email\":\"" + email + "\",\"password\":\"" + password + "\"}"
 
             try {
-                ApiClient.post("/api/auth/register", json)
+                // 1. Registra no BFF
+                ApiClient.post("/api/auth/register", jsonRegister)
+                // 2. Faz login automatico para pegar o token
+                var token = ApiClient.post("/api/auth/login", jsonLogin)
+                ApiClient.setToken(token)
+                
                 Router.go(Routes.onboarding)
             } catch (String e) {
                 // Erro no cadastro
