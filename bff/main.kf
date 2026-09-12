@@ -77,7 +77,18 @@ main() {
         } catch (String e) {
             return status(401, "{\"error\":\"" + e + "\"}")
         }
-        return http.post("http://localhost:8080/api/users/onboarding", body(), authHeader(token))
+        var rawJson = http.post("http://localhost:8080/api/users/me/onboarding", body(), authHeader(token))
+        try {
+            var resp = json.decode<OnboardingResponse>(rawJson)
+            var bStr = ""
+            for (var i = 0; i < resp.buckets.size(); i = i + 1) {
+                var b = resp.buckets.get(i)
+                bStr = bStr + b.name + ":" + b.percentage + ":" + b.formattedValue + ","
+            }
+            return resp.suggestedModel + "|" + resp.modelDescription + "|" + bStr
+        } catch (String err) {
+            return status(500, "{\"error\":\"Erro ao decodificar JSON do backend: " + err + "\"}")
+        }
     }
 
     // Repassa para o mesmo endpoint de registro de renda do backend (/api/variable-income)
@@ -98,7 +109,13 @@ main() {
         } catch (String e) {
             return status(401, "{\"error\":\"" + e + "\"}")
         }
-        return http.post("http://localhost:8080/chat/message", body(), authHeader(token))
+        var rawJson = http.post("http://localhost:8080/api/coach/chat", body(), authHeader(token))
+        try {
+            var resp = json.decode<ChatMessageResponse>(rawJson)
+            return resp.reply
+        } catch (String err) {
+            return status(500, "{\"error\":\"Erro ao decodificar JSON do backend: " + err + "\"}")
+        }
     }
 
     app.get("/api/transactions") {
