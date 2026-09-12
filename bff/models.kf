@@ -21,3 +21,9 @@ record OnboardingResponse(String suggestedModel, String modelDescription)
 record BucketSummary(String name, Int percentage, Float amount)
 
 record TierStatus(String tier, Int messagesUsed, Boolean voiceEnabled, Boolean canSendMessage)
+
+record TransactionResponse(String id, String category, String description, Float amount, String currency)
+record DashboardSummaryResponse(List<BucketSummary> categories, Float totalSpent, String currency)
+record CategorySummary(String category, Float total, String currency, Int count, Float percentage)
+record TransactionOutput(String id, String description, String category, Float value, String currency)
+record DashboardSummaryResponse(Float totalSpent, String currency, List<CategorySummary> categories, List<TransactionOutput> transactions)

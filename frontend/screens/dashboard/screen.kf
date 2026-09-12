@@ -181,8 +181,8 @@ Component buildDashboardScreen() {
     c.onMount(() -> {
         // Busca pulso diário e transações recentes via BFF
         try {
-            var pulseData = ApiClient.get("/api/budgets/daily-pulse")
-            var txData = ApiClient.get("/api/transactions")
+            
+            var dashData = ApiClient.get("/api/dashboard")
         } catch (String e) {
             // Falhas de rede tratadas com fallback para os dados de estado
         }
@@ -194,3 +194,4 @@ Component buildDashboardScreen() {
 
     return c
 }
+

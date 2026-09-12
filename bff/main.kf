@@ -173,6 +173,38 @@ main() {
         return http.delete("http://localhost:8080/api/envelopes/" + param("id"), authHeader(token))
     }
 
+    app.get("/api/dashboard") {
+        var token = header("Authorization")
+        try {
+            requireAuth()
+        } catch (String e) {
+            return status(401, "{\"error\":\"" + e + "\"}")
+        }
+        var rawJson = http.get("http://localhost:8080/transactions/dashboard", authHeader(token))
+        
+        try {
+            var dash = json.decode<DashboardSummaryResponse>(rawJson)
+            
+            // Montar string customizada para contornar limitacao de parser no kof.ui
+            // Formato: totalSpent|currency|Cat1:pct,Cat2:pct...|Tx1:cat:val,Tx2:cat:val...
+            var cats = ""
+            for (var i = 0; i < dash.categories.size(); i = i + 1) {
+                var c = dash.categories.get(i)
+                cats = cats + c.category + ":" + c.percentage + ","
+            }
+            
+            var txs = ""
+            for (var j = 0; j < dash.transactions.size(); j = j + 1) {
+                var t = dash.transactions.get(j)
+                txs = txs + t.description + ":" + t.category + ":" + t.value + ","
+            }
+            
+            return dash.totalSpent + "|" + dash.currency + "|" + cats + "|" + txs
+        } catch (String err) {
+            return status(500, "{\"error\":\"Erro ao decodificar JSON do backend: " + err + "\"}")
+        }
+    }
+
     app.get("/api/users/tier-status") {
         var token = header("Authorization")
         try {
@@ -185,3 +217,4 @@ main() {
 
     app.listen(3000)
 }
+
