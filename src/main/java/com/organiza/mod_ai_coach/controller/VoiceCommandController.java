@@ -3,6 +3,7 @@ package com.organiza.mod_ai_coach.controller;
 import com.organiza.mod_ai_coach.model.ChatMessageEntity;
 import com.organiza.mod_ai_coach.model.ChatRole;
 import com.organiza.mod_ai_coach.repository.ChatMessageEntityRepository;
+import com.organiza.mod_ai_coach.service.KakeiboReflectionService;
 import com.organiza.shared.exception.TierLimitExceededException;
 import com.organiza.shared.security.CurrentUserService;
 import com.organiza.shared.service.TierEnforcementService;
@@ -55,6 +56,7 @@ public class VoiceCommandController {
     private final ChatMessageEntityRepository chatMessageRepository;
     private final CurrentUserService currentUserService;
     private final TierEnforcementService tierEnforcementService;
+    private final KakeiboReflectionService kakeiboReflectionService;
 
     public VoiceCommandController(@Value("classpath:prompts/system-message.st") Resource systemPrompt,
                                    ChatClient.Builder chatClientBuilder,
@@ -62,12 +64,14 @@ public class VoiceCommandController {
                                    OpenAiAudioSpeechModel speechModel,
                                    ChatMessageEntityRepository chatMessageRepository,
                                    CurrentUserService currentUserService,
-                                   TierEnforcementService tierEnforcementService) throws IOException {
+                                   TierEnforcementService tierEnforcementService,
+                                   KakeiboReflectionService kakeiboReflectionService) throws IOException {
         this.transcriptionModel = transcriptionModel;
         this.speechModel = speechModel;
         this.chatMessageRepository = chatMessageRepository;
         this.currentUserService = currentUserService;
         this.tierEnforcementService = tierEnforcementService;
+        this.kakeiboReflectionService = kakeiboReflectionService;
         // Cache em memória exigido pelo MessageChatMemoryAdvisor do Spring AI;
         // é ressincronizado com o banco a cada interação em syncChatMemoryFromDatabase.
         this.chatMemory = MessageWindowChatMemory.builder()
@@ -77,7 +81,8 @@ public class VoiceCommandController {
         this.chatClient = chatClientBuilder
                 .defaultSystem(systemPrompt.getContentAsString(Charset.defaultCharset()))
                 .defaultToolNames("persistTransactionUseCase", "listTransactionsByCategoryUseCase", "getTotalByCategoryUseCase",
-                        "registerIncomeFunction", "suggestModelChangeFunction", "getDailyPulseFunction", "getBalanceFunction")
+                        "registerIncomeFunction", "suggestModelChangeFunction", "getDailyPulseFunction", "getBalanceFunction",
+                        "answerKakeiboReflectionFunction")
                 .build();
     }
 
@@ -159,7 +164,7 @@ public class VoiceCommandController {
 
         syncChatMemoryFromDatabase(userId);
 
-        String promptPersonalizado = userText + " (Obrigatório: Responda em português do Brasil de forma amigável e natural informando o resultado da operação).";
+        String promptPersonalizado = buildPromptForCurrentInteraction(userId, userText);
 
         LocalDate hoje = LocalDate.now();
         String currentDate = hoje.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
@@ -205,6 +210,19 @@ public class VoiceCommandController {
         if (!history.isEmpty()) {
             chatMemory.add(userId, Collections.unmodifiableList(history));
         }
+    }
+
+    private String buildPromptForCurrentInteraction(String userId, String userText) {
+        String basePrompt = userText + " (Obrigatório: Responda em português do Brasil de forma amigável e natural informando o resultado da operação).";
+
+        if (kakeiboReflectionService.shouldAskForReflection(userId, LocalDate.now())) {
+            String weeklyQuestions = String.join(" | ", KakeiboReflectionService.QUESTIONS);
+            return "ATENÇÃO: este usuário está no modelo Kakeibo e ainda não respondeu a reflexão semanal desta semana. " +
+                    "Faça as 4 perguntas reflexivas do Kakeibo, em sequência, para ele responder: " + weeklyQuestions +
+                    "\nPergunta/observação do usuário: " + basePrompt;
+        }
+
+        return basePrompt;
     }
 }
 
