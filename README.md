@@ -2,7 +2,22 @@
 
 **O único app de finanças que conversa com você, entende seu salário e te diz o que fazer hoje.**
 
-Organiza IA é um organizador de gastos inteligente projetado para separar as finanças de uma pessoa com base no salário que ela ganha -- fixo ou variável. Ao contrário de agregadores passivos de mercado, ele atua como um coach financeiro proativo.
+Organiza IA é um organizador de gastos inteligente projetado para separar as finanças de uma pessoa com base no salário que ela ganha — fixo ou variável. Ao contrário de agregadores passivos de mercado, ele atua como um coach financeiro proativo.
+
+---
+
+## 🔬 Laboratório Científico e Transparência (Work in Progress)
+
+O **Organiza IA** atua oficialmente como caso de estudo e laboratório de validação para a linguagem **KOF** (KofLang). Guiados pela metodologia de pesquisa técnica rigorosa da equipe criadora e pesquisadores (UFPA), tratamos produtividade, performance e DX (*Developer Experience*) como **hipóteses testáveis** e não como fatos de marketing.
+
+**Estado Atual e Limitações (Disclaimer):**
+Atualmente, o projeto possui a *arquitetura* e o *produto funcional* operando em KOF (BFF e UI). No entanto, **a infraestrutura empírica de medição ainda está em construção**. Ainda não possuímos no repositório (mas estamos implementando em Issues ativas):
+- Suítes de extração e análise da AST (*Abstract Syntax Tree*).
+- CI/CD instrumentado para coletar métricas exatas de compilação.
+- Benchmarks de alocação de memória e execução (KofJS vs JVM).
+- Análises estatísticas quantitativas de *LLM-friendliness*.
+
+> ⚠️ Qualquer afirmação técnica sobre "superioridade" de código ou arquitetura gerada por este projeto, sem estar lastreada por esses futuros *benchmarks*, deve ser interpretada como proposta arquitetural e hipótese de design, e não como resultado experimental comprovado.
 
 ---
 
