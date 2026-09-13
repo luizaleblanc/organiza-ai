@@ -113,6 +113,38 @@ public class VoiceCommandController {
         }
     }
 
+    @PostMapping(value = "/chat", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> processTextCommand(@RequestBody Map<String, String> payload) {
+        try {
+            tierEnforcementService.enforceCanSendMessage();
+            String userId = currentUserService.getCurrentUserId();
+            String userText = payload.get("message");
+
+            syncChatMemoryFromDatabase(userId);
+
+            String promptPersonalizado = userText + " (Obrigatorio: Responda em portugues do Brasil de forma amigavel e natural informando o resultado da operacao).";
+            
+            LocalDate hoje = LocalDate.now();
+            String currentDate = hoje.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+            String currentDayOfWeek = hoje.getDayOfWeek().getDisplayName(TextStyle.FULL, new Locale("pt", "BR"));
+
+            String aiTextResponse = chatClient.prompt()
+                    .system(s -> s.param("currentDate", currentDate).param("currentDayOfWeek", currentDayOfWeek))
+                    .user(promptPersonalizado)
+                    .advisors(MessageChatMemoryAdvisor.builder(this.chatMemory).build())
+                    .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, userId))
+                    .call()
+                    .content();
+
+            chatMessageRepository.save(new ChatMessageEntity(userId, ChatRole.USER, userText));
+            chatMessageRepository.save(new ChatMessageEntity(userId, ChatRole.ASSISTANT, aiTextResponse));
+
+            return ResponseEntity.ok(Map.of("reply", aiTextResponse));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     private byte[] processVoiceCommand(Resource audioResource) {
         tierEnforcementService.enforceVoiceAllowed();
         tierEnforcementService.enforceCanSendMessage();
@@ -175,3 +207,4 @@ public class VoiceCommandController {
         }
     }
 }
+
