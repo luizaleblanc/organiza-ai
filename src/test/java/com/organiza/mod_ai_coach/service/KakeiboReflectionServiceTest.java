@@ -18,7 +18,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -96,21 +96,22 @@ class KakeiboReflectionServiceTest {
                 "Comprei coisas extras que não eram urgentes.",
                 "Vou reduzir compras impulsivas na próxima semana."
         );
-        AtomicInteger reflectionChecks = new AtomicInteger();
-        KakeiboReflectionEntity savedReflection = new KakeiboReflectionEntity(userId, weekStart, answers);
+
+        // Estado real compartilhado entre os mocks de save/findByUserIdAndWeekStart,
+        // simulando um repositorio em memoria em vez de fixar uma sequencia de retornos.
+        AtomicReference<KakeiboReflectionEntity> persistedReflection = new AtomicReference<>();
 
         when(userEntityRepository.findById(userId)).thenReturn(Optional.of(new UserEntity(
                 userId, "d@d.com", "123", Role.USER, BigDecimal.valueOf(5000), Tier.FREE, false, null,
                 BudgetModelType.KAKEIBO, IncomeType.FIXED, false, null)));
-        when(reflectionRepository.findByUserIdAndWeekStart(userId, weekStart)).thenAnswer(invocation -> {
-            int callNumber = reflectionChecks.getAndIncrement();
-            if (callNumber <= 1) {
-                return Optional.empty();
-            }
-            return Optional.of(savedReflection);
-        });
+        when(reflectionRepository.findByUserIdAndWeekStart(userId, weekStart))
+                .thenAnswer(invocation -> Optional.ofNullable(persistedReflection.get()));
         when(reflectionRepository.save(org.mockito.ArgumentMatchers.any(KakeiboReflectionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> {
+                    KakeiboReflectionEntity toSave = invocation.getArgument(0);
+                    persistedReflection.set(toSave);
+                    return toSave;
+                });
 
         assertTrue(service.shouldAskForReflection(userId, referenceDate));
 
