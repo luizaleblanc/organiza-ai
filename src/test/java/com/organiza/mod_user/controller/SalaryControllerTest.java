@@ -39,10 +39,17 @@ class SalaryControllerTest {
 
     @Test
     void shouldUpdateSalaryOfCurrentUser() {
-        UserEntity user = new UserEntity(USER_ID, "user@teste.com", "hash", Role.USER, null,
-                com.organiza.mod_user.model.Tier.FREE, false, null,
-                com.organiza.mod_budget.model.BudgetModelType.STANDARD_503020,
-                com.organiza.mod_user.model.IncomeType.FIXED, false, BigDecimal.ZERO);
+                UserEntity user = new UserEntity();
+        user.setId(USER_ID);
+        user.setEmail("user@teste.com");
+        user.setPassword("hash");
+        user.setRole(Role.USER);
+        user.setTier(com.organiza.mod_user.model.Tier.FREE);
+        user.setHasVariableIncome(false);
+        user.setBudgetModel(com.organiza.mod_budget.model.BudgetModelType.STANDARD_503020);
+        user.setIncomeType(com.organiza.mod_user.model.IncomeType.FIXED);
+        user.setHasDebt(false);
+        user.setDebtAmount(BigDecimal.ZERO);
 
         when(currentUserService.getCurrentUserId()).thenReturn(USER_ID);
         when(userEntityRepository.findById(USER_ID)).thenReturn(Optional.of(user));
@@ -65,3 +72,4 @@ class SalaryControllerTest {
         verify(userEntityRepository, never()).save(any(UserEntity.class));
     }
 }
+
