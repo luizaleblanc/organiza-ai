@@ -1,4 +1,4 @@
-﻿# Issues de Arquitetura e Integração (Auditoria KOF + Spring Boot)
+# Issues de Arquitetura e Integração (Auditoria KOF + Spring Boot)
 
 ## 1. Documentação de API KOF Faltante (Causa Raiz de CI Crash)
 **Severidade:** Crítica
@@ -20,7 +20,7 @@
 - Centralizar essas rotas ou deixá-las explícitas de forma restful (ex: /api/users/me/salary, /api/users/me/tier).
 
 ## 4. Documentação Conflitante no Projeto (Status e Specs)
-**Severidade:** Baixa
+**Severidade:** Resolvida
 **Descrição:** 
 - O PROJECT_STATUS.md afirma que o "frontend KOF não está iniciado", mas logo abaixo lista 11 telas como concluídas.
 - A especificação base specs/PHASE_0_FOUNDATION.md ainda cita Flutter/Next.js, ignorando o Handoff para KOF.
@@ -31,3 +31,12 @@
 ## 5. Limpeza de Arquivos de Integração Contínua
 **Severidade:** Resolvida
 **Descrição:** O arquivo .github/workflows/kof-check.yml tentava rodar o KOF em ambiente remoto sem suporte. O erro já foi mitigado e o arquivo excluído e ignorado localmente.
+## 20. Refatorar Optionals no Backend (Substituir .get() por .orElseThrow())
+**Severidade:** Resolvida
+**Descricao:** Havia warnings de Null type safety no VS Code devido ao uso inseguro de Optional.get().
+**Solucao:** Substituidos por .orElseThrow() e .orElseGet() nos respectivos arquivos.
+
+## 28. Extrator Estatistico de AST e LOC para validar LLM-friendliness
+**Severidade:** Resolvida
+**Descricao:** Necessidade de comprovar empiricamente a melhoria de DX do KOF frente ao Java.
+**Solucao:** Criado script scripts/AstStats.java que consome o parser/lexer do Kof4j, realiza parsing nativo de .kf e extrai contagem exata de tokens, linhas de codigo e nos estruturais AST via Reflection.

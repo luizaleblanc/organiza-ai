@@ -58,13 +58,11 @@ public class KakeiboReflectionService {
         }
 
         LocalDate weekStart = getWeekStart(referenceDate);
-        Optional<KakeiboReflectionEntity> existing = reflectionRepository.findByUserIdAndWeekStart(userId, weekStart);
-        if (existing.isPresent()) {
-            return existing.get();
-        }
-
-        KakeiboReflectionEntity reflection = new KakeiboReflectionEntity(userId, weekStart, answers);
-        return reflectionRepository.save(reflection);
+        return reflectionRepository.findByUserIdAndWeekStart(userId, weekStart)
+                .orElseGet(() -> {
+                    KakeiboReflectionEntity reflection = new KakeiboReflectionEntity(userId, weekStart, answers);
+                    return reflectionRepository.save(reflection);
+                });
     }
 
     static LocalDate getWeekStart(LocalDate referenceDate) {

@@ -9,7 +9,7 @@ import kof.security
 
 class ApiClient {
     static String baseUrl = "http://localhost:3000"
-    static String? token = null
+    static String? token
 
     static setBaseUrl(String url) {
         ApiClient.baseUrl = url
@@ -20,7 +20,7 @@ class ApiClient {
     }
 
     static clearToken() {
-        ApiClient.token = null
+        ApiClient.token = ""
     }
 
     static String _authHeader() {

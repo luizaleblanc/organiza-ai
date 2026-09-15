@@ -62,7 +62,7 @@ ALTER TABLE transactions ADD COLUMN source ENUM('MANUAL', 'VOICE', 'BANK_NOTIFIC
 1. Backend compila e roda com a nova estrutura modular
 2. Migrations executam sem erro no MySQL
 3. Testes existentes continuam passando
-4. Flutter app roda no emulador com tela de login placeholder
+4. Frontend KOF roda com tela de login placeholder
 5. Auth mobile retorna JWT bearer funcional
 
 ## Fora de Escopo
