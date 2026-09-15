@@ -12,21 +12,32 @@ import kof.ui
 
 class AppTheme {
     // Base
-    static Color background      = Color(10, 13, 24)
-    static Color card            = Color(18, 22, 42)
-    static Color cardSecondary   = Color(26, 31, 58)
-    static Color borderCard      = Color.rgba(255, 255, 255, 0.06)
-    static Color borderChrome    = Color.rgba(255, 255, 255, 0.08)
+    static Color background      = Color(18, 18, 20)
+    static Color card            = Color(24, 24, 27)
+    static Color cardSecondary   = Color(39, 39, 42)
+    static Color borderCard      = Color(39, 39, 42)
+    static Color borderChrome    = Color(39, 39, 42)
+
+    // Base (Dark Mode — nomes de token do spec; mesmos valores de
+    // background/card/borderCard acima)
+    static Color bgPrimary       = Color(18, 18, 20)
+    static Color bgCard          = Color(24, 24, 27)
+    static Color bgBorder        = Color(39, 39, 42)
 
     // Accent
-    static Color accent          = Color(0, 212, 255)
-    static Color accentBlue      = Color(0, 102, 255)
-    static Color accentContrast  = Color(6, 18, 28)
+    static Color accent          = Color(6, 182, 212)
+    static Color accentBlue      = Color(6, 182, 212)
+    static Color accentContrast  = Color(250, 250, 250)
 
     // Texto
-    static Color textPrimary     = Color(240, 240, 240)
-    static Color textSecondary   = Color(123, 142, 173)
-    static Color textMuted       = Color(74, 85, 120)
+    static Color textPrimary     = Color(250, 250, 250)
+    static Color textSecondary   = Color(161, 161, 170)
+    static Color textMuted       = Color(113, 113, 122)
+
+    // Tamanhos de fonte
+    static Int titleSize         = 24
+    static Int subtitleSize      = 16
+    static Int bodySize          = 14
 
     // Estado
     static Color success         = Color(0, 229, 160)
@@ -49,3 +60,7 @@ class AppTheme {
 Style screenStyle() = Style(AppTheme.background, AppTheme.textPrimary, 16, 0)
 Style cardStyle()   = Style(AppTheme.card, AppTheme.textPrimary, 16, 12)
 Style inputStyle()  = Style(AppTheme.card, AppTheme.textPrimary, 16, 8)
+
+// Botão padrão: fundo accent (cyan), radius 8, sem borda (View/Style não tem
+// propriedade de borda), texto textPrimary. Usar: View(buttonStyle()).bind(button)
+Style buttonStyle() = Style(AppTheme.accent, AppTheme.textPrimary, 16, 8)
