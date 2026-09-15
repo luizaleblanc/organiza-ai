@@ -1,0 +1,36 @@
+import kof.ui
+import core.theme
+
+// =============================================================================
+// Organiza IA - Entrypoint KOF
+// =============================================================================
+// Apenas widgets confirmados no training/ (Window, View, Column, Row, Label,
+// Button, Input, Style, Color, Theme). Router/Component/Canvas NÃO existem
+// no corpus oficial e não podem ser usados.
+//
+// TODO: quando houver mais de uma tela, controlar a tela ativa com um campo
+// estático (ex.: AppState.currentScreen) e reconstruir o conteúdo da Window
+// manualmente (window.bind(novaView)) em vez de usar um router.
+// =============================================================================
+
+main() {
+    var window = Window("Organiza IA")
+    window.theme = Theme.dark()
+
+    var title = Label("Organiza IA")
+    title.fontSize = 28
+    title.color = AppTheme.textPrimary
+
+    var loading = Label("Carregando...")
+    loading.fontSize = 14
+    loading.color = AppTheme.textSecondary
+
+    var content = Column(listOf(title, loading))
+
+    var style = Style(AppTheme.bgPrimary, AppTheme.textPrimary, 16, 0)
+    var view = View(style)
+    view.bind(content)
+
+    window.bind(view)
+    window.show()
+}
