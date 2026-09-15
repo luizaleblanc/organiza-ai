@@ -1,0 +1,37 @@
+package components
+
+import kof.ui
+import core.theme
+
+// =============================================================================
+// Gráfico de Pizza (DESIGN_SYSTEM.md seção 3.7.1)
+// Usa Canvas para desenhar as fatias.
+// =============================================================================
+
+View buildPieChart(List<Float> percentages, List<Color> colors) {
+    // Diâmetro = 200px (raio = 100)
+    var c = Canvas(200, 200)
+    var PI = 3.14159265358979
+    var cx = 100
+    var cy = 100
+    var r = 100
+    
+    var start = 0.0
+    for (var i = 0; i < percentages.size(); i = i + 1) {
+        var pct = percentages.get(i)
+        var end = start + (pct / 100.0) * 2.0 * PI
+        
+        c.setFill(colors.get(i))
+        c.beginPath()
+        c.moveTo(cx, cy)
+        c.arc(cx, cy, r, start, end)
+        c.closePath()
+        c.fill()
+        
+        start = end
+    }
+    
+    var v = View(Style(Palette.transparent, Palette.transparent, 0, 0))
+    v.bind(c)
+    return v
+}

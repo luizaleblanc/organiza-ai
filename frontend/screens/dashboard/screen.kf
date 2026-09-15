@@ -6,6 +6,7 @@ import core.constants
 import core.router_config
 import core.http_client
 import components.pulse_card
+import components.pie_chart
 
 // =============================================================================
 // Tela 8 — Dashboard
@@ -49,34 +50,6 @@ View buildTransactionItem(String name, String category, String amount, String ti
 // COMP002/ASM Frame.merge crash no compilador 0.3.1-beta quando as 3 fatias
 // + legendas + composicao Row/Column viviam na mesma funcao; ver run de CI
 // 34292116608 do kof-check).
-void drawBucketSlices(Canvas canvas) {
-    // (training/learn/35-kof-ui.md: setFill(cor) -> beginPath -> moveTo -> arc -> closePath -> fill())
-
-    // Fatia Necessidades: 82% (cor accent cyan)
-    canvas.setFill(AppTheme.accent)
-    canvas.beginPath()
-    canvas.moveTo(100, 100)
-    canvas.arc(100, 100, 80, 0, 5.15) // ~82% de 2*PI
-    canvas.closePath()
-    canvas.fill()
-
-    // Fatia Desejos: 15% (cor accentBlue) - ajustando mock para somar ~100%
-    canvas.setFill(AppTheme.accentBlue)
-    canvas.beginPath()
-    canvas.moveTo(100, 100)
-    canvas.arc(100, 100, 80, 5.15, 6.09) // ~15% de 2*PI
-    canvas.closePath()
-    canvas.fill()
-
-    // Fatia Futuro: 3% (cor success verde-limão)
-    canvas.setFill(AppTheme.success)
-    canvas.beginPath()
-    canvas.moveTo(100, 100)
-    canvas.arc(100, 100, 80, 6.09, 6.28) // ~3% de 2*PI
-    canvas.closePath()
-    canvas.fill()
-}
-
 // Legendas do grafico (extraido de buildBucketChart -- ver drawBucketSlices)
 Column buildBucketLegends() {
     var bucketNeeds = Label("● Necessidades: 82%")
@@ -91,19 +64,18 @@ Column buildBucketLegends() {
     return Column(listOf(bucketNeeds, bucketWants, bucketFuture))
 }
 
-// Gráfico de Pizza de Buckets usando Canvas 2D
+// Gráfico de Pizza de Buckets usando componente pie_chart
 View buildBucketChart() {
     var chartTitle = Label("Distribuição por Buckets")
     chartTitle.fontSize = 14
     chartTitle.bold = true
     chartTitle.color = AppTheme.textSecondary
 
-    var canvas = Canvas(200, 200)
-    drawBucketSlices(canvas)
+    var pie = buildPieChart(listOf(82.0, 15.0, 3.0), listOf(AppTheme.accent, AppTheme.accentBlue, AppTheme.success))
 
     var legends = buildBucketLegends()
 
-    var chartRow = Row(listOf(canvas, legends))
+    var chartRow = Row(listOf(pie, legends))
     var chartCol = Column(listOf(chartTitle, chartRow))
 
     var chartBox = View(cardStyle())

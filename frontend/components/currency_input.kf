@@ -13,8 +13,19 @@ import core.theme
 
 Row buildCurrencyInput(String currentValue) {
     var prefix = Label("R$ ")
+    prefix.fontSize = 24
+    prefix.color = AppTheme.accent
+    prefix.bold = true
+
     var amount = Label(currentValue)
+    amount.fontSize = 24
+    amount.color = AppTheme.accent
+    amount.bold = true
+
     var cursor = Label("|")
+    cursor.fontSize = 24
+    cursor.color = AppTheme.accent
+    cursor.bold = false
 
     return Row(listOf(prefix, amount, cursor))
 }
