@@ -3,7 +3,7 @@ package screens.onboarding
 import kof.ui
 import core.theme
 import core.router_config
-import core.http_client
+
 import components.progress_dots
 import components.currency_input
 import screens.onboarding.state
@@ -25,9 +25,9 @@ import screens.onboarding.state
 
 Component buildDebtAmountScreen() {
     // Estado local com valor inicial sugerido
-    var c = Component(5000.0)
+    var c = Component(0)
 
-    c.view((currentDebt: Float) -> {
+    c.view((currentDebt: Int) -> {
         // Indicador de progresso: 4 passos, step 3 ativo (DESIGN_SYSTEM.md seção 3.8)
         var dots = buildProgressDots(3, 4)
 
@@ -56,15 +56,11 @@ Component buildDebtAmountScreen() {
 
         // Botão "Próximo": salva dívida, submete ao BFF e navega para tela de resultado
         var nextBtn = Button("Próximo", () -> {
-            OnboardingState.debtAmount = 5000.0
-            OnboardingState.currentStep = 3
+            OnboardingState.debtAmount = currentDebt
 
-            try {
-                ApiClient.post("/api/users/onboarding", OnboardingState.toJson())
-            } catch (String e) {
-                // Tratamento com fallback gracioso em caso de erro de rede
-            }
-
+            // Local save (in a real scenario, this updates DB directly)
+            // e.g. orm.save(db, User(...))
+            
             Router.go(Routes.result)
         })
 

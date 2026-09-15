@@ -3,7 +3,7 @@ package screens.onboarding
 import kof.ui
 import core.theme
 import core.router_config
-import core.http_client
+
 import components.progress_dots
 import components.choice_card
 import screens.onboarding.state
@@ -29,9 +29,9 @@ class DebtScreenState {
 }
 
 Component buildDebtScreen() {
-    var c = Component("")
+    var c = Component(0)
 
-    c.view((ignored: String) -> {
+    c.view((ignored: Int) -> {
         var dots = buildProgressDots(2, 4)
 
         var title = Label("Você tem dívidas em atraso?")
@@ -51,22 +51,16 @@ Component buildDebtScreen() {
         var cardNo = buildChoiceCard("Não, estou em dia", false)
 
         var nextBtn = Button("Próximo", () -> {
+            if (DebtScreenState.selectedChoice == "") {
+                return
+            }
+
             if (DebtScreenState.selectedChoice == "YES") {
                 OnboardingState.hasDebt = true
-                OnboardingState.currentStep = 3
                 Router.go(Routes.debtAmount)
-            }
-            if (DebtScreenState.selectedChoice == "NO") {
+            } else {
                 OnboardingState.hasDebt = false
-                OnboardingState.debtAmount = 0.0
-                OnboardingState.currentStep = 3
-
-                try {
-                    ApiClient.post("/api/users/onboarding", OnboardingState.toJson())
-                } catch (String e) {
-                    // Tratamento com fallback
-                }
-
+                // Local save logic (orm.save) would go here
                 Router.go(Routes.result)
             }
         })

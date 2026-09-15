@@ -4,7 +4,7 @@ import kof.ui
 import core.theme
 import core.constants
 import core.router_config
-import core.http_client
+
 import components.chat_bubble
 import screens.chat.state
 
@@ -56,9 +56,9 @@ View renderChatBubble(String text, String role) {
 }
 
 Component buildChatScreen() {
-    var c = Component("initial")
+    var c = Component(0)
 
-    c.view((state: String) -> {
+    c.view((state: Int) -> {
         // 1. Cabeçalho centralizado com a marca (46px)
         // DESIGN_SYSTEM.md seção 1.1 e 5 (Tela 9)
         var brand = buildBrandHeader()
@@ -87,15 +87,9 @@ Component buildChatScreen() {
                 chatInput.text = ""
                 ChatState.loading = true
 
-                try {
-                    var jsonBody = "{\"message\":\"" + text + "\"}"
-                    var response = ApiClient.post("/api/chat/message", jsonBody)
-                    ChatState.addMessage("assistant", response)
-                } catch (String e) {
-                    ChatState.addMessage("assistant", "Erro ao comunicar com o assistente: " + e)
-                } finally {
-                    ChatState.loading = false
-                }
+                // Local chat mock
+                ChatState.addMessage("assistant", "Local agent received: " + text)
+                ChatState.loading = false
             }
         })
 

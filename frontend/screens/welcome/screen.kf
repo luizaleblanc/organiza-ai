@@ -29,9 +29,9 @@ View buildBrandHero() {
 }
 
 Component buildWelcomeScreen() {
-    var c = Component("initial")
+    var c = Component(0)
 
-    c.view((state: String) -> {
+    c.view((state: Int) -> {
         // Marca centralizada (230px hero)
         var brand = buildBrandHero()
 

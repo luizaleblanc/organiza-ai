@@ -3,7 +3,7 @@ package screens.auth
 import kof.ui
 import core.theme
 import core.router_config
-import core.http_client
+
 
 // =============================================================================
 // Tela 3 — Cadastro
@@ -30,9 +30,9 @@ View buildBrandLogo52() {
 }
 
 Component buildRegisterScreen() {
-    var c = Component("idle")
+    var c = Component(0)
 
-    c.view((state: String) -> {
+    c.view((state: Int) -> {
         // Marca isolada no topo (52px)
         var brand = buildBrandLogo52()
         var brandSection = Column(listOf(brand))
@@ -62,20 +62,8 @@ Component buildRegisterScreen() {
             var password = passwordInput.text()
             var confirmPassword = confirmPasswordInput.text()
 
-            var jsonRegister = "{\"name\":\"" + name + "\",\"email\":\"" + email + "\",\"password\":\"" + password + "\",\"confirmPassword\":\"" + confirmPassword + "\"}"
-            var jsonLogin = "{\"email\":\"" + email + "\",\"password\":\"" + password + "\"}"
-
-            try {
-                // 1. Registra no BFF
-                ApiClient.post("/api/auth/register", jsonRegister)
-                // 2. Faz login automatico para pegar o token
-                var token = ApiClient.post("/api/auth/login", jsonLogin)
-                ApiClient.setToken(token)
-                
-                Router.go(Routes.onboarding)
-            } catch (String e) {
-                // Erro no cadastro
-            }
+            // Local register mock: assume success
+            Router.go(Routes.onboarding)
         })
 
         // Rodapé: "Já tem conta?" + link cyan "Entre"

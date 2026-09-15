@@ -4,7 +4,7 @@ import kof.ui
 import core.theme
 import core.constants
 import core.router_config
-import core.http_client
+
 import components.envelope_card
 import screens.envelopes.state
 
@@ -37,9 +37,9 @@ View buildEnvelopeItem(String name, String category, Int percentage, String spen
 }
 
 Component buildEnvelopesScreen() {
-    var c = Component("initial")
+    var c = Component(0)
 
-    c.view((state: String) -> {
+    c.view((state: Int) -> {
         // 1. Cabeçalho: "Suas caixinhas" + botão de adicionar "+"
         // DESIGN_SYSTEM.md seção 3.1 (Icon button) e seção 5 (Tela 10)
         var title = Label("Suas caixinhas")
@@ -92,12 +92,7 @@ Component buildEnvelopesScreen() {
     })
 
     c.onMount(() -> {
-        // Busca envelopes do usuário via BFF
-        try {
-            var envelopesData = ApiClient.get("/api/envelopes")
-        } catch (String e) {
-            // Tratamento de falha de rede ou uso de cache
-        }
+        // Local state initialization or DB queries would go here
     })
 
     c.onDispose(() -> {

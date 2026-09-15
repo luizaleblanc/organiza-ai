@@ -3,7 +3,7 @@ package screens.auth
 import kof.ui
 import core.theme
 import core.router_config
-import core.http_client
+
 
 // =============================================================================
 // Tela 2 — Login
@@ -30,9 +30,9 @@ View buildBrandLogo68() {
 }
 
 Component buildLoginScreen() {
-    var c = Component("idle")
+    var c = Component(0)
 
-    c.view((state: String) -> {
+    c.view((state: Int) -> {
         // Marca centralizada (68px)
         var brand = buildBrandLogo68()
         var brandSection = Column(listOf(brand))
@@ -52,15 +52,9 @@ Component buildLoginScreen() {
         var submitBtn = Button("Entrar", () -> {
             var email = emailInput.text()
             var password = passwordInput.text()
-            var json = "{\"email\":\"" + email + "\",\"password\":\"" + password + "\"}"
-
-            try {
-                var token = ApiClient.post("/api/auth/login", json)
-                ApiClient.setToken(token)
-                Router.go(Routes.dashboard)
-            } catch (String e) {
-                // Erro na autenticação
-            }
+            
+            // Local login mock: assume success
+            Router.go(Routes.dashboard)
         })
 
         // Rodapé: "Não tem conta?" + link cyan "Cadastre-se"

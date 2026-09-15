@@ -2,7 +2,7 @@ import kof.ui
 import core.theme
 import core.constants
 import core.router_config
-import core.service_locator
+import core.database
 
 import screens.welcome.screen
 import screens.auth.login_screen
@@ -17,18 +17,14 @@ import screens.chat.screen
 import screens.envelopes.screen
 
 // =============================================================================
-// Organiza IA — Frontend KOF (Monolito Modular)
+// Organiza IA - KOF Monolito (Backend + Frontend)
 // =============================================================================
-// Entrypoint da aplicação. Responsabilidades:
-// 1. Inicializar o ServiceLocator (BFF URL)
-// 2. Configurar o tema dark
-// 3. Registrar todas as rotas no Router
-// 4. Exibir a tela inicial (welcome)
+// Entrypoint da aplicacao.
 // =============================================================================
 
 main() {
-    // 1. Inicializar serviços
-    ServiceLocator.init("http://localhost:3000")
+    // 1. Inicializar banco de dados nativo
+    // AppDatabase.init()
 
     // 2. Criar janela com tema dark
     var window = Window("Organiza IA")

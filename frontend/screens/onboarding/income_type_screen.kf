@@ -27,9 +27,9 @@ class IncomeScreenState {
 }
 
 Component buildIncomeTypeScreen() {
-    var c = Component("")
+    var c = Component(0)
 
-    c.view((ignored: String) -> {
+    c.view((ignored: Int) -> {
         var dots = buildProgressDots(1, 4)
 
         var title = Label("Sua renda é fixa ou variável?")
