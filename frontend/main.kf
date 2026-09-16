@@ -8,26 +8,46 @@ import core.theme
 // Button, Input, Style, Color, Theme). Router/Component/Canvas NÃO existem
 // no corpus oficial e não podem ser usados.
 //
+// BUG DE COMPILADOR (Kof 0.3.1-beta, backend JS/KofJS) — confirmado inspecionando
+// o Default.mjs gerado e o DOM ao vivo no navegador: campos "static Color x =
+// Color(r,g,b)" (ex.: AppTheme.textPrimary/bgPrimary) são emitidos como
+// "static x;" (sem valor) e o Color(...) real fica dentro de um constructor()
+// de instância que nunca roda (a classe só é usada estaticamente). Resultado:
+// AppTheme.textPrimary chega "undefined" no runtime e a cor renderiza como
+// rgba(0,0,0,0) (transparente) -- os Labels ficam invisíveis. Só campos com
+// literal direto (ex.: static Int titleSize = 24) escapam do bug.
+// Workaround (só neste arquivo): construir Color(...) diretamente aqui em vez
+// de ler AppTheme.bgPrimary/textPrimary/textSecondary. Não mexi em theme.kf
+// (fora do escopo desta tarefa).
+//
 // TODO: quando houver mais de uma tela, controlar a tela ativa com um campo
 // estático (ex.: AppState.currentScreen) e reconstruir o conteúdo da Window
 // manualmente (window.bind(novaView)) em vez de usar um router.
+//
+// TODO: não existe no training/ nenhuma forma de View/Style ocupar 100% da
+// tela (sem width/height/unidades de viewport em Style). A única API de
+// tamanho confirmada é Window.size(largura, altura), em pixels absolutos --
+// usamos aqui o viewport mobile canônico do DESIGN_SYSTEM (360x640). O fundo
+// escuro cobrindo a tela inteira já vem de window.theme = Theme.dark(),
+// que pinta o container raiz (kof-root) independente do tamanho da Window.
 // =============================================================================
 
 main() {
     var window = Window("Organiza IA")
     window.theme = Theme.dark()
+    window.size(360, 640)
 
     var title = Label("Organiza IA")
     title.fontSize = 28
-    title.color = AppTheme.textPrimary
+    title.color = Color(250, 250, 250)
 
     var loading = Label("Carregando...")
     loading.fontSize = 14
-    loading.color = AppTheme.textSecondary
+    loading.color = Color(161, 161, 170)
 
     var content = Column(listOf(title, loading))
 
-    var style = Style(AppTheme.bgPrimary, AppTheme.textPrimary, 16, 0)
+    var style = Style(Color(18, 18, 20), Color(250, 250, 250), 16, 0)
     var view = View(style)
     view.bind(content)
 
