@@ -1,0 +1,170 @@
+// backend/models.kf
+// Transpilado de src/main/java/com/organiza/**/model/*.java para KOF
+// Sintaxe validada apenas contra training/ do repositorio KofLang/Kof4j.
+// Anotacoes JPA (@Entity, @Id, @Column, @Enumerated, @PrePersist, @Lob,
+// @CreationTimestamp) foram ignoradas -- persistencia sera gerenciada por kof.db.
+// BigDecimal -> Float | LocalDateTime/Instant -> String? | UUID -> String
+
+// =========================================================
+// Enums
+// =========================================================
+
+// mod_user/model/Role.java
+enum Role { USER, ADMIN }
+
+// mod_user/model/Tier.java
+enum Tier { FREE, PREMIUM }
+
+// mod_user/model/IncomeType.java
+enum IncomeType { FIXED, VARIABLE }
+
+// mod_transaction/model/Category.java
+enum Category {
+    GROCERIES, LEISURE, FOOD, PHARMA, HEALTH, AUTO, TRANSPORT,
+    HOUSING, EDUCATION, SHOPPING, SUBSCRIPTIONS, OTHER
+}
+
+// mod_transaction/model/Bucket.java (referenciado por TransactionEntity.bucket)
+enum Bucket { NEEDS, WANTS, SAVINGS, DEBT_PAYMENT, CULTURAL, LEISURE, EXTRAS }
+
+// mod_transaction/model/Source.java (referenciado por TransactionEntity.source)
+enum Source { MANUAL, VOICE, BANK_NOTIFICATION }
+
+// mod_budget/model/BudgetModelType.java
+enum BudgetModelType {
+    STANDARD_503020, SURVIVAL_702010, ANTI_DEBT_701020,
+    SIMPLE_8020, KAKEIBO, FREELANCER_BASE_ZERO
+}
+
+// mod_budget/model/EnvelopeLimitType.java
+enum EnvelopeLimitType { FIXED, MOVING_AVERAGE }
+
+// mod_ai_coach/model/ChatRole.java
+enum ChatRole { USER, ASSISTANT }
+
+// mod_variable_income/model/VariableIncomeDestination.java (referenciado por VariableIncomeEntity.destination)
+enum VariableIncomeDestination { EMERGENCY_FUND, BUDGET_5030020 }
+
+// =========================================================
+// Entidades (classes mutaveis -- campos + constructor)
+// =========================================================
+
+// mod_user/model/UserEntity.java
+class UserEntity {
+    String id
+    String email
+    String password
+    Role role
+    Float? salary
+    Tier tier
+    Bool hasVariableIncome
+    Float? emergencyFundGoal
+    BudgetModelType budgetModel
+    IncomeType incomeType
+    Bool hasDebt
+    Float? debtAmount
+
+    public constructor(String id, String email, String password, Role role,
+            Float? salary, Tier tier, Bool hasVariableIncome, Float? emergencyFundGoal,
+            BudgetModelType budgetModel, IncomeType incomeType, Bool hasDebt, Float? debtAmount) {
+        this.id = id
+        this.email = email
+        this.password = password
+        this.role = role
+        this.salary = salary
+        this.tier = tier
+        this.hasVariableIncome = hasVariableIncome
+        this.emergencyFundGoal = emergencyFundGoal
+        this.budgetModel = budgetModel
+        this.incomeType = incomeType
+        this.hasDebt = hasDebt
+        this.debtAmount = debtAmount
+    }
+}
+
+// mod_transaction/model/TransactionEntity.java
+class TransactionEntity {
+    String id
+    String description
+    Long amount
+    Category? category
+    String currency
+    String userId
+    Bucket? bucket
+    Source source
+    String? createdAt
+
+    public constructor(String id, String description, Long amount, Category? category,
+            String currency, String userId, Bucket? bucket, Source source, String? createdAt) {
+        this.id = id
+        this.description = description
+        this.amount = amount
+        this.category = category
+        this.currency = currency
+        this.userId = userId
+        this.bucket = bucket
+        this.source = source
+        this.createdAt = createdAt
+    }
+}
+
+// mod_budget/model/EnvelopeEntity.java
+class EnvelopeEntity {
+    String id
+    String userId
+    String categoryName
+    Float limitAmount
+    Float currentSpent
+    EnvelopeLimitType limitType
+    Int movingAverageMonths
+    String? createdAt
+
+    public constructor(String id, String userId, String categoryName, Float limitAmount,
+            Float currentSpent, EnvelopeLimitType limitType, Int movingAverageMonths, String? createdAt) {
+        this.id = id
+        this.userId = userId
+        this.categoryName = categoryName
+        this.limitAmount = limitAmount
+        this.currentSpent = currentSpent
+        this.limitType = limitType
+        this.movingAverageMonths = movingAverageMonths
+        this.createdAt = createdAt
+    }
+}
+
+// mod_ai_coach/model/ChatMessageEntity.java
+class ChatMessageEntity {
+    String id
+    String userId
+    ChatRole role
+    String content
+    String? createdAt
+
+    public constructor(String id, String userId, ChatRole role, String content, String? createdAt) {
+        this.id = id
+        this.userId = userId
+        this.role = role
+        this.content = content
+        this.createdAt = createdAt
+    }
+}
+
+// mod_variable_income/model/VariableIncomeEntity.java
+class VariableIncomeEntity {
+    String id
+    String userId
+    Float amount
+    String source
+    VariableIncomeDestination destination
+    String? date
+
+    public constructor(String id, String userId, Float amount, String source,
+            VariableIncomeDestination destination, String? date) {
+        this.id = id
+        this.userId = userId
+        this.amount = amount
+        this.source = source
+        this.destination = destination
+        this.date = date
+    }
+}
