@@ -1,0 +1,569 @@
+// backend/services.kf
+// Transpilado de src/main/java/com/organiza/**/service/*.java e
+// src/main/java/com/organiza/**/repository/*.java para KOF.
+// Sintaxe validada apenas contra training/ do repositorio KofLang/Kof4j.
+//
+// DESVIO DE INSTRUCAO (reportado): a tarefa pediu "Importar os tipos de
+// backend/models.kf no topo". Testei empiricamente com o binario kof
+// 0.4.2-beta: `import backend.models` e `import models` retornam
+// PKG006 ("import nao encontrado no modulo... sob a raiz") porque este
+// projeto nao tem um manifesto de pacote (kofdeps / kof.toml) definindo
+// a raiz -- e um `package backend` em models.kf tambem falha com PKG004
+// ("package nao corresponde ao diretorio") quando o check roda a partir
+// da raiz do projeto. training/ nao documenta o formato desse manifesto,
+// entao nao posso inventa-lo. O que FUNCIONA e comprovadamente compila
+// (`kof check backend`, verificado nesta sessao): arquivos .kf no MESMO
+// DIRETORIO compartilham escopo de tipos automaticamente, sem import.
+// Por isso este arquivo NAO tem `import` -- os tipos de models.kf (UserEntity,
+// TransactionEntity, EnvelopeEntity, ChatMessageEntity, VariableIncomeEntity,
+// Role, Tier, IncomeType, Category, Bucket, Source, BudgetModelType,
+// EnvelopeLimitType, ChatRole, VariableIncomeDestination) sao usados
+// diretamente porque backend/models.kf esta no mesmo diretorio.
+//
+// Repository/Service/Controller (Spring) viram funcoes top-level, conforme
+// training/idioms/architecture.md ("Unnecessary layers" -- Controller/Service/
+// Repository e convencao de framework Java, Kof nao tem essa convencao).
+//
+// @Autowired/injecao de construtor: sem container de DI confirmado no
+// training/ -- convertido para parametros de funcao explicitos (userId,
+// datas de corte, etc.) em vez de campos injetados.
+
+// =========================================================
+// Mock de persistencia (equivalente a AppDatabase de
+// frontend/core/database.kf, mas tipado com as entidades de
+// backend/models.kf -- ver gap #1 no relatorio)
+// =========================================================
+
+class BackendDb {
+    static List<UserEntity> users = listOf()
+    static List<TransactionEntity> transactions = listOf()
+    static List<EnvelopeEntity> envelopes = listOf()
+    static List<ChatMessageEntity> chatMessages = listOf()
+    static List<VariableIncomeEntity> variableIncomes = listOf()
+}
+
+// =========================================================
+// DTOs auxiliares (records referenciados pelos services pedidos)
+// =========================================================
+
+// mod_user/dto/BucketSummaryDTO.java
+record BucketSummaryDTO(String name, Int percentage, Float amount)
+
+// mod_transaction/dto/PersistTransactionInput.java
+record PersistTransactionInput(String description, Long amount, Category category, String currency)
+
+// mod_transaction/dto/TransactionOutput.java
+record TransactionOutput(String id, String description, String category, Float value, String currency)
+
+// mod_transaction/dto/GetTotalByCategoryInput.java
+record GetTotalByCategoryInput(Category category)
+
+// mod_transaction/dto/GetTotalByCategoryOutput.java
+record GetTotalByCategoryOutput(Float total)
+
+// mod_transaction/service/ListTransactionsByCategoryUseCase.java (record interno Input, elevado a top-level)
+record ListTransactionsByCategoryInput(Category category)
+
+// shared/service/TierStatus.java
+record TierStatus(String tier, Int messagesUsed, Int messagesLimit, Bool voiceEnabled, Bool canSendMessage)
+
+// =========================================================
+// mod_user/repository/UserEntityRepository.java
+// =========================================================
+
+UserEntity? findUserByEmail(String email) {
+    for (var u in BackendDb.users) {
+        if (u.email == email) {
+            return u
+        }
+    }
+    return null
+}
+
+UserEntity? findUserById(String id) {
+    for (var u in BackendDb.users) {
+        if (u.id == id) {
+            return u
+        }
+    }
+    return null
+}
+
+// CRUD implicito de JpaRepository (save/findById), usado pelos services abaixo
+UserEntity saveUser(UserEntity user) {
+    var i = 0
+    while (i < BackendDb.users.size) {
+        var existing = BackendDb.users.get(i)
+        if (existing.id == user.id) {
+            BackendDb.users.set(i, user)
+            return user
+        }
+        i = i + 1
+    }
+    BackendDb.users.add(user)
+    return user
+}
+
+// =========================================================
+// mod_transaction/repository/TransactionEntityRepository.java
+// (inclui a logica de JpaTransactionRepository/TransactionRepository,
+// colapsada aqui -- ver gap #2 no relatorio: sem camada de dominio
+// Transaction/TransactionId separada da entidade, por idioms/architecture.md)
+// =========================================================
+
+List<TransactionEntity> findTransactionsByCategoryAndUserId(Category category, String userId) {
+    return BackendDb.transactions.filter((t: TransactionEntity) -> t.category == category && t.userId == userId)
+}
+
+Float sumAmountByCategoryAndUserId(Category category, String userId) {
+    var matching = findTransactionsByCategoryAndUserId(category, userId)
+    var total: Long = 0
+    for (var t in matching) {
+        total = total + t.amount
+    }
+    return total
+}
+
+// GAP (ver relatorio #3): comparacao de datas feita como String
+// (createdAt.compareTo(from) >= 0, confirmado pelo compilador via SEM053 --
+// Kof nao tem operador >= para String) -- sem API de data/hora real
+// confirmada no training/ lido nesta sessao; ordem lexicografica so e
+// correta se os timestamps forem ISO-8601.
+List<TransactionEntity> findTransactionsByUserIdAndCreatedAtAfter(String userId, String from) {
+    var result: List<TransactionEntity> = listOf()
+    for (var t in BackendDb.transactions) {
+        var createdAt = t.createdAt
+        if (t.userId == userId && createdAt != null) {
+            if (createdAt.compareTo(from) >= 0) {
+                result.add(t)
+            }
+        }
+    }
+    return result
+}
+
+Long sumAmountByUserIdAndCreatedAtAfter(String userId, String from) {
+    var matching = findTransactionsByUserIdAndCreatedAtAfter(userId, from)
+    var sum: Long = 0
+    for (var t in matching) {
+        sum = sum + t.amount
+    }
+    return sum
+}
+
+void deleteTransactionsByUserId(String userId) {
+    var remaining: List<TransactionEntity> = listOf()
+    for (var t in BackendDb.transactions) {
+        if (t.userId != userId) {
+            remaining.add(t)
+        }
+    }
+    BackendDb.transactions = remaining
+}
+
+TransactionEntity saveTransaction(TransactionEntity transaction) {
+    var i = 0
+    while (i < BackendDb.transactions.size) {
+        var existing = BackendDb.transactions.get(i)
+        if (existing.id == transaction.id) {
+            BackendDb.transactions.set(i, transaction)
+            return transaction
+        }
+        i = i + 1
+    }
+    BackendDb.transactions.add(transaction)
+    return transaction
+}
+
+TransactionOutput transactionEntityToOutput(TransactionEntity t) {
+    var category = t.category
+    var categoryName = "OTHER"
+    if (category != null) {
+        categoryName = category.name()
+    }
+    return TransactionOutput(t.id, t.description, categoryName, t.amount, t.currency)
+}
+
+// =========================================================
+// mod_budget/repository/EnvelopeEntityRepository.java
+// =========================================================
+
+List<EnvelopeEntity> findEnvelopesByUserId(String userId) {
+    return BackendDb.envelopes.filter((e: EnvelopeEntity) -> e.userId == userId)
+}
+
+EnvelopeEntity? findEnvelopeById(String id) {
+    for (var e in BackendDb.envelopes) {
+        if (e.id == id) {
+            return e
+        }
+    }
+    return null
+}
+
+EnvelopeEntity saveEnvelope(EnvelopeEntity envelope) {
+    var i = 0
+    while (i < BackendDb.envelopes.size) {
+        var existing = BackendDb.envelopes.get(i)
+        if (existing.id == envelope.id) {
+            BackendDb.envelopes.set(i, envelope)
+            return envelope
+        }
+        i = i + 1
+    }
+    BackendDb.envelopes.add(envelope)
+    return envelope
+}
+
+void deleteEnvelopeById(String id) {
+    var remaining: List<EnvelopeEntity> = listOf()
+    for (var e in BackendDb.envelopes) {
+        if (e.id != id) {
+            remaining.add(e)
+        }
+    }
+    BackendDb.envelopes = remaining
+}
+
+// =========================================================
+// mod_ai_coach/repository/ChatMessageEntityRepository.java
+// =========================================================
+
+// GAP (ver relatorio #4): sem orderBy/sort confirmados no training/ para
+// List<T> generico (orderBy so existe dentro da Query DSL de kof.orm sobre
+// `entity`, nao para List). Filtra mas NAO ordena.
+List<ChatMessageEntity> findChatMessagesByUserIdOrderByCreatedAtAsc(String userId) {
+    return BackendDb.chatMessages.filter((m: ChatMessageEntity) -> m.userId == userId)
+}
+
+// GAP: idem acima + sem "top N"/limit confirmado para List generico.
+// Retorna todas as mensagens do usuario, sem ordenar nem truncar em 20.
+List<ChatMessageEntity> findTop20ChatMessagesByUserIdOrderByCreatedAtDesc(String userId) {
+    return BackendDb.chatMessages.filter((m: ChatMessageEntity) -> m.userId == userId)
+}
+
+// GAP: comparacao de data como String (compareTo), mesma ressalva do gap #3.
+Int countChatMessagesByUserIdAndRoleAndCreatedAtGreaterThanEqual(String userId, ChatRole role, String since) {
+    var count = 0
+    for (var m in BackendDb.chatMessages) {
+        var createdAt = m.createdAt
+        if (m.userId == userId && m.role == role && createdAt != null) {
+            if (createdAt.compareTo(since) >= 0) {
+                count = count + 1
+            }
+        }
+    }
+    return count
+}
+
+ChatMessageEntity saveChatMessage(ChatMessageEntity message) {
+    var i = 0
+    while (i < BackendDb.chatMessages.size) {
+        var existing = BackendDb.chatMessages.get(i)
+        if (existing.id == message.id) {
+            BackendDb.chatMessages.set(i, message)
+            return message
+        }
+        i = i + 1
+    }
+    BackendDb.chatMessages.add(message)
+    return message
+}
+
+// =========================================================
+// mod_variable_income/repository/VariableIncomeEntityRepository.java
+// =========================================================
+
+List<VariableIncomeEntity> findVariableIncomesByUserId(String userId) {
+    return BackendDb.variableIncomes.filter((v: VariableIncomeEntity) -> v.userId == userId)
+}
+
+VariableIncomeEntity saveVariableIncomeEntity(VariableIncomeEntity income) {
+    var i = 0
+    while (i < BackendDb.variableIncomes.size) {
+        var existing = BackendDb.variableIncomes.get(i)
+        if (existing.id == income.id) {
+            BackendDb.variableIncomes.set(i, income)
+            return income
+        }
+        i = i + 1
+    }
+    BackendDb.variableIncomes.add(income)
+    return income
+}
+
+// =========================================================
+// mod_budget/service/BudgetModelSuggestionService.java
+// =========================================================
+
+BudgetModelType suggestBudgetModel(Float salary, IncomeType incomeType, Bool hasDebt) {
+    if (incomeType == IncomeType.VARIABLE) {
+        return BudgetModelType.FREELANCER_BASE_ZERO
+    }
+    if (hasDebt) {
+        return BudgetModelType.ANTI_DEBT_701020
+    }
+    if (salary <= 3242.0) {
+        return BudgetModelType.SURVIVAL_702010
+    }
+    if (salary <= 5000.0) {
+        return BudgetModelType.STANDARD_503020
+    }
+    return BudgetModelType.STANDARD_503020
+}
+
+// =========================================================
+// mod_budget/service/BudgetModelPlanService.java
+// =========================================================
+
+String describeBudgetModel(BudgetModelType model) {
+    return switch (model) {
+        case STANDARD_503020 -> "Modelo Padrão 50/30/20: metade da sua renda cobre o essencial, 30% é pra viver bem hoje, e 20% guarda pro futuro."
+        case SURVIVAL_702010 -> "Modelo Sobrevivência 70/20/10: a maior parte cobre o essencial, uma folga pra respirar e um pouco guardado, mesmo que pouco."
+        case ANTI_DEBT_701020 -> "Modelo Anti-Dívida: 70% para necessidades, 10% para o mínimo pessoal, 20% para quitar suas dívidas. Quando você sair do vermelho, o sistema migra automaticamente para outro modelo."
+        case SIMPLE_8020 -> "Modelo Simplificado 80/20: 80% pra viver sem culpa, 20% pra guardar sem esforço. Simples assim."
+        case KAKEIBO -> "Modelo Kakeibo: reflexão em 4 categorias -- essencial, cultura, lazer e extras. Toda semana você para pra pensar no que gastou e como pode melhorar."
+        case FREELANCER_BASE_ZERO -> "Modelo Base Zero: sua renda varia, então cada entrada é alocada na hora -- parte pra reserva de emergência, parte pro seu orçamento. Nada fixo, tudo sob controle."
+    }
+}
+
+BucketSummaryDTO bucketOf(String name, Int percentage, Float salary) {
+    var amount = salary * percentage / 100.0
+    return BucketSummaryDTO(name, percentage, amount)
+}
+
+List<BucketSummaryDTO> buildBudgetBuckets(BudgetModelType model, Float salary) {
+    return switch (model) {
+        case STANDARD_503020 -> listOf(
+            bucketOf("Necessidades", 50, salary),
+            bucketOf("Desejos", 30, salary),
+            bucketOf("Futuro", 20, salary))
+        case SURVIVAL_702010 -> listOf(
+            bucketOf("Necessidades", 70, salary),
+            bucketOf("Folga", 20, salary),
+            bucketOf("Guarda", 10, salary))
+        case ANTI_DEBT_701020 -> listOf(
+            bucketOf("Necessidades", 70, salary),
+            bucketOf("Pessoal", 10, salary),
+            bucketOf("Quitação de Dívida", 20, salary))
+        case SIMPLE_8020 -> listOf(
+            bucketOf("Viver", 80, salary),
+            bucketOf("Guardar", 20, salary))
+        case KAKEIBO -> listOf(
+            bucketOf("Essencial", 50, salary),
+            bucketOf("Cultura", 10, salary),
+            bucketOf("Lazer", 30, salary),
+            bucketOf("Extras", 10, salary))
+        case FREELANCER_BASE_ZERO -> listOf()
+    }
+}
+
+// =========================================================
+// mod_budget/service/EnvelopeService.java
+// =========================================================
+
+EnvelopeEntity createEnvelope(EnvelopeEntity envelope) {
+    return saveEnvelope(envelope)
+}
+
+EnvelopeEntity updateEnvelope(String id, EnvelopeEntity updated) {
+    var envelope = findEnvelopeById(id)
+    if (envelope != null) {
+        envelope.categoryName = updated.categoryName
+        envelope.limitAmount = updated.limitAmount
+        envelope.limitType = updated.limitType
+        envelope.movingAverageMonths = updated.movingAverageMonths
+        return saveEnvelope(envelope)
+    }
+    throw "Envelope not found."
+}
+
+void deleteEnvelope(String id) {
+    deleteEnvelopeById(id)
+}
+
+EnvelopeEntity updateEnvelopeSpent(String envelopeId, Float amount) {
+    var envelope = findEnvelopeById(envelopeId)
+    if (envelope != null) {
+        envelope.currentSpent = envelope.currentSpent + amount
+        return saveEnvelope(envelope)
+    }
+    throw "Envelope not found."
+}
+
+// TODO (preservado do Java original): TransactionEntity ainda nao tem
+// envelope_id (ver PROJECT_STATUS.md). Implementar consulta real dos
+// gastos dos ultimos N meses quando esse campo existir.
+Float calculateMovingAverage(String envelopeId, Int months) {
+    var envelope = findEnvelopeById(envelopeId)
+    if (envelope != null) {
+        return 0.0
+    }
+    throw "Envelope not found."
+}
+
+// =========================================================
+// mod_budget/service/BudgetModelMigrationService.java
+// =========================================================
+
+BudgetModelType migrateBudgetModelIfNeeded(UserEntity? user) {
+    if (user != null) {
+        var current = user.budgetModel
+        var incomeType = user.incomeType
+        var hasDebt = user.hasDebt
+        var salaryNullable = user.salary
+        var salary = 0.0
+        if (salaryNullable != null) {
+            salary = salaryNullable
+        }
+
+        if (current == BudgetModelType.ANTI_DEBT_701020 && !hasDebt) {
+            return BudgetModelType.STANDARD_503020
+        }
+        if (current == BudgetModelType.STANDARD_503020 && incomeType == IncomeType.VARIABLE) {
+            return BudgetModelType.FREELANCER_BASE_ZERO
+        }
+        if (current == BudgetModelType.STANDARD_503020 && hasDebt) {
+            return BudgetModelType.ANTI_DEBT_701020
+        }
+        if (current == BudgetModelType.SURVIVAL_702010 && hasDebt) {
+            return BudgetModelType.ANTI_DEBT_701020
+        }
+        if (current == BudgetModelType.STANDARD_503020 && salary <= 3242.0 && !hasDebt) {
+            return BudgetModelType.SURVIVAL_702010
+        }
+        if (current == BudgetModelType.SURVIVAL_702010 && salary > 5000.0 && !hasDebt) {
+            return BudgetModelType.STANDARD_503020
+        }
+
+        var suggested = suggestBudgetModel(salary, incomeType, hasDebt)
+        if (suggested == current) {
+            return current
+        }
+        return suggested
+    }
+    throw "User cannot be null."
+}
+
+// =========================================================
+// mod_variable_income/service/VariableIncomeService.java
+// =========================================================
+
+VariableIncomeDestination decideVariableIncomeDestination(String userId, Float amount) {
+    var user = findUserById(userId)
+    if (user != null) {
+        var goal = user.emergencyFundGoal
+        if (goal != null) {
+            if (goal > 0.0) {
+                var currentReserve = findVariableIncomesByUserId(userId)
+                    .filter((income: VariableIncomeEntity) -> income.destination == VariableIncomeDestination.EMERGENCY_FUND)
+                    .map((income: VariableIncomeEntity) -> income.amount)
+                    .reduce((a: Float, b: Float) -> a + b, 0.0)
+                if (currentReserve < goal) {
+                    return VariableIncomeDestination.EMERGENCY_FUND
+                }
+                return VariableIncomeDestination.BUDGET_5030020
+            }
+            return VariableIncomeDestination.BUDGET_5030020
+        }
+        return VariableIncomeDestination.BUDGET_5030020
+    }
+    throw "User not found."
+}
+
+VariableIncomeEntity saveVariableIncome(VariableIncomeEntity income) {
+    income.destination = decideVariableIncomeDestination(income.userId, income.amount)
+    return saveVariableIncomeEntity(income)
+}
+
+// =========================================================
+// mod_transaction/service/PersistTransactionUseCase.java
+// GAP (ver relatorio #5): CurrentUserService (Spring Security) nao tem
+// equivalente confirmado no training/ -- userId passa a ser parametro
+// explicito da funcao em vez de injetado via contexto de autenticacao.
+// GAP (ver relatorio #6): sem UUID.randomUUID() equivalente confirmado
+// no training/ -- id passa a ser parametro explicito (responsabilidade
+// do chamador, ex.: BFF gera e envia o id).
+// =========================================================
+
+TransactionOutput persistTransaction(String id, PersistTransactionInput input, String userId) {
+    if (input.amount() <= 0) {
+        throw "Operação negada: O valor da transação deve ser maior que zero."
+    }
+
+    var transaction = TransactionEntity(id, input.description(), input.amount(), input.category(), input.currency(), userId, null, Source.MANUAL, null)
+    saveTransaction(transaction)
+
+    return transactionEntityToOutput(transaction)
+}
+
+// =========================================================
+// mod_transaction/service/GetTotalByCategoryUseCase.java
+// =========================================================
+
+Float getTotalByCategory(Category category, String userId) {
+    return sumAmountByCategoryAndUserId(category, userId)
+}
+
+GetTotalByCategoryOutput getTotalByCategoryOutput(GetTotalByCategoryInput input, String userId) {
+    return GetTotalByCategoryOutput(getTotalByCategory(input.category(), userId))
+}
+
+// =========================================================
+// mod_transaction/service/ListTransactionsByCategoryUseCase.java
+// =========================================================
+
+List<TransactionOutput> listTransactionsByCategory(Category category, String userId) {
+    return findTransactionsByCategoryAndUserId(category, userId).map((t: TransactionEntity) -> transactionEntityToOutput(t))
+}
+
+List<TransactionOutput> listTransactionsByCategoryOutput(ListTransactionsByCategoryInput input, String userId) {
+    return listTransactionsByCategory(input.category(), userId)
+}
+
+// =========================================================
+// mod_transaction/service/ClearTransactionsUseCase.java
+// =========================================================
+
+void clearTransactions(String userId) {
+    deleteTransactionsByUserId(userId)
+}
+
+// =========================================================
+// shared/service/TierEnforcementService.java
+// GAP (ver relatorio #3): "inicio do mes" (LocalDate.now().withDayOfMonth(1)...)
+// nao tem API de data/hora confirmada no training/ lido nesta sessao
+// (kof.time existe segundo o README principal, mas seu training especifico
+// nao foi lido nesta tarefa -- nao vou inventar sua assinatura). O calculo
+// da data de corte passa a ser responsabilidade do chamador, via parametro
+// monthStartIso.
+// =========================================================
+
+TierStatus getTierStatus(String userId, String monthStartIso) {
+    var user = findUserById(userId)
+    if (user != null) {
+        var messagesUsed = countChatMessagesByUserIdAndRoleAndCreatedAtGreaterThanEqual(userId, ChatRole.USER, monthStartIso)
+
+        if (user.tier == Tier.PREMIUM) {
+            return TierStatus(Tier.PREMIUM.name(), messagesUsed, -1, true, true)
+        }
+
+        var canSendMessage = messagesUsed < 30
+        return TierStatus(Tier.FREE.name(), messagesUsed, 30, false, canSendMessage)
+    }
+    throw "User not found."
+}
+
+void enforceCanSendMessage(String userId, String monthStartIso) {
+    var status = getTierStatus(userId, monthStartIso)
+    if (!status.canSendMessage()) {
+        throw "Você atingiu o limite de 30 mensagens gratuitas este mês."
+    }
+}
+
+void enforceVoiceAllowed(String userId, String monthStartIso) {
+    var status = getTierStatus(userId, monthStartIso)
+    if (!status.voiceEnabled()) {
+        throw "Entrada por voz disponível apenas no plano Premium."
+    }
+}
