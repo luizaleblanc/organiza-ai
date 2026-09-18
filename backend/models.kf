@@ -168,3 +168,21 @@ class VariableIncomeEntity {
         this.date = date
     }
 }
+
+// mod_ai_coach/model/KakeiboReflectionEntity.java
+class KakeiboReflectionEntity {
+    String id
+    String userId
+    String weekStart
+    List<String> answers
+    String? createdAt
+
+    public constructor(String id, String userId, String weekStart, List<String> answers, String? createdAt) {
+        this.id = id
+        this.userId = userId
+        this.weekStart = weekStart
+        this.answers = answers
+        this.createdAt = createdAt
+    }
+}
+

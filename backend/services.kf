@@ -40,6 +40,7 @@ class BackendDb {
     static List<EnvelopeEntity> envelopes = listOf()
     static List<ChatMessageEntity> chatMessages = listOf()
     static List<VariableIncomeEntity> variableIncomes = listOf()
+    static List<KakeiboReflectionEntity> kakeiboReflections = listOf()
 }
 
 // =========================================================
