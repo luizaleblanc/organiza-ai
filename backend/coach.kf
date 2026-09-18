@@ -1,0 +1,273 @@
+// backend/coach.kf
+// Módulo de IA Coach e Regras Cognitivas transpilado de Java para KOF.
+// Cobre: CategoryBucketMapper, GetDailyPulseFunction, GetBalanceFunction,
+// RegisterIncomeFunction, SuggestModelChangeFunction e KakeiboReflectionService.
+// Compartilha escopo com backend/models.kf e backend/services.kf.
+
+// =========================================================
+// DTOs e Records do Coach
+// =========================================================
+
+record BucketBalanceDTO(String name, Int percentage, Float plannedAmount, Float spentAmount, Float remainingAmount)
+
+record GetDailyPulseOutput(Float pulse, Int daysRemaining, Float totalSpent, Float salary, String? message)
+
+record GetBalanceOutput(String model, List<BucketBalanceDTO> buckets, Float? totalSpent, Float? notAllocated)
+
+record RegisterIncomeOutput(String destination, String message)
+
+record SuggestModelChangeOutput(Bool shouldChange, String suggestedModel, String reason)
+
+// =========================================================
+// CategoryBucketMapper (Mapeamento de Categoria para Bucket)
+// =========================================================
+
+Bucket toStandardBucket(Category? category) {
+    if (category == null) {
+        return Bucket.WANTS
+    }
+    if (category == Category.GROCERIES || category == Category.PHARMA || category == Category.HEALTH ||
+        category == Category.TRANSPORT || category == Category.HOUSING || category == Category.EDUCATION) {
+        return Bucket.NEEDS
+    }
+    return Bucket.WANTS
+}
+
+String toKakeiboBucket(Category? category) {
+    if (category == null) {
+        return "Extras"
+    }
+    if (category == Category.GROCERIES || category == Category.PHARMA || category == Category.HEALTH ||
+        category == Category.TRANSPORT || category == Category.HOUSING || category == Category.EDUCATION) {
+        return "Essencial"
+    }
+    if (category == Category.SUBSCRIPTIONS) {
+        return "Cultura"
+    }
+    if (category == Category.LEISURE || category == Category.FOOD) {
+        return "Lazer"
+    }
+    return "Extras"
+}
+
+Bucket toBucket(BudgetModelType model, Category? category) {
+    if (model == BudgetModelType.KAKEIBO) {
+        var kBucket = toKakeiboBucket(category)
+        if (kBucket == "Cultura") { return Bucket.CULTURAL }
+        if (kBucket == "Lazer") { return Bucket.LEISURE }
+        if (kBucket == "Extras") { return Bucket.EXTRAS }
+        return Bucket.NEEDS
+    }
+    return toStandardBucket(category)
+}
+
+// =========================================================
+// Repositório Kakeibo
+// =========================================================
+
+KakeiboReflectionEntity? findKakeiboReflection(String userId, String weekStart) {
+    for (var r in BackendDb.kakeiboReflections) {
+        if (r.userId == userId && r.weekStart == weekStart) {
+            return r
+        }
+    }
+    return null
+}
+
+KakeiboReflectionEntity saveKakeiboReflection(KakeiboReflectionEntity reflection) {
+    var i = 0
+    while (i < BackendDb.kakeiboReflections.size) {
+        var existing = BackendDb.kakeiboReflections.get(i)
+        if (existing.userId == reflection.userId && existing.weekStart == reflection.weekStart) {
+            BackendDb.kakeiboReflections.set(i, reflection)
+            return reflection
+        }
+        i = i + 1
+    }
+    BackendDb.kakeiboReflections.add(reflection)
+    return reflection
+}
+
+// =========================================================
+// GetDailyPulseFunction -> calculateDailyPulse
+// =========================================================
+
+GetDailyPulseOutput calculateDailyPulse(String userId, Int daysRemaining, String fromIso) {
+    var user = findUserById(userId)
+    if (user != null) {
+        var salary = 0.0
+        var userSalary = user.salary
+        if (userSalary != null) {
+            salary = userSalary
+        }
+
+        var totalSpentLong = sumAmountByUserIdAndCreatedAtAfter(userId, fromIso)
+        var totalSpent = totalSpentLong * 1.0
+
+        var remaining = salary - totalSpent
+        if (remaining <= 0.0) {
+            return GetDailyPulseOutput(0.0, daysRemaining, totalSpent, salary, "Você já comprometeu todo o salário deste mês.")
+        }
+
+        var pulse = remaining / (daysRemaining * 1.0)
+        return GetDailyPulseOutput(pulse, daysRemaining, totalSpent, salary, null)
+    }
+    throw "Usuário não encontrado."
+}
+
+// =========================================================
+// GetBalanceFunction -> calculateBalance
+// =========================================================
+
+GetBalanceOutput calculateBalance(String userId, String fromIso) {
+    var user = findUserById(userId)
+    if (user != null) {
+        var salary = 0.0
+        var userSalary = user.salary
+        if (userSalary != null) {
+            salary = userSalary
+        }
+        var model = user.budgetModel
+        var monthTransactions = findTransactionsByUserIdAndCreatedAtAfter(userId, fromIso)
+
+        if (model == BudgetModelType.FREELANCER_BASE_ZERO) {
+            var totalSpent = 0.0
+            for (var t in monthTransactions) {
+                totalSpent = totalSpent + (t.amount * 1.0)
+            }
+            var notAllocated = salary - totalSpent
+            var emptyList: List<BucketBalanceDTO> = listOf()
+            return GetBalanceOutput(model.name(), emptyList, totalSpent, notAllocated)
+        }
+
+        var plan = buildBudgetBuckets(model, salary)
+        var resultBuckets: List<BucketBalanceDTO> = listOf()
+
+        if (model == BudgetModelType.KAKEIBO) {
+            for (var b in plan) {
+                var spent = 0.0
+                for (var t in monthTransactions) {
+                    if (toKakeiboBucket(t.category) == b.name) {
+                        spent = spent + (t.amount * 1.0)
+                    }
+                }
+                var rem = b.amount - spent
+                resultBuckets.add(BucketBalanceDTO(b.name, b.percentage, b.amount, spent, rem))
+            }
+        } else {
+            var needsSpent = 0.0
+            var wantsSpent = 0.0
+            for (var t in monthTransactions) {
+                var bucket = toStandardBucket(t.category)
+                if (bucket == Bucket.NEEDS) {
+                    needsSpent = needsSpent + (t.amount * 1.0)
+                } else {
+                    wantsSpent = wantsSpent + (t.amount * 1.0)
+                }
+            }
+
+            if (plan.size == 2) {
+                var first = plan.get(0)
+                var totalSpent = needsSpent + wantsSpent
+                resultBuckets.add(BucketBalanceDTO(first.name, first.percentage, first.amount, totalSpent, first.amount - totalSpent))
+                if (plan.size > 1) {
+                    var second = plan.get(1)
+                    resultBuckets.add(BucketBalanceDTO(second.name, second.percentage, second.amount, 0.0, second.amount))
+                }
+            } else if (plan.size >= 2) {
+                var first = plan.get(0)
+                resultBuckets.add(BucketBalanceDTO(first.name, first.percentage, first.amount, needsSpent, first.amount - needsSpent))
+                var second = plan.get(1)
+                resultBuckets.add(BucketBalanceDTO(second.name, second.percentage, second.amount, wantsSpent, second.amount - wantsSpent))
+                var i = 2
+                while (i < plan.size) {
+                    var other = plan.get(i)
+                    resultBuckets.add(BucketBalanceDTO(other.name, other.percentage, other.amount, 0.0, other.amount))
+                    i = i + 1
+                }
+            }
+        }
+
+        return GetBalanceOutput(model.name(), resultBuckets, null, null)
+    }
+    throw "Usuário não encontrado."
+}
+
+// =========================================================
+// RegisterIncomeFunction -> registerUserIncome
+// =========================================================
+
+RegisterIncomeOutput registerUserIncome(String userId, Float amount, String source) {
+    var lower = source.toLowerCase()
+    if (lower.contains("salari") || lower.contains("salario") || lower.contains("fixo") || lower.contains("clt") || lower.contains("mensal")) {
+        return RegisterIncomeOutput("SALARY", "Beleza, essa é a sua renda fixa. Ela já está considerada no seu orçamento mensal.")
+    }
+
+    var incomeItem = VariableIncomeEntity("inc_" + String.valueOf(BackendDb.variableIncomes.size + 1), userId, amount, source, VariableIncomeDestination.EMERGENCY_FUND, null)
+    var saved = saveVariableIncome(incomeItem)
+
+    if (saved.destination == VariableIncomeDestination.EMERGENCY_FUND) {
+        return RegisterIncomeOutput(saved.destination.name(), "Boa! Coloquei esse valor direto na sua reserva de emergência até você bater a meta.")
+    }
+
+    var user = findUserById(userId)
+    var modelName = "STANDARD_503020"
+    if (user != null) {
+        modelName = user.budgetModel.name()
+    }
+
+    return RegisterIncomeOutput(saved.destination.name(), "Sua reserva de emergência já está completa, então distribuí esse valor pelo seu modelo de orçamento (" + modelName + ").")
+}
+
+// =========================================================
+// SuggestModelChangeFunction -> suggestModelChange
+// =========================================================
+
+SuggestModelChangeOutput suggestModelChange(String userId) {
+    var user = findUserById(userId)
+    if (user != null) {
+        var currentModel = user.budgetModel
+        if (currentModel == BudgetModelType.ANTI_DEBT_701020 && !user.hasDebt) {
+            return SuggestModelChangeOutput(true, BudgetModelType.STANDARD_503020.name(), "Seu modelo atual é o Anti-Dívida, mas você não tem nenhuma dívida registrada. Faz mais sentido migrar para o modelo Padrão 50/30/20.")
+        }
+        return SuggestModelChangeOutput(false, currentModel.name(), "Seus gastos atuais estão aderentes ao modelo " + currentModel.name() + ".")
+    }
+    throw "Usuário não encontrado."
+}
+
+// =========================================================
+// KakeiboReflectionService
+// =========================================================
+
+Bool shouldAskKakeiboReflection(String userId, String weekStart) {
+    var user = findUserById(userId)
+    if (user != null) {
+        if (user.budgetModel != BudgetModelType.KAKEIBO) {
+            return false
+        }
+        return findKakeiboReflection(userId, weekStart) == null
+    }
+    return false
+}
+
+KakeiboReflectionEntity recordKakeiboReflection(String userId, String weekStart, List<String> answers) {
+    var user = findUserById(userId)
+    if (user != null) {
+        if (user.budgetModel != BudgetModelType.KAKEIBO) {
+            throw "Usuário não está no modelo Kakeibo: " + userId
+        }
+        if (answers.size != 4) {
+            throw "As 4 respostas do Kakeibo são obrigatórias."
+        }
+
+        var existing = findKakeiboReflection(userId, weekStart)
+        if (existing != null) {
+            return existing
+        }
+
+        var reflection = KakeiboReflectionEntity("ref_" + String.valueOf(BackendDb.kakeiboReflections.size + 1), userId, weekStart, answers, null)
+        return saveKakeiboReflection(reflection)
+    }
+    throw "Usuário não encontrado: " + userId
+}
+
