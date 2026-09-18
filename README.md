@@ -124,6 +124,20 @@ Etapas commitáveis, na ordem em que devem ser aplicadas:
 cada etapa fica local até revisão. Ver commit sugerido na sessão que gerou
 esta auditoria.
 
+## Arquitetura KofLith — Transição e Unificação (Menos Segregação, Mais Intenção)
+
+Em alinhamento com a filosofia da linguagem KOF (`training/idioms/architecture.md`), estamos realizando a transição progressiva do backend em Spring Boot para o padrão **KofLith**. 
+
+Na visão KOF, segregar o frontend e o backend em dois mundos artificiais com proxies HTTP intermediários adiciona complexidade acidental desnecessária. O padrão KofLith unifica intenção: entidades viram `record`, comportamento vira `class`, e regras de negócio viram `funções top-level` diretas.
+
+### Estado da Transpilação KOF (`backend/`):
+- **Entidades e Enums (`backend/models.kf`):** 100% transpilado e validado.
+- **Serviços e Repositórios Core (`backend/services.kf`):** 100% transpilado e validado (`mod_user`, `mod_transaction`, `mod_budget`, `mod_variable_income`, `TierEnforcement`).
+- **Módulo de IA Coach (`backend/coach.kf`):** 100% transpilado e validado (`CategoryBucketMapper`, `calculateDailyPulse`, `calculateBalance`, `registerUserIncome`, `suggestModelChange`, `KakeiboReflection`).
+- **Validação de Compilação:** 100% dos arquivos do `backend/` e `bff/` compilam com **0 erros** via `kof check`.
+- **Garantia de Não-Regressão:** O código Java legado (`src/main/java`) é preservado integralmente como especificação executável até que todos os testes de paridade sejam concluídos.
+
+
 ## Como Contribuir
 
 Veja [CONTRIBUTING.md](CONTRIBUTING.md) para o guia completo de setup, padrões de código e fluxo de PR. Todo participante deve seguir o [Código de Conduta](CODE_OF_CONDUCT.md).

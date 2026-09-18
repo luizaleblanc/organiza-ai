@@ -3,16 +3,15 @@
 > Atualizado em: 08/09/2026
 > Fase atual: 2 -- Desenvolvimento (backend e BFF concluídos, Design System concluído, frontend KOF arquitetado e em andamento)
 
-## Estado do Backend (ATUAL)
-- Java: 17
-- Spring Boot: 3.3.13
-- Spring AI: 1.0.8
-- Build: Gradle
-- Banco: MySQL (Aiven free tier)
-- Auth: JWT + Spring Security + jjwt
-- Redis: spring-boot-starter-data-redis adicionado (sem uso ainda)
-- Docker: compose.yml para MySQL local
-- Arquitetura: monólito modular (auth, user, transaction, budget, coach, notification, bankreader, shared)
+## Estado do Backend (ATUAL — Transição KofLith)
+- Java: 17 (Ground Truth preservado até homologação final)
+- Spring Boot: 3.3.13 / Spring AI: 1.0.8
+- Backend KOF (`backend/*.kf`): **100% dos módulos de domínio transpilados e validados**:
+  - `backend/models.kf`: Entidades, Records e Enums (170 LOC) — `kof check` OK.
+  - `backend/services.kf`: Repositórios e Serviços Core (User, Transaction, Budget, Envelope, VariableIncome, Tier) (570 LOC) — `kof check` OK.
+  - `backend/coach.kf`: Lógica Cognitiva, Daily Pulse, Balance, SuggestModel e Kakeibo (270 LOC) — `kof check` OK.
+- Filosofia Arquitetural: **KofLith (Menos segregação, mais intenção)**. Unificação de rotas, domínio e persistência na plataforma Kof sem proxies HTTP desnecessários.
+
 
 ## Estado do Frontend + BFF (ATUAL)
 - BFF em KOF (`kof.web`, `bff/*.kf`): concluído -- health check, rotas públicas, middleware JWT, rotas protegidas e rota de tier-status.
