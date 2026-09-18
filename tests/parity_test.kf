@@ -58,10 +58,10 @@ enum Bucket { NEEDS, WANTS, SAVINGS, DEBT_PAYMENT, CULTURAL, LEISURE, EXTRAS }
 
 class UserEntity {
     String id
-    Float? salary
+    Double? salary
     BudgetModelType budgetModel
 
-    public constructor(String id, Float? salary, BudgetModelType budgetModel) {
+    public constructor(String id, Double? salary, BudgetModelType budgetModel) {
         this.id = id
         this.salary = salary
         this.budgetModel = budgetModel
@@ -94,7 +94,7 @@ class MirrorDb {
 // #findTransactionsByUserIdAndCreatedAtAfter, #sumAmountByUserIdAndCreatedAtAfter,
 // #bucketOf, #buildBudgetBuckets -- copiados literalmente.
 
-record BucketSummaryDTO(String name, Int percentage, Float amount)
+record BucketSummaryDTO(String name, Int percentage, Double amount)
 
 UserEntity? findUserById(String id) {
     for (var u in MirrorDb.users) {
@@ -134,16 +134,12 @@ Long sumAmountByUserIdAndCreatedAtAfter(String userId, String from) {
     return sum
 }
 
-// ACHADO #1 (bucketOf): Java (BudgetModelPlanService#bucket) faz
-// salary.multiply(percentage).divide(100, 2, RoundingMode.HALF_UP) --
-// arredonda para 2 casas decimais. Esta versao Kof (copia literal de
-// backend/services.kf#bucketOf) NAO arredonda: usa Float puro.
-BucketSummaryDTO bucketOf(String name, Int percentage, Float salary) {
-    var amount = salary * percentage / 100.0
+BucketSummaryDTO bucketOf(String name, Int percentage, Double salary) {
+    var amount = math.roundTo(salary * percentage / 100.0, 2)
     return BucketSummaryDTO(name, percentage, amount)
 }
 
-List<BucketSummaryDTO> buildBudgetBuckets(BudgetModelType model, Float salary) {
+List<BucketSummaryDTO> buildBudgetBuckets(BudgetModelType model, Double salary) {
     return switch (model) {
         case STANDARD_503020 -> listOf(
             bucketOf("Necessidades", 50, salary),
@@ -173,15 +169,12 @@ List<BucketSummaryDTO> buildBudgetBuckets(BudgetModelType model, Float salary) {
 // Fonte: backend/coach.kf#calculateDailyPulse, #calculateBalance,
 // #toStandardBucket, #toKakeiboBucket -- copiados literalmente.
 
-record GetDailyPulseOutput(Float pulse, Int daysRemaining, Float totalSpent, Float salary, String? message)
+record GetDailyPulseOutput(Double pulse, Int daysRemaining, Double totalSpent, Double salary, String? message)
 
-record BucketBalanceDTO(String name, Int percentage, Float plannedAmount, Float spentAmount, Float remainingAmount)
+record BucketBalanceDTO(String name, Int percentage, Double plannedAmount, Double spentAmount, Double remainingAmount)
 
-record GetBalanceOutput(String model, List<BucketBalanceDTO> buckets, Float? totalSpent, Float? notAllocated)
+record GetBalanceOutput(String model, List<BucketBalanceDTO> buckets, Double totalSpent, Double notAllocated)
 
-// ACHADO #2 (calculateDailyPulse): Java (GetDailyPulseFunction#apply) faz
-// remaining.divide(daysRemaining, 2, RoundingMode.HALF_UP). Esta versao Kof
-// (copia literal de backend/coach.kf#calculateDailyPulse) NAO arredonda.
 GetDailyPulseOutput calculateDailyPulse(String userId, Int daysRemaining, String fromIso) {
     var user = findUserById(userId)
     if (user != null) {
@@ -199,7 +192,7 @@ GetDailyPulseOutput calculateDailyPulse(String userId, Int daysRemaining, String
             return GetDailyPulseOutput(0.0, daysRemaining, totalSpent, salary, "Você já comprometeu todo o salário deste mês.")
         }
 
-        var pulse = remaining / (daysRemaining * 1.0)
+        var pulse = math.roundTo(remaining / (daysRemaining * 1.0), 2)
         return GetDailyPulseOutput(pulse, daysRemaining, totalSpent, salary, null)
     }
     throw "Usuário não encontrado."
@@ -309,7 +302,7 @@ GetBalanceOutput calculateBalance(String userId, String fromIso) {
             }
         }
 
-        return GetBalanceOutput(model.name(), resultBuckets, null, null)
+        return GetBalanceOutput(model.name(), resultBuckets, 0.0, 0.0)
     }
     throw "Usuário não encontrado."
 }
@@ -323,10 +316,7 @@ GetBalanceOutput calculateBalance(String userId, String fromIso) {
 test "calculateDailyPulse: deve arredondar para 2 casas HALF_UP como o Java (ACHADO #2)" {
     // salary=1000.00, totalSpent=0, daysRemaining=3
     // remaining=1000.00; pulse = 1000.00/3 = 333.333... -> HALF_UP(2) = 333.33
-    // `var ... : Float = 1000.0` em vez de literal direto: ver ACHADO #4
-    // (VerifyError disfarçada de erro de JavaFX ao passar literal Float
-    // direto num parametro Float? -- reproduzido tambem em backend/main.kf:50).
-    var salary1: Float = 1000.0
+    var salary1: Double = 1000.0
     saveUser(UserEntity("u1", salary1, BudgetModelType.STANDARD_503020))
 
     var result = calculateDailyPulse("u1", 3, "2026-09-01T00:00:00Z")
@@ -339,7 +329,7 @@ test "calculateDailyPulse: deve arredondar para 2 casas HALF_UP como o Java (ACH
 }
 
 test "calculateDailyPulse: renda ja comprometida -- paridade OK (sem arredondamento envolvido)" {
-    var salary2: Float = 500.0
+    var salary2: Double = 500.0
     saveUser(UserEntity("u2", salary2, BudgetModelType.STANDARD_503020))
     MirrorDb.transactions.add(TransactionEntity("tx2", 600, null, "u2", "2026-09-15T12:00:00Z"))
 
@@ -355,7 +345,7 @@ test "calculateBalance (STANDARD_503020): buckets devem arredondar para 2 casas 
     //   Necessidades (50%): 333.33*50=16666.50 /100=166.665 -> HALF_UP(2)=166.67
     //   Desejos      (30%): 333.33*30=9999.90  /100=99.999  -> HALF_UP(2)=100.00
     //   Futuro       (20%): 333.33*20=6666.60  /100=66.666  -> HALF_UP(2)=66.67
-    var salary3: Float = 333.33
+    var salary3: Double = 333.33
     saveUser(UserEntity("u3", salary3, BudgetModelType.STANDARD_503020))
 
     var result = calculateBalance("u3", "2026-09-01T00:00:00Z")
@@ -366,7 +356,7 @@ test "calculateBalance (STANDARD_503020): buckets devem arredondar para 2 casas 
 }
 
 test "calculateBalance (FREELANCER_BASE_ZERO): totalSpent/notAllocated ja tem paridade exata com o Java" {
-    var salary4: Float = 1000.0
+    var salary4: Double = 1000.0
     saveUser(UserEntity("u4", salary4, BudgetModelType.FREELANCER_BASE_ZERO))
     MirrorDb.transactions.add(TransactionEntity("tx4", 250, null, "u4", "2026-09-15T12:00:00Z"))
 
@@ -384,7 +374,7 @@ test "calculateBalance (KAKEIBO): categoria nula -- documenta a divergencia de c
     // regrida silenciosamente para um terceiro comportamento antes de uma
     // decisao explicita de produto (replicar o erro Java, ou consertar o
     // Java tambem).
-    var salary5: Float = 1000.0
+    var salary5: Double = 1000.0
     saveUser(UserEntity("u5", salary5, BudgetModelType.KAKEIBO))
     MirrorDb.transactions.add(TransactionEntity("tx5", 50, null, "u5", "2026-09-15T12:00:00Z"))
 

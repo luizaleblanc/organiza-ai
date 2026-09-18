@@ -76,6 +76,7 @@
 - [x] **Etapa 7**: Telas Principais (Dashboard, Chat, Envelopes)
 - [x] **Etapa 8**: Auditoria de Sintaxe KOF e Resolução de Erros de CI
 - [x] **Etapa 9**: Transição KofLith — Unificação de Domínio e Gateway HTTP, Geração de Bytecode JVM Nativo e Validação de Runtime na porta 3000
+- [x] **Etapa 10**: Validação de Paridade Diferencial KOF vs. Java Legado — Suíte formal de 5 testes de paridade (`tests/parity_test.kf` e `scripts/run_parity_tests.ps1`) com 100% de aprovação comprovando equivalência aritmética e de regras cognitivas.
 
 ## Documentação
 - [x] Todos os arquivos `.md` atualizados (README, CLAUDE.md, CONTRIBUTING.md, DATA_MODEL.md, ARCHITECTURE_DECISIONS.md, PROJECT_STATUS.md, DESIGN_SYSTEM.md)

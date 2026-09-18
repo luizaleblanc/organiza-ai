@@ -109,7 +109,7 @@ GetDailyPulseOutput calculateDailyPulse(String userId, Int daysRemaining, String
             return GetDailyPulseOutput(0.0, daysRemaining, totalSpent, salary, "Você já comprometeu todo o salário deste mês.")
         }
 
-        var pulse = remaining / (daysRemaining * 1.0)
+        var pulse = math.roundTo(remaining / (daysRemaining * 1.0), 2)
         return GetDailyPulseOutput(pulse, daysRemaining, totalSpent, salary, null)
     }
     throw "Usuário não encontrado."
