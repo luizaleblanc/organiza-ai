@@ -1,0 +1,396 @@
+// backend/parity_test.kf
+// Suite de paridade diferencial: KOF (backend/coach.kf, backend/services.kf,
+// backend/models.kf) vs. Java/Spring Boot
+// (src/main/java/com/organiza/mod_ai_coach/service/GetDailyPulseFunction.java,
+// GetBalanceFunction.java, CategoryBucketMapper.java,
+// src/main/java/com/organiza/mod_budget/service/BudgetModelPlanService.java).
+//
+// -----------------------------------------------------------------------
+// LIMITACAO ESTRUTURAL DO `kof test` (verificada nesta sessao, nao suposta):
+// `kof test <arquivo|dir>` compila CADA .kf isoladamente, um programa por
+// arquivo, por design (ver dev/kof/cli/CmdTest.java: "cada .kf e um programa
+// independente com seu proprio main() -- NUNCA agrupar irmaos num modulo so
+// -- cross-file e dominio de kof build" / regra PKG002). Confirmado rodando
+// `kof test backend` e `kof test backend/parity_test.kf` contra este
+// repositorio: ambos falham com "Undefined function/variable" para todo
+// simbolo definido em outro arquivo do diretorio, mesmo que `kof check backend`
+// (que MERGEIA o diretorio) passe limpo. `kof compare` tem a mesma restricao
+// (compila um unico .kf via driver.compile(kofFile, ...)).
+//
+// Consequencia pratica: backend/coach.kf (calculateDailyPulse, calculateBalance)
+// depende de backend/services.kf (findUserById, buildBudgetBuckets, bucketOf,
+// findTransactionsByUserIdAndCreatedAtAfter) e backend/models.kf (BackendDb,
+// UserEntity, TransactionEntity, enums) -- portanto NENHUM desses dois pontos
+// de entrada e executavel/testavel via `kof test` no estado atual do projeto.
+// Isso bloqueia a Task 4 (verificacao de paridade) e tem implicacao direta na
+// Task 3 (bff chamando funcoes Kof "diretamente"): sem package/import
+// consistente OU sem consolidar backend/ num unico arquivo, so `kof build`
+// (nunca `kof run`/`kof test`/`kof compare`) consegue produzir algo executavel
+// a partir de varios arquivos.
+//
+// Ate essa decisao de arquitetura ser tomada, este arquivo e um espelho
+// AUTOCONTIDO (sem imports) das duas funcoes sob auditoria e de suas
+// dependencias diretas, copiado literalmente do estado atual de
+// backend/coach.kf e backend/services.kf na data deste commit. Ele PROVA os
+// achados da auditoria via `kof test`, mas nao testa o arquivo real -- testa
+// uma copia dele. Qualquer alteracao em calculateDailyPulse, bucketOf,
+// buildBudgetBuckets, calculateBalance, toStandardBucket ou toKakeiboBucket
+// nos arquivos reais deve ser replicada aqui manualmente ate que o KofLith
+// suporte multi-arquivo em `kof test` (ou até os tres arquivos serem
+// fundidos em um so backend.kf).
+//
+// Rodar com: kof test backend/parity_test.kf
+// -----------------------------------------------------------------------
+
+// ===== Espelho de backend/models.kf (subconjunto usado por GetDailyPulse/GetBalance) =====
+
+enum BudgetModelType {
+    STANDARD_503020, SURVIVAL_702010, ANTI_DEBT_701020,
+    SIMPLE_8020, KAKEIBO, FREELANCER_BASE_ZERO
+}
+
+enum Category {
+    GROCERIES, LEISURE, FOOD, PHARMA, HEALTH, AUTO, TRANSPORT,
+    HOUSING, EDUCATION, SHOPPING, SUBSCRIPTIONS, OTHER
+}
+
+enum Bucket { NEEDS, WANTS, SAVINGS, DEBT_PAYMENT, CULTURAL, LEISURE, EXTRAS }
+
+class UserEntity {
+    String id
+    Float? salary
+    BudgetModelType budgetModel
+
+    public constructor(String id, Float? salary, BudgetModelType budgetModel) {
+        this.id = id
+        this.salary = salary
+        this.budgetModel = budgetModel
+    }
+}
+
+class TransactionEntity {
+    String id
+    Long amount
+    Category? category
+    String userId
+    String? createdAt
+
+    public constructor(String id, Long amount, Category? category, String userId, String? createdAt) {
+        this.id = id
+        this.amount = amount
+        this.category = category
+        this.userId = userId
+        this.createdAt = createdAt
+    }
+}
+
+class MirrorDb {
+    static List<UserEntity> users = listOf()
+    static List<TransactionEntity> transactions = listOf()
+}
+
+// ===== Espelho de backend/services.kf =====
+// Fonte: backend/services.kf#findUserById, #saveUser,
+// #findTransactionsByUserIdAndCreatedAtAfter, #sumAmountByUserIdAndCreatedAtAfter,
+// #bucketOf, #buildBudgetBuckets -- copiados literalmente.
+
+record BucketSummaryDTO(String name, Int percentage, Float amount)
+
+UserEntity? findUserById(String id) {
+    for (var u in MirrorDb.users) {
+        if (u.id == id) {
+            return u
+        }
+    }
+    return null
+}
+
+UserEntity saveUser(UserEntity user) {
+    MirrorDb.users.add(user)
+    return user
+}
+
+// GAP (services.kf linha ~128): comparacao de datas via String.compareTo --
+// mesma limitacao do arquivo real, replicada aqui de proposito.
+List<TransactionEntity> findTransactionsByUserIdAndCreatedAtAfter(String userId, String from) {
+    var result: List<TransactionEntity> = listOf()
+    for (var t in MirrorDb.transactions) {
+        var createdAt = t.createdAt
+        if (t.userId == userId && createdAt != null) {
+            if (createdAt.compareTo(from) >= 0) {
+                result.add(t)
+            }
+        }
+    }
+    return result
+}
+
+Long sumAmountByUserIdAndCreatedAtAfter(String userId, String from) {
+    var matching = findTransactionsByUserIdAndCreatedAtAfter(userId, from)
+    var sum: Long = 0
+    for (var t in matching) {
+        sum = sum + t.amount
+    }
+    return sum
+}
+
+// ACHADO #1 (bucketOf): Java (BudgetModelPlanService#bucket) faz
+// salary.multiply(percentage).divide(100, 2, RoundingMode.HALF_UP) --
+// arredonda para 2 casas decimais. Esta versao Kof (copia literal de
+// backend/services.kf#bucketOf) NAO arredonda: usa Float puro.
+BucketSummaryDTO bucketOf(String name, Int percentage, Float salary) {
+    var amount = salary * percentage / 100.0
+    return BucketSummaryDTO(name, percentage, amount)
+}
+
+List<BucketSummaryDTO> buildBudgetBuckets(BudgetModelType model, Float salary) {
+    return switch (model) {
+        case STANDARD_503020 -> listOf(
+            bucketOf("Necessidades", 50, salary),
+            bucketOf("Desejos", 30, salary),
+            bucketOf("Futuro", 20, salary))
+        case SURVIVAL_702010 -> listOf(
+            bucketOf("Necessidades", 70, salary),
+            bucketOf("Folga", 20, salary),
+            bucketOf("Guarda", 10, salary))
+        case ANTI_DEBT_701020 -> listOf(
+            bucketOf("Necessidades", 70, salary),
+            bucketOf("Pessoal", 10, salary),
+            bucketOf("Quitação de Dívida", 20, salary))
+        case SIMPLE_8020 -> listOf(
+            bucketOf("Viver", 80, salary),
+            bucketOf("Guardar", 20, salary))
+        case KAKEIBO -> listOf(
+            bucketOf("Essencial", 50, salary),
+            bucketOf("Cultura", 10, salary),
+            bucketOf("Lazer", 30, salary),
+            bucketOf("Extras", 10, salary))
+        case FREELANCER_BASE_ZERO -> listOf()
+    }
+}
+
+// ===== Espelho de backend/coach.kf =====
+// Fonte: backend/coach.kf#calculateDailyPulse, #calculateBalance,
+// #toStandardBucket, #toKakeiboBucket -- copiados literalmente.
+
+record GetDailyPulseOutput(Float pulse, Int daysRemaining, Float totalSpent, Float salary, String? message)
+
+record BucketBalanceDTO(String name, Int percentage, Float plannedAmount, Float spentAmount, Float remainingAmount)
+
+record GetBalanceOutput(String model, List<BucketBalanceDTO> buckets, Float? totalSpent, Float? notAllocated)
+
+// ACHADO #2 (calculateDailyPulse): Java (GetDailyPulseFunction#apply) faz
+// remaining.divide(daysRemaining, 2, RoundingMode.HALF_UP). Esta versao Kof
+// (copia literal de backend/coach.kf#calculateDailyPulse) NAO arredonda.
+GetDailyPulseOutput calculateDailyPulse(String userId, Int daysRemaining, String fromIso) {
+    var user = findUserById(userId)
+    if (user != null) {
+        var salary = 0.0
+        var userSalary = user.salary
+        if (userSalary != null) {
+            salary = userSalary
+        }
+
+        var totalSpentLong = sumAmountByUserIdAndCreatedAtAfter(userId, fromIso)
+        var totalSpent = totalSpentLong * 1.0
+
+        var remaining = salary - totalSpent
+        if (remaining <= 0.0) {
+            return GetDailyPulseOutput(0.0, daysRemaining, totalSpent, salary, "Você já comprometeu todo o salário deste mês.")
+        }
+
+        var pulse = remaining / (daysRemaining * 1.0)
+        return GetDailyPulseOutput(pulse, daysRemaining, totalSpent, salary, null)
+    }
+    throw "Usuário não encontrado."
+}
+
+Bucket toStandardBucket(Category? category) {
+    if (category == null) {
+        return Bucket.WANTS
+    }
+    if (category == Category.GROCERIES || category == Category.PHARMA || category == Category.HEALTH ||
+        category == Category.TRANSPORT || category == Category.HOUSING || category == Category.EDUCATION) {
+        return Bucket.NEEDS
+    }
+    return Bucket.WANTS
+}
+
+// ACHADO #3 (toKakeiboBucket com categoria nula): a versao Java
+// (CategoryBucketMapper#toKakeiboBucket) e um `switch (category)` classico
+// sobre enum -- se category==null (coluna nullable em TransactionEntity),
+// lanca NullPointerException (contrato de ERRO). Esta versao Kof trata
+// `category == null` explicitamente e devolve "Extras" (contrato de SUCESSO).
+// NAO e paridade: e uma mudanca silenciosa de contrato introduzida na
+// transpilacao.
+String toKakeiboBucket(Category? category) {
+    if (category == null) {
+        return "Extras"
+    }
+    if (category == Category.GROCERIES || category == Category.PHARMA || category == Category.HEALTH ||
+        category == Category.TRANSPORT || category == Category.HOUSING || category == Category.EDUCATION) {
+        return "Essencial"
+    }
+    if (category == Category.SUBSCRIPTIONS) {
+        return "Cultura"
+    }
+    if (category == Category.LEISURE || category == Category.FOOD) {
+        return "Lazer"
+    }
+    return "Extras"
+}
+
+GetBalanceOutput calculateBalance(String userId, String fromIso) {
+    var user = findUserById(userId)
+    if (user != null) {
+        var salary = 0.0
+        var userSalary = user.salary
+        if (userSalary != null) {
+            salary = userSalary
+        }
+        var model = user.budgetModel
+        var monthTransactions = findTransactionsByUserIdAndCreatedAtAfter(userId, fromIso)
+
+        if (model == BudgetModelType.FREELANCER_BASE_ZERO) {
+            var totalSpent = 0.0
+            for (var t in monthTransactions) {
+                totalSpent = totalSpent + (t.amount * 1.0)
+            }
+            var notAllocated = salary - totalSpent
+            var emptyList: List<BucketBalanceDTO> = listOf()
+            return GetBalanceOutput(model.name(), emptyList, totalSpent, notAllocated)
+        }
+
+        var plan = buildBudgetBuckets(model, salary)
+        var resultBuckets: List<BucketBalanceDTO> = listOf()
+
+        if (model == BudgetModelType.KAKEIBO) {
+            for (var b in plan) {
+                var spent = 0.0
+                for (var t in monthTransactions) {
+                    if (toKakeiboBucket(t.category) == b.name) {
+                        spent = spent + (t.amount * 1.0)
+                    }
+                }
+                var rem = b.amount - spent
+                resultBuckets.add(BucketBalanceDTO(b.name, b.percentage, b.amount, spent, rem))
+            }
+        } else {
+            var needsSpent = 0.0
+            var wantsSpent = 0.0
+            for (var t in monthTransactions) {
+                var bucket = toStandardBucket(t.category)
+                if (bucket == Bucket.NEEDS) {
+                    needsSpent = needsSpent + (t.amount * 1.0)
+                } else {
+                    wantsSpent = wantsSpent + (t.amount * 1.0)
+                }
+            }
+
+            if (plan.size == 2) {
+                var first = plan.get(0)
+                var totalSpent = needsSpent + wantsSpent
+                resultBuckets.add(BucketBalanceDTO(first.name, first.percentage, first.amount, totalSpent, first.amount - totalSpent))
+                if (plan.size > 1) {
+                    var second = plan.get(1)
+                    resultBuckets.add(BucketBalanceDTO(second.name, second.percentage, second.amount, 0.0, second.amount))
+                }
+            } else if (plan.size >= 2) {
+                var first = plan.get(0)
+                resultBuckets.add(BucketBalanceDTO(first.name, first.percentage, first.amount, needsSpent, first.amount - needsSpent))
+                var second = plan.get(1)
+                resultBuckets.add(BucketBalanceDTO(second.name, second.percentage, second.amount, wantsSpent, second.amount - wantsSpent))
+                var i = 2
+                while (i < plan.size) {
+                    var other = plan.get(i)
+                    resultBuckets.add(BucketBalanceDTO(other.name, other.percentage, other.amount, 0.0, other.amount))
+                    i = i + 1
+                }
+            }
+        }
+
+        return GetBalanceOutput(model.name(), resultBuckets, null, null)
+    }
+    throw "Usuário não encontrado."
+}
+
+// ===== Testes de paridade =====
+// Valores esperados calculados reproduzindo a aritmetica EXATA do Java
+// (BigDecimal, RoundingMode.HALF_UP), nao copiados de uma execucao do Kof.
+// Um "GREEN" so vale como prova se os numeros batem com o contrato Java
+// (training/anti-patterns/weak-green-proof.md).
+
+test "calculateDailyPulse: deve arredondar para 2 casas HALF_UP como o Java (ACHADO #2)" {
+    // salary=1000.00, totalSpent=0, daysRemaining=3
+    // remaining=1000.00; pulse = 1000.00/3 = 333.333... -> HALF_UP(2) = 333.33
+    // `var ... : Float = 1000.0` em vez de literal direto: ver ACHADO #4
+    // (VerifyError disfarçada de erro de JavaFX ao passar literal Float
+    // direto num parametro Float? -- reproduzido tambem em backend/main.kf:50).
+    var salary1: Float = 1000.0
+    saveUser(UserEntity("u1", salary1, BudgetModelType.STANDARD_503020))
+
+    var result = calculateDailyPulse("u1", 3, "2026-09-01T00:00:00Z")
+
+    assert(result.pulse == 333.33, "esperado 333.33 (paridade com Java/BigDecimal HALF_UP); Kof sem math.roundTo produz 333.3333333333333")
+    assert(result.daysRemaining == 3)
+    assert(result.totalSpent == 0.0)
+    assert(result.salary == 1000.0)
+    assert(result.message == null)
+}
+
+test "calculateDailyPulse: renda ja comprometida -- paridade OK (sem arredondamento envolvido)" {
+    var salary2: Float = 500.0
+    saveUser(UserEntity("u2", salary2, BudgetModelType.STANDARD_503020))
+    MirrorDb.transactions.add(TransactionEntity("tx2", 600, null, "u2", "2026-09-15T12:00:00Z"))
+
+    var result = calculateDailyPulse("u2", 10, "2026-09-01T00:00:00Z")
+
+    assert(result.pulse == 0.0)
+    assert(result.totalSpent == 600.0)
+    assert(result.message == "Você já comprometeu todo o salário deste mês.")
+}
+
+test "calculateBalance (STANDARD_503020): buckets devem arredondar para 2 casas HALF_UP como o Java (ACHADO #1)" {
+    // salary=333.33
+    //   Necessidades (50%): 333.33*50=16666.50 /100=166.665 -> HALF_UP(2)=166.67
+    //   Desejos      (30%): 333.33*30=9999.90  /100=99.999  -> HALF_UP(2)=100.00
+    //   Futuro       (20%): 333.33*20=6666.60  /100=66.666  -> HALF_UP(2)=66.67
+    var salary3: Float = 333.33
+    saveUser(UserEntity("u3", salary3, BudgetModelType.STANDARD_503020))
+
+    var result = calculateBalance("u3", "2026-09-01T00:00:00Z")
+
+    assert(result.buckets.get(0).plannedAmount == 166.67, "bucket Necessidades esperado 166.67 (HALF_UP/2 casas) igual ao Java")
+    assert(result.buckets.get(1).plannedAmount == 100.0, "bucket Desejos esperado 100.00 (HALF_UP/2 casas) igual ao Java")
+    assert(result.buckets.get(2).plannedAmount == 66.67, "bucket Futuro esperado 66.67 (HALF_UP/2 casas) igual ao Java")
+}
+
+test "calculateBalance (FREELANCER_BASE_ZERO): totalSpent/notAllocated ja tem paridade exata com o Java" {
+    var salary4: Float = 1000.0
+    saveUser(UserEntity("u4", salary4, BudgetModelType.FREELANCER_BASE_ZERO))
+    MirrorDb.transactions.add(TransactionEntity("tx4", 250, null, "u4", "2026-09-15T12:00:00Z"))
+
+    var result = calculateBalance("u4", "2026-09-01T00:00:00Z")
+
+    assert(result.totalSpent == 250.0)
+    assert(result.notAllocated == 750.0)
+    assert(result.buckets.size == 0)
+}
+
+test "calculateBalance (KAKEIBO): categoria nula -- documenta a divergencia de contrato do ACHADO #3" {
+    // Java lancaria NullPointerException aqui (ver comentario acima de
+    // toKakeiboBucket). Este teste fixa o comportamento ATUAL do Kof
+    // (classifica como "Extras" sem lancar) para que a divergencia nao
+    // regrida silenciosamente para um terceiro comportamento antes de uma
+    // decisao explicita de produto (replicar o erro Java, ou consertar o
+    // Java tambem).
+    var salary5: Float = 1000.0
+    saveUser(UserEntity("u5", salary5, BudgetModelType.KAKEIBO))
+    MirrorDb.transactions.add(TransactionEntity("tx5", 50, null, "u5", "2026-09-15T12:00:00Z"))
+
+    var result = calculateBalance("u5", "2026-09-01T00:00:00Z")
+
+    var extras = result.buckets.get(3)
+    assert(extras.name == "Extras")
+    assert(extras.spentAmount == 50.0, "Kof classifica categoria nula como Extras; Java lancaria NPE (500) no mesmo cenario -- ver ACHADO #3")
+}
