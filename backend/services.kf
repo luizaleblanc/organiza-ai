@@ -48,19 +48,19 @@ class BackendDb {
 // =========================================================
 
 // mod_user/dto/BucketSummaryDTO.java
-record BucketSummaryDTO(String name, Int percentage, Float amount)
+record BucketSummaryDTO(String name, Int percentage, Double amount)
 
 // mod_transaction/dto/PersistTransactionInput.java
 record PersistTransactionInput(String description, Long amount, Category category, String currency)
 
 // mod_transaction/dto/TransactionOutput.java
-record TransactionOutput(String id, String description, String category, Float value, String currency)
+record TransactionOutput(String id, String description, String category, Double value, String currency)
 
 // mod_transaction/dto/GetTotalByCategoryInput.java
 record GetTotalByCategoryInput(Category category)
 
 // mod_transaction/dto/GetTotalByCategoryOutput.java
-record GetTotalByCategoryOutput(Float total)
+record GetTotalByCategoryOutput(Double total)
 
 // mod_transaction/service/ListTransactionsByCategoryUseCase.java (record interno Input, elevado a top-level)
 record ListTransactionsByCategoryInput(Category category)
@@ -116,11 +116,11 @@ List<TransactionEntity> findTransactionsByCategoryAndUserId(Category category, S
     return BackendDb.transactions.filter((t: TransactionEntity) -> t.category == category && t.userId == userId)
 }
 
-Float sumAmountByCategoryAndUserId(Category category, String userId) {
+Double sumAmountByCategoryAndUserId(Category category, String userId) {
     var matching = findTransactionsByCategoryAndUserId(category, userId)
-    var total: Long = 0
+    var total = 0.0
     for (var t in matching) {
-        total = total + t.amount
+        total = total + (t.amount * 1.0)
     }
     return total
 }
@@ -297,7 +297,7 @@ VariableIncomeEntity saveVariableIncomeEntity(VariableIncomeEntity income) {
 // mod_budget/service/BudgetModelSuggestionService.java
 // =========================================================
 
-BudgetModelType suggestBudgetModel(Float salary, IncomeType incomeType, Bool hasDebt) {
+BudgetModelType suggestBudgetModel(Double salary, IncomeType incomeType, Bool hasDebt) {
     if (incomeType == IncomeType.VARIABLE) {
         return BudgetModelType.FREELANCER_BASE_ZERO
     }
@@ -328,12 +328,12 @@ String describeBudgetModel(BudgetModelType model) {
     }
 }
 
-BucketSummaryDTO bucketOf(String name, Int percentage, Float salary) {
+BucketSummaryDTO bucketOf(String name, Int percentage, Double salary) {
     var amount = salary * percentage / 100.0
     return BucketSummaryDTO(name, percentage, amount)
 }
 
-List<BucketSummaryDTO> buildBudgetBuckets(BudgetModelType model, Float salary) {
+List<BucketSummaryDTO> buildBudgetBuckets(BudgetModelType model, Double salary) {
     return switch (model) {
         case STANDARD_503020 -> listOf(
             bucketOf("Necessidades", 50, salary),
@@ -383,7 +383,7 @@ void deleteEnvelope(String id) {
     deleteEnvelopeById(id)
 }
 
-EnvelopeEntity updateEnvelopeSpent(String envelopeId, Float amount) {
+EnvelopeEntity updateEnvelopeSpent(String envelopeId, Double amount) {
     var envelope = findEnvelopeById(envelopeId)
     if (envelope != null) {
         envelope.currentSpent = envelope.currentSpent + amount
@@ -395,7 +395,7 @@ EnvelopeEntity updateEnvelopeSpent(String envelopeId, Float amount) {
 // TODO (preservado do Java original): TransactionEntity ainda nao tem
 // envelope_id (ver PROJECT_STATUS.md). Implementar consulta real dos
 // gastos dos ultimos N meses quando esse campo existir.
-Float calculateMovingAverage(String envelopeId, Int months) {
+Double calculateMovingAverage(String envelopeId, Int months) {
     var envelope = findEnvelopeById(envelopeId)
     if (envelope != null) {
         return 0.0
@@ -450,20 +450,20 @@ BudgetModelType migrateBudgetModelIfNeeded(UserEntity? user) {
 // mod_variable_income/service/VariableIncomeService.java
 // =========================================================
 
-VariableIncomeDestination decideVariableIncomeDestination(String userId, Float amount) {
+VariableIncomeDestination decideVariableIncomeDestination(String userId, Double amount) {
     var user = findUserById(userId)
     if (user != null) {
         var goal = user.emergencyFundGoal
         if (goal != null) {
-            if (goal > 0.0) {
-                var currentReserve = findVariableIncomesByUserId(userId)
-                    .filter((income: VariableIncomeEntity) -> income.destination == VariableIncomeDestination.EMERGENCY_FUND)
-                    .map((income: VariableIncomeEntity) -> income.amount)
-                    .reduce((a: Float, b: Float) -> a + b, 0.0)
-                if (currentReserve < goal) {
-                    return VariableIncomeDestination.EMERGENCY_FUND
+            var emergencyIncomes = findVariableIncomesByUserId(userId)
+            var currentReserve = 0.0
+            for (var inc in emergencyIncomes) {
+                if (inc.destination == VariableIncomeDestination.EMERGENCY_FUND) {
+                    currentReserve = currentReserve + inc.amount
                 }
-                return VariableIncomeDestination.BUDGET_5030020
+            }
+            if (currentReserve < goal) {
+                return VariableIncomeDestination.EMERGENCY_FUND
             }
             return VariableIncomeDestination.BUDGET_5030020
         }
@@ -502,7 +502,7 @@ TransactionOutput persistTransaction(String id, PersistTransactionInput input, S
 // mod_transaction/service/GetTotalByCategoryUseCase.java
 // =========================================================
 
-Float getTotalByCategory(Category category, String userId) {
+Double getTotalByCategory(Category category, String userId) {
     return sumAmountByCategoryAndUserId(category, userId)
 }
 

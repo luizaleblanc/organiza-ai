@@ -55,18 +55,18 @@ class UserEntity {
     String email
     String password
     Role role
-    Float? salary
+    Double? salary
     Tier tier
     Bool hasVariableIncome
-    Float? emergencyFundGoal
+    Double? emergencyFundGoal
     BudgetModelType budgetModel
     IncomeType incomeType
     Bool hasDebt
-    Float? debtAmount
+    Double? debtAmount
 
     public constructor(String id, String email, String password, Role role,
-            Float? salary, Tier tier, Bool hasVariableIncome, Float? emergencyFundGoal,
-            BudgetModelType budgetModel, IncomeType incomeType, Bool hasDebt, Float? debtAmount) {
+            Double? salary, Tier tier, Bool hasVariableIncome, Double? emergencyFundGoal,
+            BudgetModelType budgetModel, IncomeType incomeType, Bool hasDebt, Double? debtAmount) {
         this.id = id
         this.email = email
         this.password = password
@@ -113,14 +113,14 @@ class EnvelopeEntity {
     String id
     String userId
     String categoryName
-    Float limitAmount
-    Float currentSpent
+    Double limitAmount
+    Double currentSpent
     EnvelopeLimitType limitType
     Int movingAverageMonths
     String? createdAt
 
-    public constructor(String id, String userId, String categoryName, Float limitAmount,
-            Float currentSpent, EnvelopeLimitType limitType, Int movingAverageMonths, String? createdAt) {
+    public constructor(String id, String userId, String categoryName, Double limitAmount,
+            Double currentSpent, EnvelopeLimitType limitType, Int movingAverageMonths, String? createdAt) {
         this.id = id
         this.userId = userId
         this.categoryName = categoryName
@@ -153,12 +153,12 @@ class ChatMessageEntity {
 class VariableIncomeEntity {
     String id
     String userId
-    Float amount
+    Double amount
     String source
     VariableIncomeDestination destination
     String? date
 
-    public constructor(String id, String userId, Float amount, String source,
+    public constructor(String id, String userId, Double amount, String source,
             VariableIncomeDestination destination, String? date) {
         this.id = id
         this.userId = userId
@@ -191,9 +191,9 @@ class KakeiboReflectionEntity {
 // =========================================================
 
 record LoginRequest(String email, String password)
-record OnboardingRequest(Float salary, String incomeType, Bool hasDebt)
-record VariableIncomeInput(Float amount, String source)
-record CreateEnvelopeInput(String userId, String categoryName, Float limitAmount)
+record OnboardingRequest(Double salary, String incomeType, Bool hasDebt)
+record VariableIncomeInput(Double amount, String source)
+record CreateEnvelopeInput(String userId, String categoryName, Double limitAmount)
 record ChatMessageRequest(String message)
 
 

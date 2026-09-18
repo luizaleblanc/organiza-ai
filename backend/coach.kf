@@ -8,11 +8,11 @@
 // DTOs e Records do Coach
 // =========================================================
 
-record BucketBalanceDTO(String name, Int percentage, Float plannedAmount, Float spentAmount, Float remainingAmount)
+record BucketBalanceDTO(String name, Int percentage, Double plannedAmount, Double spentAmount, Double remainingAmount)
 
-record GetDailyPulseOutput(Float pulse, Int daysRemaining, Float totalSpent, Float salary, String? message)
+record GetDailyPulseOutput(Double pulse, Int daysRemaining, Double totalSpent, Double salary, String? message)
 
-record GetBalanceOutput(String model, List<BucketBalanceDTO> buckets, Float? totalSpent, Float? notAllocated)
+record GetBalanceOutput(String model, List<BucketBalanceDTO> buckets, Double totalSpent, Double notAllocated)
 
 record RegisterIncomeOutput(String destination, String message)
 
@@ -188,7 +188,7 @@ GetBalanceOutput calculateBalance(String userId, String fromIso) {
             }
         }
 
-        return GetBalanceOutput(model.name(), resultBuckets, null, null)
+        return GetBalanceOutput(model.name(), resultBuckets, 0.0, 0.0)
     }
     throw "Usuário não encontrado."
 }
@@ -197,7 +197,7 @@ GetBalanceOutput calculateBalance(String userId, String fromIso) {
 // RegisterIncomeFunction -> registerUserIncome
 // =========================================================
 
-RegisterIncomeOutput registerUserIncome(String userId, Float amount, String source) {
+RegisterIncomeOutput registerUserIncome(String userId, Double amount, String source) {
     var lower = source.toLowerCase()
     if (lower.contains("salari") || lower.contains("salario") || lower.contains("fixo") || lower.contains("clt") || lower.contains("mensal")) {
         return RegisterIncomeOutput("SALARY", "Beleza, essa é a sua renda fixa. Ela já está considerada no seu orçamento mensal.")
