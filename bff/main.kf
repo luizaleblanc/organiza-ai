@@ -9,7 +9,12 @@
 
 import middleware.auth
 
-String authHeader(String token) = "Authorization: " + token
+String authHeader(String? token) {
+    if (token != null) {
+        return "Authorization: " + token
+    }
+    return ""
+}
 
 main() {
     var app = web.app()

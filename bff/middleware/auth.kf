@@ -43,17 +43,15 @@ String jwtSecret() {
 }
 
 String? extractBearerToken(String? authHeader) {
-    if (authHeader == null || authHeader == "") {
-        return null
+    if (authHeader != null) {
+        if (authHeader.startsWith("Bearer ")) {
+            var token = authHeader.substring(7).trim()
+            if (token != "") {
+                return token
+            }
+        }
     }
-    if (!authHeader.startsWith("Bearer ")) {
-        return null
-    }
-    var token = authHeader.substring(7).trim()
-    if (token == "") {
-        return null
-    }
-    return token
+    return null
 }
 
 Bool hasBearerToken() {
