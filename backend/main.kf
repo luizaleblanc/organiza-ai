@@ -3,8 +3,6 @@
 // Substitui a segregação artificial BFF <-> Spring Boot.
 // Todas as rotas chamam diretamente o domínio Kof sem proxy HTTP.
 
-import middleware.auth
-
 main() {
     var app = web.app()
 

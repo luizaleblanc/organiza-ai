@@ -1,0 +1,59 @@
+// backend/auth.kf
+// Autenticação e Autorização JWT unificada do Monólito KofLith
+// Filosofia KOF: "Menos segregação, mais intenção" -- sem isolamento artificial de pacotes.
+
+record AuthClaims(String sub, String iss)
+
+String expectedIssuer() {
+    return "QUAK"
+}
+
+List<String> publicPaths() {
+    return listOf("/health", "/api/auth/login", "/api/auth/register")
+}
+
+Bool isPublicPath(String path) {
+    return publicPaths().contains(path)
+}
+
+String jwtSecret() {
+    var secret = secrets.get("API_SECURITY_TOKEN_SECRET")
+    if (secret != null) {
+        return secret
+    }
+    return "koflith-dev-secret-key-organiza-ai-2026-min-32-chars"
+}
+
+String? extractBearerToken(String? authHeader) {
+    if (authHeader != null) {
+        if (authHeader.startsWith("Bearer ")) {
+            var token = authHeader.substring(7).trim()
+            if (token != "") {
+                return token
+            }
+        }
+    }
+    return null
+}
+
+Bool hasBearerToken() {
+    return extractBearerToken(header("Authorization")) != null
+}
+
+AuthClaims requireAuth() {
+    var token = extractBearerToken(header("Authorization"))
+    if (token == null) {
+        throw "Token não informado"
+    }
+    try {
+        var claimsJson = jwt.verify(token, jwtSecret())
+        var claims = json.decode<AuthClaims>(claimsJson)
+        if (claims.iss() != expectedIssuer()) {
+            throw "Token com issuer inválido"
+        }
+        return claims
+    } catch (String e) {
+        throw "Token inválido ou expirado"
+    }
+}
+
