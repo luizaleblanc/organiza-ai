@@ -23,3 +23,4 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "`n[FALHA] Testes de paridade falharam (Código: $LASTEXITCODE)" -ForegroundColor Red
 }
 exit $LASTEXITCODE
+

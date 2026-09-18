@@ -94,12 +94,20 @@
   - [ ] Target Android (APK) usando a compilação cruzada do KOF
   - [ ] Screenshots da aplicação no README - Issue #16
   
-  ## Issues abertas no GitHub (Backend)
-  - #7: feat(backend): modelo de renda variável com reserva de emergência
-  - #8: feat(backend): implementar análise real do suggestModelChange
-  - #12: feat(backend): migração automática de modelo de orçamento
-  - #13: feat(backend): Kakeibo reflexivo (modelo de orçamento)
-  - #16: Sugiro add print(s) da aplicação no README
+  ## Issues ativas no GitHub
+  - #11: `feat(frontend): tela de seleção/troca de modelo de orçamento`
+  - #16: `Sugiro add print(s) da aplicação no README`
+  - #24: `feat(backend): Adicionar envelope_id na TransactionEntity e atualizar IA Tool`
+  - #25: `docs: Atualizar spec do MVP 1 por estar obsoleto`
+  - #26: `pesquisa: CI pipeline para medir tempo de compilação do KOF`
+  - #27: `pesquisa: Benchmarks automatizados de alocação de memória KofJS vs JVM`
+  - #31: `docs: Iniciar Artigo 1 - Mapeamento Sistemático da Literatura (MSL)`
+  - #32: `feat(frontend): Integrar Dashboard com API de Envelopes/Buckets`
+  - #33: `feat(frontend): Integrar fluxo de Onboarding com SuggestModel`
+  - #34: `feat(frontend): Integrar Motor de Ação do Chat`
+  - #35: `chore(kof4j): isolar RawView e submeter PR em conformidade com CONTRIBUTING.md do KofLang`
+  - #36: `test(e2e): homologação do fluxo completo do usuário no monólito KofLith (porta 3000)`
+  - #37: `refactor(arch): arquivar legado Java (src/main/java) após homologação E2E do KofLith`
 
 ## Decisões tomadas
 - Frontend + BFF em KOF (kof.ui / kof.web)
