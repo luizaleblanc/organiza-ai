@@ -38,6 +38,7 @@ out/
 
 ### Claude Code ###
 .claude/
+.kof_preview/
 
 ### Agent Skills (npx @tech-leads-club/agent-skills) ###
 .agent/
