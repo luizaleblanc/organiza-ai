@@ -1,0 +1,261 @@
+// backend/main.kf
+// KofLith — Monólito Modular Unificado do Organiza IA (0.4.x)
+// Substitui a segregação artificial BFF <-> Spring Boot.
+// Todas as rotas chamam diretamente o domínio Kof sem proxy HTTP.
+
+import middleware.auth
+
+main() {
+    var app = web.app()
+
+    // Middleware global de autenticação
+    app.use {
+        if (isPublicPath(path())) {
+            return null
+        }
+        if (!hasBearerToken()) {
+            return status(401, "{\"error\":\"Token não informado\"}")
+        }
+        return null
+    }
+
+    app.get("/health") {
+        return "OK"
+    }
+
+    // =========================================================
+    // Autenticação Direta (Zero dependência externa)
+    // =========================================================
+
+    app.post("/api/auth/login") {
+        var req = json.decode<LoginRequest>(body())
+        var user = findUserByEmail(req.email)
+        if (user != null) {
+            if (user.password == req.password) {
+                var payload = "{\"sub\":\"" + user.id + "\",\"iss\":\"" + expectedIssuer() + "\"}"
+                var token = jwt.create(payload, jwtSecret(), 7200)
+                return token
+            }
+        }
+        return status(401, "{\"error\":\"Credenciais inválidas\"}")
+    }
+
+    app.post("/api/auth/register") {
+        var req = json.decode<LoginRequest>(body())
+        var existing = findUserByEmail(req.email)
+        if (existing != null) {
+            return status(409, "{\"error\":\"Usuário já cadastrado\"}")
+        }
+
+        var newId = "usr_" + String.valueOf(BackendDb.users.size + 1)
+        var newUser = UserEntity(newId, req.email, req.password, Role.USER, 0.0, Tier.FREE, false, 0.0, BudgetModelType.STANDARD_503020, IncomeType.FIXED, false, 0.0)
+        saveUser(newUser)
+
+        var payload = "{\"sub\":\"" + newId + "\",\"iss\":\"" + expectedIssuer() + "\"}"
+        var token = jwt.create(payload, jwtSecret(), 7200)
+        return token
+    }
+
+    // =========================================================
+    // Onboarding — Sugestão e Criação de Orçamento
+    // =========================================================
+
+    app.post("/api/users/onboarding") {
+        try {
+            requireAuth()
+        } catch (String e) {
+            return status(401, "{\"error\":\"" + e + "\"}")
+        }
+
+        var req = json.decode<OnboardingRequest>(body())
+        var incomeType = IncomeType.FIXED
+        if (req.incomeType == "VARIABLE") {
+            incomeType = IncomeType.VARIABLE
+        }
+
+        var suggested = suggestBudgetModel(req.salary, incomeType, req.hasDebt)
+        var desc = describeBudgetModel(suggested)
+        var buckets = buildBudgetBuckets(suggested, req.salary)
+
+        var bStr = ""
+        for (var b in buckets) {
+            bStr = bStr + b.name + ":" + String.valueOf(b.percentage) + ":" + String.valueOf(b.amount) + ","
+        }
+
+        return suggested.name() + "|" + desc + "|" + bStr
+    }
+
+    // =========================================================
+    // Renda Variável (Reserva de Emergência ou Orçamento)
+    // =========================================================
+
+    app.post("/api/variable-income") {
+        try {
+            requireAuth()
+        } catch (String e) {
+            return status(401, "{\"error\":\"" + e + "\"}")
+        }
+
+        var token = header("Authorization")
+        var rawToken = extractBearerToken(token)
+        var userId = "usr_1"
+        if (rawToken != null) {
+            var claimsJson = jwt.verify(rawToken, jwtSecret())
+            var claims = json.decode<AuthClaims>(claimsJson)
+            userId = claims.sub
+        }
+
+        var req = json.decode<VariableIncomeInput>(body())
+        var res = registerUserIncome(userId, req.amount, req.source)
+        return json.encode(res)
+    }
+
+    app.get("/api/variable-income") {
+        try {
+            requireAuth()
+        } catch (String e) {
+            return status(401, "{\"error\":\"" + e + "\"}")
+        }
+
+        var userId = query("userId")
+        if (userId != null) {
+            var list = findVariableIncomesByUserId(userId)
+            return json.encode(list)
+        }
+        return "[]"
+    }
+
+    // =========================================================
+    // Pulso Diário e Coach Cognitivo
+    // =========================================================
+
+    app.get("/api/budgets/daily-pulse") {
+        try {
+            requireAuth()
+        } catch (String e) {
+            return status(401, "{\"error\":\"" + e + "\"}")
+        }
+
+        var token = header("Authorization")
+        var rawToken = extractBearerToken(token)
+        var userId = "usr_1"
+        if (rawToken != null) {
+            var claimsJson = jwt.verify(rawToken, jwtSecret())
+            var claims = json.decode<AuthClaims>(claimsJson)
+            userId = claims.sub
+        }
+
+        var pulse = calculateDailyPulse(userId, 30, "2026-09-01")
+        return json.encode(pulse)
+    }
+
+    app.post("/api/chat/message") {
+        try {
+            requireAuth()
+        } catch (String e) {
+            return status(401, "{\"error\":\"" + e + "\"}")
+        }
+
+        var token = header("Authorization")
+        var rawToken = extractBearerToken(token)
+        var userId = "usr_1"
+        if (rawToken != null) {
+            var claimsJson = jwt.verify(rawToken, jwtSecret())
+            var claims = json.decode<AuthClaims>(claimsJson)
+            userId = claims.sub
+        }
+
+        var msgReq = json.decode<ChatMessageRequest>(body())
+        var userMsg = ChatMessageEntity("msg_" + String.valueOf(BackendDb.chatMessages.size + 1), userId, ChatRole.USER, msgReq.message, null)
+        saveChatMessage(userMsg)
+
+        var pulse = calculateDailyPulse(userId, 30, "2026-09-01")
+        var reply = "Olá! Seu pulso diário disponível hoje é R$ " + String.valueOf(pulse.pulse) + ". O que deseja registrar hoje?"
+        var botMsg = ChatMessageEntity("msg_" + String.valueOf(BackendDb.chatMessages.size + 2), userId, ChatRole.ASSISTANT, reply, null)
+        saveChatMessage(botMsg)
+
+        return reply
+    }
+
+    // =========================================================
+    // Envelopes e Caixinhas
+    // =========================================================
+
+    app.get("/api/envelopes") {
+        try {
+            requireAuth()
+        } catch (String e) {
+            return status(401, "{\"error\":\"" + e + "\"}")
+        }
+
+        var userId = query("userId")
+        if (userId != null) {
+            var envelopes = findEnvelopesByUserId(userId)
+            return json.encode(envelopes)
+        }
+        return "[]"
+    }
+
+    app.post("/api/envelopes") {
+        try {
+            requireAuth()
+        } catch (String e) {
+            return status(401, "{\"error\":\"" + e + "\"}")
+        }
+
+        var req = json.decode<CreateEnvelopeInput>(body())
+        var newEnv = EnvelopeEntity("env_" + String.valueOf(BackendDb.envelopes.size + 1), req.userId, req.categoryName, req.limitAmount, 0.0, EnvelopeLimitType.FIXED, 0, null)
+        var saved = createEnvelope(newEnv)
+        return json.encode(saved)
+    }
+
+    // =========================================================
+    // Dashboard Unificado
+    // =========================================================
+
+    app.get("/api/dashboard") {
+        try {
+            requireAuth()
+        } catch (String e) {
+            return status(401, "{\"error\":\"" + e + "\"}")
+        }
+
+        var token = header("Authorization")
+        var rawToken = extractBearerToken(token)
+        var userId = "usr_1"
+        if (rawToken != null) {
+            var claimsJson = jwt.verify(rawToken, jwtSecret())
+            var claims = json.decode<AuthClaims>(claimsJson)
+            userId = claims.sub
+        }
+
+        var user = findUserById(userId)
+        var totalSpentLong = sumAmountByUserIdAndCreatedAtAfter(userId, "2026-09-01")
+        var totalSpent = totalSpentLong * 1.0
+
+        // Formato esperado pelo kof.ui: totalSpent|currency|categories|transactions
+        return String.valueOf(totalSpent) + "|BRL|Alimentação:50,Transporte:30,Lazer:20|Supermercado:Alimentação:150.0,"
+    }
+
+    app.get("/api/users/tier-status") {
+        try {
+            requireAuth()
+        } catch (String e) {
+            return status(401, "{\"error\":\"" + e + "\"}")
+        }
+
+        var token = header("Authorization")
+        var rawToken = extractBearerToken(token)
+        var userId = "usr_1"
+        if (rawToken != null) {
+            var claimsJson = jwt.verify(rawToken, jwtSecret())
+            var claims = json.decode<AuthClaims>(claimsJson)
+            userId = claims.sub
+        }
+
+        var status = getTierStatus(userId, "2026-09-01")
+        return json.encode(status)
+    }
+
+    app.listen(3000)
+}

@@ -1,0 +1,9 @@
+[project]
+name = "organiza-ai"
+
+[backend]
+target = "jvm"
+
+[frontend]
+target = "kofjs"
+

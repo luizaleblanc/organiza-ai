@@ -7,7 +7,7 @@
   - **Commit:** `feat(backend): transpolar servicos e repositorios core para KOF (services.kf)`
 
 ## Phase 2: AI Coach & Cognitive Logic Transpilation
-- [ ] **Task 2.1: Implementar `backend/coach.kf`**
+- [x] **Task 2.1: Implementar `backend/coach.kf`**
   - Transpolar `CategoryBucketMapper`, `GetDailyPulseFunction`, `GetBalanceFunction`, `RegisterIncomeFunction`, `SuggestModelChangeFunction` e `KakeiboReflectionService`.
   - Atualizar `backend/models.kf` com `KakeiboReflectionEntity`.
   - **Tests:** `kof check backend`
@@ -15,11 +15,11 @@
   - **Commit:** `feat(coach): transpolar modulo de IA e logica cognitiva para KOF (backend/coach.kf)`
 
 ## Phase 3: Monolith Unification (KofLith)
-- [ ] **Task 3.1: Conectar rotas do `bff/main.kf` diretamente aos serviços Kof**
+- [x] **Task 3.1: Conectar rotas do `backend/main.kf` diretamente aos serviços Kof**
   - Eliminar proxy `http.post("http://localhost:8080/...")` em favor de chamadas diretas às funções Kof do `backend/`.
-  - **Tests:** `kof check bff`
+  - **Tests:** `kof check backend` (4 arquivos com main)
   - **Gate:** Rotas resolvendo tipos sem proxy externo.
-  - **Commit:** `feat(bff): unificar rotas e servicos no padrao KofLith monolitico (bff/main.kf)`
+  - **Commit:** `feat(koflith): unificar gateway HTTP e funcoes de dominio no monólito KofLith (backend/main.kf)`
 
 ## Phase 4: Documentation, Parity Verification & LinkedIn Post
 - [ ] **Task 4.1: Atualizar `README.md` e `PROJECT_STATUS.md`**

@@ -186,3 +186,14 @@ class KakeiboReflectionEntity {
     }
 }
 
+// =========================================================
+// DTOs de Entrada e API Web (KofLith)
+// =========================================================
+
+record LoginRequest(String email, String password)
+record OnboardingRequest(Float salary, String incomeType, Bool hasDebt)
+record VariableIncomeInput(Float amount, String source)
+record CreateEnvelopeInput(String userId, String categoryName, Float limitAmount)
+record ChatMessageRequest(String message)
+
+
