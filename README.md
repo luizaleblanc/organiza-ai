@@ -56,22 +56,31 @@ Conheça a interface do Organiza IA:
 
 | Camada | Tecnologia |
 |---|---|
-| Front-end | KOF (kof.ui) -- linguagem compilada para JVM, renderiza via KofJS em webview |
-| Back-end (BFF) | KOF (kof.web) -- servidor HTTP desacoplado, servindo dados estruturados para o front-end |
-| Back-end (API) | Java 17, Spring Boot 3.3.x, Spring AI (GPT-4o-mini via tool calling) |
-| Banco de Dados | MySQL no Render (modelo relacional) com cronjob de ping para estabilidade contínua |
-| Build | Gradle (backend), kof-cli (frontend/BFF) |
+| Monólito KofLith | KOF (`backend/*.kf`) -- Monólito modular unificado (Gateway HTTP, Auth JWT, Regras de Negócio e AI Coach compilados 100% para Bytecode JVM nativo) |
+| Front-end | KOF (`kof.ui`, `frontend/*.kf`) -- Interface reativa e adaptativa compilada para a JVM e Web |
+| Back-end Legado | Java 17, Spring Boot 3.3.x, Spring AI (preservado como *Ground Truth* em `src/main/java` até homologação final) |
+| Banco de Dados | MySQL no Render com modelo relacional integrado |
+| Build & Tooling | `kof-cli` / Kof Compiler (Java 25 JDK), Gradle (para o legado Java) |
 
 ## Arquitetura
 
+O projeto adota o padrão **KofLith** (*Menos segregação, mais intenção*), unificando a interface, as rotas de gateway e a lógica de negócios em uma estrutura monolítica modular direta:
+
 ```
-┌─────────────────────────┐     ┌─────────────────────────┐     ┌─────────────────────────┐
-│  KOF Frontend (kof.ui)  │     │  KOF BFF (kof.web)      │     │  Spring Boot (Backend)  │
-│                         │     │                         │     │                         │
-│  Telas e componentes    │────>│  Proxy autenticado      │────>│  Lógica de negócio      │
-│  compilados para JVM    │ JWT │  Rotas desacopladas     │ HTTP│  Spring AI (coach IA)   │
-│  Renderiza via webview  │     │  Servidor HTTP na JVM   │     │  MySQL (Render)         │
-└─────────────────────────┘     └─────────────────────────┘     └─────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│                        ORGANIZA IA (KOFLITH)                           │
+│                                                                        │
+│   ┌───────────────────────────┐      ┌──────────────────────────────┐  │
+│   │   Frontend (kof.ui)       │      │   Domínio Core (kof.web)     │  │
+│   │                           │      │                              │  │
+│   │   • Boas-Vindas & Auth    │─────>│   • Gateway HTTP (porta 3000)│  │
+│   │   • Fluxo de Onboarding   │      │   • Segurança JWT Nativa     │  │
+│   │   • Dashboard & Envelopes │      │   • AI Coach & Pulso Diário  │  │
+│   │   • Chat Conversacional   │      │   • Modelos de Orçamento     │  │
+│   └───────────────────────────┘      └──────────────────────────────┘  │
+│                                                                        │
+│             Bytecode JVM Nativo com Execução em Virtual Threads        │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Modelo de Negócio

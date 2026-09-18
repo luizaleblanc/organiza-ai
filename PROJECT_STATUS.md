@@ -1,16 +1,18 @@
 # PROJECT_STATUS.md -- Organiza IA
 
-> Atualizado em: 08/09/2026
-> Fase atual: 2 -- Desenvolvimento (backend e BFF concluídos, Design System concluído, frontend KOF arquitetado e em andamento)
+> Atualizado em: 17/09/2026
+> Fase atual: 3 -- Arquitetura KofLith Concluída (Monólito Modular Unificado compilando para Bytecode JVM nativo e validado na porta 3000)
 
-## Estado do Backend (ATUAL — Transição KofLith)
-- Java: 17 (Ground Truth preservado até homologação final)
-- Spring Boot: 3.3.13 / Spring AI: 1.0.8
-- Backend KOF (`backend/*.kf`): **100% dos módulos de domínio transpilados e validados**:
-  - `backend/models.kf`: Entidades, Records e Enums (170 LOC) — `kof check` OK.
-  - `backend/services.kf`: Repositórios e Serviços Core (User, Transaction, Budget, Envelope, VariableIncome, Tier) (570 LOC) — `kof check` OK.
-  - `backend/coach.kf`: Lógica Cognitiva, Daily Pulse, Balance, SuggestModel e Kakeibo (270 LOC) — `kof check` OK.
+## Estado do Backend (ATUAL — Transição KofLith Concluída)
+- Java: 17 (Ground Truth preservado em `src/main/java` até homologação final e paridade formal)
+- Monólito KOF (`backend/*.kf`): **100% dos módulos de domínio unificados, compilados e validados em runtime**:
+  - `backend/models.kf`: Entidades, Records e Enums com tipos monetários de 64 bits (`Double`) — `kof check` e JVM bytecode OK.
+  - `backend/services.kf`: Repositórios e Serviços Core (User, Transaction, Budget, Envelope, VariableIncome, Tier) — `kof check` e JVM bytecode OK.
+  - `backend/coach.kf`: Lógica Cognitiva, Daily Pulse, Balance, SuggestModel e Kakeibo — `kof check` e JVM bytecode OK.
+  - `backend/auth.kf`: Middleware e segurança JWT unificados no pacote raiz do domínio — `kof check` e JVM bytecode OK.
+  - `backend/main.kf`: Gateway HTTP nativo KOF na porta 3000 sem proxy ou segregação de processos.
 - Filosofia Arquitetural: **KofLith (Menos segregação, mais intenção)**. Unificação de rotas, domínio e persistência na plataforma Kof sem proxies HTTP desnecessários.
+- Validação Automatizada: `scripts/validate_architecture.ps1` valida check de tipo, compilação de bytecode JVM e smoke test do endpoint `GET /health` na porta 3000.
 
 
 ## Estado do Frontend + BFF (ATUAL)
@@ -73,6 +75,7 @@
 - [x] **Etapa 6**: Telas Onboarding (Salary, Income, Debt, Debt Amount, Result)
 - [x] **Etapa 7**: Telas Principais (Dashboard, Chat, Envelopes)
 - [x] **Etapa 8**: Auditoria de Sintaxe KOF e Resolução de Erros de CI
+- [x] **Etapa 9**: Transição KofLith — Unificação de Domínio e Gateway HTTP, Geração de Bytecode JVM Nativo e Validação de Runtime na porta 3000
 
 ## Documentação
 - [x] Todos os arquivos `.md` atualizados (README, CLAUDE.md, CONTRIBUTING.md, DATA_MODEL.md, ARCHITECTURE_DECISIONS.md, PROJECT_STATUS.md, DESIGN_SYSTEM.md)

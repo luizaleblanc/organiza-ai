@@ -25,6 +25,7 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "   [OK] backend/*.kf (models, services, coach, main): 0 erros de compilação!" -ForegroundColor Green
 } else {
     Write-Host "   [FALHA] backend/*.kf falhou no typecheck" -ForegroundColor Red
+    Write-Host $backendCheck
     exit 1
 }
 
@@ -44,6 +45,32 @@ if ($LASTEXITCODE -eq 0) {
 } else {
     Write-Host "   [FALHA] Geração de bytecode JVM falhou" -ForegroundColor Red
     exit 1
+}
+
+Write-Host "`n4. Testando Inicialização Nativa e Endpoint /health (porta 3000)..." -ForegroundColor Yellow
+$psi = New-Object System.Diagnostics.ProcessStartInfo
+$psi.FileName = $javaExe
+$psi.Arguments = "-cp build/classes Default.Main"
+$psi.UseShellExecute = $false
+$psi.CreateNoWindow = $true
+$serverProc = [System.Diagnostics.Process]::Start($psi)
+Start-Sleep -Seconds 2
+try {
+    $health = Invoke-RestMethod -Uri "http://localhost:3000/health" -Method Get -TimeoutSec 3
+    if ($health -eq "OK") {
+        Write-Host "   [OK] Servidor KofLith subiu nativamente na JVM e respondeu OK em /health!" -ForegroundColor Green
+    } else {
+        Write-Host "   [FALHA] Resposta inesperada do servidor: $health" -ForegroundColor Red
+        exit 1
+    }
+} catch {
+    Write-Host "   [FALHA] Servidor KofLith não respondeu na porta 3000: $_" -ForegroundColor Red
+    exit 1
+} finally {
+    if (!$serverProc.HasExited) {
+        $serverProc.Kill()
+        $serverProc.WaitForExit()
+    }
 }
 
 Write-Host "`n==========================================================" -ForegroundColor Cyan
