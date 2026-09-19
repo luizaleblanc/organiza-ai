@@ -93,9 +93,11 @@ class TransactionEntity {
     Bucket? bucket
     Source source
     String? createdAt
+    String? envelopeId
 
     public constructor(String id, String description, Long amount, Category? category,
-            String currency, String userId, Bucket? bucket, Source source, String? createdAt) {
+            String currency, String userId, Bucket? bucket, Source source, String? createdAt,
+            String? envelopeId) {
         this.id = id
         this.description = description
         this.amount = amount
@@ -105,6 +107,7 @@ class TransactionEntity {
         this.bucket = bucket
         this.source = source
         this.createdAt = createdAt
+        this.envelopeId = envelopeId
     }
 }
 

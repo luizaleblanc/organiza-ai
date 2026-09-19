@@ -51,10 +51,10 @@ class BackendDb {
 record BucketSummaryDTO(String name, Int percentage, Double amount)
 
 // mod_transaction/dto/PersistTransactionInput.java
-record PersistTransactionInput(String description, Long amount, Category category, String currency)
+record PersistTransactionInput(String description, Long amount, Category category, String currency, String? envelopeId)
 
 // mod_transaction/dto/TransactionOutput.java
-record TransactionOutput(String id, String description, String category, Double value, String currency)
+record TransactionOutput(String id, String description, String category, Double value, String currency, String? envelopeId)
 
 // mod_transaction/dto/GetTotalByCategoryInput.java
 record GetTotalByCategoryInput(Category category)
@@ -133,10 +133,14 @@ Double sumAmountByCategoryAndUserId(Category category, String userId) {
 List<TransactionEntity> findTransactionsByUserIdAndCreatedAtAfter(String userId, String from) {
     var result: List<TransactionEntity> = listOf()
     for (var t in BackendDb.transactions) {
-        var createdAt = t.createdAt
-        if (t.userId == userId && createdAt != null) {
-            if (createdAt.compareTo(from) >= 0) {
+        if (t.userId == userId) {
+            var createdAt = t.createdAt
+            if (createdAt == null) {
                 result.add(t)
+            } else {
+                if (createdAt.compareTo(from) >= 0) {
+                    result.add(t)
+                }
             }
         }
     }
@@ -182,7 +186,7 @@ TransactionOutput transactionEntityToOutput(TransactionEntity t) {
     if (category != null) {
         categoryName = category.name()
     }
-    return TransactionOutput(t.id, t.description, categoryName, t.amount, t.currency)
+    return TransactionOutput(t.id, t.description, categoryName, (t.amount * 1.0), t.currency, t.envelopeId)
 }
 
 // =========================================================
@@ -191,6 +195,15 @@ TransactionOutput transactionEntityToOutput(TransactionEntity t) {
 
 List<EnvelopeEntity> findEnvelopesByUserId(String userId) {
     return BackendDb.envelopes.filter((e: EnvelopeEntity) -> e.userId == userId)
+}
+
+EnvelopeEntity? findEnvelopeByUserIdAndCategoryName(String userId, String categoryName) {
+    for (var e in BackendDb.envelopes) {
+        if (e.userId == userId && e.categoryName == categoryName) {
+            return e
+        }
+    }
+    return null
 }
 
 EnvelopeEntity? findEnvelopeById(String id) {
@@ -492,8 +505,25 @@ TransactionOutput persistTransaction(String id, PersistTransactionInput input, S
         throw "Operação negada: O valor da transação deve ser maior que zero."
     }
 
-    var transaction = TransactionEntity(id, input.description(), input.amount(), input.category(), input.currency(), userId, null, Source.MANUAL, null)
+    var envId = input.envelopeId()
+    if (envId == null) {
+        var categoryName = input.category().name()
+        var env = findEnvelopeByUserIdAndCategoryName(userId, categoryName)
+        if (env != null) {
+            envId = env.id
+        }
+    }
+
+    var transaction = TransactionEntity(id, input.description(), input.amount(), input.category(), input.currency(), userId, null, Source.MANUAL, "2026-09-18T12:00:00Z", envId)
     saveTransaction(transaction)
+
+    if (envId != null) {
+        var envToUpdate = findEnvelopeById(envId)
+        if (envToUpdate != null) {
+            envToUpdate.currentSpent = envToUpdate.currentSpent + (input.amount() * 1.0)
+            saveEnvelope(envToUpdate)
+        }
+    }
 
     return transactionEntityToOutput(transaction)
 }

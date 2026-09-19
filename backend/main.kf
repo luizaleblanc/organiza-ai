@@ -4,6 +4,7 @@
 // Todas as rotas chamam diretamente o domínio Kof sem proxy HTTP.
 
 main() {
+    auth.secret(jwtSecret())
     var app = web.app()
 
     // Middleware global de autenticação
@@ -205,6 +206,56 @@ main() {
         var newEnv = EnvelopeEntity("env_" + String.valueOf(BackendDb.envelopes.size + 1), req.userId, req.categoryName, req.limitAmount, 0.0, EnvelopeLimitType.FIXED, 0, null)
         var saved = createEnvelope(newEnv)
         return json.encode(saved)
+    }
+
+    // =========================================================
+    // Transações e Histórico (Issues #3 e #24)
+    // =========================================================
+
+    app.get("/api/transactions") {
+        try {
+            requireAuth()
+        } catch (String e) {
+            return status(401, "{\"error\":\"" + e + "\"}")
+        }
+
+        var token = header("Authorization")
+        var rawToken = extractBearerToken(token)
+        var userId = "usr_1"
+        if (rawToken != null) {
+            var claimsJson = jwt.verify(rawToken, jwtSecret())
+            var claims = json.decode<AuthClaims>(claimsJson)
+            userId = claims.sub
+        }
+
+        var list = findTransactionsByUserIdAndCreatedAtAfter(userId, "2000-01-01")
+        var outputs: List<TransactionOutput> = listOf()
+        for (var t in list) {
+            outputs.add(transactionEntityToOutput(t))
+        }
+        return json.encode(outputs)
+    }
+
+    app.post("/api/transactions") {
+        try {
+            requireAuth()
+        } catch (String e) {
+            return status(401, "{\"error\":\"" + e + "\"}")
+        }
+
+        var token = header("Authorization")
+        var rawToken = extractBearerToken(token)
+        var userId = "usr_1"
+        if (rawToken != null) {
+            var claimsJson = jwt.verify(rawToken, jwtSecret())
+            var claims = json.decode<AuthClaims>(claimsJson)
+            userId = claims.sub
+        }
+
+        var req = json.decode<PersistTransactionInput>(body())
+        var newId = "tx_" + String.valueOf(BackendDb.transactions.size + 1)
+        var created = persistTransaction(newId, req, userId)
+        return json.encode(created)
     }
 
     // =========================================================
