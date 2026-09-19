@@ -1,18 +1,19 @@
 # PROJECT_STATUS.md -- Organiza IA
 
-> Atualizado em: 17/09/2026
-> Fase atual: 3 -- Arquitetura KofLith Concluída (Monólito Modular Unificado compilando para Bytecode JVM nativo e validado na porta 3000)
+> Atualizado em: 18/09/2026
+> Fase atual: 3 -- Monólito KofLith 100% Nativo sobre a JVM (Issue #37 concluída: legado Java arquivado)
 
-## Estado do Backend (ATUAL — Transição KofLith Concluída)
-- Java: 17 (Ground Truth preservado em `src/main/java` até homologação final e paridade formal)
-- Monólito KOF (`backend/*.kf`): **100% dos módulos de domínio unificados, compilados e validados em runtime**:
-  - `backend/models.kf`: Entidades, Records e Enums com tipos monetários de 64 bits (`Double`) — `kof check` e JVM bytecode OK.
-  - `backend/services.kf`: Repositórios e Serviços Core (User, Transaction, Budget, Envelope, VariableIncome, Tier) — `kof check` e JVM bytecode OK.
-  - `backend/coach.kf`: Lógica Cognitiva, Daily Pulse, Balance, SuggestModel e Kakeibo — `kof check` e JVM bytecode OK.
-  - `backend/auth.kf`: Middleware e segurança JWT unificados no pacote raiz do domínio — `kof check` e JVM bytecode OK.
+## Estado do Backend (ATUAL — Monólito Puro KOF)
+- Java: 17 -- **arquivado** em `archive/legacy-backend-java/` (tag histórica `legacy/java-spring-boot`), não faz mais parte do build do projeto. Preservado só como Ground Truth histórico.
+- Monólito KOF (`backend/*.kf`): **100% dos módulos de domínio unificados**, operando de forma autônoma e exclusiva (sem o backend Java):
+  - `backend/models.kf`: Entidades, Records e Enums com tipos monetários de 64 bits (`Double`) — `kof check` OK.
+  - `backend/services.kf`: Repositórios e Serviços Core (User, Transaction, Budget, Envelope, VariableIncome, Tier) — `kof check` OK.
+  - `backend/coach.kf`: Lógica Cognitiva, Daily Pulse, Balance, SuggestModel e Kakeibo — `kof check` OK.
+  - `backend/auth.kf`: Middleware e segurança JWT unificados no pacote raiz do domínio — `kof check` OK.
   - `backend/main.kf`: Gateway HTTP nativo KOF na porta 3000 sem proxy ou segregação de processos.
 - Filosofia Arquitetural: **KofLith (Menos segregação, mais intenção)**. Unificação de rotas, domínio e persistência na plataforma Kof sem proxies HTTP desnecessários.
 - Validação Automatizada: `scripts/validate_architecture.ps1` valida check de tipo, compilação de bytecode JVM e smoke test do endpoint `GET /health` na porta 3000.
+- ⚠️ **Bloqueio conhecido (Issue #41):** a etapa de geração de bytecode JVM do `validate_architecture.ps1` crasha atualmente por um bug do compilador Kof4j (`ASM COMPUTE_FRAMES`, `ArrayIndexOutOfBoundsException`) ao construir `record`s com campo `Double` antes de um `String?` nulo (reproduzido isoladamente em `backend/coach.kf::calculateDailyPulse`). O `kof check` (typecheck) passa normalmente; o bloqueio é só na emissão de bytecode. Sem workaround seguro só em `.kf` (records são imutáveis — `SEM038` — e atribuição de `null` fora de narrowing é proibida — `SEM048`). Precisa de correção no compilador Kof4j.
 
 
 ## Estado do Frontend + BFF (ATUAL)
@@ -78,6 +79,7 @@
 - [x] **Etapa 9**: Transição KofLith — Unificação de Domínio e Gateway HTTP, Geração de Bytecode JVM Nativo e Validação de Runtime na porta 3000
 - [x] **Etapa 10**: Validação de Paridade Diferencial KOF vs. Java Legado — Suíte formal de 5 testes de paridade (`tests/parity_test.kf` e `scripts/run_parity_tests.ps1`) com 100% de aprovação comprovando equivalência aritmética e de regras cognitivas.
 - [x] **Etapa 11**: Homologação E2E Completa do Monólito KofLith e Dedução de Envelopes (Issues #24 e #36) — Suíte de 9 testes ponta a ponta (`scripts/test_e2e_flow.ps1`) com 100% de aprovação GREEN na porta 3000 cobrindo Auth JWT, Onboarding 50/30/20, Envelopes, Transações vinculadas com dedução automática, Pulso Diário e AI Coach.
+- [x] **Etapa 12**: Arquivamento do Legado Java (Issue #37) — `src/main/java` e `src/main/resources` movidos para `archive/legacy-backend-java/`, tag histórica `legacy/java-spring-boot` criada. Organiza IA agora é um monólito puro KOF sobre a JVM. Validação completa de bytecode segue bloqueada por bug de compilador rastreado na Issue #41.
 
 ## Documentação
 - [x] Todos os arquivos `.md` atualizados (README, CLAUDE.md, CONTRIBUTING.md, DATA_MODEL.md, ARCHITECTURE_DECISIONS.md, PROJECT_STATUS.md, DESIGN_SYSTEM.md)
@@ -108,11 +110,15 @@
   - #34: `feat(frontend): Integrar Motor de Ação do Chat`
   - #35: `chore(kof4j): isolar RawView e submeter PR em conformidade com CONTRIBUTING.md do KofLang`
   - #36: `test(e2e): homologação do fluxo completo do usuário no monólito KofLith (porta 3000)`
-  - #37: `refactor(arch): arquivar legado Java (src/main/java) após homologação E2E do KofLith`
+  - #37: `refactor(arch): arquivar legado Java (src/main/java) após homologação E2E do KofLith` -- **fechada**
+  - #38: `feat(frontend): integrar componentes e telas kof.ui com o novo widget RawView (Kof4j #451)`
+  - #39: `ci(benchmarks): pipeline de execucao e coleta de metricas de memoria JVM vs KofJS`
+  - #40: `docs(readme): gerar capturas de tela das 11 telas do Design System para o README`
+  - #41: `bug(kof4j): ASM COMPUTE_FRAMES crasha ao construir record com Double antes de String? nulo`
 
 ## Decisões tomadas
 - Frontend + BFF em KOF (kof.ui / kof.web)
-- Backend permanece Java/Spring Boot
+- Backend migrado de Java/Spring Boot para monólito KOF (`backend/*.kf`); Java arquivado em `archive/legacy-backend-java/` (Issue #37)
 - 6 modelos de orçamento adaptativos, selecionados automaticamente no onboarding
 - Monetização: freemium (R$9,90/mês premium)
 - Dashboard é a interface principal; entrada por voz é opcional

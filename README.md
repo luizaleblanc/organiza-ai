@@ -56,11 +56,11 @@ Conheça a interface do Organiza IA:
 
 | Camada | Tecnologia |
 |---|---|
-| Monólito KofLith | KOF (`backend/*.kf`) -- Monólito modular unificado (Gateway HTTP, Auth JWT, Regras de Negócio e AI Coach compilados 100% para Bytecode JVM nativo) |
+| Monólito KofLith | KOF (`backend/*.kf`) -- Monólito modular unificado (Gateway HTTP, Auth JWT, Regras de Negócio e AI Coach) |
 | Front-end | KOF (`kof.ui`, `frontend/*.kf`) -- Interface reativa e adaptativa compilada para a JVM e Web |
-| Back-end Legado | Java 17, Spring Boot 3.3.x, Spring AI (preservado como *Ground Truth* em `src/main/java` até homologação final) |
+| Back-end Legado (arquivado) | Java 17, Spring Boot 3.3.x, Spring AI -- arquivado em `archive/legacy-backend-java/` (tag histórica `legacy/java-spring-boot`), mantido apenas como referência histórica |
 | Banco de Dados | MySQL no Render com modelo relacional integrado |
-| Build & Tooling | `kof-cli` / Kof Compiler (Java 25 JDK), Gradle (para o legado Java) |
+| Build & Tooling | `kof-cli` / Kof Compiler (Java 25 JDK) |
 
 ## Arquitetura
 
@@ -133,18 +133,18 @@ Etapas commitáveis, na ordem em que devem ser aplicadas:
 cada etapa fica local até revisão. Ver commit sugerido na sessão que gerou
 esta auditoria.
 
-## Arquitetura KofLith — Transição e Unificação (Menos Segregação, Mais Intenção)
+## Arquitetura KofLith — Monólito 100% Nativo sobre a JVM (Issue #37)
 
-Em alinhamento com a filosofia da linguagem KOF (`training/idioms/architecture.md`), estamos realizando a transição progressiva do backend em Spring Boot para o padrão **KofLith**. 
+Em alinhamento com a filosofia da linguagem KOF (`training/idioms/architecture.md`), o Organiza IA concluiu a transição do backend Spring Boot para o padrão **KofLith**: o monólito de domínio (`backend/*.kf`) e o gateway (`bff/*.kf`) rodam de forma autônoma e exclusiva em KOF sobre a JVM, sem depender do backend Java em runtime.
 
 Na visão KOF, segregar o frontend e o backend em dois mundos artificiais com proxies HTTP intermediários adiciona complexidade acidental desnecessária. O padrão KofLith unifica intenção: entidades viram `record`, comportamento vira `class`, e regras de negócio viram `funções top-level` diretas.
 
 ### Estado da Transpilação KOF (`backend/`):
-- **Entidades e Enums (`backend/models.kf`):** 100% transpilado e validado.
-- **Serviços e Repositórios Core (`backend/services.kf`):** 100% transpilado e validado (`mod_user`, `mod_transaction`, `mod_budget`, `mod_variable_income`, `TierEnforcement`).
-- **Módulo de IA Coach (`backend/coach.kf`):** 100% transpilado e validado (`CategoryBucketMapper`, `calculateDailyPulse`, `calculateBalance`, `registerUserIncome`, `suggestModelChange`, `KakeiboReflection`).
-- **Validação de Compilação:** 100% dos arquivos do `backend/` e `bff/` compilam com **0 erros** via `kof check`.
-- **Garantia de Não-Regressão:** O código Java legado (`src/main/java`) é preservado integralmente como especificação executável até que todos os testes de paridade sejam concluídos.
+- **Entidades e Enums (`backend/models.kf`):** transpilado.
+- **Serviços e Repositórios Core (`backend/services.kf`):** transpilado (`mod_user`, `mod_transaction`, `mod_budget`, `mod_variable_income`, `TierEnforcement`).
+- **Módulo de IA Coach (`backend/coach.kf`):** transpilado (`CategoryBucketMapper`, `calculateDailyPulse`, `calculateBalance`, `registerUserIncome`, `suggestModelChange`, `KakeiboReflection`).
+- **Código Java legado:** arquivado em `archive/legacy-backend-java/` (não compila mais como parte do projeto), preservado como *Ground Truth* histórico via tag `legacy/java-spring-boot`.
+- **Pendência conhecida de validação de bytecode:** `scripts/validate_architecture.ps1` está atualmente bloqueado por um bug do compilador Kof4j na geração de bytecode JVM (`ASM COMPUTE_FRAMES`) ao construir `record`s com campos `Double` seguidos de um campo `String?` nulo -- ver Issue #41. O `kof check` (typecheck) passa normalmente; o bloqueio é só na fase de emissão de bytecode.
 
 
 ## Como Contribuir
