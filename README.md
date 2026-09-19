@@ -1,4 +1,4 @@
-# Organiza IA
+# Organiza AI
 
 **O único app de finanças que conversa com você, entende seu salário e te diz quanto você pode gastar para terminar o mês no verde.**
 
