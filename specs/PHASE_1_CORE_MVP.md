@@ -1,58 +1,65 @@
-# PHASE 1 -- Core MVP: Chat + Registro + Pulso Diario
+# PHASE 1 -- Core MVP: Monólito KofLith (Auth + Onboarding + Envelopes + Transações + Pulso Diário + Coach)
 
-## Contexto
-Fase 0 concluida: backend modular, Flutter scaffold, schema atualizado.
-Esta fase entrega o fluxo principal: usuario informa salario, registra gastos via chat, ve o pulso diario.
+## Contexto e Arquitetura Atual
+O Organiza IA opera sob a arquitetura **KofLith (Monólito Modular JVM em KOF)**.
+Toda a lógica de gateway HTTP, modelos de domínio, cálculo financeiro com precisão de 64 bits (`Double`), regras cognitivas anti-alucinação e persistência foi unificada nos pacotes `backend/*.kf`, operando de forma autônoma na porta 3000 sem proxies ou dependência de microsserviços.
 
-## Escopo EXATO desta fase
+---
 
-### Backend (mod-ai-coach)
-- [ ] Endpoint `POST /api/chat/message` -- recebe texto, processa via Spring AI, retorna resposta
-- [ ] System prompt: coach financeiro em pt-BR, usa tool calling para registrar gastos
-- [ ] Tools: `registerExpense`, `registerIncome`, `getBalance`, `getDailyPulse`
-- [ ] Persistencia de historico de chat (tabela `chat_messages`, ultimas 20 msgs como contexto)
+## Escopo Consolidado do MVP
 
-### Backend (mod-transaction)
-- [ ] `POST /api/transactions` -- criar transacao
-- [ ] `GET /api/transactions?month=2026-09` -- listar por mes
-- [ ] Categorizacao automatica pela IA ao registrar via chat
-- [ ] Classificacao em bucket (NEEDS/WANTS/SAVINGS) pela IA
+### 1. Autenticação & Segurança (`backend/auth.kf` + `backend/main.kf`)
+- `POST /api/auth/register`: Registro com validação de formato e emissão de Bearer Token JWT nativo.
+- `POST /api/auth/login`: Autenticação e emissão de JWT.
+- Middleware JWT nativo KofWeb intercepta rotas privadas e valida o segredo `KOF_AUTH_SECRET`.
 
-### Backend (mod-budget)
-- [ ] `POST /api/budgets` -- criar budget mensal (triggered no onboarding ao informar salario)
-- [ ] `GET /api/budgets/current` -- retorna budget do mes corrente
-- [ ] `GET /api/budgets/daily-pulse` -- calculo: (salario - gastos_mes) / dias_restantes
-- [ ] Auto-criacao: ao cadastrar salario, gera budget com 50/30/20
+### 2. Usuário & Onboarding Adaptativo (`backend/services.kf` + `backend/coach.kf`)
+- `POST /api/users/onboarding`: Processamento de renda mensal, tipo de renda (`FIXED` ou `VARIABLE`), presença e valor de dívidas (`debtAmount`).
+- Seleção e sugestão automática de 6 modelos de orçamento adaptativos (50/30/20, 60/20/20, 70/20/10, etc.).
+- Geração automática dos buckets de orçamento e direcionamento de renda variável para reserva de emergência.
 
-### Backend (mod-user)
-- [ ] `PATCH /api/users/salary` -- atualizar salario
-- [ ] Endpoint retorna user com salario
+### 3. Sistema de Envelopes (`backend/models.kf` + `backend/services.kf`)
+- `GET /api/envelopes`: Listagem dos envelopes orçamentários por categoria do usuário autenticado.
+- `POST /api/envelopes`: Criação de envelopes com nome, categoria e limite mensal planejado (`allocatedLimit`).
+- Saldo atual e gastos acumulados (`currentSpent`) rastreados com precisão aritmética.
 
-### Flutter (4 telas)
-- [ ] **Onboarding**: input de salario + nome. Chama `PATCH /users/salary` + `POST /budgets`
-- [ ] **Chat**: lista de mensagens (USER/ASSISTANT). Input de texto. Scroll automatico. Card de pulso diario fixo no topo
-- [ ] **Pulso Diario (widget)**: consome `GET /budgets/daily-pulse`. Mostra "Voce pode gastar R$XX hoje"
-- [ ] **Historico**: lista de transacoes do mes. Consome `GET /transactions?month=`
+### 4. Transações com Vínculo e Dedução Automática (`backend/services.kf` + `backend/main.kf`)
+- `POST /api/transactions`: Registro de transações com `envelopeId` opcional. Se nulo, localiza automaticamente o envelope da categoria do usuário, associa a transação e debita/acumula o valor gasto no envelope.
+- `GET /api/transactions`: Histórico filtrado de transações do usuário.
 
-## Contratos de API
+### 5. Motor de Pulso Diário (`backend/coach.kf` + `backend/services.kf`)
+- `GET /api/budgets/daily-pulse`:
+  - Cálculo: `(salário - total_gastos_mês) / dias_restantes_no_mês`.
+  - Arredondamento financeiro com 2 casas decimais (`roundTo(valor, 2)`).
+  - Status dos buckets com percentual e limite comprometido.
 
-### POST /api/chat/message
+### 6. IA Coach Financeiro com Grounding (`backend/coach.kf` + `backend/main.kf`)
+- `POST /api/chat/message`: Processamento cognitivo de despesas e orientações via Coach Financeiro com grounding temporal.
+- Integração de tools cognitivas: `getDailyPulse`, `getBalance`, `suggestModelChange`.
+
+---
+
+## Contratos de API (Resumo)
+
+### POST /api/transactions
 ```json
 // Request
-{ "message": "gastei 35 reais no almoco" }
-
-// Response
 {
-  "reply": "Registrei R$35,00 em Alimentacao (Necessidades). Seu pulso diario agora e R$92,00.",
-  "transaction": {
-    "id": 42,
-    "amount": 35.00,
-    "category": "ALIMENTACAO",
-    "bucket": "NEEDS",
-    "description": "almoco",
-    "source": "MANUAL"
-  },
-  "dailyPulse": 92.00
+  "amount": 45.50,
+  "category": "FOOD",
+  "description": "Almoço executivo",
+  "envelopeId": "env_1"
+}
+
+// Response (TransactionOutput)
+{
+  "id": "tx_1",
+  "userId": "user_1",
+  "envelopeId": "env_1",
+  "amount": 45.50,
+  "category": "FOOD",
+  "description": "Almoço executivo",
+  "createdAt": "2026-09-18T12:00:00Z"
 }
 ```
 
@@ -60,36 +67,18 @@ Esta fase entrega o fluxo principal: usuario informa salario, registra gastos vi
 ```json
 // Response
 {
-  "dailyPulse": 92.00,
-  "daysRemaining": 12,
-  "totalSpent": 2896.00,
-  "totalBudget": 4000.00,
-  "bucketsUsage": {
-    "NEEDS": { "limit": 2000.00, "spent": 1650.00, "percentage": 82.5 },
-    "WANTS": { "limit": 1200.00, "spent": 980.00, "percentage": 81.6 },
-    "SAVINGS": { "limit": 800.00, "spent": 266.00, "percentage": 33.2 }
-  }
+  "dailyLimit": 133.33,
+  "daysRemaining": 30,
+  "availableToday": 133.33,
+  "spentToday": 45.50,
+  "message": "Você tem R$ 133,33 disponíveis por dia neste mês."
 }
 ```
 
-## Regras de Negocio
-1. Pulso diario = (salario - total_gastos_mes) / dias_restantes_no_mes
-2. Se pulso <= 0, a IA deve orientar: "Voce ja comprometeu todo o salario. Vamos revisar seus gastos?"
-3. Classificacao de bucket pela IA: Moradia, Saude, Mercado, Transporte = NEEDS. Delivery, Lazer, Streaming, Roupas = WANTS. Poupanca, Investimento = SAVINGS
-4. Historico de chat limitado a 20 mensagens como contexto para a IA (gerenciar tokens)
-5. Budget e criado automaticamente no primeiro dia de cada mes (Spring Scheduler) OU no onboarding
+---
 
-## Criterios de Aceite
-1. Usuario abre o app pela primeira vez -> onboarding pede salario -> budget 50/30/20 criado
-2. Usuario digita "gastei 50 no uber" no chat -> IA registra transacao em Transporte/NEEDS -> pulso atualiza
-3. Usuario digita "quanto posso gastar hoje?" -> IA responde com pulso diario calculado
-4. Historico mostra transacoes do mes com categoria e bucket
-5. Pulso diario no topo do chat atualiza apos cada gasto registrado
-
-## Fora de Escopo
-- Envelopes (Fase 2)
-- Dashboard visual com graficos (Fase 2)
-- Entrada por voz (Fase 3)
-- Leitura de notificacoes bancarias (Fase 3)
-- Insights semanais (Fase 4)
-- Paywall (Fase 5)
+## Critérios de Homologação E2E (100% GREEN)
+Conforme homologado na suíte `scripts/test_e2e_flow.ps1` e na suíte de paridade diferencial `tests/parity_test.kf`:
+1. Health check respondendo 200 OK na porta 3000.
+2. Fluxo de ponta a ponta sem qualquer proxy intermediário.
+3. Paridade de centavos e regras de negócio com o ground truth Java legado.
