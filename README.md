@@ -1,6 +1,6 @@
 # Organiza IA
 
-**O único app de finanças que conversa com você, entende seu salário e te diz o que fazer hoje.**
+**O único app de finanças que conversa com você, entende seu salário e te diz quanto você pode gastar para terminar o mês no verde.**
 
 Organiza IA é um organizador de gastos inteligente projetado para separar as finanças de uma pessoa com base no salário que ela ganha — fixo ou variável. Ao contrário de agregadores passivos de mercado, ele atua como um coach financeiro proativo.
 
