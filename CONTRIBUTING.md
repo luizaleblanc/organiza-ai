@@ -183,38 +183,55 @@ Textos voltados ao usuário seguem o tom de voz da marca: linguagem simples, aco
 
 ---
 
-## Fluxo de Pull Request
+## Organização de Branches, Tags e Fluxo de Pull Request (MVP 1)
 
-O projeto usa três branches de integração permanentes -- `main`, `qa` e `dev` -- além das branches de feature. Uma mudança só chega em `main` depois de passar pelos dois ambientes intermediários.
+O repositório organiza suas branches e tags em alinhamento direto com o **Plano de Ataque do MVP 1 (`mvp1-koflith-attack`)** sobre a Arquitetura Monolítica Modular.
 
-### 1. Branch
+### 1. Estrutura de Branches
 
-Toda branch de feature nasce a partir do commit mais recente (HEAD) de `main` -- nunca a partir de `dev` ou `qa`, que podem estar à frente ou atrás de `main` em experimentos ainda não promovidos.
+#### A. Branches Permanentes de Integração
+- **`main`**: Produção / Baseline homologada (`kof check` 0 erros + `9/9 E2E GREEN`).
+- **`qa`**: Ambiente de homologação End-to-End e revisão visual Dual Viewport (`360×640` Mobile / `1280×800` Desktop).
+- **`dev`**: Integração contínua dos lotes de execução (`Batches`).
+
+#### B. Branches de Ataque do MVP 1 (Mapeadas por Lote SDD)
+Toda branch de lote nasce a partir do `HEAD` da `main`:
+
+| Branch | Lote SDD (`.specs/features/mvp1-koflith-attack/tasks.md`) | Escopo Modular |
+|---|---|---|
+| `feat/mvp1-batch1-core-foundation` | **Batch 1 (T1–T5)** | `core/theme.kf`, `core/app_state.kf`, `core/api_client.kf`, `components/brand_header.kf`, `components/nav_bar.kf` e Dual Viewport |
+| `feat/mvp1-batch2-auth-onboarding` | **Batch 2 (T6–T7)** | `screens/auth_screens.kf` (Telas 1–3) e `screens/onboarding_screens.kf` (Telas 4, 5, 6, 6.1 e 7 — Issue #33) |
+| `feat/mvp1-batch3-dashboard-canvas` | **Batch 3 (T8–T9)** | `components/pulse_card.kf`, `components/pie_chart.kf` (Canvas 2D) e `screens/dashboard_screen.kf` (Tela 8 — Issue #32) |
+| `feat/mvp1-batch4-coach-envelopes` | **Batch 4 (T10–T12)** | `screens/chat_screen.kf` (Tela 9) e `screens/envelopes_screen.kf` + 5 modelos de notificação (Telas 10 e 11 — Issue #34) |
+| `feat/mvp1-batch5-e2e-benchmarks` | **Batch 5 (T13–T15)** | Homologação E2E Full-Stack (`scripts/test_e2e_flow.ps1`) e Benchmarks Empíricos (`scripts/benchmark_kof.ps1` — Issues #11 e #41) |
+
+### 2. Taxonomia e Divisão de Tags (Marcos do Projeto & MVP 1)
+
+As tags do repositório são divididas em **3 categorias**:
+
+| Categoria | Tag | Significado / Marco no Repositório |
+|---|---|---|
+| **Arquivo Histórico** | `legacy/java-spring-boot` | *Ground Truth* histórico do antigo backend Java 17 / Spring Boot antes da migração KofLith |
+| **Marcos Concluídos (KofLith)** | `v0.1.0-koflith-backend` | Monólito Modular Backend (`backend/*.kf`) 100% homologado em E2E (`9/9 GREEN`) na porta `3000` (`0d88643`) |
+| **Marcos Concluídos (KofLith)** | `v0.2.0-koflith-pure` | Expurgo definitivo do runtime Java e arquivamento em `archive/legacy-backend-java/` — Issue #37 (`1806c85`) |
+| **Marcos Concluídos (KofLith)** | `v0.3.0-mvp1-sdd-baseline` | Fechamento da Tríade Design System MVP 1, CI de Benchmarks e Plano de Ataque SDD (`main`) |
+| **Entregas MVP 1 (Alvo)** | `v0.4.0-mvp1-batch1-core` | Entrega homologada do Batch 1 (Fundação Core & Dual Viewport) |
+| **Entregas MVP 1 (Alvo)** | `v0.5.0-mvp1-batch2-onboarding` | Entrega homologada do Batch 2 (Auth & Onboarding Adaptativo) |
+| **Entregas MVP 1 (Alvo)** | `v0.6.0-mvp1-batch3-dashboard` | Entrega homologada do Batch 3 (Dashboard & Gráfico Pizza Canvas 2D) |
+| **Entregas MVP 1 (Alvo)** | `v0.7.0-mvp1-batch4-coach-boxes` | Entrega homologada do Batch 4 (AI Coach & Caixinhas + Notificações) |
+| **Release Oficial MVP 1** | `v1.0.0-mvp1` | **Release Completo do MVP 1** (Monólito Modular KofLith Full-Stack + Relatório de Benchmarks) |
+
+### 3. Padrão de Commits (Conventional Commits)
 
 ```bash
-git checkout main
-git pull origin main
-git checkout -b feature/<número-da-issue>-descrição-curta
-# Exemplos (branches já criadas para as issues abertas):
-# feature/1-jwt-middleware
-# feature/2-chat-proxy
-# feature/3-transactions-proxy
-# feature/4-daily-pulse-proxy
-# feature/5-user-salary
-# feature/6-envelope-crud
+git commit -m "feat(core): implement top-level color tokens and static AppState"
+git commit -m "feat(onboarding): implement screens 4 to 7 with debtAmount conditional flow"
+git commit -m "feat(dashboard): implement 200x200 Canvas 2D pie chart and daily pulse card"
+git commit -m "feat(envelopes): implement category chips and 5 notification toast templates"
+git commit -m "test(e2e): validate full-stack KofLith flow and collect compilation benchmarks"
 ```
 
-### 2. Commits
-
-```bash
-git commit -m "feat(budget): add daily pulse calculation"
-git commit -m "feat(frontend): implement onboarding screen"
-git commit -m "feat(bff): add auth middleware"
-git commit -m "fix(coach): fix null amount in tool calling"
-git commit -m "test(transaction): add category tests"
-```
-
-Tipos: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
+Tipos permitidos: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 
 ### 3. MR para `dev` -- primeira validação
 
