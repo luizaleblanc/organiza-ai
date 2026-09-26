@@ -37,6 +37,12 @@ Toda a lógica de gateway HTTP, modelos de domínio, cálculo financeiro com pre
 - `POST /api/chat/message`: Processamento cognitivo de despesas e orientações via Coach Financeiro com grounding temporal.
 - Integração de tools cognitivas: `getDailyPulse`, `getBalance`, `suggestModelChange`.
 
+### 7. Frontend KofUI & Tríade Oficial do Design System (`frontend/*.kf`)
+- **Design System (Core Tokens & Catálogo):** [https://claude.ai/artifact/JVjueTmHeJsnHLsow3LDVb](https://claude.ai/artifact/JVjueTmHeJsnHLsow3LDVb) (`DESIGN_SYSTEM.md`)
+- **Protótipo Desktop (`1280×800`):** [https://claude.ai/artifact/64FYjX5UiveVxTtRGYurQP](https://claude.ai/artifact/64FYjX5UiveVxTtRGYurQP)
+- **Protótipo Mobile (`360×640` — 11 Telas):** [https://claude.ai/artifact/8b3jFV4BrGj4YkDQAwDvDF](https://claude.ai/artifact/8b3jFV4BrGj4YkDQAwDvDF)
+- **Execution Plan & SDD Artifacts:** Veja [`docs/MVP1_EXECUTION_PLAN.md`](../docs/MVP1_EXECUTION_PLAN.md) e [`.specs/features/mvp1-koflith-attack/`](../.specs/features/mvp1-koflith-attack/spec.md) (Tarefas `T1` a `T15` em 3 lotes para subagentes Gemini Flash 3.6 Effort Alto).
+
 ---
 
 ## Contratos de API (Resumo)
@@ -80,5 +86,6 @@ Toda a lógica de gateway HTTP, modelos de domínio, cálculo financeiro com pre
 ## Critérios de Homologação E2E (100% GREEN)
 Conforme homologado na suíte `scripts/test_e2e_flow.ps1` e na suíte de paridade diferencial `tests/parity_test.kf`:
 1. Health check respondendo 200 OK na porta 3000.
-2. Fluxo de ponta a ponta sem qualquer proxy intermediário.
-3. Paridade de centavos e regras de negócio com o ground truth Java legado.
+2. Fluxo de ponta a ponta sem qualquer proxy intermediário (`backend/main.kf` + `frontend/main.kf`).
+3. Paridade de centavos e regras de negócio com o ground truth Java legado (`archive/legacy-backend-java/`).
+

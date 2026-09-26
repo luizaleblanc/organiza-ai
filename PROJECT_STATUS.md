@@ -47,17 +47,12 @@
 - [x] Rotas protegidas
 - [x] Rota de tier-status
 
-### Frontend KOF (kof.ui) -- Monolito Modular
-- [x] Infraestrutura Core (`core/`: `theme`, `constants`, `router_config`, `http_client`, `service_locator`)
-- [x] Models compartilhados (`models/`: `user`, `transaction`, `envelope`, `chat`)
-- [x] Componentes de UI reutilizáveis (`components/`: `primary_button`, `secondary_button`, `currency_input`, `pulse_card`, `bucket_bar`, `envelope_card`, `chat_bubble`, `nav_bar`, `choice_card`, `progress_dots`)
-- [x] Fluxo de Auth (`screens/auth/`: `login_screen`, `register_screen`)
-- [x] Fluxo de Boas-Vindas (`screens/welcome/`: `screen`)
-- [x] Fluxo de Onboarding (`screens/onboarding/`: `state`, `salary_screen`, `income_type_screen`, `debt_screen`, `debt_amount_screen`, `result_screen`)
-- [x] Dashboard (`screens/dashboard/`: `state`, `screen`)
-- [x] Chat Coach (`screens/chat/`: `state`, `screen`)
-- [x] Caixinhas / Envelopes (`screens/envelopes/`: `state`, `screen`)
-- [x] Entrypoint e Roteador (`main.kf`)
+### Frontend KOF (kof.ui) -- Monolito Modular (`docs/MVP1_EXECUTION_PLAN.md`)
+- [x] Baseline limpa validada em `--target=js` (`frontend/main.kf` e `frontend/core/theme.kf` pós-expurgo de `Router`/`Component`/`Spacer` no commit `5d58ca9150`)
+- [x] Especificação SDD e Execution Plan do MVP 1 (`.specs/features/mvp1-koflith-attack/{spec.md,design.md,tasks.md}` e `docs/MVP1_EXECUTION_PLAN.md`)
+- [ ] **Lote 1 (`T1–T4`)**: Tokens `theme.kf`, estado reativo `app_state.kf`, cliente HTTP `api_client.kf` e navegação `navigation_chrome.kf`
+- [ ] **Lote 2 (`T5–T9`)**: Componentes (`cards.kf`, `visual_widgets.kf`), Auth (`auth_screens.kf` — Telas 1–3) e Onboarding Adaptativo (`onboarding_steps_screens.kf` + `onboarding_result_screen.kf` — Telas 4–7, Issues #11 e #33)
+- [ ] **Lote 3 (`T10–T15`)**: Dashboard (`dashboard_screen.kf` — Tela 8, Issue #32), Chat Coach (`chat_screen.kf` — Tela 9, Issue #34), Caixinhas & Push Toast (`envelopes_screen.kf` — Telas 10–11), Shell Dual Mobile/Desktop (`main.kf`) e fix `ASM COMPUTE_FRAMES` (Issue #41)
 
 ### Design System
 - [x] Paleta de cores (base, accent, texto, estado, categoria)
