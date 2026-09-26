@@ -1,8 +1,8 @@
-# Organiza IA
+# Organiza AI
 
-**O único app de finanças que conversa com você, entende seu salário e te diz o que fazer hoje.**
+**O único app de finanças que conversa com você, entende seu salário e te diz quanto você pode gastar para terminar o mês no verde.**
 
-Organiza IA é um organizador de gastos inteligente projetado para separar as finanças de uma pessoa com base no salário que ela ganha — fixo ou variável. Ao contrário de agregadores passivos de mercado, ele atua como um coach financeiro proativo.
+Organiza AI é um organizador de gastos inteligente projetado para separar as finanças de uma pessoa com base no salário que ela ganha — fixo ou variável. Ao contrário de agregadores passivos de mercado, ele atua como um coach financeiro proativo, construído sobre uma **Arquitetura Monolítica Modular (KofLith)** 100% em KOF.
 
 ---
 
@@ -11,7 +11,7 @@ Organiza IA é um organizador de gastos inteligente projetado para separar as fi
 O **Organiza IA** atua oficialmente como caso de estudo e laboratório de validação para a linguagem **KOF** (KofLang). Guiados pela metodologia de pesquisa técnica rigorosa da equipe criadora e pesquisadores (UFPA), tratamos produtividade, performance e DX (*Developer Experience*) como **hipóteses testáveis** e não como fatos de marketing.
 
 **Estado Atual e Limitações (Disclaimer):**
-Atualmente, o projeto possui a *arquitetura* e o *produto funcional* operando em KOF (BFF e UI). No entanto, **a infraestrutura empírica de medição ainda está em construção**. Ainda não possuímos no repositório (mas estamos implementando em Issues ativas):
+Atualmente, o projeto possui a *arquitetura monolítica modular* e o *produto funcional* operando em KOF (Domínio e UI). No entanto, **a infraestrutura empírica de medição ainda está em construção**. Ainda não possuímos no repositório (mas estamos implementando em Issues ativas):
 - Suítes de extração e análise da AST (*Abstract Syntax Tree*).
 - ~~CI/CD instrumentado para coletar métricas exatas de compilação~~ -- ✅ pipeline inicial no ar (`.github/workflows/benchmarks.yml`), ver [docs/BENCHMARKS.md](docs/BENCHMARKS.md) para metodologia e limitações conhecidas.
 - Benchmarks de alocação de memória e execução (KofJS vs JVM) -- parcial: tempo de compilação e footprint de artefato já medidos; memória de runtime sob carga é best-effort (ver limitações em [docs/BENCHMARKS.md](docs/BENCHMARKS.md)).
@@ -56,27 +56,31 @@ Conheça a interface do Organiza IA:
 
 | Camada | Tecnologia |
 |---|---|
-| Monólito KofLith | KOF (`backend/*.kf`) -- Monólito modular unificado (Gateway HTTP, Auth JWT, Regras de Negócio e AI Coach) |
-| Front-end | KOF (`kof.ui`, `frontend/*.kf`) -- Interface reativa e adaptativa compilada para a JVM e Web |
-| Back-end Legado (arquivado) | Java 17, Spring Boot 3.3.x, Spring AI -- arquivado em `archive/legacy-backend-java/` (tag histórica `legacy/java-spring-boot`), mantido apenas como referência histórica |
-| Banco de Dados | MySQL no Render com modelo relacional integrado |
-| Build & Tooling | `kof-cli` / Kof Compiler (Java 25 JDK) |
+| **Arquitetura** | **Monólito Modular (KofLith)** — Unidade de execução coesa com separação estrita por módulos de domínio e de interface |
+| **Monólito Modular Backend** | KOF (`backend/*.kf`) -- Módulos de Domínio (`models.kf`, `auth.kf`, `services.kf`, `coach.kf`, `main.kf`) |
+| **Monólito Modular Frontend** | KOF (`kof.ui`, `frontend/*.kf`) -- Módulos de Core (`core/`), Componentes (`components/`) e Telas (`screens/`) |
+| **Back-end Legado (arquivado)** | Java 17, Spring Boot 3.3.x, Spring AI -- arquivado em `archive/legacy-backend-java/` (tag histórica `legacy/java-spring-boot`), mantido apenas como referência histórica |
+| **Banco de Dados** | MySQL no Render com modelo relacional integrado |
+| **Build & Tooling** | `kof-cli` / Kof Compiler (Java 25 JDK) |
 
-## Arquitetura
+## Arquitetura Monolítica Modular (KofLith)
 
-O projeto adota o padrão **KofLith** (*Menos segregação, mais intenção*), unificando a interface, as rotas de gateway e a lógica de negócios em uma estrutura monolítica modular direta:
+O projeto trata-se especificamente de uma **Arquitetura Monolítica Modular** batizada de **KofLith** (*Menos segregação, mais intenção*). Em vez de fragmentar o sistema em microsserviços distribuídos com overhead de rede, ou manter um monólito espaguete sem fronteiras, o Organiza IA combina **implantação unificada** com **alto desacoplamento modular interno**:
+
+- **Modularidade de Domínio (`backend/`):** Cada contexto delimitado reside em seu próprio módulo `.kf` com responsabilidades estritas — `models.kf` (Contratos, Records e Enums), `auth.kf` (Segurança e JWT HS256), `services.kf` (Regras de Negócio: `mod_user`, `mod_transaction`, `mod_budget`, `mod_variable_income`, `TierEnforcement`), `coach.kf` (Motor Cognitivo, Pulso Diário e Kakeibo) e `main.kf` (Gateway HTTP na porta 3000).
+- **Modularidade de Interface (`frontend/`):** A UI em `kof.ui` é estruturada como um monólito modular dividido em `core/` (Design Tokens, Estado Reativo Estático e Cliente HTTP), `components/` (Widgets reutilizáveis de UI e Canvas 2D) e `screens/` (11 telas do MVP 1 em Dual Viewport Mobile/Desktop).
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                        ORGANIZA IA (KOFLITH)                           │
+│            ORGANIZA IA — ARQUITETURA MONOLÍTICA MODULAR (KOFLITH)      │
 │                                                                        │
 │   ┌───────────────────────────┐      ┌──────────────────────────────┐  │
-│   │   Frontend (kof.ui)       │      │   Domínio Core (kof.web)     │  │
+│   │  Módulos Frontend (kof.ui)│      │  Módulos de Domínio (kof.web)│  │
 │   │                           │      │                              │  │
-│   │   • Boas-Vindas & Auth    │─────>│   • Gateway HTTP (porta 3000)│  │
-│   │   • Fluxo de Onboarding   │      │   • Segurança JWT Nativa     │  │
-│   │   • Dashboard & Envelopes │      │   • AI Coach & Pulso Diário  │  │
-│   │   • Chat Conversacional   │      │   • Modelos de Orçamento     │  │
+│   │  • core/ (Theme, State)   │─────>│  • main.kf (Gateway :3000)   │  │
+│   │  • components/ (Canvas)   │      │  • auth.kf (Segurança JWT)   │  │
+│   │  • screens/ (Auth, Onb,   │      │  • services.kf (Core Rules)  │  │
+│   │    Dashboard, Chat, Boxes)│      │  • coach.kf (AI & Pulso)     │  │
 │   └───────────────────────────┘      └──────────────────────────────┘  │
 │                                                                        │
 │             Bytecode JVM Nativo com Execução em Virtual Threads        │

@@ -1,17 +1,17 @@
 # PROJECT_STATUS.md -- Organiza IA
 
-> Atualizado em: 18/09/2026
-> Fase atual: 3 -- Monólito KofLith 100% Nativo sobre a JVM (Issue #37 concluída: legado Java arquivado)
+> Atualizado em: 25/09/2026
+> Fase atual: 3 -- **Arquitetura Monolítica Modular (KofLith)** 100% Nativa sobre a JVM e KofJS (Issue #37 concluída: legado Java arquivado)
 
-## Estado do Backend (ATUAL — Monólito Puro KOF)
+## Estado do Backend (ATUAL — Monólito Modular Puro KOF)
 - Java: 17 -- **arquivado** em `archive/legacy-backend-java/` (tag histórica `legacy/java-spring-boot`), não faz mais parte do build do projeto. Preservado só como Ground Truth histórico.
-- Monólito KOF (`backend/*.kf`): **100% dos módulos de domínio unificados**, operando de forma autônoma e exclusiva (sem o backend Java):
-  - `backend/models.kf`: Entidades, Records e Enums com tipos monetários de 64 bits (`Double`) — `kof check` OK.
-  - `backend/services.kf`: Repositórios e Serviços Core (User, Transaction, Budget, Envelope, VariableIncome, Tier) — `kof check` OK.
-  - `backend/coach.kf`: Lógica Cognitiva, Daily Pulse, Balance, SuggestModel e Kakeibo — `kof check` OK.
-  - `backend/auth.kf`: Middleware e segurança JWT unificados no pacote raiz do domínio — `kof check` OK.
-  - `backend/main.kf`: Gateway HTTP nativo KOF na porta 3000 sem proxy ou segregação de processos.
-- Filosofia Arquitetural: **KofLith (Menos segregação, mais intenção)**. Unificação de rotas, domínio e persistência na plataforma Kof sem proxies HTTP desnecessários.
+- Monólito Modular KOF (`backend/*.kf`): **100% dos módulos de domínio unificados**, operando de forma autônoma e exclusiva (sem o backend Java) com separação modular estrita:
+  - `backend/models.kf`: Módulo de Entidades, Records e Enums com tipos monetários de 64 bits (`Double`) — `kof check` OK.
+  - `backend/services.kf`: Módulo de Repositórios e Serviços Core (User, Transaction, Budget, Envelope, VariableIncome, Tier) — `kof check` OK.
+  - `backend/coach.kf`: Módulo de Lógica Cognitiva, Daily Pulse, Balance, SuggestModel e Kakeibo — `kof check` OK.
+  - `backend/auth.kf`: Módulo de Middleware e segurança JWT unificados no pacote raiz do domínio — `kof check` OK.
+  - `backend/main.kf`: Módulo de Gateway HTTP nativo KOF na porta 3000 sem proxy ou segregação de processos.
+- Filosofia Arquitetural: **Arquitetura Monolítica Modular — KofLith (*Menos segregação, mais intenção*)**. O projeto se trata especificamente de um **Monólito Modular**: unidade de deploy única com fronteiras modulares bem definidas entre domínio (`backend/*.kf`) e interface (`frontend/core/`, `frontend/components/`, `frontend/screens/`), eliminando microsserviços e proxies HTTP desnecessários.
 - Validação Automatizada: `scripts/validate_architecture.ps1` valida check de tipo, compilação de bytecode JVM e smoke test do endpoint `GET /health` na porta 3000.
 - ⚠️ **Bloqueio conhecido (Issue #41):** a etapa de geração de bytecode JVM do `validate_architecture.ps1` crasha atualmente por um bug do compilador Kof4j (`ASM COMPUTE_FRAMES`, `ArrayIndexOutOfBoundsException`) ao construir `record`s com campo `Double` antes de um `String?` nulo (reproduzido isoladamente em `backend/coach.kf::calculateDailyPulse`). O `kof check` (typecheck) passa normalmente; o bloqueio é só na emissão de bytecode. Sem workaround seguro só em `.kf` (records são imutáveis — `SEM038` — e atribuição de `null` fora de narrowing é proibida — `SEM048`). Precisa de correção no compilador Kof4j.
 
