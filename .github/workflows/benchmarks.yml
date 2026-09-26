@@ -1,0 +1,60 @@
+name: KOF benchmarks
+
+# Pipeline de benchmarks empiricos (Issue #39): tempo de compilacao a frio e
+# footprint de artefato para o target JVM (bff/) e para o target JS/KofJS
+# (frontend/), alem de uma tentativa best-effort de medir memoria de
+# runtime sob carga. Ver scripts/benchmark_kof.ps1 e docs/BENCHMARKS.md.
+#
+# Roda sob demanda e semanalmente (nao a cada push -- e um job lento e o
+# objetivo e uma serie historica, nao gate de PR).
+
+on:
+  workflow_dispatch:
+    inputs:
+      iterations:
+        description: "Numero de builds a frio por alvo"
+        default: "5"
+        required: false
+      load_requests:
+        description: "Numero de requisicoes de carga no teste de memoria"
+        default: "100"
+        required: false
+  schedule:
+    - cron: "0 6 * * 1" # toda segunda-feira, 06:00 UTC
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    env:
+      KOF_VERSION: 0.3.1-beta
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Baixar e instalar o Kof CLI (release oficial linux-x86_64)
+        run: |
+          curl -fsSL -o kof.tar.gz \
+            "https://github.com/KofLang/Kof4j/releases/download/kof-${KOF_VERSION}-linux-x86_64/kof-${KOF_VERSION}-linux-x86_64.tar.gz"
+          tar -xzf kof.tar.gz
+          DIR=$(find . -maxdepth 1 -type d -name "kof-*-linux-x86_64" | head -1)
+          echo "$DIR/bin" >> "$GITHUB_PATH"
+
+      - name: kof version / info
+        run: |
+          kof version
+          kof info
+
+      - name: Rodar benchmark (PowerShell Core)
+        shell: pwsh
+        run: |
+          ./scripts/benchmark_kof.ps1 `
+            -KofExe kof `
+            -Iterations ${{ github.event.inputs.iterations || '5' }} `
+            -LoadRequests ${{ github.event.inputs.load_requests || '100' }}
+
+      - name: Publicar resultados como artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kof-benchmark-results-${{ github.run_number }}
+          path: benchmarks/results/
+          retention-days: 90

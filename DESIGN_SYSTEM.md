@@ -1,10 +1,12 @@
-# Design System — Organiza IA
+# Design System — Organiza IA (MVP 1)
 
-> Documento de referência visual gerado a partir do protótipo criado no Claude Design
-> (artifact `9b4531f0-a9f9-444e-8555-36c2b92ec978`, revisado e fechado no artifact
-> `6befd748-2c5d-4261-9069-8ea9a12291de` — responsivo mobile/desktop, alinhamento e
-> modelos de notificação consolidados; ver Changelog na seção 6).
-> Identidade: fundo preto-azulado, ondas cyan quase imperceptíveis ao fundo, cyan usado com parcimônia (só em destaques: valores, ações primárias, estado ativo).
+> Documento de referência visual consolidado para o **MVP 1** a partir dos artefatos oficiais no Claude Design:
+> - **Design System (Tokens, Tipografia, Componentes & Catálogo):** [https://claude.ai/artifact/JVjueTmHeJsnHLsow3LDVb](https://claude.ai/artifact/JVjueTmHeJsnHLsow3LDVb)
+> - **Protótipo Desktop (Layout Responsivo / Web):** [https://claude.ai/artifact/64FYjX5UiveVxTtRGYurQP](https://claude.ai/artifact/64FYjX5UiveVxTtRGYurQP)
+> - **Protótipo Mobile (Viewport 360×640 / App Principal):** [https://claude.ai/artifact/8b3jFV4BrGj4YkDQAwDvDF](https://claude.ai/artifact/8b3jFV4BrGj4YkDQAwDvDF)
+> - *(Histórico anterior: artifacts `9b4531f0-a9f9-444e-8555-36c2b92ec978` e `6befd748-2c5d-4261-9069-8ea9a12291de`, ver Changelog na seção 6).*
+>
+> Identidade: fundo preto-azulado (`#0A0D18`), ondas cyan quase imperceptíveis ao fundo, cyan (`#00D4FF`) usado com parcimônia (só em destaques: valores, ações primárias, estado ativo).
 
 ---
 
@@ -401,6 +403,12 @@ Só o modelo de **alerta/aviso** usa cor de estado (perigo/atenção) no ícone;
 ---
 
 ## 6. Changelog
+
+### 2026-09-25 — Fechamento Oficial MVP 1 (Design System, Desktop & Mobile)
+- **Tríade de Artefatos Finais do MVP 1**:
+  - **Design System (`JVjueTmHeJsnHLsow3LDVb`)**: [https://claude.ai/artifact/JVjueTmHeJsnHLsow3LDVb](https://claude.ai/artifact/JVjueTmHeJsnHLsow3LDVb) — Especificação consolidada de tokens, cores, tipografia Manrope, componentes e estados.
+  - **Desktop (`64FYjX5UiveVxTtRGYurQP`)**: [https://claude.ai/artifact/64FYjX5UiveVxTtRGYurQP](https://claude.ai/artifact/64FYjX5UiveVxTtRGYurQP) — Experiência desktop adaptada sobre o monólito KofLith.
+  - **Mobile (`8b3jFV4BrGj4YkDQAwDvDF`)**: [https://claude.ai/artifact/8b3jFV4BrGj4YkDQAwDvDF](https://claude.ai/artifact/8b3jFV4BrGj4YkDQAwDvDF) — Experiência mobile canônica (360×640) das 11 telas do MVP 1.
 
 ### 2026-09-08 — Fechamento: responsividade, alinhamento e modelos de notificação
 - **Responsivo mobile/desktop**: o protótipo (artifact de documentação) não tinha nenhuma media query; o valor "R$ 3.000" da Tela 4 quebrava ao abrir em celular real. Corrigido com `clamp()` no tamanho da fonte (24–32px) e largura fixa em `ch` no lugar de recálculo por caractere; adicionada media query (`≤420px`) para o mockup do celular se ajustar ao viewport.

@@ -17,11 +17,14 @@
 
 
 ## Estado do Frontend + BFF (ATUAL)
-- BFF em KOF (`kof.web`, `bff/*.kf`): concluído -- health check, rotas públicas, middleware JWT, rotas protegidas e rota de tier-status.
-- Frontend em KOF (`kof.ui`, `frontend/*.kf`): **ARQUITETURA E TELAS CRIADAS** -- Estrutura de Monolito Modular implementada com 35 arquivos (`main.kf`, `core/`, `models/`, `components/`, `screens/`).
-- Design System: **CONCLUÍDO** -- `DESIGN_SYSTEM.md` com paleta de cores, tipografia, 11 telas especificadas, componentes e mapeamento KOF.
+- BFF em KOF (`kof.web`, `bff/*.kf`): concluído -- health check, rotas públicas, middleware JWT, rotas protegidas e rota de tier-status. (Integrado no monólito `backend/main.kf` na porta 3000).
+- Frontend em KOF (`kof.ui`, `frontend/*.kf`): **BASELINE LIMPA PÓS-AUDITORIA DE COMPILADOR** -- Os arquivos com componentes alucinados (`Router`, `Component`, `Spacer`) foram expurgados no commit `5d58ca9150` para garantir compilação 100% real em `--target=js`. Atualmente contém `frontend/main.kf` e `frontend/core/theme.kf`, prontos para a reconstrução modular das 11 telas no Execution Plan do MVP 1.
+- Design System (MVP 1 Fechado): **CONCLUÍDO** -- `DESIGN_SYSTEM.md` atualizado com a tríade oficial de artefatos do Claude Design:
+  - **Design System:** `https://claude.ai/artifact/JVjueTmHeJsnHLsow3LDVb`
+  - **Desktop:** `https://claude.ai/artifact/64FYjX5UiveVxTtRGYurQP`
+  - **Mobile:** `https://claude.ai/artifact/8b3jFV4BrGj4YkDQAwDvDF`
 - Frontend legado (`frontend-voice`, Next.js): **REMOVIDO** -- expurgado por vulnerabilidades de segurança (commits `551eec4e`, `af6568eb`).
-- Consulte `KOF_REFERENCE.md` e `KOF_WEB_REFERENCE.md` (raiz) antes de escrever qualquer código `.kf`.
+- Consulte `KOF_REFERENCE.md`, `KOF_WEB_REFERENCE.md`, `docs/LLM_KOF_UI_GUIDELINES.md` e `docs/kof4j/` antes de escrever qualquer código `.kf`.
 
 ## O que está concluído
 
