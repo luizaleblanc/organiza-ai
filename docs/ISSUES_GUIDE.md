@@ -1,157 +1,71 @@
-# Guia de Implementação por Issue -- Organiza IA
+# Guia de Implementação por Issue — Organiza AI (MVP 1 · Arquitetura Monolítica Modular KofLith)
 
-> Este documento traduz cada issue aberta em orientação concreta de implementação, alinhada à missão do produto, às decisões arquiteturais já tomadas (`DECISIONS.md`) e ao ciclo de vida de software descrito em `CONTRIBUTING.md`. Não substitui a issue nem o spec da fase -- é o elo entre "o que fazer" e "como fazer do jeito que este projeto faz".
->
-> **Regra de manutenção:** atualize este documento sempre que uma issue nova for aberta, fechada ou tiver seu escopo alterado, para que a lista abaixo nunca fique dessincronizada do GitHub Issues.
-
-## Como usar este guia
-
-Para cada issue: abra a branch já criada (`feature/<numero>-<slug>`) a partir do HEAD de `main`, siga o padrão de camadas indicado, e revise a seção "Alinhamento com a missão" antes de tomar decisões de design não cobertas aqui -- ela existe para resolver ambiguidades a favor do produto, não da conveniência técnica. Depois, siga o fluxo de PR em `CONTRIBUTING.md` (`feature/* → dev → qa → main`).
+> Este documento traduz cada Issue ativa em [GitHub Issues (`luizaleblanc/organiza-ai/issues`)](https://github.com/luizaleblanc/organiza-ai/issues) em orientação concreta de implementação sobre a **Arquitetura Monolítica Modular (KofLith — 100% KOF)**.
+> O antigo backend em Java/Spring Boot foi arquivado em `archive/legacy-backend-java/` (Issue #37 fechada) apenas como *Ground Truth* histórico.
 
 ---
 
-## Issue #1 -- `feat(bff): middleware JWT para rotas protegidas`
+## 🧠 Protocolo Obrigatório Antes de Iniciar Qualquer Issue (Treinamento KOF)
 
-**Branch:** `feature/1-jwt-middleware`
+Todo contribuidor ou subagente (**Gemini Flash Effort Alto** / Claude Code) deve obrigatoriamente ingerir a documentação do compilador `KofLang/Kof4j` na seguinte ordem antes de tocar em qualquer arquivo `.kf`:
 
-**Alinhamento com a missão:** o Organiza IA promete "zero barreira de entrada" ([README](../README.md), Diferenciais) -- isso vale para o usuário, não para a segurança dos dados dele. Todo dado financeiro que passa pelo BFF precisa estar atrelado a um usuário autenticado antes de chegar ao backend.
-
-**Decisões arquiteturais relevantes:**
-- O backend já emite JWT via `mod_auth` (`TokenService`, ver `DECISIONS.md` ADR-012) -- o middleware do BFF **valida** esse token, não emite um novo.
-- ADR-015: o BFF é KOF (`kof.web`), não Next.js -- o middleware deve ser escrito em `.kf`, seguindo `bff/middleware/` (estrutura já prevista em `CONTRIBUTING.md`).
-
-**Padrão a seguir (BFF/KOF):** `rotas -> middleware -> proxy para backend` (`CONTRIBUTING.md`, Fase 2).
-
-**Passo a passo sugerido:**
-1. Criar `bff/middleware/auth.kf` com uma função que lê o header `Authorization`, extrai o `Bearer <token>` e valida contra o backend (ou decodifica localmente, se o KOF suportar verificação de assinatura JWT -- confirmar em `KOF_REFERENCE.md`; se não suportar, repassar a validação para uma chamada ao backend).
-2. Extrair o `userId`/`email` do token validado e disponibilizar para as rotas que dele dependerem (issues #2, #3, #4).
-3. Rotas públicas (`/api/auth/login`, `/api/auth/register`, `/health`) **não** passam pelo middleware -- confirmar que ele só é aplicado às rotas que exigem sessão.
-
-**Critérios de aceite:**
-- Requisição sem header `Authorization` (ou com token inválido/expirado) em uma rota protegida retorna erro (401) sem chegar a chamar o backend.
-- Requisição com token válido chega ao backend com o `userId` correto disponível para o proxy.
+1. [`docs/kof4j/README.md`](kof4j/README.md) & [`KOF_REFERENCE.md`](../KOF_REFERENCE.md)
+2. [`docs/kof4j/training/language/syntax.md`](kof4j/training/language/syntax.md) — Funções sem keyword `fun`/`fn`/`func`.
+3. [`docs/kof4j/training/language/types.md`](kof4j/training/language/types.md) — Null safety (`String?`), *smart cast* e `Double` de 64 bits.
+4. [`docs/kof4j/training/language/ui.md`](kof4j/training/language/ui.md) & [`docs/LLM_KOF_UI_GUIDELINES.md`](LLM_KOF_UI_GUIDELINES.md) — Primitivas reais do `kof.ui` (`Window`, `View`, `Column`, `Row`, `Label`, `Button`, `Input`, `Canvas`, `Style`, `Color`, `Theme`).
+5. [`docs/kof4j/training/idioms/architecture.md`](kof4j/training/idioms/architecture.md) — Arquitetura Monolítica Modular KofLith (*Menos segregação, mais intenção*).
+6. [`docs/kof4j/training/anti-patterns/fake-idioms.md`](kof4j/training/anti-patterns/fake-idioms.md) — Firewall contra sintaxe inventada (`Router`, `Component`, `Spacer`, `lista[0]`, `for` sem `var`).
 
 ---
 
-## Issue #2 -- `feat(bff): rota proxy de chat (POST /api/chat/message)`
+## Mapa Geral: Issues Ativas × Lotes do MVP 1 × Branches
 
-**Branch:** `feature/2-chat-proxy`
-
-**Alinhamento com a missão:** esta é a rota que sustenta o "Coach Financeiro com IA" ([README](../README.md), Diferenciais) -- o canal pelo qual o usuário conversa naturalmente sobre seus gastos. Latência e confiabilidade aqui têm prioridade alta: é a interação mais frequente do produto.
-
-**Decisões arquiteturais relevantes:** depende da issue #1 (middleware JWT) -- esta rota exige sessão. O proxy deve seguir o mesmo padrão já usado em `bff/main.kf` para as rotas públicas de auth (repassar `body()` cru via `http.post`, devolver `response.body`), mas passando pelo middleware antes.
-
-**Padrão a seguir:** mesmo padrão de proxy das rotas de auth já implementadas -- não reinventar o formato da chamada.
-
-**Passo a passo sugerido:**
-1. Adicionar `app.post("/api/chat/message")` em `bff/main.kf`, protegida pelo middleware da issue #1.
-2. Repassar para `POST http://localhost:8080/chat/message` (endpoint no backend ainda não existe -- verificar se já foi criado por outra issue de backend antes de assumir o contrato exato do body/response).
-3. Usar os records `ChatMessageRequest`/`ChatMessageResponse` já definidos em `bff/models.kf` como referência de contrato, ajustando se o backend definir algo diferente.
-
-**Critérios de aceite:**
-- Requisição autenticada com `{ "message": "..." }` retorna a resposta do backend sem alteração de conteúdo.
-- Requisição sem autenticação é rejeitada pelo middleware antes de chegar ao backend.
+| Issue | Lote SDD | Branch Alvo | Tag Alvo | Escopo Modular (`frontend/` & `backend/`) |
+|---|---|---|---|---|
+| **[#38](https://github.com/luizaleblanc/organiza-ai/issues/38)** | **Batch 1 (`T1–T5`)** | `feat/mvp1-batch1-core-foundation` | `v0.4.0-mvp1-batch1-core` | Fundação Core KofUI (`core/theme.kf`, `core/app_state.kf`, `core/api_client.kf`, `components/brand_header.kf`, `components/nav_bar.kf` e Dual Viewport Mobile `360×640` / Desktop `1280×800`) |
+| **[#33](https://github.com/luizaleblanc/organiza-ai/issues/33)** | **Batch 2 (`T6–T7`)** | `feat/mvp1-batch2-auth-onboarding` | `v0.5.0-mvp1-batch2-onboarding` | Telas 1 a 3 (`screens/auth_screens.kf`) e Telas 4, 5, 6, 6.1 e 7 (`screens/onboarding_screens.kf` — `SuggestModel` + `debtAmount`) |
+| **[#32](https://github.com/luizaleblanc/organiza-ai/issues/32)** | **Batch 3 (`T8–T9`)** | `feat/mvp1-batch3-dashboard-canvas` | `v0.6.0-mvp1-batch3-dashboard` | Tela 8 (`components/pulse_card.kf`, `components/pie_chart.kf` em Canvas 2D `200×200` e `screens/dashboard_screen.kf`) |
+| **[#34](https://github.com/luizaleblanc/organiza-ai/issues/34)** | **Batch 4 (`T10`)** | `feat/mvp1-batch4-coach-envelopes` | `v0.7.0-mvp1-batch4-coach-boxes` | Tela 9 (`components/chat_bubble.kf` e `screens/chat_screen.kf` conectado a `POST /api/chat/message` e `POST /api/transactions`) |
+| **[#11](https://github.com/luizaleblanc/organiza-ai/issues/11)** | **Batch 4 (`T11–T12`)** | `feat/mvp1-batch4-coach-envelopes` | `v0.7.0-mvp1-batch4-coach-boxes` | Telas 10 e 11 (`components/envelope_card.kf`, `components/notification_toast.kf` com 5 templates e `screens/envelopes_screen.kf` com troca de modelo) |
+| **[#39](https://github.com/luizaleblanc/organiza-ai/issues/39)** | **Batch 5 (`T13–T15`)** | `feat/mvp1-batch5-e2e-benchmarks` | `v1.0.0-mvp1` | Homologação E2E Full-Stack (`scripts/test_e2e_flow.ps1`) e Benchmarks Empíricos (`scripts/benchmark_kof.ps1` → `docs/BENCHMARKS.md`) |
+| **[#40](https://github.com/luizaleblanc/organiza-ai/issues/40)** | **Batch 5** | `feat/mvp1-batch5-e2e-benchmarks` | `v1.0.0-mvp1` | Capturas de tela HD (Mobile `360×640` e Desktop `1280×800`) das 11 Telas em `docs/screenshots/` |
+| **[#41](https://github.com/luizaleblanc/organiza-ai/issues/41)** | **Upstream Kof4j** | `main` | — | Bug `ASM COMPUTE_FRAMES` ao construir `record` com `Double` antes de `String?` nulo |
 
 ---
 
-## Issue #3 -- `feat(bff): rotas proxy de transactions (GET/POST /api/transactions)`
+## Detalhamento por Issue
 
-**Branch:** `feature/3-transactions-proxy`
+### 1. Issue #38 — `[MVP1-Batch1] Fundação Core KofUI & Dual Viewport`
+- **Referências Visuais:** `JVjueTmHeJsnHLsow3LDVb` (Design System), `64FYjX5UiveVxTtRGYurQP` (Desktop `1280×800`), `8b3jFV4BrGj4YkDQAwDvDF` (Mobile `360×640`).
+- **Passo a passo:**
+  1. Implementar `frontend/core/theme.kf` com funções top-level `Color(r,g,b)` e builders de `Style`.
+  2. Implementar `frontend/core/app_state.kf` com classes `static` (`AppState`, `SessionState`, `OnboardingState`, `DashboardState`, `ChatState`) e `navigateTo(Window w, String screen)` invocando `w.bind(...)`.
+  3. Implementar `frontend/core/api_client.kf` usando `http.get` / `http.post` (`kof.http`) na porta `3000`.
+  4. Implementar `frontend/components/brand_header.kf` (logo de 3 ondas via `Canvas`) e `frontend/components/nav_bar.kf` (barra inferior Mobile + Sidebar Desktop).
+  5. Validar com `kof check frontend`.
 
-**Alinhamento com a missão:** transações são o dado bruto de tudo -- pulso diário, buckets 50/30/20 e envelopes dependem delas. Erros aqui se propagam para todo o resto do produto.
+### 2. Issue #33 — `[MVP1-Batch2] Telas 1 a 7 (Auth & Onboarding Adaptativo)`
+- **Passo a passo:**
+  1. Criar `frontend/screens/auth_screens.kf` (Telas 1 Boas-vindas, 2 Login `POST /api/auth/login` e 3 Cadastro `POST /api/auth/register`).
+  2. Criar `frontend/screens/onboarding_screens.kf` cobrindo Tela 4 (Salário), Tela 5 (Tipo de Renda Fixa/Variável), Tela 6 (Dívida Sim/Não), Tela 6.1 condicional (`debtAmount`) e Tela 7 (Resultado `POST /api/onboarding/setup` com o modelo recomendado pelo `backend/coach.kf`).
+  3. Validar com `kof check frontend`.
 
-**Decisões arquiteturais relevantes:** o backend já tem `mod_transaction` com `bucket`/`source` mapeados na entidade (ADR-007) -- confirmar se esses campos já estão expostos nos DTOs do backend antes de desenhar o contrato do proxy no BFF.
+### 3. Issue #32 — `[MVP1-Batch3] Tela 8 (Dashboard, Pulso Diário & Gráfico Pizza Canvas 2D)`
+- **Passo a passo:**
+  1. Criar `frontend/components/pulse_card.kf` consumindo `GET /api/coach/daily-pulse`.
+  2. Criar `frontend/components/pie_chart.kf` usando `Canvas(200, 200)` (`canvas.setFill(cor)` + `canvas.fill()`) com cores semânticas (`#00D4FF`, `#0066FF`, `#1E2847` e transição automática para `#FFB800` em 80–99% ou `#FF4A6E` em ≥100%).
+  3. Criar `frontend/screens/dashboard_screen.kf` unificando a visão Mobile (`360×640`) e Desktop (`1280×800`).
+  4. Validar com `kof check frontend`.
 
-**Padrão a seguir:** mesmo padrão de proxy; `GET` aceita query param `?month=2026-09` e deve repassá-lo como query string para o backend.
+### 4. Issue #34 & Issue #11 — `[MVP1-Batch4] Telas 9, 10 e 11 (AI Coach, Caixinhas & Notificações)`
+- **Passo a passo:**
+  1. Criar `frontend/components/chat_bubble.kf` e `frontend/screens/chat_screen.kf` (Tela 9 conectada a `POST /api/chat/message` e `POST /api/transactions`).
+  2. Criar `frontend/components/envelope_card.kf` (chips coloridos por categoria + barra de progresso) e `frontend/components/notification_toast.kf` (os 5 modelos da Tela 11).
+  3. Criar `frontend/screens/envelopes_screen.kf` (Tela 10 agrupada por bucket + troca de modelo de orçamento).
+  4. Validar com `kof check frontend` e `kof check backend`.
 
-**Passo a passo sugerido:**
-1. Adicionar `app.get("/api/transactions")` e `app.post("/api/transactions")` em `bff/main.kf`, ambas protegidas pelo middleware da issue #1.
-2. No `GET`, ler o query param via `query("month")` (ver `KOF_REFERENCE.md`) e repassar para o backend.
-3. Usar o record `Transaction` de `bff/models.kf` como referência de contrato.
-
-**Critérios de aceite:**
-- `GET /api/transactions?month=2026-09` retorna só as transações do mês pedido.
-- `POST /api/transactions` cria a transação e retorna o registro criado.
-- Ambas exigem autenticação válida.
-
----
-
-## Issue #4 -- `feat(bff): rota proxy de budget e pulso diario (GET /api/budgets/daily-pulse)`
-
-**Branch:** `feature/4-daily-pulse-proxy`
-
-**Alinhamento com a missão:** o "pulso diário" é o diferencial central do produto -- é o que transforma o app de um extrato passivo em orientação proativa ("diz o que fazer com o dinheiro que você tem hoje", README). Essa rota precisa ser rápida e sempre disponível; é provavelmente a tela mais visitada do app.
-
-**Decisões arquiteturais relevantes:** o cálculo do pulso diário é lógica de negócio do backend (`pulso = (salary - total_gasto) / dias_restantes`, ver `docs/DATA_MODEL.md`) -- o BFF **não** deve recalcular nada, só expor o resultado já pronto pelo backend (ver `CONTRIBUTING.md`: "Padrões de Código" > Frontend não faz lógica de negócio, mesma regra vale para o BFF como camada de apresentação de dados).
-
-**Padrão a seguir:** proxy simples, protegido pelo middleware da issue #1.
-
-**Passo a passo sugerido:**
-1. Adicionar `app.get("/api/budgets/daily-pulse")` em `bff/main.kf`.
-2. Repassar para o endpoint correspondente no backend (confirmar path exato com quem implementar a lógica de pulso diário no backend, se ainda não existir).
-
-**Critérios de aceite:**
-- Requisição autenticada retorna o valor do pulso diário calculado pelo backend, sem transformação no BFF.
-- Requisição sem autenticação é rejeitada.
-
----
-
-## Issue #5 -- `feat(backend): adicionar campo salary no User e migration`
-
-**Branch:** `feature/5-user-salary`
-
-**Alinhamento com a missão:** o salário é a base de cálculo de tudo no Organiza IA -- sem ele, não existe pulso diário nem buckets 50/30/20 (ver `docs/DATA_MODEL.md`, "USER é o centro").
-
-**Decisões arquiteturais relevantes:**
-- **Importante:** o campo `salary` **já existe** em `UserEntity` desde a Fase 0 (ADR-007), como `BigDecimal`, mas só na camada de persistência -- ainda não está mapeado na classe de domínio `User` (`com.organiza.mod_user.model.User`) nem exposto em endpoints. Esta issue é sobre completar esse mapeamento, não recriar a coluna.
-- Valores monetários no backend são sempre `BigDecimal` (`CONTRIBUTING.md`, Padrões de Código) -- já é o tipo usado em `UserEntity.salary`, manter.
-- Seguir o padrão de camadas do backend: `entity -> repository -> service -> dto -> controller -> teste` (`CONTRIBUTING.md`, Fase 2).
-
-**Passo a passo sugerido:**
-1. Adicionar `salary` (`BigDecimal`, opcional) ao construtor/getters de `com.organiza.mod_user.model.User` e atualizar `UserEntity.toDomain()`/`from()` para mapear o campo (hoje eles ignoram `salary`/`tier`).
-2. Criar um DTO de request para o endpoint (ex.: `UpdateSalaryRequest(BigDecimal salary)`) em `mod_user/dto/`.
-3. Criar `PATCH /users/salary` em `AdminController` ou um novo `UserController` em `mod_user/controller/` -- o usuário autenticado atualiza o próprio salário (usar `CurrentUserService`, em `shared/security`, para identificar quem faz a requisição -- nunca aceitar um `userId` arbitrário no body).
-4. Escrever testes JUnit 5 + Mockito para o novo endpoint/serviço (obrigatório, `CONTRIBUTING.md`).
-5. Migration: como o projeto usa Hibernate `ddl-auto=update` (ADR-008, sem Flyway/Liquibase), não é necessário script de migração manual -- a coluna já existe desde a Fase 0.
-
-**Critérios de aceite:**
-- `PATCH /users/salary` autenticado atualiza o salário do usuário logado (nunca de outro usuário).
-- Teste cobrindo o caso de sucesso e o caso de tentativa de atualizar sem autenticação.
-
----
-
-## Issue #6 -- `feat(backend): CRUD de envelopes`
-
-**Branch:** `feature/6-envelope-crud`
-
-**Alinhamento com a missão:** envelopes são a "Abordagem Híbrida" do produto na prática -- é onde o usuário personaliza os tetos de gastos dentro de cada bucket 50/30/20 (README, Diferenciais; `docs/DATA_MODEL.md`).
-
-**Decisões arquiteturais relevantes:**
-- **Atenção a uma sobreposição conceitual:** o backend já tem uma entidade `BudgetEntity` (`com.organiza.mod_budget.model`, criada na Fase 0 conforme ADR-006) representando limites mensais por bucket (needs/wants/savings). `Envelope`, como descrito na issue e em `docs/DATA_MODEL.md`, é uma entidade **por categoria** (`categoryName`, `limitAmount`, `currentSpent`), um nível mais granular. Confirme com o maintainer se `Envelope` é uma tabela nova dentro de `mod_budget` (recomendado, já que ambas pertencem ao mesmo domínio de negócio) ou se substitui/se relaciona com `BudgetEntity` de alguma forma -- não presuma antes de conversar, para não duplicar conceito.
-- Padrão de ID: seguir o mesmo usado no resto do projeto -- `String` (UUID), não `BIGINT` (ADR-006, decisão consciente de manter consistência com `users.id`).
-- Seguir o padrão de camadas do backend: `entity -> repository -> service -> dto -> controller -> teste` (`CONTRIBUTING.md`, Fase 2).
-
-**Passo a passo sugerido:**
-1. Criar `EnvelopeEntity` (`id` String/UUID, `userId` String, `categoryName`, `limitAmount` `BigDecimal`, `currentSpent` `BigDecimal`) em `mod_budget/model/`, com o mesmo estilo de `BudgetEntity` (Lombok `@Data`/`@AllArgsConstructor`/`@NoArgsConstructor`, construtor customizado gerando o UUID).
-2. Repositório Spring Data (`EnvelopeEntityRepository`) em `mod_budget/repository/`.
-3. Service com as quatro operações (criar, listar por usuário, atualizar, remover), sempre restritas ao usuário autenticado (via `CurrentUserService`).
-4. DTOs de request/response em `mod_budget/dto/`.
-5. Controller expondo `POST/GET/PUT/DELETE /api/envelopes` em `mod_budget/controller/`.
-6. Testes JUnit 5 + Mockito para o service (obrigatório).
-
-**Critérios de aceite:**
-- CRUD completo funcional, sempre escopado ao usuário autenticado (um usuário não pode ler/editar/apagar envelope de outro).
-- `currentSpent` inicia em zero na criação (a atualização automática ao registrar uma transação é escopo de uma issue futura, não desta).
-
----
-
-## Mapeamento issue → branch (referência rápida)
-
-| Issue | Branch | Módulo |
-|---|---|---|
-| [#1](https://github.com/luizaleblanc/organiza-ai/issues/1) | `feature/1-jwt-middleware` | BFF |
-| [#2](https://github.com/luizaleblanc/organiza-ai/issues/2) | `feature/2-chat-proxy` | BFF |
-| [#3](https://github.com/luizaleblanc/organiza-ai/issues/3) | `feature/3-transactions-proxy` | BFF |
-| [#4](https://github.com/luizaleblanc/organiza-ai/issues/4) | `feature/4-daily-pulse-proxy` | BFF |
-| [#5](https://github.com/luizaleblanc/organiza-ai/issues/5) | `feature/5-user-salary` | Backend |
-| [#6](https://github.com/luizaleblanc/organiza-ai/issues/6) | `feature/6-envelope-crud` | Backend |
+### 5. Issue #39 & Issue #40 — `[MVP1-Batch5] Homologação E2E, Benchmarks & Screenshots`
+- **Passo a passo:**
+  1. Executar `powershell -ExecutionPolicy Bypass -File scripts/test_e2e_flow.ps1` (`9/9 GREEN`).
+  2. Executar `powershell -ExecutionPolicy Bypass -File scripts/benchmark_kof.ps1` para atualizar `docs/BENCHMARKS.md`.
+  3. Adicionar as capturas de tela em `docs/screenshots/` e atualizar `README.md`.
