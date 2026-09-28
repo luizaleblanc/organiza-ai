@@ -117,6 +117,8 @@ T14 → T15
 ---
 
 ### T4: Build Brand Logomark & Responsive Navigation Chrome (`navigation_chrome.kf`)
+> **Implementado como (Issue #38):** `frontend/components/brand_header.kf` (`buildBrandHeader`) + `frontend/components/nav_bar.kf` (`buildNavBar`, `buildSidebar`). O dispatcher `buildActiveScreen`/`navigateTo`/`mountScreen` vive em `frontend/core/navigation.kf` (o `main.kf` não é importável — `PKG006`).
+
 **What**: Create `frontend/components/navigation_chrome.kf` providing `buildBrandHeader` (rendering the 3 parallel cyan waves in 2:1 aspect ratio with decreasing opacity `1.0 / 0.7 / 0.45` + Mobile/Desktop viewport toggle button) and `buildNavBar` / `buildDesktopSidebar` (bottom 3-tab navigation bar for Mobile `360×640` and vertical Sidebar for Desktop `1280×800`: `Dashboard`, `Chat`, `Caixinhas`).
 **Where**: `frontend/components/navigation_chrome.kf`
 **Depends on**: T3

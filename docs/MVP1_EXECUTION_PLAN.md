@@ -90,7 +90,7 @@ Seguindo a regra de empacotamento do `tlc-spec-driven` (`~5 a 6 tarefas atômica
 │ • T1: frontend/core/theme.kf (Tokens #0A0D18, #00D4FF, Manrope, 6 categorias)       │
 │ • T2: frontend/core/app_state.kf (AppState, SessionState, OnboardingState, etc.)    │
 │ • T3: frontend/core/api_client.kf (Cliente HTTP KofLith :3000 + parsers + fallback) │
-│ • T4: frontend/components/navigation_chrome.kf (Logomark 3 ondas + NavBar/Sidebar)  │
+│ • T4: components/brand_header.kf + nav_bar.kf; core/navigation.kf (dispatcher) — #38 │
 └─────────────────────────────────────────┬───────────────────────────────────────────┘
                                           ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
@@ -145,7 +145,7 @@ git add DESIGN_SYSTEM.md README.md PROJECT_STATUS.md specs/PHASE_1_CORE_MVP.md .
 git commit -m "docs(sdd): fechar design system mvp 1 (desk/mobile) e criar execution plan koflith"
 
 # Lote 1 (Core, Theme, State, API Client & Navigation Chrome - T1 a T4):
-git add frontend/core/ frontend/components/navigation_chrome.kf
+git add frontend/core/ frontend/components/ frontend/main.kf archive/legacy-frontend/
 git commit -m "feat(frontend): implementar core theme mvp 1, estado reativo, api client e navegacao"
 
 # Lote 2 (Widgets do Design System, Auth & Onboarding Adaptativo - Telas 1 a 7 - T5 a T9):
