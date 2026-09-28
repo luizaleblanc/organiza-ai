@@ -16,6 +16,7 @@ Atualmente, o projeto possui a *arquitetura monolítica modular* e o *produto fu
 - ~~CI/CD instrumentado para coletar métricas exatas de compilação~~ -- ✅ pipeline inicial no ar (`.github/workflows/benchmarks.yml`), ver [docs/BENCHMARKS.md](docs/BENCHMARKS.md) para metodologia e limitações conhecidas.
 - Benchmarks de alocação de memória e execução (KofJS vs JVM) -- parcial: tempo de compilação e footprint de artefato já medidos; memória de runtime sob carga é best-effort (ver limitações em [docs/BENCHMARKS.md](docs/BENCHMARKS.md)).
 - Análises estatísticas quantitativas de *LLM-friendliness*.
+- Protocolo de validação científica (hipóteses H1–H4, reprodutibilidade e ameaças à validade) -- em definição na [Issue #42](https://github.com/luizaleblanc/organiza-ai/issues/42).
 
 > ⚠️ Qualquer afirmação técnica sobre "superioridade" de código ou arquitetura gerada por este projeto, sem estar lastreada por esses futuros *benchmarks*, deve ser interpretada como proposta arquitetural e hipótese de design, e não como resultado experimental comprovado.
 

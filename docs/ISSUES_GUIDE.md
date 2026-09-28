@@ -30,6 +30,7 @@ Todo contribuidor ou subagente (**Gemini Flash Effort Alto** / Claude Code) deve
 | **[#39](https://github.com/luizaleblanc/organiza-ai/issues/39)** | **Batch 5 (`T13–T15`)** | `feat/mvp1-batch5-e2e-benchmarks` | `v1.0.0-mvp1` | Homologação E2E Full-Stack (`scripts/test_e2e_flow.ps1`) e Benchmarks Empíricos (`scripts/benchmark_kof.ps1` → `docs/BENCHMARKS.md`) |
 | **[#40](https://github.com/luizaleblanc/organiza-ai/issues/40)** | **Batch 5** | `feat/mvp1-batch5-e2e-benchmarks` | `v1.0.0-mvp1` | Capturas de tela HD (Mobile `360×640` e Desktop `1280×800`) das 11 Telas em `docs/screenshots/` |
 | **[#41](https://github.com/luizaleblanc/organiza-ai/issues/41)** | **Upstream Kof4j** | `main` | — | Bug `ASM COMPUTE_FRAMES` ao construir `record` com `Double` antes de `String?` nulo |
+| **[#42](https://github.com/luizaleblanc/organiza-ai/issues/42)** | **Pesquisa** | `main` | — | Validação científica do KOF/KofLith: hipóteses H1–H4 (paridade, concisão, LLM-friendliness, build/runtime), protocolo reprodutível e ameaças à validade (`docs/VALIDACAO_CIENTIFICA.md`) |
 
 ---
 
