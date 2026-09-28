@@ -1,0 +1,59 @@
+package components
+
+import kof.ui
+import core.theme
+import core.app_state
+import core.navigation
+
+// =============================================================================
+// T4 — Logomark (3 ondas paralelas) + cabeçalho com toggle Mobile/Desktop
+// =============================================================================
+
+// Uma onda: 9 pontos de uma senoide em Canvas(36, 22), traço de 3px.
+drawWave(Canvas c, Int yBase, Color color) {
+    c.setStroke(color)
+    c.setLineWidth(3)
+    c.beginPath()
+    c.moveTo(1, yBase)
+    c.lineTo(5, yBase - 3)
+    c.lineTo(9, yBase - 4)
+    c.lineTo(13, yBase - 3)
+    c.lineTo(18, yBase)
+    c.lineTo(23, yBase + 3)
+    c.lineTo(27, yBase + 4)
+    c.lineTo(31, yBase + 3)
+    c.lineTo(35, yBase)
+    c.stroke()
+}
+
+// Logomark 36x22: ondas a 1.0 / 0.7 / 0.45 de opacidade (cores já compostas).
+Canvas buildLogomark() {
+    var c = Canvas(36, 22)
+    drawWave(c, 5, colorAccent())
+    drawWave(c, 11, colorWave2())
+    drawWave(c, 17, colorWave3())
+    return c
+}
+
+String viewportLabel() {
+    if (AppState.isDesktop) {
+        return "Desktop 1280x800"
+    }
+    return "Mobile 360x640"
+}
+
+View buildBrandHeader(Window w) {
+    var name = Label("Organiza AI")
+    name.fontSize = sizeSubtitle()
+    name.bold = true
+    name.color = colorTextPrimary()
+
+    var toggle = Button(viewportLabel(), () -> switchViewport(w))
+    var toggleView = View(cardSecondaryStyle())
+    toggleView.bind(toggle)
+
+    var row = Row(listOf(buildLogomark(), name, toggleView))
+    var header = View(Style(colorBgPrimary(), colorTextPrimary(), 12, 0))
+    header.bind(row)
+    return header
+}

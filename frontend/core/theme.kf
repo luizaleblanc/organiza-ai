@@ -3,64 +3,70 @@ package core
 import kof.ui
 
 // =============================================================================
-// Paleta de Cores e Tema — DESIGN_SYSTEM.md
+// T1 — Tokens do Design System (artefato JVjueTmHeJsnHLsow3LDVb / DESIGN_SYSTEM.md)
 // =============================================================================
-// Estado mutável/compartilhado em KOF vive em campos estáticos de classe
-// (training/learn/35-kof-ui.md; CLAUDE.md regra 5) — nunca em variáveis
-// soltas em nível de arquivo.
-// =============================================================================
-
-class AppTheme {
-    // Base
-    static Color background      = Color(18, 18, 20)
-    static Color card            = Color(24, 24, 27)
-    static Color cardSecondary   = Color(39, 39, 42)
-    static Color borderCard      = Color(39, 39, 42)
-    static Color borderChrome    = Color(39, 39, 42)
-
-    // Base (Dark Mode — nomes de token do spec; mesmos valores de
-    // background/card/borderCard acima)
-    static Color bgPrimary       = Color(18, 18, 20)
-    static Color bgCard          = Color(24, 24, 27)
-    static Color bgBorder        = Color(39, 39, 42)
-
-    // Accent
-    static Color accent          = Color(6, 182, 212)
-    static Color accentBlue      = Color(6, 182, 212)
-    static Color accentContrast  = Color(250, 250, 250)
-
-    // Texto
-    static Color textPrimary     = Color(250, 250, 250)
-    static Color textSecondary   = Color(161, 161, 170)
-    static Color textMuted       = Color(113, 113, 122)
-
-    // Tamanhos de fonte
-    static Int titleSize         = 24
-    static Int subtitleSize      = 16
-    static Int bodySize          = 14
-
-    // Estado
-    static Color success         = Color(0, 229, 160)
-    static Color warning         = Color(255, 184, 0)
-    static Color danger          = Color(255, 74, 110)
-
-    // Categoria (ícones de caixinhas)
-    static Color catMoradia      = Color(124, 140, 255)
-    static Color catMercado      = Color(45, 212, 191)
-    static Color catTransporte   = Color(56, 189, 248)
-    static Color catDelivery     = Color(167, 139, 250)
-    static Color catLazer        = Color(244, 114, 182)
-    static Color catReserva      = Color(163, 230, 53)
-}
-
-// =============================================================================
-// Estilos pré-definidos (funções top-level — sem estado, sem cerimônia)
+// Todas as cores são FUNÇÕES top-level. Campos "static Color x = Color(...)"
+// são emitidos como "static x;" (sem valor) no KofJS (Default.mjs) e a cor
+// chega "undefined" no runtime — por isso nenhum token vive em campo estático.
+// Tamanhos (Int) também são funções, para manter um único idioma.
 // =============================================================================
 
-Style screenStyle() = Style(AppTheme.background, AppTheme.textPrimary, 16, 0)
-Style cardStyle()   = Style(AppTheme.card, AppTheme.textPrimary, 16, 12)
-Style inputStyle()  = Style(AppTheme.card, AppTheme.textPrimary, 16, 8)
+// ---- Base (dark) -----------------------------------------------------------
+Color colorBgPrimary()     = Color(10, 13, 24)     // #0A0D18
+Color colorCard()          = Color(18, 22, 42)     // #12162A
+Color colorCardSecondary() = Color(26, 31, 58)     // #1A1F3A
 
-// Botão padrão: fundo accent (cyan), radius 8, sem borda (View/Style não tem
-// propriedade de borda), texto textPrimary. Usar: View(buttonStyle()).bind(button)
-Style buttonStyle() = Style(AppTheme.accent, AppTheme.textPrimary, 16, 8)
+// ---- Accent ----------------------------------------------------------------
+Color colorAccent()        = Color(0, 212, 255)    // #00D4FF (cyan)
+Color colorAccent2()       = Color(0, 102, 255)    // #0066FF (blue)
+Color colorAccentContrast() = Color(6, 18, 28)     // #06121C (texto sobre cyan)
+
+// ---- Texto -----------------------------------------------------------------
+Color colorTextPrimary()   = Color(240, 240, 240)  // #F0F0F0
+Color colorTextSecondary() = Color(123, 142, 173)  // #7B8EAD
+Color colorTextMuted()     = Color(74, 85, 120)    // #4A5578
+
+// ---- Estado ----------------------------------------------------------------
+Color colorSuccess()       = Color(0, 229, 160)    // #00E5A0
+Color colorWarning()       = Color(255, 184, 0)    // #FFB800
+Color colorDanger()        = Color(255, 74, 110)   // #FF4A6E
+
+// ---- Categorias (ícones das Caixinhas) -------------------------------------
+Color colorCatMoradia()    = Color(124, 140, 255)  // #7C8CFF
+Color colorCatMercado()    = Color(45, 212, 191)   // #2DD4BF
+Color colorCatTransporte() = Color(56, 189, 248)   // #38BDF8
+Color colorCatDelivery()   = Color(167, 139, 250)  // #A78BFA
+Color colorCatLazer()      = Color(244, 114, 182)  // #F472B6
+Color colorCatReserva()    = Color(163, 230, 53)   // #A3E635
+
+// ---- Logomark: cyan a 70% / 45% já composto sobre colorBgPrimary -----------
+// (Color.withAlpha usa canal 0-255 e toCss() emite rgba(..., a) sem escala —
+// composição opaca evita depender disso.)
+Color colorWave2()         = Color(3, 152, 186)
+Color colorWave3()         = Color(6, 103, 128)
+
+// ---- Tipografia (Manrope 400/500/600 — px) ---------------------------------
+Int sizeTitle()    = 24
+Int sizeSubtitle() = 18
+Int sizeBody()     = 16
+Int sizeCaption()  = 14
+Int sizeMoney()    = 28
+
+// ---- Viewports canônicos ---------------------------------------------------
+Int mobileWidth()   = 360
+Int mobileHeight()  = 640
+Int desktopWidth()  = 1280
+Int desktopHeight() = 800
+
+// =============================================================================
+// Styles — Style(background, foreground, padding, radius)
+// =============================================================================
+
+Style screenStyle()        = Style(colorBgPrimary(), colorTextPrimary(), 16, 0)
+Style cardStyle()          = Style(colorCard(), colorTextPrimary(), 16, 12)
+Style cardSecondaryStyle() = Style(colorCardSecondary(), colorTextPrimary(), 12, 10)
+Style inputStyle()         = Style(colorCard(), colorTextPrimary(), 12, 8)
+Style navBarStyle()        = Style(colorCard(), colorTextSecondary(), 8, 0)
+Style sidebarStyle()       = Style(colorCard(), colorTextSecondary(), 16, 0)
+Style buttonStyle()        = Style(colorAccent(), colorAccentContrast(), 12, 8)
+Style dangerStyle()        = Style(colorDanger(), colorTextPrimary(), 12, 8)

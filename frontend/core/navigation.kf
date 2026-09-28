@@ -1,0 +1,127 @@
+package core
+
+import kof.ui
+import core.theme
+import core.app_state
+import components.brand_header
+import components.nav_bar
+
+// =============================================================================
+// T5 — Dispatcher raiz e navegação (Dual Viewport)
+// =============================================================================
+// Navegação sem Router/Component: AppState.currentScreen + re-render explícito
+// `mountScreen(window)` = remove() do root anterior +
+// `window.bind(buildActiveScreen(window))`.
+// Mobile (360x640) empilha em Column; Desktop (1280x800) usa Row de 3 colunas
+// (sidebar | conteúdo | coach).
+//
+// Vive fora de main.kf porque o ponto de entrada não é importável (PKG006) e
+// brand_header/nav_bar precisam chamar navigateTo/buildActiveScreen (import
+// cíclico entre módulos não-main é aceito pelo compilador).
+// As telas reais entram nos Batches 2–4; aqui cada rota tem um placeholder.
+// =============================================================================
+
+// Root montado atualmente. Window.bind ACRESCENTA ao DOM (não substitui), então o
+// root anterior é removido antes de montar o novo. `View?` sem inicializador lê
+// null antes da primeira escrita (contrato de campos anuláveis).
+class NavState {
+    static View? mounted
+}
+
+applyViewport(Window w) {
+    if (AppState.isDesktop) {
+        w.size(desktopWidth(), desktopHeight())
+    } else {
+        w.size(mobileWidth(), mobileHeight())
+    }
+}
+
+// Re-renderiza: remove o root anterior e monta o layout da viewport ativa.
+mountScreen(Window w) {
+    View? old = NavState.mounted
+    if (old != null) {
+        old.remove()
+    }
+    var fresh = buildActiveScreen(w)
+    NavState.mounted = fresh
+    w.bind(fresh)
+}
+
+// Troca a tela ativa e re-renderiza.
+navigateTo(Window w, String screen) {
+    AppState.currentScreen = screen
+    mountScreen(w)
+}
+
+// Alterna entre Mobile (360x640) e Desktop (1280x800) e re-renderiza.
+switchViewport(Window w) {
+    AppState.isDesktop = !AppState.isDesktop
+    applyViewport(w)
+    mountScreen(w)
+}
+
+String screenTitle() {
+    if (AppState.currentScreen == "dashboard") {
+        return "Dashboard"
+    }
+    if (AppState.currentScreen == "chat") {
+        return "AI Coach"
+    }
+    if (AppState.currentScreen == "envelopes") {
+        return "Caixinhas"
+    }
+    return "Organiza AI"
+}
+
+// Conteúdo da tela ativa (placeholder até os Batches 2–4).
+View buildScreenContent() {
+    var title = Label(screenTitle())
+    title.fontSize = sizeTitle()
+    title.bold = true
+    title.color = colorTextPrimary()
+
+    var hint = Label("Em construção")
+    hint.fontSize = sizeCaption()
+    hint.color = colorTextSecondary()
+
+    var card = View(cardStyle())
+    card.bind(Column(listOf(title, hint)))
+    return card
+}
+
+// Painel direito do Desktop: AI Coach.
+View buildCoachPanel() {
+    var title = Label("AI Coach")
+    title.fontSize = sizeSubtitle()
+    title.bold = true
+    title.color = colorTextPrimary()
+
+    var pulse = Label("Pulso diário: R$ " + DashboardState.dailyPulse)
+    pulse.fontSize = sizeCaption()
+    pulse.color = colorAccent()
+
+    var panel = View(cardStyle())
+    panel.bind(Column(listOf(title, pulse)))
+    return panel
+}
+
+View buildMobileLayout(Window w) {
+    var root = View(screenStyle())
+    root.bind(Column(listOf(buildBrandHeader(w), buildScreenContent(), buildNavBar(w))))
+    return root
+}
+
+View buildDesktopLayout(Window w) {
+    var center = Column(listOf(buildBrandHeader(w), buildScreenContent()))
+    var root = View(screenStyle())
+    root.bind(Row(listOf(buildSidebar(w), center, buildCoachPanel())))
+    return root
+}
+
+// Dispatcher raiz: escolhe o layout pela viewport ativa.
+View buildActiveScreen(Window w) {
+    if (AppState.isDesktop) {
+        return buildDesktopLayout(w)
+    }
+    return buildMobileLayout(w)
+}

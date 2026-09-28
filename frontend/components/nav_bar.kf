@@ -1,0 +1,49 @@
+package components
+
+import kof.ui
+import core.theme
+import core.app_state
+import core.navigation
+
+// =============================================================================
+// T4 — Navegação: NavBar inferior (Mobile) e Sidebar esquerda (Desktop)
+// =============================================================================
+// Abas: Dashboard, Chat, Caixinhas. A aba ativa usa o accent cyan.
+// Não existe BottomNavigationBar no kof.ui — é um Row manual de Buttons.
+// =============================================================================
+
+Style navItemStyle(String screen) {
+    if (AppState.currentScreen == screen) {
+        return Style(colorAccent(), colorAccentContrast(), 8, 8)
+    }
+    return Style(colorCard(), colorTextSecondary(), 8, 8)
+}
+
+View buildNavItem(Window w, String screen, String text) {
+    var button = Button(text, () -> navigateTo(w, screen))
+    var item = View(navItemStyle(screen))
+    item.bind(button)
+    return item
+}
+
+// Barra inferior de 3 abas (Mobile 360x640).
+View buildNavBar(Window w) {
+    var row = Row(listOf(
+        buildNavItem(w, "dashboard", "Dashboard"),
+        buildNavItem(w, "chat", "Chat"),
+        buildNavItem(w, "envelopes", "Caixinhas")))
+    var bar = View(navBarStyle())
+    bar.bind(row)
+    return bar
+}
+
+// Sidebar vertical (Desktop 1280x800).
+View buildSidebar(Window w) {
+    var col = Column(listOf(
+        buildNavItem(w, "dashboard", "Dashboard"),
+        buildNavItem(w, "chat", "Chat"),
+        buildNavItem(w, "envelopes", "Caixinhas")))
+    var side = View(sidebarStyle())
+    side.bind(col)
+    return side
+}

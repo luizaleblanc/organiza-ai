@@ -1,0 +1,38 @@
+package core
+
+import kof.http
+import core.app_state
+
+// =============================================================================
+// T3 — Cliente HTTP do monólito KofLith (http://localhost:3000)
+// =============================================================================
+// kof.http devolve o corpo como String direto (sem .body/.status) e os headers
+// são UMA String, um "Nome: valor" por linha. Falhas de rede são exceções
+// String (catch (String e)); aqui viram "" para a UI decidir o fallback.
+// =============================================================================
+
+String apiBaseUrl() = "http://localhost:3000"
+
+String apiHeaders() {
+    var headers = "Content-Type: application/json"
+    if (SessionState.token != "") {
+        headers = "Authorization: Bearer " + SessionState.token + "\n" + headers
+    }
+    return headers
+}
+
+String apiGet(String path) {
+    try {
+        return http.get(apiBaseUrl() + path, apiHeaders())
+    } catch (String e) {
+        return ""
+    }
+}
+
+String apiPost(String path, String payload) {
+    try {
+        return http.post(apiBaseUrl() + path, payload, apiHeaders())
+    } catch (String e) {
+        return ""
+    }
+}

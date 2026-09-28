@@ -1,0 +1,74 @@
+package core
+
+// =============================================================================
+// T2 — Estado global da UI
+// =============================================================================
+// Estado mutável compartilhado entre telas vive em campos `static` de classes
+// (lambdas de Button capturam snapshots, mas leem/escrevem campos estáticos).
+// Todos os defaults são LITERAIS não-nulos: sem `= null` (SEM048) e sem
+// inicializadores computados (o KofJS só inicializa literais diretos).
+// Coleções são codificadas em String (uma linha por item) pelo mesmo motivo.
+// =============================================================================
+
+class AppState {
+    static String currentScreen = "welcome"
+    static Bool isDesktop = false
+    static String activeToast = ""
+    static String activeNotificationModel = ""
+    static Bool showNotificationOverlay = false
+}
+
+class SessionState {
+    static String token = ""
+    static String userId = ""
+    static String userName = ""
+    static String userEmail = ""
+    static String tier = "FREE"
+}
+
+class OnboardingState {
+    static String salary = ""
+    static String incomeType = "FIXED"
+    static Bool hasDebt = false
+    static String debtAmount = ""
+    static String suggestedModel = ""
+    static String modelDescription = ""
+}
+
+class DashboardState {
+    static String dailyPulse = "0,00"
+    static Double monthlyBalance = 0.0
+    static Int daysRemaining = 0
+    static String tipText = ""
+    static String budgetModel = "STANDARD_503020"
+    static Int needsPct = 0
+    static Int wantsPct = 0
+    static Int savingsPct = 0
+    static String selectedBucket = ""
+    // Uma caixinha por linha: "nome:gasto:limite"
+    static String envelopes = ""
+}
+
+class ChatState {
+    // Uma mensagem por linha: "USER|texto" ou "ASSISTANT|texto"
+    static String messages = ""
+    static Int remainingFreeMsgs = 10
+}
+
+// ---- Helpers de estado -----------------------------------------------------
+
+Bool isLoggedIn() = SessionState.token != ""
+
+chatAppend(String role, String text) {
+    ChatState.messages = ChatState.messages + role + "|" + text + "\n"
+}
+
+resetSession() {
+    SessionState.token = ""
+    SessionState.userId = ""
+    SessionState.userName = ""
+    SessionState.userEmail = ""
+    SessionState.tier = "FREE"
+    ChatState.messages = ""
+    AppState.currentScreen = "welcome"
+}
