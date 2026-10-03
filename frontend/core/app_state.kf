@@ -1,0 +1,43 @@
+package core
+
+// =============================================================================
+// AppState e Estados Compartilhados — Issue #38
+// =============================================================================
+// O padrão KOF define que o estado reativo compartilhado entre telas e
+// componentes vive em campos estáticos (static) dentro de classes organizadas
+// por domínio.
+// =============================================================================
+
+class AppState {
+    static String currentScreen = "dashboard"
+    static Boolean isDesktop = false
+    static String activeToast = ""
+}
+
+class SessionState {
+    static String token = ""
+    static String userId = "usr-001"
+    static String userName = "Luiza"
+    static String userEmail = "luiza.fg@gmail.com"
+    static String tier = "free"
+}
+
+class OnboardingState {
+    static Int salary = 3000
+    static String incomeType = "fixed"
+    static Boolean hasDebt = false
+    static Int debtAmount = 0
+    static String suggestedModel = "50/30/20"
+}
+
+class DashboardState {
+    static String dailyPulse = "R$ 92,00"
+    static Int monthlyBalance = 9200
+    static String budgetModel = "50/30/20"
+    static String envelopes = "Moradia: 38% | Alimentação: 22% | Transporte: 12% | Lazer: 9%"
+}
+
+class ChatState {
+    static String messages = ""
+    static Int remainingFreeMsgs = 30
+}

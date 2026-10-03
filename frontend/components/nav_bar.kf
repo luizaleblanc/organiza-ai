@@ -1,0 +1,59 @@
+package components
+
+import kof.ui
+import core.theme
+import core.app_state
+
+// =============================================================================
+// NavBar e Sidebar — Issue #38 (T4)
+// =============================================================================
+// - Barra inferior de 3 abas para viewport Mobile (360x640)
+// - Sidebar esquerda estruturada para viewport Desktop (1280x800)
+// =============================================================================
+
+View navBar(String activeTab) {
+    var homeBtn = Button("Início")
+    var budgetBtn = Button("Orçamentos")
+    var coachBtn = Button("Coach IA")
+
+    var actions = Row(listOf(homeBtn, budgetBtn, coachBtn))
+    var view = View(navBarStyle())
+    view.bind(actions)
+    return view
+}
+
+View desktopSidebar(String activeTab, Button toggleBtn) {
+    var appName = Label("Organiza AI")
+    appName.fontSize = AppTypography.titleSize
+    appName.bold = true
+    appName.color = colorAccent()
+
+    var tagline = Label("Coach Financeiro")
+    tagline.fontSize = AppTypography.captionSize
+    tagline.color = colorTextMuted()
+
+    var headerCol = Column(listOf(appName, tagline))
+
+    var linkDashboard = Button("Dashboard")
+    var linkEnvelopes = Button("Envelopes")
+    var linkCoach = Button("Coach IA")
+    var linkSettings = Button("Configurações")
+
+    var navLinks = Column(listOf(linkDashboard, linkEnvelopes, linkCoach, linkSettings))
+
+    var userTitle = Label(SessionState.userName)
+    userTitle.fontSize = AppTypography.bodySize
+    userTitle.bold = true
+    userTitle.color = colorTextPrimary()
+
+    var userTier = Label("Tier: " + SessionState.tier)
+    userTier.fontSize = AppTypography.captionSize
+    userTier.color = colorSuccess()
+
+    var userCol = Column(listOf(userTitle, userTier, toggleBtn))
+
+    var fullSidebar = Column(listOf(headerCol, navLinks, userCol))
+    var view = View(sidebarStyle())
+    view.bind(fullSidebar)
+    return view
+}

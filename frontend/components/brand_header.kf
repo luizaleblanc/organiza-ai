@@ -1,0 +1,63 @@
+package components
+
+import kof.ui
+import core.theme
+import core.app_state
+
+// =============================================================================
+// BrandHeader — Issue #38 (T4)
+// =============================================================================
+// - Logomark de 3 ondas paralelas (#00D4FF) compatível com o runtime kof.ui
+// - Cabeçalho com título, subtítulo e botão de toggle de viewport (Mobile/Desktop)
+// =============================================================================
+
+View buildLogomark() {
+    var waveLabel = Label("≋")
+    waveLabel.fontSize = 26
+    waveLabel.bold = true
+    waveLabel.color = colorAccent()
+
+    var box = View(Style(colorCardSecondary(), colorAccent(), 6, 8))
+    box.bind(waveLabel)
+    return box
+}
+
+View brandHeader(String title, String subtitle, Button toggleBtn) {
+    var logo = buildLogomark()
+
+    var titleLabel = Label(title)
+    titleLabel.fontSize = AppTypography.subtitleSize
+    titleLabel.bold = true
+    titleLabel.color = colorTextPrimary()
+
+    var subLabel = Label(subtitle)
+    subLabel.fontSize = AppTypography.captionSize
+    subLabel.color = colorTextSecondary()
+
+    var textCol = Column(listOf(titleLabel, subLabel))
+    var headerRow = Row(listOf(logo, textCol, toggleBtn))
+
+    var view = View(cardStyle())
+    view.bind(headerRow)
+    return view
+}
+
+View brandHeaderSimple(String title, String subtitle) {
+    var logo = buildLogomark()
+
+    var titleLabel = Label(title)
+    titleLabel.fontSize = AppTypography.subtitleSize
+    titleLabel.bold = true
+    titleLabel.color = colorTextPrimary()
+
+    var subLabel = Label(subtitle)
+    subLabel.fontSize = AppTypography.captionSize
+    subLabel.color = colorTextSecondary()
+
+    var textCol = Column(listOf(titleLabel, subLabel))
+    var headerRow = Row(listOf(logo, textCol))
+
+    var view = View(cardStyle())
+    view.bind(headerRow)
+    return view
+}

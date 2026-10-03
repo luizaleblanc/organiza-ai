@@ -1,0 +1,75 @@
+package screens
+
+import kof.ui
+import core.theme
+import core.app_state
+
+// =============================================================================
+// dashboardScreen
+// =============================================================================
+// Resumo financeiro do usuário baseado no MVP1 / Issue #38.
+// =============================================================================
+
+View dashboardScreen() {
+    var title = Label("Dashboard")
+    title.fontSize = AppTypography.titleSize
+    title.bold = true
+    title.color = colorTextPrimary()
+
+    var subtitle = Label("Resumo da sua vida financeira")
+    subtitle.fontSize = AppTypography.bodySize
+    subtitle.color = colorTextSecondary()
+
+    var headerCol = Column(listOf(title, subtitle))
+
+    // Bloco de Saldo
+    var balanceLabel = Label("Saldo disponível: R$ " + DashboardState.monthlyBalance)
+    balanceLabel.fontSize = AppTypography.subtitleSize
+    balanceLabel.bold = true
+    balanceLabel.color = colorAccent()
+
+    var pulseLabel = Label("Pulso diário: " + DashboardState.dailyPulse)
+    pulseLabel.fontSize = AppTypography.bodySize
+    pulseLabel.color = colorSuccess()
+
+    var modelLabel = Label("Modelo de Orçamento: " + DashboardState.budgetModel)
+    modelLabel.fontSize = AppTypography.captionSize
+    modelLabel.color = colorTextMuted()
+
+    var summaryCol = Column(listOf(balanceLabel, pulseLabel, modelLabel))
+    var summaryCard = View(cardStyle())
+    summaryCard.bind(summaryCol)
+
+    // Bloco de Envelopes
+    var envTitle = Label("Seus Envelopes")
+    envTitle.fontSize = AppTypography.subtitleSize
+    envTitle.bold = true
+    envTitle.color = colorTextPrimary()
+
+    var envDesc = Label(DashboardState.envelopes)
+    envDesc.fontSize = AppTypography.bodySize
+    envDesc.color = colorTextSecondary()
+
+    var envCol = Column(listOf(envTitle, envDesc))
+    var envCard = View(cardSecondaryStyle())
+    envCard.bind(envCol)
+
+    // Dica do Coach IA
+    var coachTitle = Label("Coach IA")
+    coachTitle.fontSize = AppTypography.subtitleSize
+    coachTitle.bold = true
+    coachTitle.color = colorAccent()
+
+    var coachTip = Label("Você está dentro do teto previsto para o mês. Continue assim!")
+    coachTip.fontSize = AppTypography.bodySize
+    coachTip.color = colorTextSecondary()
+
+    var coachCol = Column(listOf(coachTitle, coachTip))
+    var coachCard = View(cardStyle())
+    coachCard.bind(coachCol)
+
+    var content = Column(listOf(headerCol, summaryCard, envCard, coachCard))
+    var view = View(screenStyle())
+    view.bind(content)
+    return view
+}

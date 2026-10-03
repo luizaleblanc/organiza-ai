@@ -1,0 +1,24 @@
+package components
+
+import kof.ui
+import core.theme
+
+// =============================================================================
+// SummaryCard
+// =============================================================================
+// Cartão de resumo do dia para manter a tela principal mais organizada e legível.
+// O KOF pede que a apresentação seja feita via View + Style + Column, sem
+// mutações diretas em widgets como `.color` e `.fontSize`.
+// =============================================================================
+
+View summaryCard(String title, String value, String note) {
+    var titleLabel = Label(title)
+    var valueLabel = Label(value)
+    var noteLabel = Label(note)
+
+    var content = Column(listOf(titleLabel, valueLabel, noteLabel))
+    var style = Style(AppTheme.cardSecondary, AppTheme.textPrimary, 16, 12)
+    var view = View(style)
+    view.bind(content)
+    return view
+}

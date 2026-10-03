@@ -1,0 +1,30 @@
+package screens
+
+import kof.ui
+import core.theme
+import core.app_state
+
+// =============================================================================
+// onboardingScreen
+// =============================================================================
+// Tela de onboarding inicial: apresenta o valor principal do usuário e o cenário
+// de renda em um fluxo simples, legível e fácil de evoluir para as próximas
+// telas do app.
+// =============================================================================
+
+View onboardingScreen() {
+    var title = Label("Vamos organizar sua renda")
+    var subtitle = Label("Em poucos passos, decidimos como você quer separar o dinheiro.")
+    var salary = Label("Salário atual: R$ " + OnboardingState.salary)
+    var model = Label("Modelo sugerido: " + OnboardingState.suggestedModel)
+    var incomeType = Label("Tipo principal: " + OnboardingState.incomeType)
+
+    var introCard = Column(listOf(title, subtitle, salary, model, incomeType))
+    var action = Button("Continuar")
+
+    var content = Column(listOf(introCard, action))
+    var style = Style(AppTheme.background, AppTheme.textPrimary, 16, 0)
+    var view = View(style)
+    view.bind(content)
+    return view
+}

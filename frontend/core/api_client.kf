@@ -1,0 +1,38 @@
+package core
+
+import kof.http
+import core.app_state
+
+// =============================================================================
+// Cliente HTTP Centralizado (kof.http) — Issue #38 (T3)
+// =============================================================================
+// Retorno direto em String a partir de http://localhost:3000 com injeção do
+// token Bearer mantido em SessionState.token.
+// =============================================================================
+
+String baseUrl() = "http://localhost:3000"
+
+String authHeader() {
+    if (SessionState.token == "") {
+        return ""
+    }
+    return "Authorization: Bearer " + SessionState.token
+}
+
+String apiGet(String path) {
+    var url = baseUrl() + path
+    var auth = authHeader()
+    if (auth == "") {
+        return http.get(url)
+    }
+    return http.get(url, auth)
+}
+
+String apiPost(String path, String payload) {
+    var url = baseUrl() + path
+    var auth = authHeader()
+    if (auth == "") {
+        return http.post(url, payload, "Content-Type: application/json")
+    }
+    return http.post(url, payload, auth + "\nContent-Type: application/json")
+}
