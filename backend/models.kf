@@ -210,4 +210,7 @@ record VariableIncomeInput(Double amount, String source)
 record CreateEnvelopeInput(String userId, String categoryName, Double limitAmount)
 record ChatMessageRequest(String message)
 
+// Corpo de erro das rotas: serializado com json.encode (nunca JSON concatenado a mao)
+record ApiError(String error)
+
 

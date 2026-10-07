@@ -51,7 +51,10 @@ class BackendDb {
 record BucketSummaryDTO(String name, Int percentage, Double amount)
 
 // mod_transaction/dto/PersistTransactionInput.java
-record PersistTransactionInput(String description, Long amount, Category category, String currency, String? envelopeId)
+// WORKAROUND: json.decode<T> com campo enum = argument type mismatch (repro j2; issue upstream
+// pendente). `category` chega como String e o handler converte com Category.valueOf.
+// Remover quando corrigido (voltar para `Category category`).
+record PersistTransactionInput(String description, Long amount, String category, String currency, String? envelopeId)
 
 // mod_transaction/dto/TransactionOutput.java
 record TransactionOutput(String id, String description, String category, Double value, String currency, String? envelopeId)
@@ -496,21 +499,21 @@ VariableIncomeEntity saveVariableIncome(VariableIncomeEntity income) {
 // do chamador, ex.: BFF gera e envia o id).
 // =========================================================
 
-TransactionOutput persistTransaction(String id, PersistTransactionInput input, String userId) {
+TransactionOutput persistTransaction(String id, PersistTransactionInput input, Category category, String userId) {
     if (input.amount() <= 0) {
         throw "Operação negada: O valor da transação deve ser maior que zero."
     }
 
     var envId = input.envelopeId()
     if (envId == null) {
-        var categoryName = input.category().name()
+        var categoryName = category.name()
         var env = findEnvelopeByUserIdAndCategoryName(userId, categoryName)
         if (env != null) {
             envId = env.id
         }
     }
 
-    var transaction = TransactionEntity(id, input.description(), input.amount(), input.category(), input.currency(), userId, null, Source.MANUAL, "2026-09-18T12:00:00Z", envId)
+    var transaction = TransactionEntity(id, input.description(), input.amount(), category, input.currency(), userId, null, Source.MANUAL, "2026-09-18T12:00:00Z", envId)
     saveTransaction(transaction)
 
     if (envId != null) {

@@ -265,8 +265,12 @@ main() {
         }
 
         var req = json.decode<PersistTransactionInput>(body())
+        var category = Category.valueOf(req.category())
+        if (category == null) {
+            return status(400, json.encode(ApiError("Categoria inválida: " + req.category())))
+        }
         var newId = "tx_" + String.valueOf(BackendDb.transactions.size + 1)
-        var created = persistTransaction(newId, req, userId)
+        var created = persistTransaction(newId, req, category, userId)
         return json.encode(created)
     }
 
