@@ -82,6 +82,17 @@ class UserEntity {
     }
 }
 
+// WORKAROUND: unbox de T? primitivo estreitado em store/return (Kof4j §610 parcial;
+// issue upstream pendente). `return v`, `r = v`, `math.max(v, 0.0)` e o guard invertido
+// compilam com exit 0 mas dao VerifyError ao carregar (repros z1/z5/z6); so `v + 0.0`
+// forca o unbox. Remover quando um release corrigir (ver issue #41).
+Double orZero(Double? v) {
+    if (v != null) {
+        return v + 0.0
+    }
+    return 0.0
+}
+
 // mod_transaction/model/TransactionEntity.java
 class TransactionEntity {
     String id

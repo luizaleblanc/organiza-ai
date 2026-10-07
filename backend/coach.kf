@@ -95,11 +95,7 @@ KakeiboReflectionEntity saveKakeiboReflection(KakeiboReflectionEntity reflection
 GetDailyPulseOutput calculateDailyPulse(String userId, Int daysRemaining, String fromIso) {
     var user = findUserById(userId)
     if (user != null) {
-        var salary = 0.0
-        var userSalary = user.salary
-        if (userSalary != null) {
-            salary = userSalary
-        }
+        var salary = orZero(user.salary)
 
         var totalSpentLong = sumAmountByUserIdAndCreatedAtAfter(userId, fromIso)
         var totalSpent = totalSpentLong * 1.0
@@ -122,11 +118,7 @@ GetDailyPulseOutput calculateDailyPulse(String userId, Int daysRemaining, String
 GetBalanceOutput calculateBalance(String userId, String fromIso) {
     var user = findUserById(userId)
     if (user != null) {
-        var salary = 0.0
-        var userSalary = user.salary
-        if (userSalary != null) {
-            salary = userSalary
-        }
+        var salary = orZero(user.salary)
         var model = user.budgetModel
         var monthTransactions = findTransactionsByUserIdAndCreatedAtAfter(userId, fromIso)
 

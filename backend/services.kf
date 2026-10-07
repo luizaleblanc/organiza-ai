@@ -425,11 +425,7 @@ BudgetModelType migrateBudgetModelIfNeeded(UserEntity? user) {
         var current = user.budgetModel
         var incomeType = user.incomeType
         var hasDebt = user.hasDebt
-        var salaryNullable = user.salary
-        var salary = 0.0
-        if (salaryNullable != null) {
-            salary = salaryNullable
-        }
+        var salary = orZero(user.salary)
 
         if (current == BudgetModelType.ANTI_DEBT_701020 && !hasDebt) {
             return BudgetModelType.STANDARD_503020
