@@ -73,6 +73,18 @@ main() {
         }
 
         var suggested = suggestBudgetModel(req.salary, incomeType, req.hasDebt)
+
+        // Persiste o perfil no usuario autenticado (id sempre das claims, nunca do body)
+        var user = findUserById(requireAuth().sub())
+        if (user == null) {
+            return status(404, "{\"error\":\"Usuário não encontrado\"}")
+        }
+        user.salary = req.salary
+        user.incomeType = incomeType
+        user.hasDebt = req.hasDebt
+        user.budgetModel = suggested
+        saveUser(user)
+
         var desc = describeBudgetModel(suggested)
         var buckets = buildBudgetBuckets(suggested, req.salary)
 
