@@ -1,6 +1,6 @@
 // backend/store.kf
 // Conexao e schema do banco com kof.orm (spec .specs/features/persistence-kof-orm, T1).
-// Usuarios ja vivem no banco (T2); envelopes, transacoes, chat e renda ainda ficam em BackendDb (memoria).
+// Usuarios (T2) e envelopes (T4) ja vivem no banco; transacoes, chat e renda ainda ficam em BackendDb (memoria).
 //
 // Variaveis (kof.config: a chave "db.url" le KOF_DB_URL, como "jwt.secret" le KOF_JWT_SECRET):
 //   KOF_DB_URL      URL JDBC SEM credenciais (ex.: jdbc:postgresql://host:5432/organiza). Ausente:
@@ -244,4 +244,125 @@ UserEntity updateUser(UserEntity user) {
     }
     var saved = orm.save(DbConn.handle, userToRow(user.id.toLong(), user))
     return userFromRow(saved)
+}
+
+// =========================================================
+// Envelopes (T4): EnvelopeRow <-> EnvelopeEntity. A API continua em reais; o banco guarda centavos.
+// Toda leitura filtra pelo dono (userId das claims): id de outro usuario = inexistente (PERS-09..11).
+// =========================================================
+
+// "" no banco = ausente (entity nao tem coluna nullable; String? so na borda do dominio).
+String? textOrNull(String text) {
+    if (text == "") {
+        return null
+    }
+    return text
+}
+
+String nullToText(String? text) {
+    if (text != null) {
+        return text
+    }
+    return ""
+}
+
+EnvelopeLimitType limitTypeFromText(String text) {
+    var value = EnvelopeLimitType.valueOf(text)
+    if (value != null) {
+        return value
+    }
+    return EnvelopeLimitType.FIXED
+}
+
+EnvelopeEntity envelopeFromRow(EnvelopeRow row) {
+    return EnvelopeEntity(String.valueOf(row.id()), String.valueOf(row.userId()), row.categoryName(),
+        centsToReais(row.limitCents()), centsToReais(row.spentCents()), limitTypeFromText(row.limitType()),
+        row.movingAverageMonths(), textOrNull(row.createdAt()))
+}
+
+EnvelopeRow envelopeToRow(Long id, EnvelopeEntity envelope) {
+    return EnvelopeRow(id, envelope.userId.toLong(), envelope.categoryName, toCents(envelope.limitAmount),
+        toCents(envelope.currentSpent), envelope.limitType.name(), envelope.movingAverageMonths,
+        nullToText(envelope.createdAt))
+}
+
+List<EnvelopeEntity> findEnvelopesByUserId(String userId) {
+    if (!strings.isNumeric(userId)) {
+        return listOf()
+    }
+    var uid = userId.toLong()
+    var rows = EnvelopeRow.query(DbConn.handle) {
+        where userId == uid
+        orderBy id asc
+    }
+    return rows.map((r: EnvelopeRow) -> envelopeFromRow(r))
+}
+
+EnvelopeEntity? findEnvelopeByUserIdAndCategoryName(String userId, String categoryName) {
+    if (!strings.isNumeric(userId)) {
+        return null
+    }
+    var uid = userId.toLong()
+    var rows = EnvelopeRow.query(DbConn.handle) {
+        where userId == uid
+        where categoryName == categoryName
+        orderBy id asc
+    }
+    if (rows.size > 0) {
+        return envelopeFromRow(rows.get(0))
+    }
+    return null
+}
+
+// Row do envelope SO se pertencer ao usuario; id de outro dono ou fora do formato = null.
+EnvelopeRow? findOwnedEnvelopeRow(String userId, String id) {
+    if (!strings.isNumeric(userId) || !strings.isNumeric(id)) {
+        return null
+    }
+    var row = orm.find<EnvelopeRow>(DbConn.handle, id.toLong())
+    if (row != null) {
+        if (row.userId() == userId.toLong()) {
+            return row
+        }
+    }
+    return null
+}
+
+EnvelopeEntity? findEnvelopeById(String userId, String id) {
+    var row = findOwnedEnvelopeRow(userId, id)
+    if (row != null) {
+        return envelopeFromRow(row)
+    }
+    return null
+}
+
+// id "" = envelope novo (id gerado pelo banco, PERS-06); senao atualiza o envelope do proprio dono
+// (row nova com o mesmo id, upsert por PK). Envelope de outro usuario = "Envelope not found." (PERS-11).
+EnvelopeEntity saveEnvelope(EnvelopeEntity envelope) {
+    if (envelope.id == "") {
+        return envelopeFromRow(orm.save(DbConn.handle, envelopeToRow(0, envelope)))
+    }
+    var existing = findOwnedEnvelopeRow(envelope.userId, envelope.id)
+    if (existing == null) {
+        throw "Envelope not found."
+    }
+    return envelopeFromRow(orm.save(DbConn.handle, envelopeToRow(envelope.id.toLong(), envelope)))
+}
+
+// Gasto somado em centavos direto na row (soma Long exata) e gravado no banco.
+EnvelopeEntity addEnvelopeSpentCents(String userId, String envelopeId, Long cents) {
+    var row = findOwnedEnvelopeRow(userId, envelopeId)
+    if (row == null) {
+        throw "Envelope not found."
+    }
+    var saved = orm.save(DbConn.handle, EnvelopeRow(row.id(), row.userId(), row.categoryName(), row.limitCents(),
+        row.spentCents() + cents, row.limitType(), row.movingAverageMonths(), row.createdAt()))
+    return envelopeFromRow(saved)
+}
+
+void deleteEnvelopeById(String userId, String id) {
+    var row = findOwnedEnvelopeRow(userId, id)
+    if (row != null) {
+        orm.delete<EnvelopeRow>(DbConn.handle, row.id())
+    }
 }

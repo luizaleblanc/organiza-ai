@@ -1,10 +1,12 @@
 ﻿# scripts/test_restart.ps1
-# G-RESTART: os dados gravados pela API sobrevivem ao reinício do processo (PERS-01, PERS-02).
-# Sobe o servidor com KOF_DB_URL = H2 em arquivo dentro de -DbDir (apagado no início), cria conta + onboarding 3000,
+# G-RESTART: os dados gravados pela API sobrevivem ao reinício do processo (PERS-01..03).
+# Sobe o servidor com KOF_DB_URL = H2 em arquivo dentro de -DbDir (apagado no início), cria conta + onboarding 3000
+# + envelope FOOD 1200,
 # encerra o processo e sobe outro com o mesmo banco. Dois encerramentos:
 #   (1) normal: Ctrl+C no console do servidor (a JVM roda os shutdown hooks);
 #   (2) à força: Kill() logo depois da última gravação (sem shutdown).
-# Depois de cada reinício: login com as mesmas credenciais = 200 e daily-pulse salary = 3000.0.
+# Depois de cada reinício: login com as mesmas credenciais = 200, daily-pulse salary = 3000.0 e exatamente
+# 1 envelope FOOD com limite 1200.0.
 # Pré-requisitos: `kof build backend --target jvm` e o jar do driver H2 em -ExtraClasspath (`kof deps resolve`).
 # Exit code 0 somente se todos os asserts passarem e nenhum stderr tiver VerifyError/LinkageError.
 
@@ -86,6 +88,13 @@ function Test-Step([string]$Name, [scriptblock]$Check) {
 
 function Expect([bool]$Cond, $Got) { if ($Cond) { return $true } else { return "obtido: $Got" } }
 
+# Lista JSON -> array (PowerShell 5.1 devolve o array inteiro como um objeto só)
+function ConvertFrom-JsonList([string]$Json) {
+    $parsed = $Json | ConvertFrom-Json
+    if ($null -eq $parsed) { return ,@() }
+    return ,@($parsed | ForEach-Object { $_ })
+}
+
 # Cada servidor ganha o próprio console (oculto) para receber Ctrl+C sem atingir esta suíte.
 $script:errLogs = @()
 function Start-Server([string]$Tag) {
@@ -142,6 +151,12 @@ function New-Account([string]$Label, [string]$Cred) {
         $j = $p.Body | ConvertFrom-Json
         Expect ($r.Status -eq 200 -and $p.Status -eq 200 -and $j.salary -eq 3000.0) "onboarding $($r.Status) $($r.Body) | pulso $($p.Status) $($p.Body)"
     }
+    Test-Step "$Label`: envelope FOOD 1200 = 200" {
+        $body = (@{ categoryName = "FOOD"; limitAmount = 1200.0 } | ConvertTo-Json -Compress)
+        $r = Invoke-Api "POST" "/api/envelopes" $script:newToken $body
+        $j = $r.Body | ConvertFrom-Json
+        Expect ($r.Status -eq 200 -and $j.categoryName -eq "FOOD" -and $j.limitAmount -eq 1200.0) "$($r.Status) $($r.Body)"
+    }
 }
 
 function Assert-Persisted([string]$Label, [string]$Cred) {
@@ -155,6 +170,11 @@ function Assert-Persisted([string]$Label, [string]$Cred) {
         $r = Invoke-Api "GET" "/api/budgets/daily-pulse" $script:loginToken
         $j = $r.Body | ConvertFrom-Json
         Expect ($r.Status -eq 200 -and $j.salary -eq 3000.0) "$($r.Status) $($r.Body)"
+    }
+    Test-Step "$Label`: exatamente 1 envelope, FOOD com limite 1200.0 (PERS-03)" {
+        $r = Invoke-Api "GET" "/api/envelopes" $script:loginToken
+        $list = (ConvertFrom-JsonList $r.Body)
+        Expect ($r.Status -eq 200 -and $list.Count -eq 1 -and $list[0].categoryName -eq "FOOD" -and $list[0].limitAmount -eq 1200.0) "$($r.Status) $($r.Body)"
     }
 }
 

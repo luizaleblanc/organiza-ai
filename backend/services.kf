@@ -156,53 +156,9 @@ TransactionOutput transactionEntityToOutput(TransactionEntity t) {
 
 // =========================================================
 // mod_budget/repository/EnvelopeEntityRepository.java
+// Persistido com kof.orm em backend/store.kf (T4): findEnvelopesByUserId,
+// findEnvelopeByUserIdAndCategoryName, findEnvelopeById, saveEnvelope, deleteEnvelopeById.
 // =========================================================
-
-List<EnvelopeEntity> findEnvelopesByUserId(String userId) {
-    return BackendDb.envelopes.filter((e: EnvelopeEntity) -> e.userId == userId)
-}
-
-EnvelopeEntity? findEnvelopeByUserIdAndCategoryName(String userId, String categoryName) {
-    for (var e in BackendDb.envelopes) {
-        if (e.userId == userId && e.categoryName == categoryName) {
-            return e
-        }
-    }
-    return null
-}
-
-EnvelopeEntity? findEnvelopeById(String id) {
-    for (var e in BackendDb.envelopes) {
-        if (e.id == id) {
-            return e
-        }
-    }
-    return null
-}
-
-EnvelopeEntity saveEnvelope(EnvelopeEntity envelope) {
-    var i = 0
-    while (i < BackendDb.envelopes.size) {
-        var existing = BackendDb.envelopes.get(i)
-        if (existing.id == envelope.id) {
-            BackendDb.envelopes.set(i, envelope)
-            return envelope
-        }
-        i = i + 1
-    }
-    BackendDb.envelopes.add(envelope)
-    return envelope
-}
-
-void deleteEnvelopeById(String id) {
-    var remaining: List<EnvelopeEntity> = listOf()
-    for (var e in BackendDb.envelopes) {
-        if (e.id != id) {
-            remaining.add(e)
-        }
-    }
-    BackendDb.envelopes = remaining
-}
 
 // =========================================================
 // mod_ai_coach/repository/ChatMessageEntityRepository.java
@@ -345,8 +301,9 @@ EnvelopeEntity createEnvelope(EnvelopeEntity envelope) {
     return saveEnvelope(envelope)
 }
 
-EnvelopeEntity updateEnvelope(String id, EnvelopeEntity updated) {
-    var envelope = findEnvelopeById(id)
+// Dono sempre explicito (userId das claims): envelope de outro usuario = inexistente (PERS-11).
+EnvelopeEntity updateEnvelope(String userId, String id, EnvelopeEntity updated) {
+    var envelope = findEnvelopeById(userId, id)
     if (envelope != null) {
         envelope.categoryName = updated.categoryName
         envelope.limitAmount = updated.limitAmount
@@ -357,24 +314,19 @@ EnvelopeEntity updateEnvelope(String id, EnvelopeEntity updated) {
     throw "Envelope not found."
 }
 
-void deleteEnvelope(String id) {
-    deleteEnvelopeById(id)
+void deleteEnvelope(String userId, String id) {
+    deleteEnvelopeById(userId, id)
 }
 
-EnvelopeEntity updateEnvelopeSpent(String envelopeId, Double amount) {
-    var envelope = findEnvelopeById(envelopeId)
-    if (envelope != null) {
-        envelope.currentSpent = envelope.currentSpent + amount
-        return saveEnvelope(envelope)
-    }
-    throw "Envelope not found."
+EnvelopeEntity updateEnvelopeSpent(String userId, String envelopeId, Double amount) {
+    return addEnvelopeSpentCents(userId, envelopeId, toCents(amount))
 }
 
 // TODO (preservado do Java original): TransactionEntity ainda nao tem
 // envelope_id (ver PROJECT_STATUS.md). Implementar consulta real dos
 // gastos dos ultimos N meses quando esse campo existir.
-Double calculateMovingAverage(String envelopeId, Int months) {
-    var envelope = findEnvelopeById(envelopeId)
+Double calculateMovingAverage(String userId, String envelopeId, Int months) {
+    var envelope = findEnvelopeById(userId, envelopeId)
     if (envelope != null) {
         return 0.0
     }
@@ -461,29 +413,35 @@ VariableIncomeEntity saveVariableIncome(VariableIncomeEntity income) {
 // do chamador, ex.: BFF gera e envia o id).
 // =========================================================
 
+// Envelope da transacao: o informado no corpo so vale se for do proprio usuario (PERS-11);
+// senao, o envelope do usuario com o nome da categoria; nenhum = null.
+String? resolveEnvelopeId(String userId, String? given, Category category) {
+    if (given != null) {
+        var owned = findEnvelopeById(userId, given)
+        if (owned != null) {
+            return owned.id
+        }
+    }
+    var env = findEnvelopeByUserIdAndCategoryName(userId, category.name())
+    if (env != null) {
+        return env.id
+    }
+    return null
+}
+
 TransactionOutput persistTransaction(String id, PersistTransactionInput input, Category category, String userId) {
     if (input.amount() <= 0) {
         throw "Operação negada: O valor da transação deve ser maior que zero."
     }
 
-    var envId = input.envelopeId()
-    if (envId == null) {
-        var categoryName = category.name()
-        var env = findEnvelopeByUserIdAndCategoryName(userId, categoryName)
-        if (env != null) {
-            envId = env.id
-        }
-    }
+    var envId = resolveEnvelopeId(userId, input.envelopeId(), category)
 
     var transaction = TransactionEntity(id, input.description(), input.amount(), category, input.currency(), userId, null, Source.MANUAL, "2026-09-18T12:00:00Z", envId)
     saveTransaction(transaction)
 
+    // Desconto do envelope gravado no banco (soma em centavos)
     if (envId != null) {
-        var envToUpdate = findEnvelopeById(envId)
-        if (envToUpdate != null) {
-            envToUpdate.currentSpent = envToUpdate.currentSpent + (input.amount() * 1.0)
-            saveEnvelope(envToUpdate)
-        }
+        updateEnvelopeSpent(userId, envId, input.amount() * 1.0)
     }
 
     return transactionEntityToOutput(transaction)

@@ -163,7 +163,8 @@ main() {
 
     app.post("/api/envelopes") {
         var req = json.decode<CreateEnvelopeInput>(body())
-        var newEnv = EnvelopeEntity("env_" + String.valueOf(BackendDb.envelopes.size + 1), currentUserId(), req.categoryName, req.limitAmount, 0.0, EnvelopeLimitType.FIXED, 0, null)
+        // id "" = novo: o banco gera o id (PERS-06); o dono vem das claims (PERS-09)
+        var newEnv = EnvelopeEntity("", currentUserId(), req.categoryName, req.limitAmount, 0.0, EnvelopeLimitType.FIXED, 0, null)
         var saved = createEnvelope(newEnv)
         return json.encode(saved)
     }
