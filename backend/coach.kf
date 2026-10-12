@@ -65,28 +65,8 @@ Bucket toBucket(BudgetModelType model, Category? category) {
 // Repositório Kakeibo
 // =========================================================
 
-KakeiboReflectionEntity? findKakeiboReflection(String userId, String weekStart) {
-    for (var r in BackendDb.kakeiboReflections) {
-        if (r.userId == userId && r.weekStart == weekStart) {
-            return r
-        }
-    }
-    return null
-}
-
-KakeiboReflectionEntity saveKakeiboReflection(KakeiboReflectionEntity reflection) {
-    var i = 0
-    while (i < BackendDb.kakeiboReflections.size) {
-        var existing = BackendDb.kakeiboReflections.get(i)
-        if (existing.userId == reflection.userId && existing.weekStart == reflection.weekStart) {
-            BackendDb.kakeiboReflections.set(i, reflection)
-            return reflection
-        }
-        i = i + 1
-    }
-    BackendDb.kakeiboReflections.add(reflection)
-    return reflection
-}
+// Persistido com kof.orm em backend/store.kf (T6): findKakeiboReflection, saveKakeiboReflection
+// (respostas em JSON na coluna answersJson; uma reflexao por usuario e semana).
 
 // =========================================================
 // GetDailyPulseFunction -> calculateDailyPulse
@@ -194,7 +174,8 @@ RegisterIncomeOutput registerUserIncome(String userId, Double amount, String sou
         return RegisterIncomeOutput("SALARY", "Beleza, essa é a sua renda fixa. Ela já está considerada no seu orçamento mensal.")
     }
 
-    var incomeItem = VariableIncomeEntity("inc_" + String.valueOf(BackendDb.variableIncomes.size + 1), userId, amount, source, VariableIncomeDestination.EMERGENCY_FUND, null)
+    // id "" = novo: o banco gera o id (PERS-06/07)
+    var incomeItem = VariableIncomeEntity("", userId, amount, source, VariableIncomeDestination.EMERGENCY_FUND, null)
     var saved = saveVariableIncome(incomeItem)
 
     if (saved.destination == VariableIncomeDestination.EMERGENCY_FUND) {
@@ -256,7 +237,7 @@ KakeiboReflectionEntity recordKakeiboReflection(String userId, String weekStart,
             return existing
         }
 
-        var reflection = KakeiboReflectionEntity("ref_" + String.valueOf(BackendDb.kakeiboReflections.size + 1), userId, weekStart, answers, null)
+        var reflection = KakeiboReflectionEntity("", userId, weekStart, answers, null)
         return saveKakeiboReflection(reflection)
     }
     throw "Usuário não encontrado: " + userId

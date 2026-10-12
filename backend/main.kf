@@ -141,12 +141,13 @@ main() {
     app.post("/api/chat/message") {
         var userId = currentUserId()
         var msgReq = json.decode<ChatMessageRequest>(body())
-        var userMsg = ChatMessageEntity("msg_" + String.valueOf(BackendDb.chatMessages.size + 1), userId, ChatRole.USER, msgReq.message, null)
+        // ids gerados pelo banco (PERS-06/07); createdAt fica vazio ate a issue #44
+        var userMsg = ChatMessageEntity("", userId, ChatRole.USER, msgReq.message, null)
         saveChatMessage(userMsg)
 
         var pulse = calculateDailyPulse(userId, 30, "2026-09-01")
         var reply = "Olá! Seu pulso diário disponível hoje é R$ " + String.valueOf(pulse.pulse) + ". O que deseja registrar hoje?"
-        var botMsg = ChatMessageEntity("msg_" + String.valueOf(BackendDb.chatMessages.size + 2), userId, ChatRole.ASSISTANT, reply, null)
+        var botMsg = ChatMessageEntity("", userId, ChatRole.ASSISTANT, reply, null)
         saveChatMessage(botMsg)
 
         return reply

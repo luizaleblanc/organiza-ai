@@ -130,55 +130,15 @@ List<ChatMessageEntity> findTop20ChatMessagesByUserIdOrderByCreatedAtDesc(String
     return BackendDb.chatMessages.filter((m: ChatMessageEntity) -> m.userId == userId)
 }
 
-// GAP: comparacao de data como String (compareTo), mesma ressalva do gap #3.
-Int countChatMessagesByUserIdAndRoleAndCreatedAtGreaterThanEqual(String userId, ChatRole role, String since) {
-    var count = 0
-    for (var m in BackendDb.chatMessages) {
-        var createdAt = m.createdAt
-        if (m.userId == userId && m.role == role && createdAt != null) {
-            if (createdAt.compareTo(since) >= 0) {
-                count = count + 1
-            }
-        }
-    }
-    return count
-}
-
-ChatMessageEntity saveChatMessage(ChatMessageEntity message) {
-    var i = 0
-    while (i < BackendDb.chatMessages.size) {
-        var existing = BackendDb.chatMessages.get(i)
-        if (existing.id == message.id) {
-            BackendDb.chatMessages.set(i, message)
-            return message
-        }
-        i = i + 1
-    }
-    BackendDb.chatMessages.add(message)
-    return message
-}
+// countChatMessagesByUserIdAndRoleAndCreatedAtGreaterThanEqual e saveChatMessage: persistidos
+// com kof.orm em backend/store.kf (T6).
 
 // =========================================================
 // mod_variable_income/repository/VariableIncomeEntityRepository.java
 // =========================================================
 
-List<VariableIncomeEntity> findVariableIncomesByUserId(String userId) {
-    return BackendDb.variableIncomes.filter((v: VariableIncomeEntity) -> v.userId == userId)
-}
-
-VariableIncomeEntity saveVariableIncomeEntity(VariableIncomeEntity income) {
-    var i = 0
-    while (i < BackendDb.variableIncomes.size) {
-        var existing = BackendDb.variableIncomes.get(i)
-        if (existing.id == income.id) {
-            BackendDb.variableIncomes.set(i, income)
-            return income
-        }
-        i = i + 1
-    }
-    BackendDb.variableIncomes.add(income)
-    return income
-}
+// Persistido com kof.orm em backend/store.kf (T6): findVariableIncomesByUserId,
+// saveVariableIncomeEntity (valor em centavos no banco, reais na API).
 
 // =========================================================
 // mod_budget/service/BudgetModelSuggestionService.java

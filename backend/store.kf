@@ -1,6 +1,6 @@
 // backend/store.kf
 // Conexao e schema do banco com kof.orm (spec .specs/features/persistence-kof-orm, T1).
-// Usuarios (T2), envelopes (T4) e transacoes (T5) ja vivem no banco; chat e renda ainda ficam em BackendDb (memoria).
+// Usuarios (T2), envelopes (T4), transacoes (T5), chat, renda variavel e Kakeibo (T6) vivem no banco.
 //
 // Variaveis (kof.config: a chave "db.url" le KOF_DB_URL, como "jwt.secret" le KOF_JWT_SECRET):
 //   KOF_DB_URL      URL JDBC SEM credenciais (ex.: jdbc:postgresql://host:5432/organiza). Ausente:
@@ -470,4 +470,120 @@ void deleteTransactionsByUserId(String userId) {
 // Sempre insere: o id vem do banco (PERS-06/07); texto vai por bind, gravado literal (PERS-15).
 TransactionEntity insertTransaction(TransactionEntity transaction) {
     return transactionFromRow(orm.save(DbConn.handle, transactionToRow(0, transaction)))
+}
+
+// =========================================================
+// Chat, renda variavel e Kakeibo (T6): ids do banco (PERS-06/07), sempre filtrados pelo dono.
+// Registros so sao inseridos (id ""); nenhuma rota os altera depois.
+// =========================================================
+
+ChatRole chatRoleFromText(String text) {
+    var value = ChatRole.valueOf(text)
+    if (value != null) {
+        return value
+    }
+    return ChatRole.USER
+}
+
+ChatMessageEntity chatMessageFromRow(ChatMessageRow row) {
+    return ChatMessageEntity(String.valueOf(row.id()), String.valueOf(row.userId()), chatRoleFromText(row.role()),
+        row.content(), textOrNull(row.createdAt()))
+}
+
+ChatMessageEntity saveChatMessage(ChatMessageEntity message) {
+    if (message.id != "") {
+        throw "Mensagem de chat ja gravada: o historico nao e alterado."
+    }
+    var row = ChatMessageRow(0, message.userId.toLong(), message.role.name(), message.content, nullToText(message.createdAt))
+    return chatMessageFromRow(orm.save(DbConn.handle, row))
+}
+
+// Mensagens sem data ("") ficam de fora do corte: a contagem do limite depende da issue #44.
+Int countChatMessagesByUserIdAndRoleAndCreatedAtGreaterThanEqual(String userId, ChatRole role, String since) {
+    if (!strings.isNumeric(userId)) {
+        return 0
+    }
+    var uid = userId.toLong()
+    var roleName = role.name()
+    var rows = ChatMessageRow.query(DbConn.handle) {
+        where userId == uid
+        where role == roleName
+        where createdAt >= since
+    }
+    return rows.size
+}
+
+VariableIncomeDestination destinationFromText(String text) {
+    var value = VariableIncomeDestination.valueOf(text)
+    if (value != null) {
+        return value
+    }
+    return VariableIncomeDestination.BUDGET_5030020
+}
+
+VariableIncomeEntity variableIncomeFromRow(VariableIncomeRow row) {
+    return VariableIncomeEntity(String.valueOf(row.id()), String.valueOf(row.userId()), centsToReais(row.amountCents()),
+        row.source(), destinationFromText(row.destination()), textOrNull(row.date()))
+}
+
+List<VariableIncomeEntity> findVariableIncomesByUserId(String userId) {
+    if (!strings.isNumeric(userId)) {
+        return listOf()
+    }
+    var uid = userId.toLong()
+    var rows = VariableIncomeRow.query(DbConn.handle) {
+        where userId == uid
+        orderBy id asc
+    }
+    return rows.map((r: VariableIncomeRow) -> variableIncomeFromRow(r))
+}
+
+VariableIncomeEntity saveVariableIncomeEntity(VariableIncomeEntity income) {
+    if (income.id != "") {
+        throw "Renda variavel ja gravada: o registro nao e alterado."
+    }
+    var row = VariableIncomeRow(0, income.userId.toLong(), toCents(income.amount), income.source,
+        income.destination.name(), nullToText(income.date))
+    return variableIncomeFromRow(orm.save(DbConn.handle, row))
+}
+
+KakeiboReflectionEntity kakeiboFromRow(KakeiboReflectionRow row) {
+    return KakeiboReflectionEntity(String.valueOf(row.id()), String.valueOf(row.userId()), row.weekStart(),
+        json.decode<List<String>>(row.answersJson()), textOrNull(row.createdAt()))
+}
+
+KakeiboReflectionRow? findKakeiboRow(String userId, String weekStart) {
+    if (!strings.isNumeric(userId)) {
+        return null
+    }
+    var uid = userId.toLong()
+    var rows = KakeiboReflectionRow.query(DbConn.handle) {
+        where userId == uid
+        where weekStart == weekStart
+        orderBy id asc
+    }
+    if (rows.size > 0) {
+        return rows.get(0)
+    }
+    return null
+}
+
+KakeiboReflectionEntity? findKakeiboReflection(String userId, String weekStart) {
+    var row = findKakeiboRow(userId, weekStart)
+    if (row != null) {
+        return kakeiboFromRow(row)
+    }
+    return null
+}
+
+// Uma reflexao por (usuario, semana): se ja existe, regrava na mesma row (mesmo id).
+KakeiboReflectionEntity saveKakeiboReflection(KakeiboReflectionEntity reflection) {
+    var id: Long = 0
+    var existing = findKakeiboRow(reflection.userId, reflection.weekStart)
+    if (existing != null) {
+        id = existing.id()
+    }
+    var row = KakeiboReflectionRow(id, reflection.userId.toLong(), reflection.weekStart,
+        json.encode(reflection.answers), nullToText(reflection.createdAt))
+    return kakeiboFromRow(orm.save(DbConn.handle, row))
 }
