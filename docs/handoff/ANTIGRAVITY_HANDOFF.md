@@ -35,12 +35,12 @@
 
 | Item | Estado |
 |---|---|
-| Backend (`backend/*.kf`) | Compila no kof 0.5.0-beta **só com o contorno** `orZero` ([models.kf](../../backend/models.kf)). Issue [#41](https://github.com/luizaleblanc/organiza-ai/issues/41). |
+| Backend (`backend/*.kf`) | Compila no Kof de `KOF_VERSION` (0.6.3). O contorno `orZero` **saiu** no commit `7471f78`: o modelo não tem mais `Double?` (salário em centavos + flag `hasSalary` em `UserEntity`, [models.kf](../../backend/models.kf)). Issue [#41](https://github.com/luizaleblanc/organiza-ai/issues/41) segue aberta no compilador. |
 | Raiz do #41 | Um `T?` primitivo (`Double?`) estreitado, quando atribuído ou retornado, não recebe unbox: dá `COMP002` ou `VerifyError` ao carregar a classe. O upstream §610 (#770, branch `lab`) corrige só parte. |
 | Crash escondido | `kof build` com exit 0 **não prova nada**: o `VerifyError` só aparece quando a classe é carregada. Por isso o gate exige verificação de bytecode (seção 5, gate G-BYTECODE). |
 | `json.decode<T>` com campo enum | `argument type mismatch`. Contornado no 1E: `category` como String + `Category.valueOf`, com 400 para valor inválido. |
 | E2E ([test_e2e_flow.ps1](../../scripts/test_e2e_flow.ps1)) | **20/21** (Fase 1 fechada). O único FAIL é o "tier-status conta as mensagens do chat", que deve continuar **vermelho** até a issue [#44](https://github.com/luizaleblanc/organiza-ai/issues/44) (datas reais + `enforceCanSendMessage` nunca chamado). |
-| Persistência | **Não existe banco.** Os dados ficam em listas estáticas na memória ([services.kf](../../backend/services.kf), `BackendDb`) e somem a cada reinício. |
+| Persistência | `kof.orm` em [store.kf](../../backend/store.kf) (T1–T7 de `persistence-kof-orm`): todos os dados no banco, ids gerados pelo banco, dinheiro em centavos. `BackendDb` (memória) foi removido. |
 | Segurança | **Fase 2 (07/10):** senha com `passwords.hash`/`verify` (mesma resposta 401 e mesmo custo para e-mail inexistente); `KOF_JWT_SECRET` obrigatória (≥ 32 caracteres, o boot falha sem ela); `jwt.verify` com iss/aud; autenticação central (`currentClaims`/`currentUserId` em [auth.kf](../../backend/auth.kf)); fim do IDOR e do `"usr_1"`; erros via `json.encode(ApiError)`; rate limit de login (5/min por e-mail → 429). |
 | Deploy | [Dockerfile](../../Dockerfile) do monólito Kof (Kof Linux mais recente com SHA256 → **JRE 25**); porta via `PORT` (padrão 3000). **Imagem ainda não construída** (Docker local parado em 07/10). O serviço no Render ainda é o Spring antigo e respondeu `503`/timeout em 07/10. O [keep-alive.yml](../../.github/workflows/keep-alive.yml) agora usa `curl -fsS` (fica vermelho com erro), mas ainda aponta para `/actuator/health`. |
 | CI | [kof-check.yml](../../.github/workflows/kof-check.yml) reescrito em 07/10: Kof Linux mais recente com SHA256, `kof check`+`build` do `backend`, `kof build frontend --target js` (o `kof check frontend` dá `PKG006`), sem o `bff/`. **Ainda sem run verde comprovado** (depende do push). |
@@ -85,7 +85,7 @@ kof version; kof info
 **Política de versão:**
 - **Trocar de versão é um commit próprio** (`build: fixar kof X.Y.Z ...`) que só edita `KOF_VERSION`, feito **depois** de rodar todos os gates da seção 5 na versão nova, instalada fora do repo. Nunca use "a mais recente" sem fixar: o Kof publica vários releases por dia.
 - Para avaliar uma versão nova: instale-a com o tag explícito e rode **todos** os gates (a linha de base medida é a `0.6.3`; a comparação 0.5.0-beta × 0.6.3 está no relatório de 12/10).
-  - Para cada `// WORKAROUND:` (`orZero` e o enum), teste a forma idiomática num repro **fora do repo**.
+  - Para cada `// WORKAROUND:` (hoje só o do enum; o `orZero` saiu em `7471f78`), teste a forma idiomática num repro **fora do repo**.
   - Se o bug sumiu, proponha remover o contorno como um commit separado.
 - **Se a versão nova quebrar algo** que passava, volte para o `kof-0.5.0-beta-windows-x86_64` e reporte com o repro.
 - **Registre** `kof version` e o SHA256 do zip em todo relatório.
@@ -189,7 +189,7 @@ Ordem recomendada: **1 → 2 → 4 → 5 → 6 → 3.** Com os passos de 1 a 6 s
 > (1A → 1B → 1E → 1C, via `git apply --cached` dos patches da sessão anterior). Confira com `git log`.
 > Os rascunhos upstream A/B/C ficaram no scratchpad daquela sessão, **não publicados**.
 > **Próximo: Passo 2** (concluído na Fase 2; ver abaixo).
-- [ ] Verificar se os commits 1A (`orZero`), 1B (onboarding) e 1C (E2E) já foram feitos pela usuária (`git log`).
+- [ ] Verificar se os commits 1A (`orZero`, depois removido em `7471f78`), 1B (onboarding) e 1C (E2E) já foram feitos pela usuária (`git log`).
 - [ ] **1E, contorno do enum:** `PersistTransactionInput.category` vira `String`, convertida com `Category.valueOf(...)`
       (que devolve `Category?`; estreite com `!= null`). Valor inválido devolve `status(400, json.encode(...))`.
       Marque com `// WORKAROUND: json.decode<T> com campo enum = argument type mismatch`.

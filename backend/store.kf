@@ -160,7 +160,7 @@ String openDb() {
 }
 
 // =========================================================
-// Usuarios (T2): UserRow <-> UserEntity. Os demais dados ainda ficam em BackendDb (memoria).
+// Usuarios (T2): UserRow <-> UserEntity.
 // =========================================================
 
 // Texto do banco -> enum; valor desconhecido cai no padrao do cadastro (dado nao derruba a rota).

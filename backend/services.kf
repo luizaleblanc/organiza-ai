@@ -28,19 +28,7 @@
 // training/ -- convertido para parametros de funcao explicitos (userId,
 // datas de corte, etc.) em vez de campos injetados.
 
-// =========================================================
-// Mock de persistencia (equivalente a AppDatabase de
-// frontend/core/database.kf, mas tipado com as entidades de
-// backend/models.kf -- ver gap #1 no relatorio)
-// =========================================================
-
-class BackendDb {
-    static List<TransactionEntity> transactions = listOf()
-    static List<EnvelopeEntity> envelopes = listOf()
-    static List<ChatMessageEntity> chatMessages = listOf()
-    static List<VariableIncomeEntity> variableIncomes = listOf()
-    static List<KakeiboReflectionEntity> kakeiboReflections = listOf()
-}
+// Persistencia: kof.orm em backend/store.kf (entities *Row + funcoes de repositorio).
 
 // =========================================================
 // DTOs auxiliares (records referenciados pelos services pedidos)
@@ -116,19 +104,6 @@ TransactionOutput transactionEntityToOutput(TransactionEntity t) {
 // =========================================================
 // mod_ai_coach/repository/ChatMessageEntityRepository.java
 // =========================================================
-
-// GAP (ver relatorio #4): sem orderBy/sort confirmados no training/ para
-// List<T> generico (orderBy so existe dentro da Query DSL de kof.orm sobre
-// `entity`, nao para List). Filtra mas NAO ordena.
-List<ChatMessageEntity> findChatMessagesByUserIdOrderByCreatedAtAsc(String userId) {
-    return BackendDb.chatMessages.filter((m: ChatMessageEntity) -> m.userId == userId)
-}
-
-// GAP: idem acima + sem "top N"/limit confirmado para List generico.
-// Retorna todas as mensagens do usuario, sem ordenar nem truncar em 20.
-List<ChatMessageEntity> findTop20ChatMessagesByUserIdOrderByCreatedAtDesc(String userId) {
-    return BackendDb.chatMessages.filter((m: ChatMessageEntity) -> m.userId == userId)
-}
 
 // countChatMessagesByUserIdAndRoleAndCreatedAtGreaterThanEqual e saveChatMessage: persistidos
 // com kof.orm em backend/store.kf (T6).
