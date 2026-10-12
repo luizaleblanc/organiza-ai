@@ -80,9 +80,10 @@ curl -fsS http://localhost:8080/health                                          
 
 ## Keep-alive
 
-`.github/workflows/keep-alive.yml` pinga o `/actuator/health` do serviço Spring antigo com `curl` **sem `-f`**:
-o job fica verde mesmo quando o serviço responde erro. Trocar a URL para `/health`, mudar a frequência ou
-desativar é decisão da usuária.
+`.github/workflows/keep-alive.yml` faz `curl -fsS` na URL configurada nele. Com `-f`, uma resposta HTTP de erro
+deixa o job **vermelho**; antes, sem `-f`, ele ficava verde até com `HTTP 503`, como no run de 07/10 16:09Z.
+Hoje ele ainda aponta para o `/actuator/health` do serviço Spring antigo, então fica vermelho até o serviço ser
+trocado. Trocar a URL para `/health`, mudar a frequência ou desativar é decisão da usuária.
 
 ---
 

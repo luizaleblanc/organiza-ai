@@ -11,4 +11,4 @@ jobs:
     steps:
       - name: Ping /actuator/health
         run: |
-          curl -sS -o /dev/null -w "HTTP %{http_code}\n" https://organiza-ai-5qzv.onrender.com/actuator/health
+          curl -fsS -o /dev/null -w "HTTP %{http_code}\n" https://organiza-ai-5qzv.onrender.com/actuator/health

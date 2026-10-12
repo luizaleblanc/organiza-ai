@@ -41,9 +41,9 @@
 | `json.decode<T>` com campo enum | `argument type mismatch`. Contornado no 1E: `category` como String + `Category.valueOf`, com 400 para valor inválido. |
 | E2E ([test_e2e_flow.ps1](../../scripts/test_e2e_flow.ps1)) | **20/21** (Fase 1 fechada). O único FAIL é o "tier-status conta as mensagens do chat", que deve continuar **vermelho** até a issue [#44](https://github.com/luizaleblanc/organiza-ai/issues/44) (datas reais + `enforceCanSendMessage` nunca chamado). |
 | Persistência | **Não existe banco.** Os dados ficam em listas estáticas na memória ([services.kf](../../backend/services.kf), `BackendDb`) e somem a cada reinício. |
-| Segurança | Senha em texto puro e comparada com `==`; segredo JWT literal de fallback ([auth.kf](../../backend/auth.kf)); `userId` vindo de `query`/body (IDOR); fallback `"usr_1"`. |
-| Deploy | O [Dockerfile](../../Dockerfile) ainda compila o Spring a partir de `src/`, que foi **arquivado**: um redeploy hoje falha. `app.listen(3000)` está fixo. O [keep-alive.yml](../../.github/workflows/keep-alive.yml) pinga `/actuator/health` com `curl` sem `-f`, então fica sempre verde. |
-| CI | O [kof-check.yml](../../.github/workflows/kof-check.yml) está vermelho: pin `0.3.1-beta`, checa o `bff/` legado e não checa o `backend/`. `kof check frontend` dá `PKG006`; o gate do frontend é `kof build frontend --target js`. |
+| Segurança | **Fase 2 (07/10):** senha com `passwords.hash`/`verify` (mesma resposta 401 e mesmo custo para e-mail inexistente); `KOF_JWT_SECRET` obrigatória (≥ 32 caracteres, o boot falha sem ela); `jwt.verify` com iss/aud; autenticação central (`currentClaims`/`currentUserId` em [auth.kf](../../backend/auth.kf)); fim do IDOR e do `"usr_1"`; erros via `json.encode(ApiError)`; rate limit de login (5/min por e-mail → 429). |
+| Deploy | [Dockerfile](../../Dockerfile) do monólito Kof (Kof Linux mais recente com SHA256 → **JRE 25**); porta via `PORT` (padrão 3000). **Imagem ainda não construída** (Docker local parado em 07/10). O serviço no Render ainda é o Spring antigo e respondeu `503`/timeout em 07/10. O [keep-alive.yml](../../.github/workflows/keep-alive.yml) agora usa `curl -fsS` (fica vermelho com erro), mas ainda aponta para `/actuator/health`. |
+| CI | [kof-check.yml](../../.github/workflows/kof-check.yml) reescrito em 07/10: Kof Linux mais recente com SHA256, `kof check`+`build` do `backend`, `kof build frontend --target js` (o `kof check frontend` dá `PKG006`), sem o `bff/`. **Ainda sem run verde comprovado** (depende do push). |
 | kof.ui | **Tem** Router, Component, Store, `AppState(initial)`, Form, Select, Table, Image, Canvas, `Style("css")` e os tokens Spacing/Typography ([KOFUI-AUDIT](https://github.com/KofLang/Kof4j/blob/main/docs/bugs-and-gaps/KOFUI-AUDIT.md)). A regra 7 do CLAUDE.md está desatualizada. |
 
 ### Decisões que só a usuária pode tomar
@@ -184,7 +184,7 @@ Ordem recomendada: **1 → 2 → 4 → 5 → 6 → 3.** Com os passos de 1 a 6 s
 > 1A, 1B, 1C, 1E, 1F (#44), 1G e 1H prontos. Falta só a usuária aplicar os 4 commits
 > (1A → 1B → 1E → 1C, via `git apply --cached` dos patches da sessão anterior). Confira com `git log`.
 > Os rascunhos upstream A/B/C ficaram no scratchpad daquela sessão, **não publicados**.
-> **Próximo: Passo 2.**
+> **Próximo: Passo 2** (concluído na Fase 2; ver abaixo).
 - [ ] Verificar se os commits 1A (`orZero`), 1B (onboarding) e 1C (E2E) já foram feitos pela usuária (`git log`).
 - [ ] **1E, contorno do enum:** `PersistTransactionInput.category` vira `String`, convertida com `Category.valueOf(...)`
       (que devolve `Category?`; estreite com `!= null`). Valor inválido devolve `status(400, json.encode(...))`.
@@ -196,7 +196,10 @@ Ordem recomendada: **1 → 2 → 4 → 5 → 6 → 3.** Com os passos de 1 a 6 s
 - [ ] **1H:** 3 rascunhos de issue upstream (A, B, C) **fora do repo. Não publique.**
 - **Gate:** G-BUILD, G-BYTECODE e G-E2E. Esperado: só o teste 19 vermelho.
 
-### Passo 2: Segurança mínima
+### Passo 2: Segurança mínima. **CONCLUÍDO em 07/10 (Fase 2: 2A, 2B, 2C)**
+> Variável única do segredo: `KOF_JWT_SECRET`. O `config.required("jwt.secret")` lê exatamente ela, e o runtime
+> usa a mesma no pipeline `auth.*`, que valida assinatura e exp **sem** iss/aud. Por isso iss/aud são checados no
+> ponto central (`currentClaims`). E2E: 36/37 (só a #44), com boot sem segredo, tokens forjados, IDOR e 429.
 - [ ] Senha: guardar `passwords.hash`; conferir no login com `passwords.verify`.
 - [ ] JWT: remover o segredo literal de fallback ([auth.kf](../../backend/auth.kf)). O segredo vem de `secrets`/`config.required`, e o boot falha com mensagem clara se ele faltar.
       Atenção: o runtime também lê `KOF_JWT_SECRET` no `<clinit>`; documente qual variável vale.
@@ -209,22 +212,22 @@ Ordem recomendada: **1 → 2 → 4 → 5 → 6 → 3.** Com os passos de 1 a 6 s
   - token de A acessando dados de B → 403 ou 404;
   - sem segredo configurado → o boot falha.
 
-### Passo 4: Porta vinda do Render
+### Passo 4: Porta vinda do Render. **CONCLUÍDO em 07/10 (2D)**
 - [ ] Trocar o `app.listen(3000)` por uma porta lida de `PORT`, com 3000 como padrão.
       Use `config`/`secrets` conforme o [stdlib idioms](https://raw.githubusercontent.com/KofLang/Kof4j/main/training/idioms/stdlib.md).
       Lembre que `app.listen` aceita **só Int** (`SEM025`).
 - **Gate:** G-BUILD, G-BYTECODE, servidor subindo com `PORT=8080` e respondendo `/health` = 200.
 
-### Passo 5: Dockerfile do monólito Kof
+### Passo 5: Dockerfile do monólito Kof. **PARCIAL em 07/10 (2E)**: Dockerfile, `.dockerignore` e DEPLOY.md prontos; o gate de container ficou PENDENTE (Docker local parado)
 - [ ] Reescrever o [Dockerfile](../../Dockerfile):
   - **build stage:** baixa o pacote Linux do Kof **mais recente** (mesma lógica da seção 2.1, com `linux-x86_64` e verificação do SHA256) e roda `kof build backend --target jvm`;
-  - **run stage:** JRE 21+ (o bytecode é V21) e o comando de execução correto;
+  - **run stage:** **JRE 25** e o comando de execução correto. As classes do projeto são V21 (major 65), mas o runtime do Kof copiado junto (`dev/kof/runtime/*`) é V25 (major 69): num JRE 21, o boot morre com `UnsupportedClassVersionError` (medido em 07/10);
   - leia [reference/targets](https://raw.githubusercontent.com/KofLang/Kof4j/main/training/reference/targets.md) e confirme como rodar as classes geradas.
 - [ ] Atualizar o [.dockerignore](../../.dockerignore) para excluir `archive/`, `.kof_preview/`, `bin/`, `build/` e `.claude/`.
 - [ ] Atualizar o [docs/DEPLOY.md](../DEPLOY.md), que hoje descreve o Spring.
 - **Gate:** `docker build` e `docker run -e PORT=8080 -e <segredo>`. Dentro do container, G-E2E apontando para a porta do container e G-BYTECODE no `.class` gerado pelo build.
 
-### Passo 6: Health check e keep-alive honestos
+### Passo 6: Health check e keep-alive honestos. **PARCIAL em 07/10 (2F)**: `curl -fsS` e `kof-check.yml` novos; faltam o run verde comprovado (push), o health check do Render e a URL do keep-alive (decisão da usuária)
 - [ ] Health check do Render apontando para `/health`.
 - [ ] [keep-alive.yml](../../.github/workflows/keep-alive.yml): `curl -fsS` em `/health`. A frequência e a existência do keep-alive são **decisão da usuária**.
 - [ ] [kof-check.yml](../../.github/workflows/kof-check.yml): instalar a versão mais nova (seção 2.1, versão Linux); checar o `backend`; usar `kof build frontend --target js` no frontend; tirar o `bff/` do gate.
