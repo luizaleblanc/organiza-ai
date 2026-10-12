@@ -107,10 +107,11 @@ Double userSalary(UserEntity user) {
 }
 
 // mod_transaction/model/TransactionEntity.java
+// Valor em centavos (Long, PERS-17), espelho de TransactionRow; a API devolve reais (centsToReais).
 class TransactionEntity {
     String id
     String description
-    Long amount
+    Long amountCents
     Category? category
     String currency
     String userId
@@ -119,12 +120,12 @@ class TransactionEntity {
     String? createdAt
     String? envelopeId
 
-    public constructor(String id, String description, Long amount, Category? category,
+    public constructor(String id, String description, Long amountCents, Category? category,
             String currency, String userId, Bucket? bucket, Source source, String? createdAt,
             String? envelopeId) {
         this.id = id
         this.description = description
-        this.amount = amount
+        this.amountCents = amountCents
         this.category = category
         this.currency = currency
         this.userId = userId

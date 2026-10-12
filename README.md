@@ -61,7 +61,7 @@ Conheça a interface do Organiza IA:
 | **Monólito Modular Backend** | KOF (`backend/*.kf`) -- Módulos de Domínio (`models.kf`, `auth.kf`, `services.kf`, `coach.kf`, `store.kf`, `main.kf`) |
 | **Monólito Modular Frontend** | KOF (`kof.ui`, `frontend/*.kf`) -- Módulos de Core (`core/`), Componentes (`components/`) e Telas (`screens/`) |
 | **Back-end Legado (arquivado)** | Java 17, Spring Boot 3.3.x, Spring AI -- arquivado em `archive/legacy-backend-java/` (tag histórica `legacy/java-spring-boot`), mantido apenas como referência histórica |
-| **Banco de Dados** | `kof.orm` em `backend/store.kf`: PostgreSQL na Aiven em produção (escolhido), com o app no Render; H2 em arquivo (`./data`) fora de produção. Persistência em andamento, ver [`.specs/features/persistence-kof-orm/`](.specs/features/persistence-kof-orm/): usuários e envelopes já no banco; os demais dados ainda em memória |
+| **Banco de Dados** | `kof.orm` em `backend/store.kf`: PostgreSQL na Aiven em produção (escolhido), com o app no Render; H2 em arquivo (`./data`) fora de produção. Persistência em andamento, ver [`.specs/features/persistence-kof-orm/`](.specs/features/persistence-kof-orm/): usuários, envelopes e transações já no banco; chat e renda ainda em memória |
 | **Build & Tooling** | `kof-cli` / Kof Compiler **0.6.3**, fixado em [`KOF_VERSION`](KOF_VERSION) (Java 25 JDK) |
 
 **Versão do Kof:** fixada em `0.6.3` no arquivo [`KOF_VERSION`](KOF_VERSION), fonte única do `Dockerfile` e do CI (`.github/workflows/kof-check.yml`). Trocar a versão é um commit próprio em `KOF_VERSION`, feito só depois de passar todos os gates; releases prerelease são recusados.
@@ -133,7 +133,7 @@ O fechamento ponta a ponta do **MVP 1** segue a metodologia **tlc-spec-driven (4
 
 Especificação e design em [`.specs/features/persistence-kof-orm/`](.specs/features/persistence-kof-orm/) ([`spec.md`](.specs/features/persistence-kof-orm/spec.md), [`design.md`](.specs/features/persistence-kof-orm/design.md)). Banco de produção escolhido: **PostgreSQL na Aiven**, com o app rodando no Render.
 
-**Estado:** o backend já abre o banco no boot (`backend/store.kf`, `kof.orm`) e cria as 6 tabelas `*Row` de forma idempotente. **Usuários** (cadastro, login, onboarding) já são gravados no banco (T2): id gerado pelo banco (o JWT `sub` é esse número em texto, ex. `"1"`), senha só como `passwords.hash`, salário em centavos e e-mail repetido barrado com 409 antes de gravar. **Envelopes** também (T4): id do banco, limite e gasto em centavos (a API segue em reais), leitura e gravação sempre filtradas pelo usuário do token (envelope de outro usuário = inexistente). Transações, chat e renda **ainda ficam em memória**; a migração deles (tarefas T5–T7) está pendente.
+**Estado:** o backend já abre o banco no boot (`backend/store.kf`, `kof.orm`) e cria as 6 tabelas `*Row` de forma idempotente. **Usuários** (cadastro, login, onboarding) já são gravados no banco (T2): id gerado pelo banco (o JWT `sub` é esse número em texto, ex. `"1"`), senha só como `passwords.hash`, salário em centavos e e-mail repetido barrado com 409 antes de gravar. **Envelopes** também (T4): id do banco, limite e gasto em centavos (a API segue em reais), leitura e gravação sempre filtradas pelo usuário do token (envelope de outro usuário = inexistente). **Transações** também (T5): id do banco, valor em centavos (`amount` 600 grava 60000 e volta `value` 600.0), desconto do envelope gravado no banco e texto sempre por bind (gravado literal). Chat e renda **ainda ficam em memória**; a migração deles (tarefas T6–T7) está pendente.
 
 | Variável | Uso |
 |---|---|
@@ -141,7 +141,7 @@ Especificação e design em [`.specs/features/persistence-kof-orm/`](.specs/feat
 | `KOF_DB_USER` / `KOF_DB_PASSWORD` | Credenciais, passadas separadas da URL |
 | `KOF_ENV` | `production` torna `KOF_DB_URL` obrigatória (a imagem Docker já define `KOF_ENV=production`) |
 
-**Teste de reinício (G-RESTART):** `scripts/test_restart.ps1 -ClassesDir <classes> -ExtraClasspath <jar do H2>` sobe o servidor com H2 em arquivo (pasta temporária, `-DbDir`), cria conta + onboarding 3000 + envelope FOOD 1200, encerra o processo (Ctrl+C e, depois, kill à força), sobe outro e confere login = 200, `daily-pulse` com `salary` = 3000.0 e exatamente 1 envelope FOOD com limite 1200.0.
+**Teste de reinício (G-RESTART):** `scripts/test_restart.ps1 -ClassesDir <classes> -ExtraClasspath <jar do H2>` sobe o servidor com H2 em arquivo (pasta temporária, `-DbDir`), cria conta + onboarding 3000 + envelope FOOD 1200 + transação de 600, encerra o processo (Ctrl+C e, depois, kill à força), sobe outro e confere login = 200, `daily-pulse` com `salary` = 3000.0 e `pulse` = 80.0, exatamente 1 envelope FOOD (limite 1200.0, gasto 600.0) e exatamente 1 transação com `value` = 600.0.
 
 A imagem Docker gera um fat jar com o driver JDBC (`kofdeps`) e roda em JRE 25. Detalhes em [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
@@ -155,7 +155,7 @@ Na visão KOF, segregar o frontend e o backend em dois mundos artificiais com pr
 - **Entidades e Enums (`backend/models.kf`):** transpilado e validado via `kof check`.
 - **Serviços e Repositórios Core (`backend/services.kf`):** transpilado (`mod_user`, `mod_transaction`, `mod_budget`, `mod_variable_income`, `TierEnforcement`).
 - **Módulo de IA Coach (`backend/coach.kf`):** transpilado (`CategoryBucketMapper`, `calculateDailyPulse`, `calculateBalance`, `registerUserIncome`, `suggestModelChange`, `KakeiboReflection`).
-- **Conexão e schema do banco (`backend/store.kf`):** `main.kf` abre o banco no boot e cria, de forma idempotente, as 6 tabelas `*Row` com `kof.orm`; falha derruba o boot. Usuários (`UserRow`) e envelopes (`EnvelopeRow`) já são lidos e gravados ali; o resto das rotas ainda usa memória.
+- **Conexão e schema do banco (`backend/store.kf`):** `main.kf` abre o banco no boot e cria, de forma idempotente, as 6 tabelas `*Row` com `kof.orm`; falha derruba o boot. Usuários (`UserRow`), envelopes (`EnvelopeRow`) e transações (`TransactionRow`) já são lidos e gravados ali; chat e renda ainda usam memória.
 - **Gateway HTTP & Auth JWT (`backend/main.kf`, `backend/auth.kf`):** operando na porta `3000` com 9/9 fluxos E2E validados (`scripts/test_e2e_flow.ps1`).
 - **Firewall Anti-Alucinação KofUI (`frontend/`):** uso exclusivo de primitivas reais do compilador Kof4j (`Window`, `View`, `Column`, `Row`, `Label`, `Button`, `Input`, `Canvas`, `Style`, `Color`, `Theme`), estado em campos `static` de classe e funções top-level para cores (`Color(r,g,b)`), contornando o bug de inicialização estática no `Default.mjs`.
 - **Código Java legado:** arquivado em `archive/legacy-backend-java/` (não compila mais como parte do projeto), preservado como *Ground Truth* histórico via tag `legacy/java-spring-boot`.

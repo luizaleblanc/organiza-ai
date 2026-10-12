@@ -1,12 +1,12 @@
 ﻿# scripts/test_restart.ps1
 # G-RESTART: os dados gravados pela API sobrevivem ao reinício do processo (PERS-01..03).
 # Sobe o servidor com KOF_DB_URL = H2 em arquivo dentro de -DbDir (apagado no início), cria conta + onboarding 3000
-# + envelope FOOD 1200,
+# + envelope FOOD 1200 + transação de 600 em FOOD,
 # encerra o processo e sobe outro com o mesmo banco. Dois encerramentos:
 #   (1) normal: Ctrl+C no console do servidor (a JVM roda os shutdown hooks);
 #   (2) à força: Kill() logo depois da última gravação (sem shutdown).
-# Depois de cada reinício: login com as mesmas credenciais = 200, daily-pulse salary = 3000.0 e exatamente
-# 1 envelope FOOD com limite 1200.0.
+# Depois de cada reinício: login com as mesmas credenciais = 200, daily-pulse salary = 3000.0 e pulse = 80.0,
+# exatamente 1 envelope FOOD (limite 1200.0, gasto 600.0) e exatamente 1 transação com value = 600.0.
 # Pré-requisitos: `kof build backend --target jvm` e o jar do driver H2 em -ExtraClasspath (`kof deps resolve`).
 # Exit code 0 somente se todos os asserts passarem e nenhum stderr tiver VerifyError/LinkageError.
 
@@ -157,6 +157,12 @@ function New-Account([string]$Label, [string]$Cred) {
         $j = $r.Body | ConvertFrom-Json
         Expect ($r.Status -eq 200 -and $j.categoryName -eq "FOOD" -and $j.limitAmount -eq 1200.0) "$($r.Status) $($r.Body)"
     }
+    Test-Step "$Label`: transação de 600 em FOOD = 200 com value 600.0" {
+        $body = (@{ description = "Mercado do mês"; amount = 600; category = "FOOD"; currency = "BRL" } | ConvertTo-Json -Compress)
+        $r = Invoke-Api "POST" "/api/transactions" $script:newToken $body
+        $j = $r.Body | ConvertFrom-Json
+        Expect ($r.Status -eq 200 -and $j.value -eq 600.0 -and $j.envelopeId) "$($r.Status) $($r.Body)"
+    }
 }
 
 function Assert-Persisted([string]$Label, [string]$Cred) {
@@ -166,15 +172,20 @@ function Assert-Persisted([string]$Label, [string]$Cred) {
         $script:loginToken = $r.Body
         Expect ($r.Status -eq 200 -and $r.Body.Split(".").Length -eq 3) "$($r.Status) $($r.Body)"
     }
-    Test-Step "$Label`: daily-pulse salary = 3000.0 (PERS-02)" {
+    Test-Step "$Label`: daily-pulse salary = 3000.0 e pulse = 80.0 (PERS-02/03)" {
         $r = Invoke-Api "GET" "/api/budgets/daily-pulse" $script:loginToken
         $j = $r.Body | ConvertFrom-Json
-        Expect ($r.Status -eq 200 -and $j.salary -eq 3000.0) "$($r.Status) $($r.Body)"
+        Expect ($r.Status -eq 200 -and $j.salary -eq 3000.0 -and $j.pulse -eq 80.0 -and $j.totalSpent -eq 600.0) "$($r.Status) $($r.Body)"
     }
-    Test-Step "$Label`: exatamente 1 envelope, FOOD com limite 1200.0 (PERS-03)" {
+    Test-Step "$Label`: exatamente 1 envelope, FOOD com limite 1200.0 e gasto 600.0 (PERS-03)" {
         $r = Invoke-Api "GET" "/api/envelopes" $script:loginToken
         $list = (ConvertFrom-JsonList $r.Body)
-        Expect ($r.Status -eq 200 -and $list.Count -eq 1 -and $list[0].categoryName -eq "FOOD" -and $list[0].limitAmount -eq 1200.0) "$($r.Status) $($r.Body)"
+        Expect ($r.Status -eq 200 -and $list.Count -eq 1 -and $list[0].categoryName -eq "FOOD" -and $list[0].limitAmount -eq 1200.0 -and $list[0].currentSpent -eq 600.0) "$($r.Status) $($r.Body)"
+    }
+    Test-Step "$Label`: exatamente 1 transação, value = 600.0 (PERS-03)" {
+        $r = Invoke-Api "GET" "/api/transactions" $script:loginToken
+        $list = (ConvertFrom-JsonList $r.Body)
+        Expect ($r.Status -eq 200 -and $list.Count -eq 1 -and $list[0].value -eq 600.0 -and $list[0].category -eq "FOOD") "$($r.Status) $($r.Body)"
     }
 }
 

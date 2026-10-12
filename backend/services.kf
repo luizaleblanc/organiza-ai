@@ -77,72 +77,25 @@ record TierStatus(String tier, Int messagesUsed, Int messagesLimit, Bool voiceEn
 // Transaction/TransactionId separada da entidade, por idioms/architecture.md)
 // =========================================================
 
-List<TransactionEntity> findTransactionsByCategoryAndUserId(Category category, String userId) {
-    return BackendDb.transactions.filter((t: TransactionEntity) -> t.category == category && t.userId == userId)
-}
+// Persistido com kof.orm em backend/store.kf (T5): findTransactionsByCategoryAndUserId,
+// findTransactionsByUserIdAndCreatedAtAfter, deleteTransactionsByUserId, insertTransaction.
+// As somas trabalham em centavos (Long, soma exata) e so viram reais na borda.
 
-Double sumAmountByCategoryAndUserId(Category category, String userId) {
-    var matching = findTransactionsByCategoryAndUserId(category, userId)
-    var total = 0.0
-    for (var t in matching) {
-        total = total + (t.amount * 1.0)
-    }
-    return total
-}
-
-// GAP (ver relatorio #3): comparacao de datas feita como String
-// (createdAt.compareTo(from) >= 0, confirmado pelo compilador via SEM053 --
-// Kof nao tem operador >= para String) -- sem API de data/hora real
-// confirmada no training/ lido nesta sessao; ordem lexicografica so e
-// correta se os timestamps forem ISO-8601.
-List<TransactionEntity> findTransactionsByUserIdAndCreatedAtAfter(String userId, String from) {
-    var result: List<TransactionEntity> = listOf()
-    for (var t in BackendDb.transactions) {
-        if (t.userId == userId) {
-            var createdAt = t.createdAt
-            if (createdAt == null) {
-                result.add(t)
-            } else {
-                if (createdAt.compareTo(from) >= 0) {
-                    result.add(t)
-                }
-            }
-        }
-    }
-    return result
-}
-
-Long sumAmountByUserIdAndCreatedAtAfter(String userId, String from) {
-    var matching = findTransactionsByUserIdAndCreatedAtAfter(userId, from)
+Long sumAmountCents(List<TransactionEntity> transactions) {
     var sum: Long = 0
-    for (var t in matching) {
-        sum = sum + t.amount
+    for (var t in transactions) {
+        sum = sum + t.amountCents
     }
     return sum
 }
 
-void deleteTransactionsByUserId(String userId) {
-    var remaining: List<TransactionEntity> = listOf()
-    for (var t in BackendDb.transactions) {
-        if (t.userId != userId) {
-            remaining.add(t)
-        }
-    }
-    BackendDb.transactions = remaining
+Double sumAmountByCategoryAndUserId(Category category, String userId) {
+    return centsToReais(sumAmountCents(findTransactionsByCategoryAndUserId(category, userId)))
 }
 
-TransactionEntity saveTransaction(TransactionEntity transaction) {
-    var i = 0
-    while (i < BackendDb.transactions.size) {
-        var existing = BackendDb.transactions.get(i)
-        if (existing.id == transaction.id) {
-            BackendDb.transactions.set(i, transaction)
-            return transaction
-        }
-        i = i + 1
-    }
-    BackendDb.transactions.add(transaction)
-    return transaction
+// Total em CENTAVOS (Long); quem exibe converte com centsToReais.
+Long sumAmountByUserIdAndCreatedAtAfter(String userId, String from) {
+    return sumAmountCents(findTransactionsByUserIdAndCreatedAtAfter(userId, from))
 }
 
 TransactionOutput transactionEntityToOutput(TransactionEntity t) {
@@ -151,7 +104,7 @@ TransactionOutput transactionEntityToOutput(TransactionEntity t) {
     if (category != null) {
         categoryName = category.name()
     }
-    return TransactionOutput(t.id, t.description, categoryName, (t.amount * 1.0), t.currency, t.envelopeId)
+    return TransactionOutput(t.id, t.description, categoryName, centsToReais(t.amountCents), t.currency, t.envelopeId)
 }
 
 // =========================================================
@@ -408,9 +361,7 @@ VariableIncomeEntity saveVariableIncome(VariableIncomeEntity income) {
 // GAP (ver relatorio #5): CurrentUserService (Spring Security) nao tem
 // equivalente confirmado no training/ -- userId passa a ser parametro
 // explicito da funcao em vez de injetado via contexto de autenticacao.
-// GAP (ver relatorio #6): sem UUID.randomUUID() equivalente confirmado
-// no training/ -- id passa a ser parametro explicito (responsabilidade
-// do chamador, ex.: BFF gera e envia o id).
+// Id gerado pelo banco (PERS-06/07); valor gravado em centavos (PERS-17/18).
 // =========================================================
 
 // Envelope da transacao: o informado no corpo so vale se for do proprio usuario (PERS-11);
@@ -429,19 +380,20 @@ String? resolveEnvelopeId(String userId, String? given, Category category) {
     return null
 }
 
-TransactionOutput persistTransaction(String id, PersistTransactionInput input, Category category, String userId) {
+TransactionOutput persistTransaction(PersistTransactionInput input, Category category, String userId) {
     if (input.amount() <= 0) {
         throw "Operação negada: O valor da transação deve ser maior que zero."
     }
 
     var envId = resolveEnvelopeId(userId, input.envelopeId(), category)
+    var amountCents = toCents(input.amount() * 1.0)
 
-    var transaction = TransactionEntity(id, input.description(), input.amount(), category, input.currency(), userId, null, Source.MANUAL, "2026-09-18T12:00:00Z", envId)
-    saveTransaction(transaction)
+    // createdAt fixo ate a issue #44 (datas reais); descricao gravada literal via binds (PERS-15)
+    var transaction = insertTransaction(TransactionEntity("", input.description(), amountCents, category, input.currency(), userId, null, Source.MANUAL, "2026-09-18T12:00:00Z", envId))
 
     // Desconto do envelope gravado no banco (soma em centavos)
     if (envId != null) {
-        updateEnvelopeSpent(userId, envId, input.amount() * 1.0)
+        addEnvelopeSpentCents(userId, envId, amountCents)
     }
 
     return transactionEntityToOutput(transaction)

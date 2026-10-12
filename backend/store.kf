@@ -1,6 +1,6 @@
 // backend/store.kf
 // Conexao e schema do banco com kof.orm (spec .specs/features/persistence-kof-orm, T1).
-// Usuarios (T2) e envelopes (T4) ja vivem no banco; transacoes, chat e renda ainda ficam em BackendDb (memoria).
+// Usuarios (T2), envelopes (T4) e transacoes (T5) ja vivem no banco; chat e renda ainda ficam em BackendDb (memoria).
 //
 // Variaveis (kof.config: a chave "db.url" le KOF_DB_URL, como "jwt.secret" le KOF_JWT_SECRET):
 //   KOF_DB_URL      URL JDBC SEM credenciais (ex.: jdbc:postgresql://host:5432/organiza). Ausente:
@@ -365,4 +365,109 @@ void deleteEnvelopeById(String userId, String id) {
     if (row != null) {
         orm.delete<EnvelopeRow>(DbConn.handle, row.id())
     }
+}
+
+// =========================================================
+// Transacoes (T5): TransactionRow <-> TransactionEntity, valor em centavos (PERS-17).
+// Enums e opcionais viram texto/0 no banco ("" = sem categoria/bucket/data; 0 = sem envelope).
+// =========================================================
+
+String categoryText(Category? category) {
+    if (category != null) {
+        return category.name()
+    }
+    return ""
+}
+
+String bucketText(Bucket? bucket) {
+    if (bucket != null) {
+        return bucket.name()
+    }
+    return ""
+}
+
+Source sourceFromText(String text) {
+    var value = Source.valueOf(text)
+    if (value != null) {
+        return value
+    }
+    return Source.MANUAL
+}
+
+String? idOrNull(Long id) {
+    if (id > 0) {
+        return String.valueOf(id)
+    }
+    return null
+}
+
+Long idOrZero(String? id) {
+    if (id != null) {
+        if (strings.isNumeric(id)) {
+            return id.toLong()
+        }
+    }
+    return 0
+}
+
+TransactionEntity transactionFromRow(TransactionRow row) {
+    return TransactionEntity(String.valueOf(row.id()), row.description(), row.amountCents(),
+        Category.valueOf(row.category()), row.currency(), String.valueOf(row.userId()), Bucket.valueOf(row.bucket()),
+        sourceFromText(row.source()), textOrNull(row.createdAt()), idOrNull(row.envelopeId()))
+}
+
+TransactionRow transactionToRow(Long id, TransactionEntity t) {
+    return TransactionRow(id, t.userId.toLong(), t.description, t.amountCents, categoryText(t.category), t.currency,
+        bucketText(t.bucket), t.source.name(), nullToText(t.createdAt), idOrZero(t.envelopeId))
+}
+
+List<TransactionEntity> findTransactionsByCategoryAndUserId(Category category, String userId) {
+    if (!strings.isNumeric(userId)) {
+        return listOf()
+    }
+    var uid = userId.toLong()
+    var categoryName = category.name()
+    var rows = TransactionRow.query(DbConn.handle) {
+        where userId == uid
+        where category == categoryName
+        orderBy id asc
+    }
+    return rows.map((r: TransactionRow) -> transactionFromRow(r))
+}
+
+// Filtro por dono no banco (DSL); o corte por data segue em String ISO (compareTo) e mantem as
+// transacoes sem data, como antes -- datas reais sao a issue #44.
+List<TransactionEntity> findTransactionsByUserIdAndCreatedAtAfter(String userId, String from) {
+    var result: List<TransactionEntity> = listOf()
+    if (!strings.isNumeric(userId)) {
+        return result
+    }
+    var uid = userId.toLong()
+    var rows = TransactionRow.query(DbConn.handle) {
+        where userId == uid
+        orderBy id asc
+    }
+    for (var row in rows) {
+        if (row.createdAt() == "" || row.createdAt().compareTo(from) >= 0) {
+            result.add(transactionFromRow(row))
+        }
+    }
+    return result
+}
+
+void deleteTransactionsByUserId(String userId) {
+    if (strings.isNumeric(userId)) {
+        var uid = userId.toLong()
+        var rows = TransactionRow.query(DbConn.handle) {
+            where userId == uid
+        }
+        for (var row in rows) {
+            orm.delete<TransactionRow>(DbConn.handle, row.id())
+        }
+    }
+}
+
+// Sempre insere: o id vem do banco (PERS-06/07); texto vai por bind, gravado literal (PERS-15).
+TransactionEntity insertTransaction(TransactionEntity transaction) {
+    return transactionFromRow(orm.save(DbConn.handle, transactionToRow(0, transaction)))
 }

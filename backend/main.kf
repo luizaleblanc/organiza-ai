@@ -191,8 +191,7 @@ main() {
         if (category == null) {
             return status(400, json.encode(ApiError("Categoria inválida: " + req.category())))
         }
-        var newId = "tx_" + String.valueOf(BackendDb.transactions.size + 1)
-        var created = persistTransaction(newId, req, category, currentUserId())
+        var created = persistTransaction(req, category, currentUserId())
         return json.encode(created)
     }
 
@@ -201,8 +200,7 @@ main() {
     // =========================================================
 
     app.get("/api/dashboard") {
-        var totalSpentLong = sumAmountByUserIdAndCreatedAtAfter(currentUserId(), "2026-09-01")
-        var totalSpent = totalSpentLong * 1.0
+        var totalSpent = centsToReais(sumAmountByUserIdAndCreatedAtAfter(currentUserId(), "2026-09-01"))
 
         // Formato esperado pelo kof.ui: totalSpent|currency|categories|transactions
         return String.valueOf(totalSpent) + "|BRL|Alimentação:50,Transporte:30,Lazer:20|Supermercado:Alimentação:150.0,"

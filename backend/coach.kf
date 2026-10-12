@@ -97,8 +97,7 @@ GetDailyPulseOutput calculateDailyPulse(String userId, Int daysRemaining, String
     if (user != null) {
         var salary = userSalary(user)
 
-        var totalSpentLong = sumAmountByUserIdAndCreatedAtAfter(userId, fromIso)
-        var totalSpent = totalSpentLong * 1.0
+        var totalSpent = centsToReais(sumAmountByUserIdAndCreatedAtAfter(userId, fromIso))
 
         var remaining = salary - totalSpent
         if (remaining <= 0.0) {
@@ -125,7 +124,7 @@ GetBalanceOutput calculateBalance(String userId, String fromIso) {
         if (model == BudgetModelType.FREELANCER_BASE_ZERO) {
             var totalSpent = 0.0
             for (var t in monthTransactions) {
-                totalSpent = totalSpent + (t.amount * 1.0)
+                totalSpent = totalSpent + centsToReais(t.amountCents)
             }
             var notAllocated = salary - totalSpent
             var emptyList: List<BucketBalanceDTO> = listOf()
@@ -140,7 +139,7 @@ GetBalanceOutput calculateBalance(String userId, String fromIso) {
                 var spent = 0.0
                 for (var t in monthTransactions) {
                     if (toKakeiboBucket(t.category) == b.name) {
-                        spent = spent + (t.amount * 1.0)
+                        spent = spent + centsToReais(t.amountCents)
                     }
                 }
                 var rem = b.amount - spent
@@ -152,9 +151,9 @@ GetBalanceOutput calculateBalance(String userId, String fromIso) {
             for (var t in monthTransactions) {
                 var bucket = toStandardBucket(t.category)
                 if (bucket == Bucket.NEEDS) {
-                    needsSpent = needsSpent + (t.amount * 1.0)
+                    needsSpent = needsSpent + centsToReais(t.amountCents)
                 } else {
-                    wantsSpent = wantsSpent + (t.amount * 1.0)
+                    wantsSpent = wantsSpent + centsToReais(t.amountCents)
                 }
             }
 
