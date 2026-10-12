@@ -1,6 +1,6 @@
 // backend/store.kf
 // Conexao e schema do banco com kof.orm (spec .specs/features/persistence-kof-orm, T1).
-// As rotas e o BackendDb ainda nao usam o banco: a T1 so abre a conexao e garante as tabelas.
+// Usuarios ja vivem no banco (T2); envelopes, transacoes, chat e renda ainda ficam em BackendDb (memoria).
 //
 // Variaveis (kof.config: a chave "db.url" le KOF_DB_URL, como "jwt.secret" le KOF_JWT_SECRET):
 //   KOF_DB_URL      URL JDBC SEM credenciais (ex.: jdbc:postgresql://host:5432/organiza). Ausente:
@@ -157,4 +157,91 @@ String openDb() {
     DbConn.handle = conn
     log.info("banco aberto: esquema " + scheme)
     return conn
+}
+
+// =========================================================
+// Usuarios (T2): UserRow <-> UserEntity. Os demais dados ainda ficam em BackendDb (memoria).
+// =========================================================
+
+// Texto do banco -> enum; valor desconhecido cai no padrao do cadastro (dado nao derruba a rota).
+Role roleFromText(String text) {
+    var value = Role.valueOf(text)
+    if (value != null) {
+        return value
+    }
+    return Role.USER
+}
+
+Tier tierFromText(String text) {
+    var value = Tier.valueOf(text)
+    if (value != null) {
+        return value
+    }
+    return Tier.FREE
+}
+
+BudgetModelType budgetModelFromText(String text) {
+    var value = BudgetModelType.valueOf(text)
+    if (value != null) {
+        return value
+    }
+    return BudgetModelType.STANDARD_503020
+}
+
+IncomeType incomeTypeFromText(String text) {
+    var value = IncomeType.valueOf(text)
+    if (value != null) {
+        return value
+    }
+    return IncomeType.FIXED
+}
+
+// O id do banco (Long) vira texto ("1") na borda: JWT sub e o restante do backend usam String.
+UserEntity userFromRow(UserRow row) {
+    return UserEntity(String.valueOf(row.id()), row.email(), row.passwordHash(), roleFromText(row.role()),
+        row.salaryCents(), row.hasSalary(), tierFromText(row.tier()), row.hasVariableIncome(),
+        row.emergencyGoalCents(), row.hasEmergencyGoal(), budgetModelFromText(row.budgetModel()),
+        incomeTypeFromText(row.incomeType()), row.hasDebt(), row.debtCents())
+}
+
+UserRow userToRow(Long id, UserEntity user) {
+    return UserRow(id, user.email, user.passwordHash, user.role.name(), user.salaryCents, user.hasSalary,
+        user.tier.name(), user.hasVariableIncome, user.emergencyGoalCents, user.hasEmergencyGoal,
+        user.budgetModel.name(), user.incomeType.name(), user.hasDebt, user.debtCents)
+}
+
+// Id fora do formato do banco (ex.: "usr_1" de um token antigo) = usuario inexistente.
+UserEntity? findUserById(String id) {
+    if (!strings.isNumeric(id)) {
+        return null
+    }
+    var row = orm.find<UserRow>(DbConn.handle, id.toLong())
+    if (row != null) {
+        return userFromRow(row)
+    }
+    return null
+}
+
+UserEntity? findUserByEmail(String email) {
+    var rows = orm.where<UserRow>(DbConn.handle, "email", email)
+    if (rows.size > 0) {
+        return userFromRow(rows.get(0))
+    }
+    return null
+}
+
+// Cadastro: o id vem do banco (coluna generated, PERS-06). E-mail repetido deve ser barrado ANTES
+// (findUserByEmail): a violacao de unique escapa de catch (String e) (PERS-20, medido no 0.6.3).
+UserEntity insertUser(UserEntity user) {
+    var saved = orm.save(DbConn.handle, userToRow(0, user))
+    return userFromRow(saved)
+}
+
+// Entity e imutavel (SEM038): atualizar = orm.save de uma row nova com o mesmo id (upsert por PK).
+UserEntity updateUser(UserEntity user) {
+    if (!strings.isNumeric(user.id)) {
+        throw "id de usuario invalido"
+    }
+    var saved = orm.save(DbConn.handle, userToRow(user.id.toLong(), user))
+    return userFromRow(saved)
 }

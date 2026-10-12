@@ -50,45 +50,58 @@ enum VariableIncomeDestination { EMERGENCY_FUND, BUDGET_5030020 }
 // =========================================================
 
 // mod_user/model/UserEntity.java
+// Espelho mutavel de UserRow (backend/store.kf): id = numero gerado pelo banco em texto ("1"),
+// dinheiro em centavos e valores opcionais como par valor + flag (sem T? primitivo: issue #41).
 class UserEntity {
     String id
     String email
     String passwordHash
     Role role
-    Double? salary
+    Long salaryCents
+    Bool hasSalary
     Tier tier
     Bool hasVariableIncome
-    Double? emergencyFundGoal
+    Long emergencyGoalCents
+    Bool hasEmergencyGoal
     BudgetModelType budgetModel
     IncomeType incomeType
     Bool hasDebt
-    Double? debtAmount
+    Long debtCents
 
     public constructor(String id, String email, String passwordHash, Role role,
-            Double? salary, Tier tier, Bool hasVariableIncome, Double? emergencyFundGoal,
-            BudgetModelType budgetModel, IncomeType incomeType, Bool hasDebt, Double? debtAmount) {
+            Long salaryCents, Bool hasSalary, Tier tier, Bool hasVariableIncome,
+            Long emergencyGoalCents, Bool hasEmergencyGoal, BudgetModelType budgetModel,
+            IncomeType incomeType, Bool hasDebt, Long debtCents) {
         this.id = id
         this.email = email
         this.passwordHash = passwordHash
         this.role = role
-        this.salary = salary
+        this.salaryCents = salaryCents
+        this.hasSalary = hasSalary
         this.tier = tier
         this.hasVariableIncome = hasVariableIncome
-        this.emergencyFundGoal = emergencyFundGoal
+        this.emergencyGoalCents = emergencyGoalCents
+        this.hasEmergencyGoal = hasEmergencyGoal
         this.budgetModel = budgetModel
         this.incomeType = incomeType
         this.hasDebt = hasDebt
-        this.debtAmount = debtAmount
+        this.debtCents = debtCents
     }
 }
 
-// WORKAROUND: unbox de T? primitivo estreitado em store/return (Kof4j §610 parcial;
-// issue upstream pendente). `return v`, `r = v`, `math.max(v, 0.0)` e o guard invertido
-// compilam com exit 0 mas dao VerifyError ao carregar (repros z1/z5/z6); so `v + 0.0`
-// forca o unbox. Remover quando um release corrigir (ver issue #41).
-Double orZero(Double? v) {
-    if (v != null) {
-        return v + 0.0
+// Borda reais <-> centavos. O duplo roundTo evita 1234.565 * 100 = 123456.49999 (medido no 0.6.3).
+Long toCents(Double reais) {
+    return math.roundTo(math.roundTo(reais * 100.0, 6), 0) as Long
+}
+
+Double centsToReais(Long cents) {
+    return cents / 100.0
+}
+
+// Salario em reais para os calculos; sem salario informado = 0.0.
+Double userSalary(UserEntity user) {
+    if (user.hasSalary) {
+        return centsToReais(user.salaryCents)
     }
     return 0.0
 }

@@ -72,11 +72,10 @@ main() {
             return status(409, json.encode(ApiError("Usuário já cadastrado")))
         }
 
-        var newId = "usr_" + String.valueOf(BackendDb.users.size + 1)
-        var newUser = UserEntity(newId, req.email, passwords.hash(req.password), Role.USER, 0.0, Tier.FREE, false, 0.0, BudgetModelType.STANDARD_503020, IncomeType.FIXED, false, 0.0)
-        saveUser(newUser)
+        // Senha so como passwords.hash (PERS-12); o id vem do banco, nunca de contagem em memoria (PERS-06)
+        var created = insertUser(UserEntity("", req.email, passwords.hash(req.password), Role.USER, 0, true, Tier.FREE, false, 0, true, BudgetModelType.STANDARD_503020, IncomeType.FIXED, false, 0))
 
-        return issueToken(newId)
+        return issueToken(created.id)
     }
 
     // =========================================================
@@ -97,11 +96,12 @@ main() {
         if (user == null) {
             return status(404, json.encode(ApiError("Usuário não encontrado")))
         }
-        user.salary = req.salary
+        user.salaryCents = toCents(req.salary)
+        user.hasSalary = true
         user.incomeType = incomeType
         user.hasDebt = req.hasDebt
         user.budgetModel = suggested
-        saveUser(user)
+        updateUser(user)
 
         var desc = describeBudgetModel(suggested)
         var buckets = buildBudgetBuckets(suggested, req.salary)

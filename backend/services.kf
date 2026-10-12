@@ -35,7 +35,6 @@
 // =========================================================
 
 class BackendDb {
-    static List<UserEntity> users = listOf()
     static List<TransactionEntity> transactions = listOf()
     static List<EnvelopeEntity> envelopes = listOf()
     static List<ChatMessageEntity> chatMessages = listOf()
@@ -70,43 +69,6 @@ record ListTransactionsByCategoryInput(Category category)
 
 // shared/service/TierStatus.java
 record TierStatus(String tier, Int messagesUsed, Int messagesLimit, Bool voiceEnabled, Bool canSendMessage)
-
-// =========================================================
-// mod_user/repository/UserEntityRepository.java
-// =========================================================
-
-UserEntity? findUserByEmail(String email) {
-    for (var u in BackendDb.users) {
-        if (u.email == email) {
-            return u
-        }
-    }
-    return null
-}
-
-UserEntity? findUserById(String id) {
-    for (var u in BackendDb.users) {
-        if (u.id == id) {
-            return u
-        }
-    }
-    return null
-}
-
-// CRUD implicito de JpaRepository (save/findById), usado pelos services abaixo
-UserEntity saveUser(UserEntity user) {
-    var i = 0
-    while (i < BackendDb.users.size) {
-        var existing = BackendDb.users.get(i)
-        if (existing.id == user.id) {
-            BackendDb.users.set(i, user)
-            return user
-        }
-        i = i + 1
-    }
-    BackendDb.users.add(user)
-    return user
-}
 
 // =========================================================
 // mod_transaction/repository/TransactionEntityRepository.java
@@ -428,7 +390,7 @@ BudgetModelType migrateBudgetModelIfNeeded(UserEntity? user) {
         var current = user.budgetModel
         var incomeType = user.incomeType
         var hasDebt = user.hasDebt
-        var salary = orZero(user.salary)
+        var salary = userSalary(user)
 
         if (current == BudgetModelType.ANTI_DEBT_701020 && !hasDebt) {
             return BudgetModelType.STANDARD_503020
@@ -465,8 +427,8 @@ BudgetModelType migrateBudgetModelIfNeeded(UserEntity? user) {
 VariableIncomeDestination decideVariableIncomeDestination(String userId, Double amount) {
     var user = findUserById(userId)
     if (user != null) {
-        var goal = user.emergencyFundGoal
-        if (goal != null) {
+        if (user.hasEmergencyGoal) {
+            var goal = centsToReais(user.emergencyGoalCents)
             var emergencyIncomes = findVariableIncomesByUserId(userId)
             var currentReserve = 0.0
             for (var inc in emergencyIncomes) {

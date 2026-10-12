@@ -61,7 +61,7 @@ Conheça a interface do Organiza IA:
 | **Monólito Modular Backend** | KOF (`backend/*.kf`) -- Módulos de Domínio (`models.kf`, `auth.kf`, `services.kf`, `coach.kf`, `store.kf`, `main.kf`) |
 | **Monólito Modular Frontend** | KOF (`kof.ui`, `frontend/*.kf`) -- Módulos de Core (`core/`), Componentes (`components/`) e Telas (`screens/`) |
 | **Back-end Legado (arquivado)** | Java 17, Spring Boot 3.3.x, Spring AI -- arquivado em `archive/legacy-backend-java/` (tag histórica `legacy/java-spring-boot`), mantido apenas como referência histórica |
-| **Banco de Dados** | `kof.orm` em `backend/store.kf`: PostgreSQL na Aiven em produção (escolhido), com o app no Render; H2 em arquivo (`./data`) fora de produção. Persistência em andamento, ver [`.specs/features/persistence-kof-orm/`](.specs/features/persistence-kof-orm/): as rotas ainda gravam em memória |
+| **Banco de Dados** | `kof.orm` em `backend/store.kf`: PostgreSQL na Aiven em produção (escolhido), com o app no Render; H2 em arquivo (`./data`) fora de produção. Persistência em andamento, ver [`.specs/features/persistence-kof-orm/`](.specs/features/persistence-kof-orm/): usuários já no banco; os demais dados ainda em memória |
 | **Build & Tooling** | `kof-cli` / Kof Compiler **0.6.3**, fixado em [`KOF_VERSION`](KOF_VERSION) (Java 25 JDK) |
 
 **Versão do Kof:** fixada em `0.6.3` no arquivo [`KOF_VERSION`](KOF_VERSION), fonte única do `Dockerfile` e do CI (`.github/workflows/kof-check.yml`). Trocar a versão é um commit próprio em `KOF_VERSION`, feito só depois de passar todos os gates; releases prerelease são recusados.
@@ -133,7 +133,7 @@ O fechamento ponta a ponta do **MVP 1** segue a metodologia **tlc-spec-driven (4
 
 Especificação e design em [`.specs/features/persistence-kof-orm/`](.specs/features/persistence-kof-orm/) ([`spec.md`](.specs/features/persistence-kof-orm/spec.md), [`design.md`](.specs/features/persistence-kof-orm/design.md)). Banco de produção escolhido: **PostgreSQL na Aiven**, com o app rodando no Render.
 
-**Estado:** o backend já abre o banco no boot (`backend/store.kf`, `kof.orm`) e cria as 6 tabelas `*Row` de forma idempotente. Os dados das rotas **ainda ficam em memória**; a migração (tarefas T2–T7) está pendente.
+**Estado:** o backend já abre o banco no boot (`backend/store.kf`, `kof.orm`) e cria as 6 tabelas `*Row` de forma idempotente. **Usuários** (cadastro, login, onboarding) já são gravados no banco (T2): id gerado pelo banco (o JWT `sub` é esse número em texto, ex. `"1"`), senha só como `passwords.hash`, salário em centavos e e-mail repetido barrado com 409 antes de gravar. Envelopes, transações, chat e renda **ainda ficam em memória**; a migração deles (tarefas T4–T7) está pendente.
 
 | Variável | Uso |
 |---|---|
@@ -153,7 +153,7 @@ Na visão KOF, segregar o frontend e o backend em dois mundos artificiais com pr
 - **Entidades e Enums (`backend/models.kf`):** transpilado e validado via `kof check`.
 - **Serviços e Repositórios Core (`backend/services.kf`):** transpilado (`mod_user`, `mod_transaction`, `mod_budget`, `mod_variable_income`, `TierEnforcement`).
 - **Módulo de IA Coach (`backend/coach.kf`):** transpilado (`CategoryBucketMapper`, `calculateDailyPulse`, `calculateBalance`, `registerUserIncome`, `suggestModelChange`, `KakeiboReflection`).
-- **Conexão e schema do banco (`backend/store.kf`):** `main.kf` abre o banco no boot e cria, de forma idempotente, as 6 tabelas `*Row` com `kof.orm`; falha derruba o boot. Ainda não é usado pelas rotas.
+- **Conexão e schema do banco (`backend/store.kf`):** `main.kf` abre o banco no boot e cria, de forma idempotente, as 6 tabelas `*Row` com `kof.orm`; falha derruba o boot. Usuários já são lidos e gravados ali (`UserRow`); o resto das rotas ainda usa memória.
 - **Gateway HTTP & Auth JWT (`backend/main.kf`, `backend/auth.kf`):** operando na porta `3000` com 9/9 fluxos E2E validados (`scripts/test_e2e_flow.ps1`).
 - **Firewall Anti-Alucinação KofUI (`frontend/`):** uso exclusivo de primitivas reais do compilador Kof4j (`Window`, `View`, `Column`, `Row`, `Label`, `Button`, `Input`, `Canvas`, `Style`, `Color`, `Theme`), estado em campos `static` de classe e funções top-level para cores (`Color(r,g,b)`), contornando o bug de inicialização estática no `Default.mjs`.
 - **Código Java legado:** arquivado em `archive/legacy-backend-java/` (não compila mais como parte do projeto), preservado como *Ground Truth* histórico via tag `legacy/java-spring-boot`.
