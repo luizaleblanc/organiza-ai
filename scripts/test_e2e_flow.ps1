@@ -285,6 +285,12 @@ try {
         Expect ($r.Status -eq 200 -and @($list | Where-Object { $_.value -eq 600.0 -and $_.category -eq "FOOD" }).Count -eq 1) "$($r.Status) $($r.Body)"
     }
 
+    Test-Step "Envelope FOOD descontado na mesma transação: currentSpent = 600.0" {
+        $r = Invoke-Api "GET" "/api/envelopes" $script:token
+        $food = @((ConvertFrom-JsonList $r.Body) | Where-Object { $_.categoryName -eq "FOOD" })
+        Expect ($r.Status -eq 200 -and $food.Count -eq 1 -and $food[0].currentSpent -eq 600.0) "$($r.Status) $($r.Body)"
+    }
+
     Test-Step "Pulso após gasto: pulse = roundTo((3000-600)/30, 2) = 80.0, totalSpent = 600.0" {
         $r = Invoke-Api "GET" "/api/budgets/daily-pulse" $script:token
         $j = $r.Body | ConvertFrom-Json

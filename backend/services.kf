@@ -323,15 +323,22 @@ TransactionOutput persistTransaction(PersistTransactionInput input, Category cat
     var envId = resolveEnvelopeId(userId, input.envelopeId(), category)
     var amountCents = toCents(input.amount() * 1.0)
 
-    // createdAt fixo ate a issue #44 (datas reais); descricao gravada literal via binds (PERS-15)
-    var transaction = insertTransaction(TransactionEntity("", input.description(), amountCents, category, input.currency(), userId, null, Source.MANUAL, "2026-09-18T12:00:00Z", envId))
+    // Transacao + desconto do envelope numa unica transacao do banco (transaction {} do kof.db, na
+    // conexao unica DbConn): qualquer erro desfaz as duas gravacoes e propaga como String (medido no
+    // kof 0.6.3 em H2: commit, rollback e catch (String e) fora do bloco). O bloco nao devolve valor,
+    // entao a transacao gravada sai por uma lista.
+    var saved: List<TransactionEntity> = listOf()
+    transaction {
+        // createdAt fixo ate a issue #44 (datas reais); descricao gravada literal via binds (PERS-15)
+        saved.add(insertTransaction(TransactionEntity("", input.description(), amountCents, category, input.currency(), userId, null, Source.MANUAL, "2026-09-18T12:00:00Z", envId)))
 
-    // Desconto do envelope gravado no banco (soma em centavos)
-    if (envId != null) {
-        addEnvelopeSpentCents(userId, envId, amountCents)
+        // Desconto do envelope gravado no banco (soma em centavos)
+        if (envId != null) {
+            addEnvelopeSpentCents(userId, envId, amountCents)
+        }
     }
 
-    return transactionEntityToOutput(transaction)
+    return transactionEntityToOutput(saved.get(0))
 }
 
 // =========================================================
