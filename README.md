@@ -61,7 +61,7 @@ Conheça a interface do Organiza IA:
 | **Monólito Modular Backend** | KOF (`backend/*.kf`) -- Módulos de Domínio (`models.kf`, `auth.kf`, `services.kf`, `coach.kf`, `store.kf`, `main.kf`) |
 | **Monólito Modular Frontend** | KOF (`kof.ui`, `frontend/*.kf`) -- Módulos de Core (`core/`), Componentes (`components/`) e Telas (`screens/`) |
 | **Back-end Legado (arquivado)** | Java 17, Spring Boot 3.3.x, Spring AI -- arquivado em `archive/legacy-backend-java/` (tag histórica `legacy/java-spring-boot`), mantido apenas como referência histórica |
-| **Banco de Dados** | `kof.orm` em `backend/store.kf`: MySQL 8.4 na Aiven em produção (driver MariaDB Connector/J fixado em `kofdeps`), com o app no Render; H2 em arquivo (`./data`) fora de produção. Persistência em andamento, ver [`.specs/features/persistence-kof-orm/`](.specs/features/persistence-kof-orm/): usuários, envelopes, transações, chat, renda variável e Kakeibo já no banco |
+| **Banco de Dados** | `kof.orm` em `backend/store.kf`: MySQL 8.4 na Aiven em produção (driver MariaDB Connector/J fixado em `kofdeps`), com o app no Render; H2 em arquivo (`./data`) fora de produção. Persistência concluída e em produção desde 12/10/2026, ver [`.specs/features/persistence-kof-orm/`](.specs/features/persistence-kof-orm/): usuários, envelopes, transações, chat, renda variável e Kakeibo no banco |
 | **Build & Tooling** | `kof-cli` / Kof Compiler **0.6.3**, fixado em [`KOF_VERSION`](KOF_VERSION) (Java 25 JDK) |
 
 **Versão do Kof:** fixada em `0.6.3` no arquivo [`KOF_VERSION`](KOF_VERSION), fonte única do `Dockerfile` e do CI (`.github/workflows/kof-check.yml`). Trocar a versão é um commit próprio em `KOF_VERSION`, feito só depois de passar todos os gates; releases prerelease são recusados.
@@ -122,14 +122,30 @@ O fechamento ponta a ponta do **MVP 1** segue a metodologia **tlc-spec-driven (4
 |---|---|---|---|
 | **Batch 0 — Baseline & Spec** | Expurgo de código alucinado (`5d58ca9150`), Tríade Design System, CI de Benchmarks e SDD (`spec.md`, `design.md`, `tasks.md`) | `kof check backend` (0 erros) + `kof check frontend` (0 erros) | ✅ feito |
 | **Batch 1 — Fundação Core** | `core/theme.kf` (tokens Manrope + funções top-level `Color(r,g,b)`), `core/app_state.kf` (estado `static` + `window.bind`), `core/api_client.kf` (`kof.http` na porta `:3000`) `components/brand_header.kf` + `nav_bar.kf` e `core/navigation.kf` + `main.kf` (Dual Viewport `360×640` Mobile / `1280×800` Desktop) | `kof check frontend` (0 erros) | ✅ feito |
-| **Batch 2 — Auth & Onboarding** | `screens/auth_screens.kf` (Telas 1–3: Boas-vindas, Login, Cadastro) e `screens/onboarding_screens.kf` (Telas 4, 5, 6, 6.1, 7: Salário, Renda, Dívida e Recomendação 50/30/20, 70/20/10 ou Anti-Dívida) | Fluxo `/api/auth/register` → `/api/auth/login` → `/api/onboarding/setup` | ⏳ planejado |
+| **Batch 2 — Auth & Onboarding** | `screens/auth_screens.kf` (Telas 1–3: Boas-vindas, Login, Cadastro) e `screens/onboarding_screens.kf` (Telas 4, 5, 6, 6.1, 7: Salário, Renda, Dívida e Recomendação 50/30/20, 70/20/10 ou Anti-Dívida) | Fluxo `/api/auth/register` → `/api/auth/login` → `/api/users/me` → `/api/users/onboarding`, com `kof build frontend --target js` + screenshot headless + fluxo contra o backend local | 📝 em especificação ([`mvp1-batch2-auth-onboarding`](.specs/features/mvp1-batch2-auth-onboarding/)) |
 | **Batch 3 — Dashboard & Canvas 2D** | `components/pulse_card.kf`, `components/pie_chart.kf` (gráfico de pizza 200×200 via `Canvas` 2D com estados normal/atenção/perigo) e `screens/dashboard_screen.kf` (Tela 8 Mobile + Visão Expandida Desktop) | Consumo real de `/api/coach/daily-pulse` e `/api/envelopes` | ⏳ planejado |
 | **Batch 4 — AI Coach & Caixinhas** | `components/chat_bubble.kf`, `screens/chat_screen.kf` (Tela 9), `components/envelope_card.kf`, `components/notification_toast.kf` e `screens/envelopes_screen.kf` (Telas 10 e 11: Caixinhas por bucket + 5 modelos de notificação) | `kof check frontend` + `kof check backend` (0 erros) | ⏳ planejado |
 | **Batch 5 — Homologação E2E & Benchmarks** | Testes ponta a ponta (`scripts/test_e2e_flow.ps1` 9/9 GREEN) e coleta empírica (`scripts/benchmark_kof.ps1` → `docs/BENCHMARKS.md`) | Monólito KofLith + UI Mobile/Desktop 100% homologados | ⏳ planejado |
 
 **Regra de segurança:** nenhum commit ou push é executado por agentes de IA — cada lote é validado com `kof check` e entregue para revisão e commit manual da maintainer.
 
-### Persistência (`persistence-kof-orm`) -- em andamento
+### Batch 2: autenticação e onboarding (`mvp1-batch2-auth-onboarding`) -- em especificação
+
+Especificação e design em [`.specs/features/mvp1-batch2-auth-onboarding/`](.specs/features/mvp1-batch2-auth-onboarding/) ([`spec.md`](.specs/features/mvp1-batch2-auth-onboarding/spec.md), [`design.md`](.specs/features/mvp1-batch2-auth-onboarding/design.md)), issue #33. As decisões vêm de medições com o Kof 0.6.3 num navegador real (Edge headless):
+
+- **Mesmo domínio:** o backend serve o frontend (`app.serveDir("/", KOF_WEB_OUT)`) e o frontend chama `/api/...` por caminho relativo. O backend não tem CORS, e fora de `/api/` tudo passa a ser público.
+- **Navegação** continua com `mountScreen` e campos `static`: `Router` e `Component` existem no `kof.ui`, mas no Chromium o re-render deixa a tela em branco.
+- **HTTP** sempre com `spawn` + `await`: no navegador, `http.post` síncrono devolve uma Promise.
+- **Estilo novo** com `Style("css")` (gradiente, borda, altura de 48px).
+- **Backend** ganha `GET /api/users/me`, o nome no cadastro, a dívida (`debtAmount` gravado em `debtCents`) e validação com 400.
+- **Gate** é `kof build frontend --target js`, porque `kof check frontend` dá PKG006.
+- **Regras de validação (backend e cliente):** nome, e-mail e senha obrigatórios; senha com no mínimo 8 caracteres; salário maior que 0; com `hasDebt=true`, dívida maior que 0. Entrada inválida responde 400 com `ApiError` em JSON, nunca 500.
+- **Onboarding concluído** = salário maior que 0, exposto em `GET /api/users/me` (`onboardingCompleted`). Após o login, o app vai para a Tela 4 se for `false` e para a Tela 8 se for `true`.
+- **Coluna `name`** entra por migração condicional (só adiciona se faltar), porque `orm.create` não altera tabela existente. Antes do deploy, ela passa por gate num MySQL local.
+- **Fora do MVP:** a fonte Manrope não carrega e o `index.html` gerado traz a barra de dev; os dois ficam para um `index.html` próprio (tarefa futura).
+- **Plano:** F1–F4 no backend (nome, validações, dívida e `/me`, mesmo domínio + Dockerfile), F5 cliente HTTP assíncrono, F6–F8 telas 1–7, F9 ferramentas de screenshot em `scripts/ui/`.
+
+### Persistência (`persistence-kof-orm`) -- concluída, em produção desde 12/10/2026
 
 Especificação e design em [`.specs/features/persistence-kof-orm/`](.specs/features/persistence-kof-orm/) ([`spec.md`](.specs/features/persistence-kof-orm/spec.md), [`design.md`](.specs/features/persistence-kof-orm/design.md)). Banco de produção: **MySQL 8.4 na Aiven** (database `organiza_kof`), com o app rodando no Render. O driver é o MariaDB Connector/J (`org.mariadb.jdbc:mariadb-java-client:3.5.10` em `kofdeps`, o mesmo que o Kof 0.6.3 usa para `mysql://`).
 
