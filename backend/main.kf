@@ -28,13 +28,12 @@ main() {
 
     app.post("/api/auth/login") {
         var req = json.decode<LoginRequest>(body())
-        var user = findUserByEmail(req.email)
+        // Mesma resposta (401) para e-mail inexistente e senha errada: sem enumeracao de usuario
+        var user = authenticateUser(req.email, req.password)
         if (user != null) {
-            if (user.password == req.password) {
-                var payload = "{\"sub\":\"" + user.id + "\",\"iss\":\"" + expectedIssuer() + "\"}"
-                var token = jwt.create(payload, jwtSecret(), 7200)
-                return token
-            }
+            var payload = "{\"sub\":\"" + user.id + "\",\"iss\":\"" + expectedIssuer() + "\"}"
+            var token = jwt.create(payload, jwtSecret(), 7200)
+            return token
         }
         return status(401, "{\"error\":\"Credenciais inválidas\"}")
     }
@@ -47,7 +46,7 @@ main() {
         }
 
         var newId = "usr_" + String.valueOf(BackendDb.users.size + 1)
-        var newUser = UserEntity(newId, req.email, req.password, Role.USER, 0.0, Tier.FREE, false, 0.0, BudgetModelType.STANDARD_503020, IncomeType.FIXED, false, 0.0)
+        var newUser = UserEntity(newId, req.email, passwords.hash(req.password), Role.USER, 0.0, Tier.FREE, false, 0.0, BudgetModelType.STANDARD_503020, IncomeType.FIXED, false, 0.0)
         saveUser(newUser)
 
         var payload = "{\"sub\":\"" + newId + "\",\"iss\":\"" + expectedIssuer() + "\"}"

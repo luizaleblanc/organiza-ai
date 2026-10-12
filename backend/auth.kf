@@ -24,6 +24,26 @@ String jwtSecret() {
     return "koflith-dev-secret-key-organiza-ai-2026-min-32-chars"
 }
 
+// Hash PBKDF2 de uma senha aleatoria descartada (nao e segredo): o login roda o
+// verify contra ele quando o e-mail nao existe, para que "e-mail inexistente" e
+// "senha errada" custem o mesmo tempo (~200 ms) e nao revelem quem tem conta.
+String unknownUserHash() {
+    return "pbkdf2$sha256$600000$yuJ5I43zf8jqHSJcH03DKg==$Imcjjj+zeYwtjFV9LS03HQf0nOZ73XUJsxCwMawh9zo="
+}
+
+// Devolve o usuario somente se a senha confere; sempre executa um passwords.verify.
+UserEntity? authenticateUser(String email, String password) {
+    var user = findUserByEmail(email)
+    if (user == null) {
+        passwords.verify(password, unknownUserHash())
+        return null
+    }
+    if (passwords.verify(password, user.passwordHash)) {
+        return user
+    }
+    return null
+}
+
 String? extractBearerToken(String? authHeader) {
     if (authHeader != null) {
         if (authHeader.startsWith("Bearer ")) {

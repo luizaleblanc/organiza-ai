@@ -113,10 +113,18 @@ try {
         Expect ($r.Status -eq 200 -and $r.Body.Split(".").Length -eq 3) "$($r.Status) $($r.Body)"
     }
 
+    $script:wrongPasswordBody = ""
     Test-Step "POST /api/auth/login com senha errada = 401" {
         $bad = (@{ email = $email; password = "senhaErrada" } | ConvertTo-Json -Compress)
         $r = Invoke-Api "POST" "/api/auth/login" "" $bad
+        $script:wrongPasswordBody = $r.Body
         Expect ($r.Status -eq 401) "$($r.Status) $($r.Body)"
+    }
+
+    Test-Step "POST /api/auth/login com e-mail inexistente = 401 com a mesma mensagem" {
+        $ghost = (@{ email = "ninguem_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaErrada" } | ConvertTo-Json -Compress)
+        $r = Invoke-Api "POST" "/api/auth/login" "" $ghost
+        Expect ($r.Status -eq 401 -and $r.Body -eq $script:wrongPasswordBody) "$($r.Status) $($r.Body) (senha errada deu: $($script:wrongPasswordBody))"
     }
 
     Test-Step "Rota protegida sem token = 401" {

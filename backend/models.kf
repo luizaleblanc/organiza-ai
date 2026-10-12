@@ -53,7 +53,7 @@ enum VariableIncomeDestination { EMERGENCY_FUND, BUDGET_5030020 }
 class UserEntity {
     String id
     String email
-    String password
+    String passwordHash
     Role role
     Double? salary
     Tier tier
@@ -64,12 +64,12 @@ class UserEntity {
     Bool hasDebt
     Double? debtAmount
 
-    public constructor(String id, String email, String password, Role role,
+    public constructor(String id, String email, String passwordHash, Role role,
             Double? salary, Tier tier, Bool hasVariableIncome, Double? emergencyFundGoal,
             BudgetModelType budgetModel, IncomeType incomeType, Bool hasDebt, Double? debtAmount) {
         this.id = id
         this.email = email
-        this.password = password
+        this.passwordHash = passwordHash
         this.role = role
         this.salary = salary
         this.tier = tier
