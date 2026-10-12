@@ -1,5 +1,6 @@
 ﻿# scripts/test_e2e_flow.ps1
-# Suíte de Homologação E2E — Fluxo Completo do Usuário no Monólito KofLith (Porta 3000)
+# Suíte de Homologação E2E — Fluxo Completo do Usuário no Monólito KofLith
+# Porta: -Port N (define PORT para o servidor); sem ele, usa $env:PORT ou 3000 (o padrão do backend).
 # Cobre todas as rotas de backend/main.kf com asserts semânticos (valor exato, não "não crashou").
 # Pré-requisito: `kof build backend --target jvm` (saída em build/classes, ou passe -ClassesDir).
 # Exit code 0 somente se TODOS os testes passarem e o servidor não emitir VerifyError/LinkageError.
@@ -7,14 +8,21 @@
 param(
     [string]$ClassesDir = "build/classes",
     [string]$JavaExe = "C:\Program Files\Eclipse Adoptium\jdk-25.0.3.9-hotspot\bin\java.exe",
-    [string]$BaseUrl = "http://localhost:3000"
+    [int]$Port = 0,
+    [string]$BaseUrl = ""
 )
+
+if ($Port -gt 0) { $env:PORT = "$Port" }
+if (-not $BaseUrl) {
+    $porta = if ($env:PORT) { $env:PORT } else { "3000" }
+    $BaseUrl = "http://localhost:$porta"
+}
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
 Write-Host "=================================================================" -ForegroundColor Cyan
-Write-Host "   ORGANIZA IA -- HOMOLOGAÇÃO E2E KOFLITH (PORTA 3000)          " -ForegroundColor Cyan
+Write-Host "   ORGANIZA IA -- HOMOLOGAÇÃO E2E KOFLITH ($BaseUrl)" -ForegroundColor Cyan
 Write-Host "=================================================================" -ForegroundColor Cyan
 
 # Chamada HTTP que nunca lança: devolve status + corpo decodificado em UTF-8 (4xx/5xx inclusos).
@@ -127,7 +135,7 @@ Test-Step "Boot com segredo curto falha sem vazar o valor" {
 }
 $errLog = Join-Path ([System.IO.Path]::GetTempPath()) "organiza-e2e-server-stderr.txt"
 $outLog = Join-Path ([System.IO.Path]::GetTempPath()) "organiza-e2e-server-stdout.txt"
-Write-Host "`nInicializando Servidor KofLith na JVM ($ClassesDir, porta 3000)..." -ForegroundColor Yellow
+Write-Host "`nInicializando Servidor KofLith na JVM ($ClassesDir, $BaseUrl)..." -ForegroundColor Yellow
 $serverProc = Start-Process -FilePath $JavaExe -ArgumentList @("-Xverify:all", "-cp", $ClassesDir, "Default.Main") `
     -PassThru -NoNewWindow -RedirectStandardError $errLog -RedirectStandardOutput $outLog
 

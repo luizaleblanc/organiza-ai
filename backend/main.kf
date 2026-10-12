@@ -3,6 +3,16 @@
 // Substitui a segregação artificial BFF <-> Spring Boot.
 // Todas as rotas chamam diretamente o domínio Kof sem proxy HTTP.
 
+// Porta HTTP: variavel PORT (o Render injeta), padrao 3000. app.listen aceita so Int (SEM025);
+// um PORT que nao e numero derruba o boot com a excecao da conversao (nunca sobe na porta errada).
+Int listenPort() {
+    var raw = config.env("PORT")
+    if (raw != null) {
+        return raw.trim().toInt()
+    }
+    return 3000
+}
+
 main() {
     // Boot falha cedo se KOF_JWT_SECRET faltar ou for curta (a mensagem nunca traz o valor).
     // O mesmo segredo alimenta o pipeline auth.* do runtime, que recusa tokens mal assinados.
@@ -195,5 +205,5 @@ main() {
         return json.encode(status)
     }
 
-    app.listen(3000)
+    app.listen(listenPort())
 }
