@@ -3,7 +3,8 @@
 // Usuarios (T2), envelopes (T4), transacoes (T5), chat, renda variavel e Kakeibo (T6) vivem no banco.
 //
 // Variaveis (kof.config: a chave "db.url" le KOF_DB_URL, como "jwt.secret" le KOF_JWT_SECRET):
-//   KOF_DB_URL      URL JDBC SEM credenciais (ex.: jdbc:postgresql://host:5432/organiza). Ausente:
+//   KOF_DB_URL      URL SEM credenciais (ex.: mysql://host:3306/organiza?sslMode=trust; o runtime
+//                   troca mysql:// pelo driver MariaDB do kofdeps). Ausente:
 //                   H2 em arquivo (jdbc:h2:file:./data/organiza;WRITE_DELAY=0) fora de producao; erro em producao.
 //   KOF_DB_USER     usuario do banco (opcional)
 //   KOF_DB_PASSWORD senha do banco (opcional)
@@ -110,7 +111,7 @@ String databaseUrl() {
     return defaultDevDbUrl()
 }
 
-// "jdbc:h2:file:..." -> "h2"; "postgres://..." -> "postgres". So o esquema vai para o log.
+// "jdbc:h2:file:..." -> "h2"; "mysql://..." -> "mysql". So o esquema vai para o log.
 String dbScheme(String url) {
     var rest = url
     if (rest.startsWith("jdbc:")) {
@@ -125,6 +126,35 @@ String dbScheme(String url) {
 
 Bool urlHasCredentials(String url) {
     return url.contains("@") || url.toLowerCase().contains("password=")
+}
+
+// MySQL/MariaDB em producao so com TLS. O driver (MariaDB Connector/J) le `sslMode`; o
+// `ssl-mode=REQUIRED` do cliente mysql e ignorado em silencio e a sessao sobe SEM TLS
+// (medido contra MySQL 8.4 na Aiven: Ssl_cipher vazio; com sslMode=trust, TLSv1.3).
+Bool mysqlUrlWithoutTls(String url) {
+    var scheme = dbScheme(url)
+    if (scheme != "mysql" && scheme != "mariadb") {
+        return false
+    }
+    return !url.contains("sslMode=") || url.contains("sslMode=disable")
+}
+
+// A Query DSL do kof.orm (T.query { where ... orderBy ... }) cita tabela e coluna com aspas duplas
+// ANSI; o MySQL so aceita isso com ANSI_QUOTES (sem ele: erro 1064 em toda listagem, medido no
+// MySQL 8.4 com kof 0.6.3). A sessao ganha ANSI_QUOTES sem perder o modo estrito do servidor.
+String withAnsiQuotes(String url) {
+    var scheme = dbScheme(url)
+    if (scheme != "mysql" && scheme != "mariadb") {
+        return url
+    }
+    if (url.contains("ANSI_QUOTES")) {
+        return url
+    }
+    var sep = "?"
+    if (url.contains("?")) {
+        sep = "&"
+    }
+    return url + sep + "sessionVariables=sql_mode=CONCAT(@@sql_mode,',ANSI_QUOTES')"
 }
 
 // Cria as tabelas que faltam (PERS-22): orm.create e idempotente (medido: 3x no mesmo banco = true).
@@ -146,10 +176,13 @@ String openDb() {
     if (urlHasCredentials(url)) {
         throw "KOF_DB_URL nao pode conter usuario ou senha: use KOF_DB_USER e KOF_DB_PASSWORD"
     }
+    if (isProduction() && mysqlUrlWithoutTls(url)) {
+        throw "KOF_DB_URL de MySQL em producao exige TLS: acrescente sslMode=trust (ou verify-full com serverSslCert); ssl-mode=REQUIRED e ignorado pelo driver"
+    }
     var scheme = dbScheme(url)
     var conn = ""
     try {
-        conn = db.connect(url, config.str("db.user", ""), config.str("db.password", ""))
+        conn = db.connect(withAnsiQuotes(url), config.str("db.user", ""), config.str("db.password", ""))
     } catch (String e) {
         throw "nao foi possivel abrir o banco (esquema " + scheme + "): driver JDBC ausente ou URL invalida"
     }

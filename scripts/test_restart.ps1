@@ -1,6 +1,6 @@
 ﻿# scripts/test_restart.ps1
 # G-RESTART: os dados gravados pela API sobrevivem ao reinício do processo (PERS-01..03).
-# Sobe o servidor com KOF_DB_URL = H2 em arquivo dentro de -DbDir (apagado no início), cria conta + onboarding 3000
+# Sobe o servidor com KOF_DB_URL = H2 em arquivo dentro de -DbDir (apagado no início), ou -DbUrl, cria conta + onboarding 3000
 # + envelope FOOD 1200 + transação de 600 em FOOD,
 # encerra o processo e sobe outro com o mesmo banco. Dois encerramentos:
 #   (1) normal: Ctrl+C no console do servidor (a JVM roda os shutdown hooks);
@@ -15,7 +15,10 @@ param(
     [string]$ExtraClasspath = "",
     [string]$JavaExe = "C:\Program Files\Eclipse Adoptium\jdk-25.0.3.9-hotspot\bin\java.exe",
     [int]$Port = 3001,
-    [string]$DbDir = (Join-Path ([System.IO.Path]::GetTempPath()) "organiza-restart-db")
+    [string]$DbDir = (Join-Path ([System.IO.Path]::GetTempPath()) "organiza-restart-db"),
+    # Banco externo (ex.: mysql://host:3306/organiza_kof?sslMode=trust): usa esta URL em vez do H2;
+    # usuario/senha vem de KOF_DB_USER/KOF_DB_PASSWORD do ambiente. -DbDir fica so para os logs.
+    [string]$DbUrl = ""
 )
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -31,7 +34,8 @@ if (-not (Test-Path (Join-Path $ClassesDir "Default/Main.class"))) {
 # Banco novo a cada execução, fora do repositório
 if (Test-Path $DbDir) { Remove-Item -Recurse -Force $DbDir }
 New-Item -ItemType Directory -Force $DbDir | Out-Null
-$env:KOF_DB_URL = "jdbc:h2:file:" + (Join-Path $DbDir "restart") + ";WRITE_DELAY=0"
+$env:KOF_DB_URL = if ($DbUrl) { $DbUrl } else { "jdbc:h2:file:" + (Join-Path $DbDir "restart") + ";WRITE_DELAY=0" }
+$dbLabel = if ($DbUrl) { "banco externo " + ($DbUrl -replace '//[^/]+', '//<host>') } else { "H2 em $DbDir" }
 $env:PORT = "$Port"
 if (-not $env:KOF_JWT_SECRET) {
     $rnd = New-Object byte[] 32
@@ -40,7 +44,7 @@ if (-not $env:KOF_JWT_SECRET) {
 }
 
 Write-Host "=================================================================" -ForegroundColor Cyan
-Write-Host "   ORGANIZA IA -- G-RESTART ($BaseUrl, H2 em $DbDir)" -ForegroundColor Cyan
+Write-Host "   ORGANIZA IA -- G-RESTART ($BaseUrl, $dbLabel)" -ForegroundColor Cyan
 Write-Host "=================================================================" -ForegroundColor Cyan
 
 # Chamada HTTP que nunca lança: devolve status + corpo (4xx/5xx inclusos).

@@ -61,7 +61,7 @@ Conheça a interface do Organiza IA:
 | **Monólito Modular Backend** | KOF (`backend/*.kf`) -- Módulos de Domínio (`models.kf`, `auth.kf`, `services.kf`, `coach.kf`, `store.kf`, `main.kf`) |
 | **Monólito Modular Frontend** | KOF (`kof.ui`, `frontend/*.kf`) -- Módulos de Core (`core/`), Componentes (`components/`) e Telas (`screens/`) |
 | **Back-end Legado (arquivado)** | Java 17, Spring Boot 3.3.x, Spring AI -- arquivado em `archive/legacy-backend-java/` (tag histórica `legacy/java-spring-boot`), mantido apenas como referência histórica |
-| **Banco de Dados** | `kof.orm` em `backend/store.kf`: PostgreSQL na Aiven em produção (escolhido), com o app no Render; H2 em arquivo (`./data`) fora de produção. Persistência em andamento, ver [`.specs/features/persistence-kof-orm/`](.specs/features/persistence-kof-orm/): usuários, envelopes, transações, chat, renda variável e Kakeibo já no banco |
+| **Banco de Dados** | `kof.orm` em `backend/store.kf`: MySQL 8.4 na Aiven em produção (driver MariaDB Connector/J fixado em `kofdeps`), com o app no Render; H2 em arquivo (`./data`) fora de produção. Persistência em andamento, ver [`.specs/features/persistence-kof-orm/`](.specs/features/persistence-kof-orm/): usuários, envelopes, transações, chat, renda variável e Kakeibo já no banco |
 | **Build & Tooling** | `kof-cli` / Kof Compiler **0.6.3**, fixado em [`KOF_VERSION`](KOF_VERSION) (Java 25 JDK) |
 
 **Versão do Kof:** fixada em `0.6.3` no arquivo [`KOF_VERSION`](KOF_VERSION), fonte única do `Dockerfile` e do CI (`.github/workflows/kof-check.yml`). Trocar a versão é um commit próprio em `KOF_VERSION`, feito só depois de passar todos os gates; releases prerelease são recusados.
@@ -131,17 +131,19 @@ O fechamento ponta a ponta do **MVP 1** segue a metodologia **tlc-spec-driven (4
 
 ### Persistência (`persistence-kof-orm`) -- em andamento
 
-Especificação e design em [`.specs/features/persistence-kof-orm/`](.specs/features/persistence-kof-orm/) ([`spec.md`](.specs/features/persistence-kof-orm/spec.md), [`design.md`](.specs/features/persistence-kof-orm/design.md)). Banco de produção escolhido: **PostgreSQL na Aiven**, com o app rodando no Render.
+Especificação e design em [`.specs/features/persistence-kof-orm/`](.specs/features/persistence-kof-orm/) ([`spec.md`](.specs/features/persistence-kof-orm/spec.md), [`design.md`](.specs/features/persistence-kof-orm/design.md)). Banco de produção: **MySQL 8.4 na Aiven** (database `organiza_kof`), com o app rodando no Render. O driver é o MariaDB Connector/J (`org.mariadb.jdbc:mariadb-java-client:3.5.10` em `kofdeps`, o mesmo que o Kof 0.6.3 usa para `mysql://`).
 
 **Estado:** o backend já abre o banco no boot (`backend/store.kf`, `kof.orm`) e cria as 6 tabelas `*Row` de forma idempotente. **Usuários** (cadastro, login, onboarding) já são gravados no banco (T2): id gerado pelo banco (o JWT `sub` é esse número em texto, ex. `"1"`), senha só como `passwords.hash`, salário em centavos e e-mail repetido barrado com 409 antes de gravar. **Envelopes** também (T4): id do banco, limite e gasto em centavos (a API segue em reais), leitura e gravação sempre filtradas pelo usuário do token (envelope de outro usuário = inexistente). **Transações** também (T5): id do banco, valor em centavos (`amount` 600 grava 60000 e volta `value` 600.0), desconto do envelope gravado no banco **na mesma transação** (`transaction {}` do `kof.db`: se uma das duas gravações falha, nenhuma fica) e texto sempre por bind (gravado literal). **Chat, renda variável e Kakeibo** também (T6), com ids do banco e renda em centavos. A classe `BackendDb` (memória) foi removida (T7): nenhum id por `size + 1` e nenhum SQL montado com `+`. Faltam T8 (build/CI) e T9 (banco de produção).
 
 | Variável | Uso |
 |---|---|
-| `KOF_DB_URL` | URL JDBC **sem credenciais** (ex.: `jdbc:postgresql://host:5432/organiza`). Sem ela, fora de produção, usa H2 em `./data` |
+| `KOF_DB_URL` | URL **sem credenciais** (ex.: `mysql://host:19636/organiza_kof?sslMode=trust`). Sem ela, fora de produção, usa H2 em `./data` |
 | `KOF_DB_USER` / `KOF_DB_PASSWORD` | Credenciais, passadas separadas da URL |
 | `KOF_ENV` | `production` torna `KOF_DB_URL` obrigatória (a imagem Docker já define `KOF_ENV=production`) |
 
-**Teste de reinício (G-RESTART):** `scripts/test_restart.ps1 -ClassesDir <classes> -ExtraClasspath <jar do H2>` sobe o servidor com H2 em arquivo (pasta temporária, `-DbDir`), cria conta + onboarding 3000 + envelope FOOD 1200 + transação de 600, encerra o processo (Ctrl+C e, depois, kill à força), sobe outro e confere login = 200, `daily-pulse` com `salary` = 3000.0 e `pulse` = 80.0, exatamente 1 envelope FOOD (limite 1200.0, gasto 600.0) e exatamente 1 transação com `value` = 600.0.
+**MySQL:** em produção a URL precisa de `sslMode=` (`trust`, `verify-ca` ou `verify-full`); sem isso o boot falha. O `ssl-mode=REQUIRED` do cliente `mysql` é ignorado pelo driver e a sessão subiria sem TLS (medido na Aiven). O backend acrescenta sozinho `sessionVariables=sql_mode=CONCAT(@@sql_mode,',ANSI_QUOTES')`, porque a Query DSL do `kof.orm` usa aspas duplas em tabelas e colunas. Medido num MySQL 8.4 local: as 6 tabelas, o E2E (só a #44 falha) e o G-RESTART passam.
+
+**Teste de reinício (G-RESTART):** `scripts/test_restart.ps1 -ClassesDir <classes> -ExtraClasspath <jar do H2>` sobe o servidor com H2 em arquivo (pasta temporária, `-DbDir`), cria conta + onboarding 3000 + envelope FOOD 1200 + transação de 600, encerra o processo (Ctrl+C e, depois, kill à força), sobe outro e confere login = 200, `daily-pulse` com `salary` = 3000.0 e `pulse` = 80.0, exatamente 1 envelope FOOD (limite 1200.0, gasto 600.0) e exatamente 1 transação com `value` = 600.0. Com `-DbUrl <url>` (usuário e senha em `KOF_DB_USER`/`KOF_DB_PASSWORD`), o mesmo teste roda contra um banco externo, como o MySQL.
 
 A imagem Docker gera um fat jar com o driver JDBC (`kofdeps`) e roda em JRE 25. Detalhes em [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
@@ -275,7 +277,7 @@ Todo agente ou subagente de IA usado no projeto deve receber este contexto míni
 
 ```
 Você é um agente de código no projeto organiza-ai (Arquitetura Monolítica KofLith).
-Stack: KOF 100% Nativo (backend/*.kf em kof.web na porta 3000 + frontend/*.kf em kof.ui), PostgreSQL (Aiven) em produção.
+Stack: KOF 100% Nativo (backend/*.kf em kof.web na porta 3000 + frontend/*.kf em kof.ui), MySQL (Aiven) em produção.
 REGRAS ABSOLUTAS:
 1. NUNCA faça git commit ou git push (apenas a maintainer executa commits e push)
 2. Leia obrigatoriamente docs/kof4j/ (README + training/), KOF_REFERENCE.md e docs/LLM_KOF_UI_GUIDELINES.md antes de tocar em qualquer arquivo .kf
