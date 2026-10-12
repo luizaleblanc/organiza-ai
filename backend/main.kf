@@ -4,7 +4,14 @@
 // Todas as rotas chamam diretamente o domínio Kof sem proxy HTTP.
 
 main() {
-    auth.secret(jwtSecret())
+    // Boot falha cedo se KOF_JWT_SECRET faltar ou for curta (a mensagem nunca traz o valor).
+    // O mesmo segredo alimenta o pipeline auth.* do runtime, que recusa tokens mal assinados.
+    try {
+        auth.secret(jwtSecret())
+    } catch (String e) {
+        log.error("Boot abortado: " + e)
+        throw e
+    }
     var app = web.app()
 
     // Middleware global de autenticação
@@ -31,9 +38,7 @@ main() {
         // Mesma resposta (401) para e-mail inexistente e senha errada: sem enumeracao de usuario
         var user = authenticateUser(req.email, req.password)
         if (user != null) {
-            var payload = "{\"sub\":\"" + user.id + "\",\"iss\":\"" + expectedIssuer() + "\"}"
-            var token = jwt.create(payload, jwtSecret(), 7200)
-            return token
+            return issueToken(user.id)
         }
         return status(401, "{\"error\":\"Credenciais inválidas\"}")
     }
@@ -49,9 +54,7 @@ main() {
         var newUser = UserEntity(newId, req.email, passwords.hash(req.password), Role.USER, 0.0, Tier.FREE, false, 0.0, BudgetModelType.STANDARD_503020, IncomeType.FIXED, false, 0.0)
         saveUser(newUser)
 
-        var payload = "{\"sub\":\"" + newId + "\",\"iss\":\"" + expectedIssuer() + "\"}"
-        var token = jwt.create(payload, jwtSecret(), 7200)
-        return token
+        return issueToken(newId)
     }
 
     // =========================================================

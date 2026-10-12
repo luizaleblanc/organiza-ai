@@ -2,10 +2,31 @@
 // Autenticação e Autorização JWT unificada do Monólito KofLith
 // Filosofia KOF: "Menos segregação, mais intenção" -- sem isolamento artificial de pacotes.
 
-record AuthClaims(String sub, String iss)
+record AuthClaims(String sub, String iss, String aud)
 
-String expectedIssuer() {
-    return "QUAK"
+// Configuracao do JWT (kof.config: a chave "jwt.secret" le a variavel KOF_JWT_SECRET,
+// a mesma que o runtime usa no pipeline auth.* do kof.web — uma unica fonte de verdade).
+// Ausente ou curta = falha no boot; a mensagem cita a variavel, nunca o valor.
+String jwtSecret() {
+    var secret = config.required("jwt.secret")
+    if (secret.length() < 32) {
+        throw "KOF_JWT_SECRET precisa ter pelo menos 32 caracteres"
+    }
+    return secret
+}
+
+// KOF_JWT_ISSUER / KOF_JWT_AUDIENCE (padroes documentados em .env.example e docs/DEPLOY.md)
+String jwtIssuer() {
+    return config.str("jwt.issuer", "organiza-ai")
+}
+
+String jwtAudience() {
+    return config.str("jwt.audience", "organiza-ai-api")
+}
+
+// Emite o token do usuario: sub + iss + aud (iat/exp sao adicionados pelo jwt.create; TTL 2 h)
+String issueToken(String userId) {
+    return jwt.create(json.encode(AuthClaims(userId, jwtIssuer(), jwtAudience())), jwtSecret(), 7200)
 }
 
 List<String> publicPaths() {
@@ -14,14 +35,6 @@ List<String> publicPaths() {
 
 Bool isPublicPath(String path) {
     return publicPaths().contains(path)
-}
-
-String jwtSecret() {
-    var secret = secrets.get("API_SECURITY_TOKEN_SECRET")
-    if (secret != null) {
-        return secret
-    }
-    return "koflith-dev-secret-key-organiza-ai-2026-min-32-chars"
 }
 
 // Hash PBKDF2 de uma senha aleatoria descartada (nao e segredo): o login roda o
@@ -66,12 +79,9 @@ AuthClaims requireAuth() {
         throw "Token não informado"
     }
     try {
-        var claimsJson = jwt.verify(token, jwtSecret())
-        var claims = json.decode<AuthClaims>(claimsJson)
-        if (claims.iss() != expectedIssuer()) {
-            throw "Token com issuer inválido"
-        }
-        return claims
+        // assinatura + exp + iss + aud validados pela plataforma (jwt.verify de 4 argumentos)
+        var claimsJson = jwt.verify(token, jwtSecret(), jwtIssuer(), jwtAudience())
+        return json.decode<AuthClaims>(claimsJson)
     } catch (String e) {
         throw "Token inválido ou expirado"
     }

@@ -63,10 +63,60 @@ function Test-Step([string]$Name, [scriptblock]$Check) {
 
 function Expect([bool]$Cond, $Got) { if ($Cond) { return $true } else { return "obtido: $Got" } }
 
+function ConvertTo-B64Url([byte[]]$Bytes) { [Convert]::ToBase64String($Bytes).TrimEnd("=").Replace("+", "-").Replace("/", "_") }
+
+# Monta um JWT HS256 com o segredo da suíte (para forjar iss/aud/exp errados com assinatura válida).
+function New-TestJwt([string]$PayloadJson, [string]$Secret) {
+    $h = ConvertTo-B64Url ([System.Text.Encoding]::UTF8.GetBytes('{"alg":"HS256","typ":"JWT"}'))
+    $p = ConvertTo-B64Url ([System.Text.Encoding]::UTF8.GetBytes($PayloadJson))
+    $hmac = New-Object System.Security.Cryptography.HMACSHA256 (, [System.Text.Encoding]::UTF8.GetBytes($Secret))
+    $s = ConvertTo-B64Url ($hmac.ComputeHash([System.Text.Encoding]::UTF8.GetBytes("$h.$p")))
+    return "$h.$p.$s"
+}
+
+# Sobe o servidor com um valor de KOF_JWT_SECRET (ou sem ela) e espera ele MORRER no boot.
+function Start-BootProbe([string]$SecretValue) {
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $JavaExe
+    $psi.Arguments = "-cp `"$ClassesDir`" Default.Main"
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardError = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.EnvironmentVariables.Remove("KOF_JWT_SECRET")
+    if ($SecretValue) { $psi.EnvironmentVariables["KOF_JWT_SECRET"] = $SecretValue }
+    $p = [System.Diagnostics.Process]::Start($psi)
+    $errTask = $p.StandardError.ReadToEndAsync()
+    $outTask = $p.StandardOutput.ReadToEndAsync()
+    $exited = $p.WaitForExit(20000)
+    if (-not $exited) { $p.Kill(); $p.WaitForExit(5000) | Out-Null }
+    return @{ Exited = $exited; ExitCode = $p.ExitCode; Output = ($errTask.Result + $outTask.Result) }
+}
+
 # 1. Inicia o servidor KofLith em background (stderr capturado fora do repo)
 if (-not (Test-Path (Join-Path $ClassesDir "Default/Main.class"))) {
     Write-Host "`n[ERRO] $ClassesDir/Default/Main.class não encontrado. Rode: kof build backend --target jvm" -ForegroundColor Red
     exit 2
+}
+
+# Segredo do JWT: usa o do ambiente ou gera um aleatório só para esta execução (nunca é impresso).
+if (-not $env:KOF_JWT_SECRET) {
+    $rnd = New-Object byte[] 32
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($rnd)
+    $env:KOF_JWT_SECRET = -join ($rnd | ForEach-Object { $_.ToString("x2") })
+}
+$jwtSecret = $env:KOF_JWT_SECRET
+$jwtIssuer = if ($env:KOF_JWT_ISSUER) { $env:KOF_JWT_ISSUER } else { "organiza-ai" }
+$jwtAudience = if ($env:KOF_JWT_AUDIENCE) { $env:KOF_JWT_AUDIENCE } else { "organiza-ai-api" }
+
+Test-Step "Boot sem KOF_JWT_SECRET falha com mensagem clara" {
+    $b = Start-BootProbe ""
+    Expect ($b.Exited -and $b.ExitCode -ne 0 -and $b.Output -match "KOF_JWT_SECRET") "exited=$($b.Exited) code=$($b.ExitCode) saida: $($b.Output.Substring(0, [Math]::Min(300, $b.Output.Length)))"
+}
+
+Test-Step "Boot com segredo curto falha sem vazar o valor" {
+    $curto = "curto-demais-" + [Guid]::NewGuid().ToString("N").Substring(0, 8)
+    $b = Start-BootProbe $curto
+    Expect ($b.Exited -and $b.ExitCode -ne 0 -and $b.Output -match "32 caracteres" -and -not $b.Output.Contains($curto)) "exited=$($b.Exited) code=$($b.ExitCode) vazou=$($b.Output.Contains($curto))"
 }
 $errLog = Join-Path ([System.IO.Path]::GetTempPath()) "organiza-e2e-server-stderr.txt"
 $outLog = Join-Path ([System.IO.Path]::GetTempPath()) "organiza-e2e-server-stdout.txt"
@@ -130,6 +180,38 @@ try {
     Test-Step "Rota protegida sem token = 401" {
         $r = Invoke-Api "GET" "/api/budgets/daily-pulse"
         Expect ($r.Status -eq 401) "$($r.Status) $($r.Body)"
+    }
+
+    $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    Test-Step "Token com iss errado (assinatura válida) = 401" {
+        $t = New-TestJwt "{`"sub`":`"$($script:userId)`",`"iss`":`"outro-emissor`",`"aud`":`"$jwtAudience`",`"exp`":$($now + 600)}" $jwtSecret
+        $r = Invoke-Api "GET" "/api/budgets/daily-pulse" $t
+        Expect ($r.Status -eq 401) "$($r.Status) $($r.Body)"
+    }
+
+    Test-Step "Token com aud errado (assinatura válida) = 401" {
+        $t = New-TestJwt "{`"sub`":`"$($script:userId)`",`"iss`":`"$jwtIssuer`",`"aud`":`"outra-api`",`"exp`":$($now + 600)}" $jwtSecret
+        $r = Invoke-Api "GET" "/api/budgets/daily-pulse" $t
+        Expect ($r.Status -eq 401) "$($r.Status) $($r.Body)"
+    }
+
+    Test-Step "Token expirado = 401" {
+        $t = New-TestJwt "{`"sub`":`"$($script:userId)`",`"iss`":`"$jwtIssuer`",`"aud`":`"$jwtAudience`",`"exp`":$($now - 60)}" $jwtSecret
+        $r = Invoke-Api "GET" "/api/budgets/daily-pulse" $t
+        Expect ($r.Status -eq 401) "$($r.Status) $($r.Body)"
+    }
+
+    Test-Step "Token adulterado (payload trocado sem reassinar) = 401" {
+        $parts = $script:token.Split(".")
+        $forged = ConvertTo-B64Url ([System.Text.Encoding]::UTF8.GetBytes("{`"sub`":`"usr_999`",`"iss`":`"$jwtIssuer`",`"aud`":`"$jwtAudience`",`"exp`":$($now + 600)}"))
+        $r = Invoke-Api "GET" "/api/budgets/daily-pulse" "$($parts[0]).$forged.$($parts[2])"
+        Expect ($r.Status -eq 401) "$($r.Status) $($r.Body)"
+    }
+
+    Test-Step "Token válido forjado pela suíte (controle: iss/aud certos) = 200" {
+        $t = New-TestJwt "{`"sub`":`"$($script:userId)`",`"iss`":`"$jwtIssuer`",`"aud`":`"$jwtAudience`",`"exp`":$($now + 600)}" $jwtSecret
+        $r = Invoke-Api "GET" "/api/budgets/daily-pulse" $t
+        Expect ($r.Status -eq 200) "$($r.Status) $($r.Body)"
     }
 
     Test-Step "Pulso com salário zero = 0.0 e mensagem 'já comprometeu'" {
