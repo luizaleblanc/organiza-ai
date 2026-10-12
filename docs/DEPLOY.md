@@ -3,9 +3,9 @@
 Este guia cobre o deploy do **backend Kof** (`backend/*.kf`, monólito KofLith) no **Render** via Docker.
 O backend Spring Boot foi arquivado em `archive/` e não é mais publicado; o guia antigo dele está no histórico do Git.
 
-> **Estado atual (12/10/2026):** o backend abre o banco e cria as tabelas no boot (`backend/store.kf`, T1 da
-> [persistência](../.specs/features/persistence-kof-orm/design.md)), mas as rotas ainda gravam em memória (`BackendDb`):
-> os dados continuam sumindo a cada reinício até as tarefas T2–T7.
+> **Estado atual (12/10/2026):** todos os dados ficam no banco (`backend/store.kf`, `kof.orm`). Em produção o banco é
+> **MySQL 8.4 na Aiven** (database `organiza_kof`). A imagem foi construída e testada localmente contra a Aiven: E2E
+> 37/38 (só a #44 falha) e os dados sobrevivem a `docker restart` e a `docker kill`.
 
 ---
 
@@ -16,7 +16,7 @@ O backend Spring Boot foi arquivado em `archive/` e não é mais publicado; o gu
 | `KOF_JWT_SECRET` | **sim** | — | Chave HS256 dos tokens, **mínimo 32 caracteres**. Sem ela, ou curta, o servidor **não sobe**, e a mensagem cita só o nome da variável. É a mesma variável que o runtime do Kof usa no pipeline `auth.*` do `kof.web`. Gere com `openssl rand -hex 32`. |
 | `KOF_JWT_ISSUER` | não | `organiza-ai` | `iss` gravado e exigido nos tokens. Trocar invalida os tokens já emitidos. |
 | `KOF_JWT_AUDIENCE` | não | `organiza-ai-api` | `aud` gravado e exigido nos tokens. |
-| `KOF_DB_URL` | **sim em produção** | H2 em `./data/organiza;WRITE_DELAY=0` (fora de produção) | URL JDBC do banco **sem** usuário/senha (ex.: `jdbc:postgresql://host:5432/organiza`). Uma URL com `@` ou `password=` derruba o boot, porque o runtime do Kof imprime a URL em alguns erros. Persistência: [spec](../.specs/features/persistence-kof-orm/spec.md). |
+| `KOF_DB_URL` | **sim em produção** | H2 em `./data/organiza;WRITE_DELAY=0` (fora de produção) | URL do banco **sem** usuário/senha, ex.: `mysql://<host>:<porta>/organiza_kof?sslMode=trust`. Uma URL com `@` ou `password=` derruba o boot, porque o runtime do Kof imprime a URL em alguns erros. No MySQL em produção, a URL **precisa** de `sslMode=` (`trust`, `verify-ca` ou `verify-full`), ou o boot falha: o `ssl-mode=REQUIRED` do painel da Aiven é ignorado pelo driver MariaDB, e a sessão subiria sem TLS (medido). O backend acrescenta sozinho o `ANSI_QUOTES` que a Query DSL do `kof.orm` exige. Persistência: [spec](../.specs/features/persistence-kof-orm/spec.md). |
 | `KOF_DB_USER` / `KOF_DB_PASSWORD` | conforme o banco | vazio | Credenciais do banco, passadas separadas da URL. |
 | `KOF_ENV` | não | — | `production` torna `KOF_DB_URL` obrigatória. A imagem Docker já define `KOF_ENV=production`. |
 | `PORT` | não | `3000` | Porta HTTP. O Render injeta a variável sozinho. A imagem Docker define `PORT=8080`. Um valor não numérico derruba o boot. |
@@ -60,23 +60,43 @@ curl -fsS http://localhost:8080/health                                          
 - **Build stage** (`debian:bookworm-slim`): resolve o release Linux mais recente do Kof (ou o `KOF_TAG` fixo),
   baixa o `.tar.gz`, confere o SHA256 contra o `SHA256SUMS` do próprio release e roda `kof check` + `kof build`.
   O tag usado sai sempre no log (`Kof release: ...`).
-- O `kof build` não copia o driver JDBC: o build stage roda `kof deps resolve` (drivers fixados em `kofdeps`) e gera um fat jar com `--fat --classpath`.
-- **Run stage** (`eclipse-temurin:25-jre`): usuário sem privilégios, `java -Dkof.root=/app -jar /app/kof-app.jar`, com `KOF_ENV=production` (sem `KOF_DB_URL` o container não sobe).
+- O `kof build` não copia o driver JDBC: o build stage roda `kof deps resolve` (H2 e MariaDB Connector/J fixados em `kofdeps`) e gera um fat jar com `--fat --classpath`.
+- O `--fat` do Kof 0.6.3 mantém só o primeiro `META-INF/services/java.sql.Driver` (o do H2), e aí `mysql://` falha com "driver ausente". O build stage refaz esse arquivo com os drivers de todos os jars e falha se faltar `org.mariadb.jdbc.Driver` ou `org.h2.Driver`.
+- **Run stage** (`eclipse-temurin:25-jre`): usuário sem privilégios, `java -Dkof.root=/app -jar /app/kof-app.jar`, com `KOF_ENV=production` (sem `KOF_DB_URL` o container não sobe). `/app/data` pertence ao usuário `kof`, para o H2 funcionar quando `KOF_ENV` vier vazio (teste local).
 
-> **Gate pendente:** a imagem ainda **não foi construída nem executada** (o Docker local estava parado em 07/10).
-> A lógica de download e SHA256 do build stage foi validada fora do container. Antes do primeiro deploy, rode o
-> `docker build`/`docker run` acima e o E2E apontando para o container.
+**Validado em 12/10/2026** (Docker 29.3.1, Kof 0.6.3 linux): `docker build` ok. Com `KOF_ENV` vazio (H2) e com
+`KOF_ENV=production` contra a Aiven (`sslMode=trust`), o E2E deu 37/38 contra o container (só a #44 falha). Uma conta
+criada no container passou intacta por `docker restart` e por `docker kill` + `docker start` (login, salário,
+pulso, envelope com gasto e transação), sem a senha nos logs.
+
+Teste local com H2, sem banco externo: `docker run --rm -p 8080:8080 -e KOF_ENV= -e KOF_JWT_SECRET=<64 hex> organiza-ai-backend`.
 
 ---
 
 ## Render
 
-1. No Web Service, use **Runtime: Docker** (o Render builda o `Dockerfile` da raiz).
-2. Em **Environment**, cadastre `KOF_JWT_SECRET` (valor novo e forte). `KOF_JWT_ISSUER` e `KOF_JWT_AUDIENCE` são opcionais.
-   O Render injeta `PORT` sozinho.
+1. No Web Service, use **Runtime: Docker** (o Render builda o `Dockerfile` da raiz; não há Build/Start Command).
+2. Em **Environment**, cadastre:
+
+   | Variável | Valor |
+   |---|---|
+   | `KOF_DB_URL` | `mysql://<host da Aiven>:<porta>/organiza_kof?sslMode=trust` (sem usuário e sem senha; **não** use `ssl-mode=REQUIRED`) |
+   | `KOF_DB_USER` | usuário do serviço MySQL da Aiven |
+   | `KOF_DB_PASSWORD` | senha desse usuário (marque como secreta) |
+   | `KOF_JWT_SECRET` | valor novo, gerado na hora (`openssl rand -hex 32`), com 32 caracteres ou mais |
+   | `KOF_JWT_ISSUER` | `organiza-ai` (opcional; trocar invalida tokens) |
+   | `KOF_JWT_AUDIENCE` | `organiza-ai-api` (opcional) |
+   | `KOF_ENV` | `production` (a imagem já define; cadastrar deixa explícito) |
+
+   **Não** cadastre `PORT`: o Render injeta sozinho e o backend lê.
 3. **Health Check Path:** `/health` (responde `OK` com 200, sem autenticação).
-4. As variáveis do Spring (`SPRING_DATASOURCE_*`, `OPENAI_API_KEY`, `API_SECURITY_TOKEN_SECRET`) não são lidas pelo
+4. Na Aiven, se o serviço tiver lista de IPs permitidos, ela precisa aceitar a saída do Render.
+5. Depois do deploy: `curl -fsS https://<serviço>.onrender.com/health` → `OK`. O log de boot mostra `banco aberto: esquema mysql`.
+6. As variáveis do Spring (`SPRING_DATASOURCE_*`, `OPENAI_API_KEY`, `API_SECURITY_TOKEN_SECRET`) não são lidas pelo
    backend Kof. Remover do serviço é decisão da usuária.
+
+> **TLS:** `sslMode=trust` cifra a conexão (TLSv1.3, medido) mas não confere o certificado da Aiven. Para conferir,
+> use `sslMode=verify-full&serverSslCert=<CA da Aiven>` (não medido aqui).
 
 > O serviço que está hoje no Render ainda é o Spring antigo (`/actuator/health`). Trocar para esta imagem é um
 > deploy e depende do ok da usuária.
@@ -95,7 +115,7 @@ trocado. Trocar a URL para `/health`, mudar a frequência ou desativar é decis�
 ## Checklist
 
 - [ ] `KOF_JWT_SECRET` gerado na hora (nunca um valor de exemplo), com no mínimo 32 caracteres.
-- [ ] `docker build` e `docker run` locais + E2E contra o container (gate pendente).
+- [x] `docker build` e `docker run` locais + E2E contra o container (12/10/2026, H2 e Aiven).
+- [ ] `KOF_DB_URL` com `sslMode=trust` (ou `verify-full`), e `KOF_DB_USER`/`KOF_DB_PASSWORD` cadastrados no Render.
 - [ ] Health check do Render em `/health`.
 - [ ] Keep-alive apontando para a URL nova (decisão da usuária).
-- [ ] Ciente de que, sem persistência, os dados se perdem a cada reinício.

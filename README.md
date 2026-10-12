@@ -145,7 +145,7 @@ Especificação e design em [`.specs/features/persistence-kof-orm/`](.specs/feat
 
 **Teste de reinício (G-RESTART):** `scripts/test_restart.ps1 -ClassesDir <classes> -ExtraClasspath <jar do H2>` sobe o servidor com H2 em arquivo (pasta temporária, `-DbDir`), cria conta + onboarding 3000 + envelope FOOD 1200 + transação de 600, encerra o processo (Ctrl+C e, depois, kill à força), sobe outro e confere login = 200, `daily-pulse` com `salary` = 3000.0 e `pulse` = 80.0, exatamente 1 envelope FOOD (limite 1200.0, gasto 600.0) e exatamente 1 transação com `value` = 600.0. Com `-DbUrl <url>` (usuário e senha em `KOF_DB_USER`/`KOF_DB_PASSWORD`), o mesmo teste roda contra um banco externo, como o MySQL.
 
-A imagem Docker gera um fat jar com o driver JDBC (`kofdeps`) e roda em JRE 25. Detalhes em [`docs/DEPLOY.md`](docs/DEPLOY.md).
+A imagem Docker gera um fat jar com os drivers JDBC do `kofdeps` (H2 e MariaDB, com o registro `java.sql.Driver` mesclado no build) e roda em JRE 25. Validada em 12/10/2026 contra o MySQL da Aiven: E2E 37/38 (só a #44 falha) e dados intactos após `docker restart` e `docker kill`. Passo a passo do Render em [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
 ## Arquitetura KofLith — Monólito 100% Nativo sobre a JVM (Issue #37)
 
