@@ -1,13 +1,31 @@
+# A imagem so precisa de kof.toml + backend/ (ver Dockerfile). Tudo o mais fica fora do contexto.
+# Segredos: .env nunca entra na imagem (as variaveis chegam no runtime).
+.env
+.env.*
+!.env.example
+
+# Controle de versao e ferramentas locais
 .git
 .gradle
-build
-bin
-out
 .idea
 .vscode
 .claude
+.agent
+.agents
+
+# Artefatos e ambientes pesados (nunca no contexto de build)
+.kof_preview
+bin
+build
+out
+
+# Codigo que nao faz parte do backend Kof
+archive
+frontend
 frontend-voice
+bff
+
+# Documentacao e infraestrutura local
 docs
 *.md
-.env
 compose.yml

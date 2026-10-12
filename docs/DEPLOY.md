@@ -1,63 +1,95 @@
-# Guia de Deploy — Organiza IA
+# Guia de Deploy — Organiza IA (backend Kof)
 
-Este guia cobre o deploy do backend (Spring Boot) no **Render** e do banco (MySQL) na **Aiven** — ambos com camada gratuita e sem necessidade de cartão de crédito para o uso descrito aqui (verifique os termos atuais no momento do cadastro, já que planos de provedores mudam com o tempo).
+Este guia cobre o deploy do **backend Kof** (`backend/*.kf`, monólito KofLith) no **Render** via Docker.
+O backend Spring Boot foi arquivado em `archive/` e não é mais publicado; o guia antigo dele está no histórico do Git.
 
-Tudo que dependia só de código já foi preparado no projeto:
-- `Dockerfile` na raiz (build multi-stage, testado localmente).
-- `application.properties` lendo porta e credenciais do banco via variáveis de ambiente (com fallback pro `localhost` de sempre, usado com `docker compose` local).
-- `management.health.redis.enabled=false` (ver `DECISIONS.md`, ADR-016) -- o projeto tem a dependência do Redis para uso futuro (Fase 5), mas nenhuma instância real precisa existir em produção hoje.
-
-O que falta é o que só você pode fazer: criar as contas e conectar os serviços.
+> **Estado atual (07/10/2026):** não há banco de dados. Os dados ficam em memória (`BackendDb`) e somem a cada
+> reinício ou hibernação do serviço. A persistência real é o passo 3 do
+> [handoff](handoff/ANTIGRAVITY_HANDOFF.md) e exige spec antes.
 
 ---
 
-## Parte 1 — Banco de dados na Aiven
+## Variáveis de ambiente
 
-1. Acesse [console.aiven.io](https://console.aiven.io) e crie uma conta (não precisa de cartão para o plano Free).
-2. **Create service → MySQL**, escolha o plano **Free** (não um trial com crédito -- o plano Free é permanente, sem prazo de expiração; ver `DECISIONS.md` ADR-016/017 sobre o incidente que motivou essa recomendação).
-3. Escolha uma região e crie o serviço. Aguarde o status ficar "Running".
-4. Na aba **Overview** do serviço, copie: `Host`, `Port`, `User` (geralmente `avnadmin`), `Password` e o nome do banco padrão (`defaultdb`).
-5. Monte a URL JDBC no formato:
-   ```
-   jdbc:mysql://<HOST>:<PORT>/defaultdb?useUnicode=true&characterEncoding=UTF-8&sslMode=REQUIRED
-   ```
-   (a Aiven exige SSL por padrão -- `sslMode=REQUIRED` é necessário.)
-6. **Atenção a inatividade**: serviços no plano Free da Aiven podem ser desligados (`powered off`) automaticamente após um período sem uso. Isso não apaga os dados (só depois de 180 dias desligado), mas a aplicação para de conseguir conectar até você reativar manualmente no console. O workflow `.github/workflows/keep-alive.yml` deste repositório ajuda a mitigar isso gerando tráfego periódico contra o backend (que por sua vez consulta o banco no boot).
+| Variável | Obrigatória | Padrão | Uso |
+|---|---|---|---|
+| `KOF_JWT_SECRET` | **sim** | — | Chave HS256 dos tokens, **mínimo 32 caracteres**. Sem ela, ou curta, o servidor **não sobe**, e a mensagem cita só o nome da variável. É a mesma variável que o runtime do Kof usa no pipeline `auth.*` do `kof.web`. Gere com `openssl rand -hex 32`. |
+| `KOF_JWT_ISSUER` | não | `organiza-ai` | `iss` gravado e exigido nos tokens. Trocar invalida os tokens já emitidos. |
+| `KOF_JWT_AUDIENCE` | não | `organiza-ai-api` | `aud` gravado e exigido nos tokens. |
+| `PORT` | não | `3000` | Porta HTTP. O Render injeta a variável sozinho. A imagem Docker define `PORT=8080`. Um valor não numérico derruba o boot. |
 
----
-
-## Parte 2 — Backend no Render
-
-1. Acesse [render.com](https://render.com) e crie uma conta (login com GitHub facilita).
-2. **New → Web Service** → conecte o repositório GitHub.
-3. O Render detecta o `Dockerfile` na raiz automaticamente e builda a imagem a partir dele -- não é necessário configurar build/start command manualmente.
-4. Escolha o plano **Free**.
-5. Em **Environment**, adicione as variáveis:
-
-   | Variável | Valor |
-   |---|---|
-   | `SPRING_DATASOURCE_URL` | a URL JDBC montada na Parte 1 |
-   | `SPRING_DATASOURCE_USERNAME` | usuário da Aiven (Parte 1) |
-   | `SPRING_DATASOURCE_PASSWORD` | senha da Aiven (Parte 1) |
-   | `OPENAI_API_KEY` | sua chave da OpenAI |
-   | `API_SECURITY_TOKEN_SECRET` | **gere uma chave nova e forte** (ex: `openssl rand -hex 32`) -- nunca use um valor de exemplo em produção |
-
-   O Render já injeta `PORT` automaticamente -- não precisa configurar isso (`server.port=${PORT:8080}` em `application.properties` já lida com isso).
-6. Clique em **Deploy**. O Render builda a imagem Docker e sobe o serviço (esse processo pode levar alguns minutos na primeira vez).
-7. **Teste**: acesse `https://sua-url.onrender.com/actuator/health` -- esperado: `{"status":"UP","groups":["liveness","readiness"]}`.
+Os nomes `KOF_JWT_*` vêm do `kof.config`: a chave `jwt.secret` é lida da variável `KOF_JWT_SECRET`.
+Nenhum segredo entra na imagem nem no repositório (`.env` está no `.gitignore` e no `.dockerignore`).
 
 ---
 
-## Checklist final
+## Rodar e testar localmente (sem Docker)
 
-- [ ] Aiven MySQL no plano **Free** (não trial), status "Running".
-- [ ] Backend responde `UP` em `https://.../actuator/health`.
-- [ ] `API_SECURITY_TOKEN_SECRET` foi trocado pro valor gerado (não é um valor de exemplo).
-- [ ] Workflow `.github/workflows/keep-alive.yml` ativo (aba **Actions** do repositório no GitHub) para reduzir o risco de o serviço dormir por inatividade.
+```powershell
+# kof 0.5.0-beta (ou mais novo); veja docs/handoff/ANTIGRAVITY_HANDOFF.md, seção 2.1
+kof check backend
+kof build backend --target jvm --output <pasta-fora-do-repo>\classes
 
-## Observações importantes
+# mesma execução do `kof run` (kof-cli CmdRun): java -cp <classes> Default.Main
+$env:KOF_JWT_SECRET = "<64 caracteres hex>"
+java -cp <pasta-fora-do-repo>\classes Default.Main          # sobe na porta 3000 (ou em $env:PORT)
 
-- **MySQL da Aiven em plano Free tem 1GB de storage/RAM** e pode hibernar por inatividade (ver Parte 1, passo 6) -- normal em camadas gratuitas, não indica bug na aplicação. Ver `DECISIONS.md` ADR-016/017 para o histórico de um incidente real causado por isso.
-- **Render Free** também hiberna o serviço web após um período sem tráfego (cold start no próximo request) -- o mesmo workflow de keep-alive ajuda a mitigar isso.
-- **Custos**: confirme o plano atual do Render/Aiven no momento do cadastro -- políticas de camada gratuita mudam com frequência nesses provedores.
-- **Frontend e BFF (KOF)**: o frontend (`kof.ui`) e o BFF (`kof.web`) ainda não têm um guia de deploy documentado -- ambos rodam localmente hoje (`kof run` / `kof serve`, ver `CONTRIBUTING.md`). Este guia cobre só o backend Java, que é o único componente em produção no momento.
+# suíte E2E: sobe o servidor sozinha; sem KOF_JWT_SECRET, gera uma aleatória para a execução
+powershell -ExecutionPolicy Bypass -File scripts\test_e2e_flow.ps1 -ClassesDir <pasta-fora-do-repo>\classes
+```
+
+**Java:** é preciso o **JDK/JRE 25 ou mais novo**. As classes do projeto são V21, mas o runtime do Kof que o
+`kof build` copia junto (`dev/kof/runtime/*`) é compilado pelo JDK 25 do pacote. Num Java 21, o boot morre com
+`UnsupportedClassVersionError ... class file version 69.0`.
+
+---
+
+## Docker
+
+```bash
+docker build -t organiza-ai-backend .                                              # Kof mais recente
+docker build --build-arg KOF_TAG=kof-0.5.0-beta-linux-x86_64 -t organiza-ai-backend .  # versão fixa
+docker run --rm -p 8080:8080 -e KOF_JWT_SECRET=<64 hex> organiza-ai-backend
+curl -fsS http://localhost:8080/health                                             # → OK
+```
+
+- **Build stage** (`debian:bookworm-slim`): resolve o release Linux mais recente do Kof (ou o `KOF_TAG` fixo),
+  baixa o `.tar.gz`, confere o SHA256 contra o `SHA256SUMS` do próprio release e roda `kof check` + `kof build`.
+  O tag usado sai sempre no log (`Kof release: ...`).
+- **Run stage** (`eclipse-temurin:25-jre`): usuário sem privilégios, `java -Dkof.root=/app -cp /app/classes Default.Main`.
+
+> **Gate pendente:** a imagem ainda **não foi construída nem executada** (o Docker local estava parado em 07/10).
+> A lógica de download e SHA256 do build stage foi validada fora do container. Antes do primeiro deploy, rode o
+> `docker build`/`docker run` acima e o E2E apontando para o container.
+
+---
+
+## Render
+
+1. No Web Service, use **Runtime: Docker** (o Render builda o `Dockerfile` da raiz).
+2. Em **Environment**, cadastre `KOF_JWT_SECRET` (valor novo e forte). `KOF_JWT_ISSUER` e `KOF_JWT_AUDIENCE` são opcionais.
+   O Render injeta `PORT` sozinho.
+3. **Health Check Path:** `/health` (responde `OK` com 200, sem autenticação).
+4. As variáveis do Spring (`SPRING_DATASOURCE_*`, `OPENAI_API_KEY`, `API_SECURITY_TOKEN_SECRET`) não são lidas pelo
+   backend Kof. Remover do serviço é decisão da usuária.
+
+> O serviço que está hoje no Render ainda é o Spring antigo (`/actuator/health`). Trocar para esta imagem é um
+> deploy e depende do ok da usuária.
+
+---
+
+## Keep-alive
+
+`.github/workflows/keep-alive.yml` pinga o `/actuator/health` do serviço Spring antigo com `curl` **sem `-f`**:
+o job fica verde mesmo quando o serviço responde erro. Trocar a URL para `/health`, mudar a frequência ou
+desativar é decisão da usuária.
+
+---
+
+## Checklist
+
+- [ ] `KOF_JWT_SECRET` gerado na hora (nunca um valor de exemplo), com no mínimo 32 caracteres.
+- [ ] `docker build` e `docker run` locais + E2E contra o container (gate pendente).
+- [ ] Health check do Render em `/health`.
+- [ ] Keep-alive apontando para a URL nova (decisão da usuária).
+- [ ] Ciente de que, sem persistência, os dados se perdem a cada reinício.
