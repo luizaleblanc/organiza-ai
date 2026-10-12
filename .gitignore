@@ -84,3 +84,6 @@ frontend-voice/
 .claude/
 CLAUDE.md
 CLAUDE.md
+
+# Banco local de desenvolvimento (H2 em arquivo; ver backend/store.kf)
+data/

@@ -3,16 +3,20 @@
 # Porta: -Port N (define PORT para o servidor); sem ele, usa $env:PORT ou 3000 (o padrão do backend).
 # Cobre todas as rotas de backend/main.kf com asserts semânticos (valor exato, não "não crashou").
 # Pré-requisito: `kof build backend --target jvm` (saída em build/classes, ou passe -ClassesDir).
+# Banco: o `kof build` não copia o driver JDBC; passe o jar em -ExtraClasspath (ex.: o H2 de `kof deps resolve`).
+# Sem KOF_DB_URL o servidor usa H2 em ./data/organiza (relativo à pasta atual).
 # Exit code 0 somente se TODOS os testes passarem e o servidor não emitir VerifyError/LinkageError.
 
 param(
     [string]$ClassesDir = "build/classes",
+    [string]$ExtraClasspath = "",
     [string]$JavaExe = "C:\Program Files\Eclipse Adoptium\jdk-25.0.3.9-hotspot\bin\java.exe",
     [int]$Port = 0,
     [string]$BaseUrl = ""
 )
 
 if ($Port -gt 0) { $env:PORT = "$Port" }
+$RunClasspath = if ($ExtraClasspath) { "$ClassesDir;$ExtraClasspath" } else { $ClassesDir }
 if (-not $BaseUrl) {
     $porta = if ($env:PORT) { $env:PORT } else { "3000" }
     $BaseUrl = "http://localhost:$porta"
@@ -93,7 +97,7 @@ function New-TestJwt([string]$PayloadJson, [string]$Secret) {
 function Start-BootProbe([string]$SecretValue) {
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = $JavaExe
-    $psi.Arguments = "-cp `"$ClassesDir`" Default.Main"
+    $psi.Arguments = "-cp `"$RunClasspath`" Default.Main"
     $psi.UseShellExecute = $false
     $psi.RedirectStandardError = $true
     $psi.RedirectStandardOutput = $true
@@ -136,7 +140,7 @@ Test-Step "Boot com segredo curto falha sem vazar o valor" {
 $errLog = Join-Path ([System.IO.Path]::GetTempPath()) "organiza-e2e-server-stderr.txt"
 $outLog = Join-Path ([System.IO.Path]::GetTempPath()) "organiza-e2e-server-stdout.txt"
 Write-Host "`nInicializando Servidor KofLith na JVM ($ClassesDir, $BaseUrl)..." -ForegroundColor Yellow
-$serverProc = Start-Process -FilePath $JavaExe -ArgumentList @("-Xverify:all", "-cp", $ClassesDir, "Default.Main") `
+$serverProc = Start-Process -FilePath $JavaExe -ArgumentList @("-Xverify:all", "-cp", "`"$RunClasspath`"", "Default.Main") `
     -PassThru -NoNewWindow -RedirectStandardError $errLog -RedirectStandardOutput $outLog
 
 $up = $false

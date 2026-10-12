@@ -43,22 +43,28 @@ RUN set -eu; \
     /opt/kof/bin/kof version
 
 WORKDIR /src
-COPY kof.toml ./
+COPY kof.toml kofdeps ./
 COPY backend ./backend
+# O `kof build` nao copia o driver JDBC e so auto-provisiona URL literal em db.connect (medido no 0.6.3);
+# a URL vem de KOF_DB_URL, entao os drivers ficam fixados em `kofdeps` e entram no fat jar via --classpath.
 RUN /opt/kof/bin/kof check backend \
- && /opt/kof/bin/kof build backend --target jvm --output /out/classes
+ && cp="$(/opt/kof/bin/kof deps resolve . | tail -1)" \
+ && echo "drivers: $cp" \
+ && /opt/kof/bin/kof build backend --target jvm --fat --classpath "$cp" --output /out/app \
+ && test -f /out/app/kof-app.jar
 
 # ---------------------------------------------------------------------------
 # Run stage: JRE 25. As classes geradas do projeto sao V21 (major 65), mas o runtime do Kof
 # copiado junto (dev/kof/runtime/*) e compilado pelo JDK 25 do pacote (major 69):
 # num JRE 21 o boot morre com UnsupportedClassVersionError.
-# Execucao identica ao `kof run` (kof-cli CmdRun): java -Dkof.root=... -cp <classes> Default.Main
+# Execucao: o fat jar (classes + runtime do Kof + drivers do kofdeps) com java -jar.
+# KOF_ENV=production torna KOF_DB_URL obrigatoria (PERS-23): o container nao sobe sem banco configurado.
 # ---------------------------------------------------------------------------
 FROM eclipse-temurin:25-jre
 RUN useradd --system --uid 10001 --home-dir /app kof
 WORKDIR /app
-COPY --from=build --chown=kof:kof /out/classes /app/classes
+COPY --from=build --chown=kof:kof /out/app/kof-app.jar /app/kof-app.jar
 USER kof
-ENV PORT=8080
+ENV PORT=8080 KOF_ENV=production
 EXPOSE 8080
-ENTRYPOINT ["java", "-Dkof.root=/app", "-cp", "/app/classes", "Default.Main"]
+ENTRYPOINT ["java", "-Dkof.root=/app", "-jar", "/app/kof-app.jar"]

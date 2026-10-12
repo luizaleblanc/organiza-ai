@@ -1,0 +1,160 @@
+// backend/store.kf
+// Conexao e schema do banco com kof.orm (spec .specs/features/persistence-kof-orm, T1).
+// As rotas e o BackendDb ainda nao usam o banco: a T1 so abre a conexao e garante as tabelas.
+//
+// Variaveis (kof.config: a chave "db.url" le KOF_DB_URL, como "jwt.secret" le KOF_JWT_SECRET):
+//   KOF_DB_URL      URL JDBC SEM credenciais (ex.: jdbc:postgresql://host:5432/organiza). Ausente:
+//                   H2 em arquivo (jdbc:h2:file:./data/organiza;WRITE_DELAY=0) fora de producao; erro em producao.
+//   KOF_DB_USER     usuario do banco (opcional)
+//   KOF_DB_PASSWORD senha do banco (opcional)
+//   KOF_ENV         "production" torna KOF_DB_URL obrigatoria (PERS-23)
+// Credencial nunca vai na URL: o erro DB001 do runtime imprime a URL inteira (medido no kof 0.6.3),
+// entao user/senha seguem pelo db.connect de 3 argumentos.
+
+// Entities = tabelas (nome da entity em minusculas). Records imutaveis (SEM038); enums e
+// valores opcionais viram String / par valor+flag, porque o ORM grava enum como objeto
+// serializado e Double? como texto (medido no kof 0.6.3). Dinheiro em centavos (Long).
+entity UserRow {
+    id: Long generated
+    email: String unique
+    passwordHash: String
+    role: String
+    salaryCents: Long
+    hasSalary: Bool
+    tier: String
+    hasVariableIncome: Bool
+    emergencyGoalCents: Long
+    hasEmergencyGoal: Bool
+    budgetModel: String
+    incomeType: String
+    hasDebt: Bool
+    debtCents: Long
+}
+
+entity TransactionRow {
+    id: Long generated
+    userId: Long
+    description: String
+    amountCents: Long
+    category: String
+    currency: String
+    bucket: String
+    source: String
+    createdAt: String
+    envelopeId: Long
+}
+
+entity EnvelopeRow {
+    id: Long generated
+    userId: Long
+    categoryName: String
+    limitCents: Long
+    spentCents: Long
+    limitType: String
+    movingAverageMonths: Int
+    createdAt: String
+}
+
+entity ChatMessageRow {
+    id: Long generated
+    userId: Long
+    role: String
+    content: String
+    createdAt: String
+}
+
+entity VariableIncomeRow {
+    id: Long generated
+    userId: Long
+    amountCents: Long
+    source: String
+    destination: String
+    date: String
+}
+
+entity KakeiboReflectionRow {
+    id: Long generated
+    userId: Long
+    weekStart: String
+    answersJson: String
+    createdAt: String
+}
+
+// Conexao unica do processo (o transaction {} do kof.db usa a ultima conexao aberta).
+class DbConn {
+    static String handle = ""
+}
+
+// WRITE_DELAY=0: o H2 grava no disco a cada commit. Com o padrao (atraso de ~1 s), um processo
+// morto a forca logo depois de escrever perdeu as tabelas recem-criadas (medido no kof 0.6.3).
+String defaultDevDbUrl() {
+    return "jdbc:h2:file:./data/organiza;WRITE_DELAY=0"
+}
+
+Bool isProduction() {
+    var env = config.env("KOF_ENV")
+    if (env != null) {
+        return env.trim() == "production"
+    }
+    return false
+}
+
+// URL escolhida: KOF_DB_URL; sem ela, H2 em arquivo fora de producao (PERS-04) ou erro (PERS-23).
+String databaseUrl() {
+    if (config.has("db.url")) {
+        return config.str("db.url", "").trim()
+    }
+    if (isProduction()) {
+        throw "KOF_DB_URL e obrigatoria quando KOF_ENV=production"
+    }
+    return defaultDevDbUrl()
+}
+
+// "jdbc:h2:file:..." -> "h2"; "postgres://..." -> "postgres". So o esquema vai para o log.
+String dbScheme(String url) {
+    var rest = url
+    if (rest.startsWith("jdbc:")) {
+        rest = rest.substring(5)
+    }
+    var i = rest.indexOf(":")
+    if (i > 0) {
+        return rest.substring(0, i)
+    }
+    return "desconhecido"
+}
+
+Bool urlHasCredentials(String url) {
+    return url.contains("@") || url.toLowerCase().contains("password=")
+}
+
+// Cria as tabelas que faltam (PERS-22): orm.create e idempotente (medido: 3x no mesmo banco = true).
+void ensureSchema(String db) {
+    orm.create<UserRow>(db)
+    orm.create<TransactionRow>(db)
+    orm.create<EnvelopeRow>(db)
+    orm.create<ChatMessageRow>(db)
+    orm.create<VariableIncomeRow>(db)
+    orm.create<KakeiboReflectionRow>(db)
+}
+
+// Abre a conexao e garante o schema. Qualquer falha derruba o boot (PERS-05) sem citar a URL.
+String openDb() {
+    var url = databaseUrl()
+    if (url == "") {
+        throw "KOF_DB_URL esta vazia"
+    }
+    if (urlHasCredentials(url)) {
+        throw "KOF_DB_URL nao pode conter usuario ou senha: use KOF_DB_USER e KOF_DB_PASSWORD"
+    }
+    var scheme = dbScheme(url)
+    var conn = ""
+    try {
+        conn = db.connect(url, config.str("db.user", ""), config.str("db.password", ""))
+    } catch (String e) {
+        throw "nao foi possivel abrir o banco (esquema " + scheme + "): driver JDBC ausente ou URL invalida"
+    }
+    ensureSchema(conn)
+    DbConn.handle = conn
+    log.info("banco aberto: esquema " + scheme)
+    return conn
+}
