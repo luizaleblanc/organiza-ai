@@ -55,12 +55,15 @@
 
 ## 2. Setup do ambiente
 
-### 2.1 Instalar sempre a versão mais nova do Kof (Windows, PowerShell)
+### 2.1 Instalar a versão do Kof fixada no projeto (Windows, PowerShell)
+
+A versão do projeto vive em um só lugar: o arquivo [`KOF_VERSION`](../../KOF_VERSION) na raiz (hoje `kof-0.6.3`),
+lido pelo [Dockerfile](../../Dockerfile) e pelo [kof-check.yml](../../.github/workflows/kof-check.yml). Os dois recusam tags
+marcadas como *prerelease* no GitHub.
 
 ```powershell
-# 1. Descobre o release Windows mais recente (os tags são por plataforma)
-$tag = gh release list -R KofLang/Kof4j --limit 50 --json tagName,publishedAt `
-  --jq '[.[] | select(.tagName | test("windows-x86_64"))] | sort_by(.publishedAt) | last | .tagName'
+# 1. Usa a versão fixada (os tags são por plataforma)
+$tag = (Get-Content KOF_VERSION -Raw).Trim() + "-windows-x86_64"
 $dest = "$env:LOCALAPPDATA\kof\$tag"
 New-Item -ItemType Directory -Force $dest | Out-Null
 
@@ -80,7 +83,8 @@ kof version; kof info
 ```
 
 **Política de versão:**
-- **Se a versão mudou** desde a última sessão (a última medida foi `0.5.0-beta`), rode **todos** os gates da seção 5.
+- **Trocar de versão é um commit próprio** (`build: fixar kof X.Y.Z ...`) que só edita `KOF_VERSION`, feito **depois** de rodar todos os gates da seção 5 na versão nova, instalada fora do repo. Nunca use "a mais recente" sem fixar: o Kof publica vários releases por dia.
+- Para avaliar uma versão nova: instale-a com o tag explícito e rode **todos** os gates (a linha de base medida é a `0.6.3`; a comparação 0.5.0-beta × 0.6.3 está no relatório de 12/10).
   - Para cada `// WORKAROUND:` (`orZero` e o enum), teste a forma idiomática num repro **fora do repo**.
   - Se o bug sumiu, proponha remover o contorno como um commit separado.
 - **Se a versão nova quebrar algo** que passava, volte para o `kof-0.5.0-beta-windows-x86_64` e reporte com o repro.

@@ -4,7 +4,8 @@ name: KOF check
 #   - backend: kof check + kof build --target jvm (o monolito KofLith que vai para o Render);
 #   - frontend: kof build --target js (o `kof check frontend` da PKG006 com o kof.toml na raiz;
 #     ver docs/handoff/ANTIGRAVITY_HANDOFF.md, secao 1).
-# Instala sempre o release Linux MAIS RECENTE do Kof, conferindo o SHA256 publicado no release.
+# Instala o release Linux fixado em KOF_VERSION (a mesma fonte do Dockerfile), recusa prerelease e
+# confere o SHA256 publicado no release. Trocar a versao = commit proprio em KOF_VERSION.
 # O bff/ legado nao faz mais parte do gate.
 
 on:
@@ -13,12 +14,14 @@ on:
       - "backend/**"
       - "frontend/**"
       - "kof.toml"
+      - "KOF_VERSION"
       - ".github/workflows/kof-check.yml"
   pull_request:
     paths:
       - "backend/**"
       - "frontend/**"
       - "kof.toml"
+      - "KOF_VERSION"
       - ".github/workflows/kof-check.yml"
   workflow_dispatch: {}
 
@@ -28,14 +31,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Instalar o Kof mais recente (linux-x86_64, SHA256 conferido)
+      - name: Instalar o Kof fixado em KOF_VERSION (linux-x86_64, sem prerelease, SHA256 conferido)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
-          tag="$(gh api 'repos/KofLang/Kof4j/releases?per_page=50' \
-            --jq '[.[] | select(.tag_name | test("linux-x86_64$")) | select(.draft | not)] | sort_by(.published_at) | last | .tag_name')"
-          case "$tag" in *linux-x86_64) ;; *) echo "release Linux do Kof nao encontrado: '$tag'" >&2; exit 1 ;; esac
+          tag="$(tr -d '[:space:]' < KOF_VERSION)-linux-x86_64"
+          pre="$(gh api "repos/KofLang/Kof4j/releases/tags/$tag" --jq '.prerelease' || true)"
+          if [ "$pre" != false ]; then echo "Kof $tag recusado: prerelease ou inexistente (prerelease=$pre)" >&2; exit 1; fi
           echo "Kof release: $tag"
           mkdir -p "$RUNNER_TEMP/kof-dl" "$RUNNER_TEMP/kof"
           cd "$RUNNER_TEMP/kof-dl"

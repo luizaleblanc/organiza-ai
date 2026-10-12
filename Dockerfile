@@ -1,29 +1,35 @@
 # Imagem do backend Kof (monolito KofLith, backend/*.kf) para o Render.
 #
-# Build:  docker build -t organiza-ai-backend .                                              (Kof mais recente)
-#         docker build --build-arg KOF_TAG=kof-0.5.0-beta-linux-x86_64 -t organiza-ai-backend .   (versao fixa)
+# Build:  docker build -t organiza-ai-backend .                                     (versao fixa do arquivo KOF_VERSION)
+#         docker build --build-arg KOF_TAG=kof-0.6.3-linux-x86_64 -t organiza-ai-backend .   (outra versao estavel)
+#         docker build --build-arg KOF_TAG=latest -t organiza-ai-backend .              (estavel mais recente; so para testar troca)
 # Run:    docker run -p 8080:8080 -e KOF_JWT_SECRET=<64 hex> organiza-ai-backend
 # Nenhum segredo entra na imagem: KOF_JWT_SECRET (obrigatoria), KOF_JWT_ISSUER, KOF_JWT_AUDIENCE e PORT
 # chegam so como variaveis de ambiente no runtime (ver docs/DEPLOY.md).
 
 # ---------------------------------------------------------------------------
-# Build stage: baixa o release Linux do Kof (o mais recente, ou KOF_TAG), confere o SHA256
-# publicado no proprio release e compila o backend para a JVM.
+# Build stage: baixa o release Linux do Kof fixado em KOF_VERSION (ou KOF_TAG), recusa prerelease,
+# confere o SHA256 publicado no proprio release e compila o backend para a JVM.
+# Trocar a versao = editar KOF_VERSION num commit proprio, depois de todos os gates (ver handoff 2.1).
 # ---------------------------------------------------------------------------
 FROM debian:bookworm-slim AS build
-# KOF_TAG vazio = release Linux mais recente; preenchido = versao fixa (ex.: kof-0.5.0-beta-linux-x86_64)
+# KOF_TAG vazio = versao do arquivo KOF_VERSION; "latest" = estavel mais recente; senao, o tag exato
 ARG KOF_TAG=
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl jq \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /opt
+COPY KOF_VERSION /opt/KOF_VERSION
 RUN set -eu; \
     tag="$KOF_TAG"; \
-    if [ -z "$tag" ]; then \
+    if [ -z "$tag" ]; then tag="$(tr -d '[:space:]' < /opt/KOF_VERSION)-linux-x86_64"; fi; \
+    if [ "$tag" = latest ]; then \
       tag="$(curl -fsSL 'https://api.github.com/repos/KofLang/Kof4j/releases?per_page=50' \
-        | jq -r '[.[] | select(.tag_name | test("linux-x86_64$")) | select(.draft | not)] | sort_by(.published_at) | last | .tag_name')"; \
+        | jq -r '[.[] | select(.tag_name | test("linux-x86_64$")) | select((.draft or .prerelease) | not)] | sort_by(.published_at) | last | .tag_name')"; \
     fi; \
     case "$tag" in *linux-x86_64) ;; *) echo "KOF_TAG invalido ou nao resolvido: '$tag'" >&2; exit 1 ;; esac; \
+    pre="$(curl -fsSL "https://api.github.com/repos/KofLang/Kof4j/releases/tags/$tag" | jq -r '.prerelease')"; \
+    if [ "$pre" != false ]; then echo "Kof $tag recusado: prerelease ou inexistente (prerelease=$pre)" >&2; exit 1; fi; \
     echo "Kof release: $tag (KOF_TAG='${KOF_TAG}')"; \
     base="https://github.com/KofLang/Kof4j/releases/download/$tag"; \
     curl -fsSLO "$base/SHA256SUMS"; \

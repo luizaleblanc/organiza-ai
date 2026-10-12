@@ -14,7 +14,7 @@ O **Organiza IA** atua oficialmente como caso de estudo e laboratório de valida
 Atualmente, o projeto possui a *arquitetura monolítica modular* e o *produto funcional* operando em KOF (Domínio e UI). No entanto, **a infraestrutura empírica de medição ainda está em construção**. Ainda não possuímos no repositório (mas estamos implementando em Issues ativas):
 - Suítes de extração e análise da AST (*Abstract Syntax Tree*).
 - ~~CI/CD instrumentado para coletar métricas exatas de compilação~~ -- ✅ pipeline inicial no ar (`.github/workflows/benchmarks.yml`), ver [docs/BENCHMARKS.md](docs/BENCHMARKS.md) para metodologia e limitações conhecidas.
-- Benchmarks de alocação de memória e execução (KofJS vs JVM) -- parcial: typecheck (`kof check`), transpilação KofJS (mediana ± desvio), tamanho do bundle e LOC/módulos já medidos (Kof 0.5.0-beta, ver tabela em [docs/BENCHMARKS.md](docs/BENCHMARKS.md)); memória de runtime sob carga segue bloqueada por bugs do Kof4j e `kof check backend` pela [Issue #41](https://github.com/luizaleblanc/organiza-ai/issues/41).
+- Benchmarks de alocação de memória e execução (KofJS vs JVM) -- parcial: typecheck (`kof check`), transpilação KofJS (mediana ± desvio), tamanho do bundle e LOC/módulos já medidos na Kof 0.5.0-beta (versão do benchmark; o projeto usa a 0.6.3 de `KOF_VERSION`; ver tabela em [docs/BENCHMARKS.md](docs/BENCHMARKS.md)); memória de runtime sob carga segue bloqueada por bugs do Kof4j e `kof check backend` pela [Issue #41](https://github.com/luizaleblanc/organiza-ai/issues/41).
 - Análises estatísticas quantitativas de *LLM-friendliness*.
 - Protocolo de validação científica (hipóteses H1–H4, reprodutibilidade e ameaças à validade) -- em definição na [Issue #42](https://github.com/luizaleblanc/organiza-ai/issues/42).
 
@@ -62,7 +62,9 @@ Conheça a interface do Organiza IA:
 | **Monólito Modular Frontend** | KOF (`kof.ui`, `frontend/*.kf`) -- Módulos de Core (`core/`), Componentes (`components/`) e Telas (`screens/`) |
 | **Back-end Legado (arquivado)** | Java 17, Spring Boot 3.3.x, Spring AI -- arquivado em `archive/legacy-backend-java/` (tag histórica `legacy/java-spring-boot`), mantido apenas como referência histórica |
 | **Banco de Dados** | PostgreSQL na Aiven em produção (escolhido), com o app no Render -- persistência em andamento, ver [`.specs/features/persistence-kof-orm/`](.specs/features/persistence-kof-orm/); hoje os dados ainda ficam em memória |
-| **Build & Tooling** | `kof-cli` / Kof Compiler (Java 25 JDK) |
+| **Build & Tooling** | `kof-cli` / Kof Compiler **0.6.3**, fixado em [`KOF_VERSION`](KOF_VERSION) (Java 25 JDK) |
+
+**Versão do Kof:** fixada em `0.6.3` no arquivo [`KOF_VERSION`](KOF_VERSION), fonte única do `Dockerfile` e do CI (`.github/workflows/kof-check.yml`). Trocar a versão é um commit próprio em `KOF_VERSION`, feito só depois de passar todos os gates; releases prerelease são recusados.
 
 ## Arquitetura Monolítica Modular (KofLith)
 
