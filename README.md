@@ -147,6 +147,8 @@ Especificação e design em [`.specs/features/persistence-kof-orm/`](.specs/feat
 
 A imagem Docker gera um fat jar com os drivers JDBC do `kofdeps` (H2 e MariaDB, com o registro `java.sql.Driver` mesclado no build) e roda em JRE 25. Validada em 12/10/2026 contra o MySQL da Aiven: E2E 37/38 (só a #44 falha) e dados intactos após `docker restart` e `docker kill`. Passo a passo do Render em [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
+**Em produção desde 12/10/2026:** o backend Kof (commit `708fc17`) roda no Render em <https://organiza-ai-5qzv.onrender.com> com o MySQL da Aiven (`organiza_kof`). Conferido de fora: `GET /health` = 200 `OK` e rota protegida sem token = 401. O backend Spring antigo saiu do ar. O workflow `keep-alive.yml` pinga `/health` a cada 10 minutos (`curl -f`: fica vermelho se o serviço cair).
+
 ## Arquitetura KofLith — Monólito 100% Nativo sobre a JVM (Issue #37)
 
 Em alinhamento com a filosofia da linguagem KOF (`training/idioms/architecture.md`), o Organiza IA concluiu a transição do backend Spring Boot para o padrão **KofLith**: o monólito de domínio (`backend/*.kf`) e a interface (`frontend/*.kf`) rodam de forma autônoma e exclusiva em KOF sobre a JVM e KofJS, sem depender do backend Java em runtime.
