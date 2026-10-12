@@ -207,7 +207,9 @@ class KakeiboReflectionEntity {
 record LoginRequest(String email, String password)
 record OnboardingRequest(Double salary, String incomeType, Bool hasDebt)
 record VariableIncomeInput(Double amount, String source)
-record CreateEnvelopeInput(String userId, String categoryName, Double limitAmount)
+// Sem userId: o dono do envelope vem SEMPRE do token (currentUserId). Um userId enviado no
+// corpo por clientes antigos e ignorado pelo json.decode (chaves extras nao quebram).
+record CreateEnvelopeInput(String categoryName, Double limitAmount)
 record ChatMessageRequest(String message)
 
 // Corpo de erro das rotas: serializado com json.encode (nunca JSON concatenado a mao)

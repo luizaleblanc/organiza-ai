@@ -69,21 +69,29 @@ String? extractBearerToken(String? authHeader) {
     return null
 }
 
-Bool hasBearerToken() {
-    return extractBearerToken(header("Authorization")) != null
-}
-
-AuthClaims requireAuth() {
+// UNICO ponto que produz AuthClaims: le o Bearer do header e valida assinatura + exp + iss + aud
+// (jwt.verify de 4 argumentos). null = sem token ou token invalido. Usado pelo middleware e,
+// via currentUserId(), por todas as rotas protegidas.
+AuthClaims? currentClaims() {
     var token = extractBearerToken(header("Authorization"))
     if (token == null) {
-        throw "Token não informado"
+        return null
     }
     try {
-        // assinatura + exp + iss + aud validados pela plataforma (jwt.verify de 4 argumentos)
-        var claimsJson = jwt.verify(token, jwtSecret(), jwtIssuer(), jwtAudience())
-        return json.decode<AuthClaims>(claimsJson)
+        return json.decode<AuthClaims>(jwt.verify(token, jwtSecret(), jwtIssuer(), jwtAudience()))
     } catch (String e) {
-        throw "Token inválido ou expirado"
+        return null
     }
+}
+
+// Id do usuario autenticado — SEMPRE do sub do token, nunca de query/body.
+// O middleware ja respondeu 401 a quem nao tem token valido; chegar aqui sem claims
+// e defeito do servidor (uma rota publica pedindo usuario), por isso vira 500.
+String currentUserId() {
+    var claims = currentClaims()
+    if (claims == null) {
+        throw "currentUserId() chamado sem token valido: a rota deveria ser protegida"
+    }
+    return claims.sub()
 }
 

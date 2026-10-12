@@ -63,6 +63,13 @@ function Test-Step([string]$Name, [scriptblock]$Check) {
 
 function Expect([bool]$Cond, $Got) { if ($Cond) { return $true } else { return "obtido: $Got" } }
 
+# Lista JSON -> array PowerShell de verdade (no PS 5.1, ConvertFrom-Json de "[]" vira 1 objeto, não 0 itens).
+function ConvertFrom-JsonList([string]$Json) {
+    $parsed = $Json | ConvertFrom-Json
+    if ($null -eq $parsed) { return ,@() }
+    return ,@($parsed | ForEach-Object { $_ })
+}
+
 function ConvertTo-B64Url([byte[]]$Bytes) { [Convert]::ToBase64String($Bytes).TrimEnd("=").Replace("+", "-").Replace("/", "_") }
 
 # Monta um JWT HS256 com o segredo da suíte (para forjar iss/aud/exp errados com assinatura válida).
@@ -233,16 +240,16 @@ try {
     }
 
     Test-Step "POST /api/envelopes cria FOOD com limite 1200" {
-        $body = (@{ userId = $script:userId; categoryName = "FOOD"; limitAmount = 1200.0 } | ConvertTo-Json -Compress)
+        $body = (@{ categoryName = "FOOD"; limitAmount = 1200.0 } | ConvertTo-Json -Compress)
         $r = Invoke-Api "POST" "/api/envelopes" $script:token $body
         $j = $r.Body | ConvertFrom-Json
         Expect ($r.Status -eq 200 -and $j.categoryName -eq "FOOD" -and $j.limitAmount -eq 1200.0) "$($r.Status) $($r.Body)"
     }
 
     Test-Step "GET /api/envelopes lista o envelope do usuário" {
-        $r = Invoke-Api "GET" "/api/envelopes?userId=$($script:userId)" $script:token
-        $list = @($r.Body | ConvertFrom-Json)
-        Expect ($r.Status -eq 200 -and ($list | Where-Object { $_.categoryName -eq "FOOD" }).Count -eq 1) "$($r.Status) $($r.Body)"
+        $r = Invoke-Api "GET" "/api/envelopes" $script:token
+        $list = (ConvertFrom-JsonList $r.Body)
+        Expect ($r.Status -eq 200 -and @($list | Where-Object { $_.categoryName -eq "FOOD" }).Count -eq 1) "$($r.Status) $($r.Body)"
     }
 
     Test-Step "POST /api/transactions (600 em FOOD) vincula ao envelope FOOD (Issue #24)" {
@@ -262,8 +269,8 @@ try {
 
     Test-Step "GET /api/transactions lista a transação de 600" {
         $r = Invoke-Api "GET" "/api/transactions" $script:token
-        $list = @($r.Body | ConvertFrom-Json)
-        Expect ($r.Status -eq 200 -and ($list | Where-Object { $_.value -eq 600.0 -and $_.category -eq "FOOD" }).Count -eq 1) "$($r.Status) $($r.Body)"
+        $list = (ConvertFrom-JsonList $r.Body)
+        Expect ($r.Status -eq 200 -and @($list | Where-Object { $_.value -eq 600.0 -and $_.category -eq "FOOD" }).Count -eq 1) "$($r.Status) $($r.Body)"
     }
 
     Test-Step "Pulso após gasto: pulse = roundTo((3000-600)/30, 2) = 80.0, totalSpent = 600.0" {
@@ -287,9 +294,9 @@ try {
     }
 
     Test-Step "GET /api/variable-income lista a renda de 500" {
-        $r = Invoke-Api "GET" "/api/variable-income?userId=$($script:userId)" $script:token
-        $list = @($r.Body | ConvertFrom-Json)
-        Expect ($r.Status -eq 200 -and ($list | Where-Object { $_.amount -eq 500.0 }).Count -eq 1) "$($r.Status) $($r.Body)"
+        $r = Invoke-Api "GET" "/api/variable-income" $script:token
+        $list = (ConvertFrom-JsonList $r.Body)
+        Expect ($r.Status -eq 200 -and @($list | Where-Object { $_.amount -eq 500.0 }).Count -eq 1) "$($r.Status) $($r.Body)"
     }
 
     Test-Step "GET /api/dashboard soma o gasto real (600.0|BRL|...)" {
@@ -306,6 +313,63 @@ try {
     Test-Step "Rota inexistente = 404" {
         $r = Invoke-Api "GET" "/api/nao-existe" $script:token
         Expect ($r.Status -eq 404) "$($r.Status) $($r.Body)"
+    }
+
+    Test-Step "POST /api/transactions com valor 0 = 400" {
+        $body = (@{ description = "zero"; amount = 0; category = "FOOD"; currency = "BRL" } | ConvertTo-Json -Compress)
+        $r = Invoke-Api "POST" "/api/transactions" $script:token $body
+        $j = $r.Body | ConvertFrom-Json
+        Expect ($r.Status -eq 400 -and $j.error -like "*maior que zero*") "$($r.Status) $($r.Body)"
+    }
+
+    Test-Step "POST /api/transactions com valor negativo = 400" {
+        $body = (@{ description = "neg"; amount = -50; category = "FOOD"; currency = "BRL" } | ConvertTo-Json -Compress)
+        $r = Invoke-Api "POST" "/api/transactions" $script:token $body
+        Expect ($r.Status -eq 400) "$($r.Status) $($r.Body)"
+    }
+
+    # ---- Isolamento entre usuários (IDOR): B nunca vê nem grava dados de A ----
+    $credB = (@{ email = "b_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaDoB123" } | ConvertTo-Json -Compress)
+    $script:tokenB = (Invoke-Api "POST" "/api/auth/register" "" $credB).Body
+
+    Test-Step "IDOR: B não vê os envelopes de A (nem com ?userId=A)" {
+        $r1 = Invoke-Api "GET" "/api/envelopes" $script:tokenB
+        $r2 = Invoke-Api "GET" "/api/envelopes?userId=$($script:userId)" $script:tokenB
+        $l1 = (ConvertFrom-JsonList $r1.Body); $l2 = (ConvertFrom-JsonList $r2.Body)
+        Expect ($r1.Status -eq 200 -and $r2.Status -eq 200 -and $l1.Count -eq 0 -and $l2.Count -eq 0) "$($r1.Status) $($r1.Body) | ?userId=A: $($r2.Status) $($r2.Body)"
+    }
+
+    Test-Step "IDOR: B não vê as transações de A" {
+        $r = Invoke-Api "GET" "/api/transactions" $script:tokenB
+        $list = (ConvertFrom-JsonList $r.Body)
+        Expect ($r.Status -eq 200 -and $list.Count -eq 0) "$($r.Status) $($r.Body)"
+    }
+
+    Test-Step "IDOR: B não vê a renda variável de A (nem com ?userId=A)" {
+        $r = Invoke-Api "GET" "/api/variable-income?userId=$($script:userId)" $script:tokenB
+        $list = (ConvertFrom-JsonList $r.Body)
+        Expect ($r.Status -eq 200 -and $list.Count -eq 0) "$($r.Status) $($r.Body)"
+    }
+
+    Test-Step "IDOR: userId de A no corpo de B é ignorado (envelope fica com B)" {
+        $body = (@{ userId = $script:userId; categoryName = "LEISURE"; limitAmount = 99.0 } | ConvertTo-Json -Compress)
+        $r = Invoke-Api "POST" "/api/envelopes" $script:tokenB $body
+        $created = $r.Body | ConvertFrom-Json
+        $listA = (ConvertFrom-JsonList (Invoke-Api "GET" "/api/envelopes" $script:token).Body)
+        Expect ($r.Status -eq 200 -and $created.userId -ne $script:userId -and @($listA | Where-Object { $_.categoryName -eq "LEISURE" }).Count -eq 0) "$($r.Status) $($r.Body) | envelopes de A: $($listA.Count)"
+    }
+
+    Test-Step "Pulso de A não muda com dados de B" {
+        $r = Invoke-Api "GET" "/api/budgets/daily-pulse" $script:token
+        $j = $r.Body | ConvertFrom-Json
+        Expect ($r.Status -eq 200 -and $j.pulse -eq 80.0 -and $j.totalSpent -eq 600.0) "$($r.Status) $($r.Body)"
+    }
+
+    Test-Step "Login: 6ª tentativa no mesmo e-mail em 1 minuto = 429" {
+        $alvo = (@{ email = "rl_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "x" } | ConvertTo-Json -Compress)
+        $codes = @()
+        for ($k = 1; $k -le 6; $k++) { $codes += (Invoke-Api "POST" "/api/auth/login" "" $alvo).Status }
+        Expect (@($codes[0..4] | Where-Object { $_ -eq 401 }).Count -eq 5 -and $codes[5] -eq 429) "códigos: $($codes -join ',')"
     }
 
 } finally {
