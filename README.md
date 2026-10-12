@@ -61,7 +61,7 @@ Conheça a interface do Organiza IA:
 | **Monólito Modular Backend** | KOF (`backend/*.kf`) -- Módulos de Domínio (`models.kf`, `auth.kf`, `services.kf`, `coach.kf`, `main.kf`) |
 | **Monólito Modular Frontend** | KOF (`kof.ui`, `frontend/*.kf`) -- Módulos de Core (`core/`), Componentes (`components/`) e Telas (`screens/`) |
 | **Back-end Legado (arquivado)** | Java 17, Spring Boot 3.3.x, Spring AI -- arquivado em `archive/legacy-backend-java/` (tag histórica `legacy/java-spring-boot`), mantido apenas como referência histórica |
-| **Banco de Dados** | MySQL no Render com modelo relacional integrado |
+| **Banco de Dados** | PostgreSQL na Aiven em produção (escolhido), com o app no Render -- persistência em andamento, ver [`.specs/features/persistence-kof-orm/`](.specs/features/persistence-kof-orm/); hoje os dados ainda ficam em memória |
 | **Build & Tooling** | `kof-cli` / Kof Compiler (Java 25 JDK) |
 
 ## Arquitetura Monolítica Modular (KofLith)
@@ -126,6 +126,10 @@ O fechamento ponta a ponta do **MVP 1** segue a metodologia **tlc-spec-driven (4
 | **Batch 5 — Homologação E2E & Benchmarks** | Testes ponta a ponta (`scripts/test_e2e_flow.ps1` 9/9 GREEN) e coleta empírica (`scripts/benchmark_kof.ps1` → `docs/BENCHMARKS.md`) | Monólito KofLith + UI Mobile/Desktop 100% homologados | ⏳ planejado |
 
 **Regra de segurança:** nenhum commit ou push é executado por agentes de IA — cada lote é validado com `kof check` e entregue para revisão e commit manual da maintainer.
+
+### Persistência (`persistence-kof-orm`) -- em andamento
+
+Especificação e design em [`.specs/features/persistence-kof-orm/`](.specs/features/persistence-kof-orm/) ([`spec.md`](.specs/features/persistence-kof-orm/spec.md), [`design.md`](.specs/features/persistence-kof-orm/design.md)). Banco de produção escolhido: **PostgreSQL na Aiven**, com o app rodando no Render.
 
 ## Arquitetura KofLith — Monólito 100% Nativo sobre a JVM (Issue #37)
 
@@ -256,7 +260,7 @@ Todo agente ou subagente de IA usado no projeto deve receber este contexto míni
 
 ```
 Você é um agente de código no projeto organiza-ai (Arquitetura Monolítica KofLith).
-Stack: KOF 100% Nativo (backend/*.kf em kof.web na porta 3000 + frontend/*.kf em kof.ui), MySQL.
+Stack: KOF 100% Nativo (backend/*.kf em kof.web na porta 3000 + frontend/*.kf em kof.ui), PostgreSQL (Aiven) em produção.
 REGRAS ABSOLUTAS:
 1. NUNCA faça git commit ou git push (apenas a maintainer executa commits e push)
 2. Leia obrigatoriamente docs/kof4j/ (README + training/), KOF_REFERENCE.md e docs/LLM_KOF_UI_GUIDELINES.md antes de tocar em qualquer arquivo .kf
