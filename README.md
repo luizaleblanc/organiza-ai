@@ -141,6 +141,8 @@ Especificação e design em [`.specs/features/persistence-kof-orm/`](.specs/feat
 | `KOF_DB_USER` / `KOF_DB_PASSWORD` | Credenciais, passadas separadas da URL |
 | `KOF_ENV` | `production` torna `KOF_DB_URL` obrigatória (a imagem Docker já define `KOF_ENV=production`) |
 
+**Teste de reinício (G-RESTART):** `scripts/test_restart.ps1 -ClassesDir <classes> -ExtraClasspath <jar do H2>` sobe o servidor com H2 em arquivo (pasta temporária, `-DbDir`), cria conta + onboarding 3000, encerra o processo (Ctrl+C e, depois, kill à força), sobe outro e confere login = 200 e `daily-pulse` com `salary` = 3000.0.
+
 A imagem Docker gera um fat jar com o driver JDBC (`kofdeps`) e roda em JRE 25. Detalhes em [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
 ## Arquitetura KofLith — Monólito 100% Nativo sobre a JVM (Issue #37)
