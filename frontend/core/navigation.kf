@@ -5,6 +5,9 @@ import core.theme
 import core.app_state
 import components.brand_header
 import components.nav_bar
+import screens.welcome_screen
+import screens.onboarding_screen
+import screens.dashboard_screen
 
 // =============================================================================
 // T5 — Dispatcher raiz e navegação (Dual Viewport)
@@ -61,6 +64,12 @@ switchViewport(Window w) {
 }
 
 String screenTitle() {
+    if (AppState.currentScreen == "welcome") {
+        return "Organiza IA"
+    }
+    if (AppState.currentScreen == "onboarding") {
+        return "Onboarding"
+    }
     if (AppState.currentScreen == "dashboard") {
         return "Dashboard"
     }
@@ -120,6 +129,15 @@ View buildDesktopLayout(Window w) {
 
 // Dispatcher raiz: escolhe o layout pela viewport ativa.
 View buildActiveScreen(Window w) {
+    if (AppState.currentScreen == "welcome") {
+        return welcomeScreen(w)
+    }
+    if (AppState.currentScreen == "onboarding") {
+        return onboardingScreen(w)
+    }
+    if (AppState.currentScreen == "dashboard") {
+        return dashboardScreen()
+    }
     if (AppState.isDesktop) {
         return buildDesktopLayout(w)
     }

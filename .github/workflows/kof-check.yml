@@ -1,50 +1,64 @@
 name: KOF check
 
-# Compila/valida o frontend KOF (frontend/) em toda mudança que toque .kf,
-# para nenhum código KOF quebrado chegar a main.
-# Ver: DESIGN_SYSTEM.md, PROJECT_STATUS.md, KOF_REFERENCE.md.
+# Gate do codigo Kof em toda mudanca que toque backend/ ou frontend/:
+#   - backend: kof check + kof build --target jvm (o monolito KofLith que vai para o Render);
+#   - frontend: kof build --target js (o `kof check frontend` da PKG006 com o kof.toml na raiz;
+#     ver docs/handoff/ANTIGRAVITY_HANDOFF.md, secao 1).
+# Instala o release Linux fixado em KOF_VERSION (a mesma fonte do Dockerfile), recusa prerelease e
+# confere o SHA256 publicado no release. Trocar a versao = commit proprio em KOF_VERSION.
+# O bff/ legado nao faz mais parte do gate.
 
 on:
   push:
     paths:
-      - "frontend/**/*.kf"
-      - "bff/**/*.kf"
+      - "backend/**"
+      - "frontend/**"
+      - "kof.toml"
+      - "KOF_VERSION"
       - ".github/workflows/kof-check.yml"
   pull_request:
     paths:
-      - "frontend/**/*.kf"
-      - "bff/**/*.kf"
+      - "backend/**"
+      - "frontend/**"
+      - "kof.toml"
+      - "KOF_VERSION"
       - ".github/workflows/kof-check.yml"
+  workflow_dispatch: {}
 
 jobs:
   kof-check:
     runs-on: ubuntu-latest
-    env:
-      KOF_VERSION: 0.3.1-beta
     steps:
       - uses: actions/checkout@v4
 
-      - name: Baixar e instalar o Kof CLI (release oficial linux-x86_64)
+      - name: Instalar o Kof fixado em KOF_VERSION (linux-x86_64, sem prerelease, SHA256 conferido)
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          curl -fsSL -o kof.tar.gz \
-            "https://github.com/KofLang/Kof4j/releases/download/kof-${KOF_VERSION}-linux-x86_64/kof-${KOF_VERSION}-linux-x86_64.tar.gz"
-          tar -xzf kof.tar.gz
-          DIR=$(find . -maxdepth 1 -type d -name "kof-*-linux-x86_64" | head -1)
-          echo "$DIR/bin" >> "$GITHUB_PATH"
+          set -eu
+          tag="$(tr -d '[:space:]' < KOF_VERSION)-linux-x86_64"
+          pre="$(gh api "repos/KofLang/Kof4j/releases/tags/$tag" --jq '.prerelease' || true)"
+          if [ "$pre" != false ]; then echo "Kof $tag recusado: prerelease ou inexistente (prerelease=$pre)" >&2; exit 1; fi
+          echo "Kof release: $tag"
+          mkdir -p "$RUNNER_TEMP/kof-dl" "$RUNNER_TEMP/kof"
+          cd "$RUNNER_TEMP/kof-dl"
+          gh release download "$tag" -R KofLang/Kof4j -p '*.tar.gz' -p SHA256SUMS
+          tarball="$(awk '/linux-x86_64\.tar\.gz$/ {print $2}' SHA256SUMS)"
+          test -n "$tarball"
+          grep " $tarball\$" SHA256SUMS | sha256sum -c -
+          tar -xzf "$tarball" -C "$RUNNER_TEMP/kof" --strip-components=1
+          echo "$RUNNER_TEMP/kof/bin" >> "$GITHUB_PATH"
 
       - name: kof version / info
         run: |
           kof version
           kof info
 
-      - name: kof check — frontend (KOF UI, monolito modular)
-        run: kof check frontend
-
-      - name: kof check — BFF (KOF web)
-        if: always()
+      - name: kof check + build — backend (JVM)
         run: |
-          if [ -d bff ] && find bff -name "*.kf" | grep -q .; then
-            kof check bff
-          else
-            echo "bff/ ainda sem arquivos .kf — pulando"
-          fi
+          kof check backend
+          kof build backend --target jvm --output "$RUNNER_TEMP/backend-classes"
+
+      - name: kof build — frontend (KofJS)
+        if: always()
+        run: kof build frontend --target js --output "$RUNNER_TEMP/frontend-js"

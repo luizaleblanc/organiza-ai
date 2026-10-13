@@ -28,20 +28,7 @@
 // training/ -- convertido para parametros de funcao explicitos (userId,
 // datas de corte, etc.) em vez de campos injetados.
 
-// =========================================================
-// Mock de persistencia (equivalente a AppDatabase de
-// frontend/core/database.kf, mas tipado com as entidades de
-// backend/models.kf -- ver gap #1 no relatorio)
-// =========================================================
-
-class BackendDb {
-    static List<UserEntity> users = listOf()
-    static List<TransactionEntity> transactions = listOf()
-    static List<EnvelopeEntity> envelopes = listOf()
-    static List<ChatMessageEntity> chatMessages = listOf()
-    static List<VariableIncomeEntity> variableIncomes = listOf()
-    static List<KakeiboReflectionEntity> kakeiboReflections = listOf()
-}
+// Persistencia: kof.orm em backend/store.kf (entities *Row + funcoes de repositorio).
 
 // =========================================================
 // DTOs auxiliares (records referenciados pelos services pedidos)
@@ -51,7 +38,10 @@ class BackendDb {
 record BucketSummaryDTO(String name, Int percentage, Double amount)
 
 // mod_transaction/dto/PersistTransactionInput.java
-record PersistTransactionInput(String description, Long amount, Category category, String currency, String? envelopeId)
+// WORKAROUND: json.decode<T> com campo enum = argument type mismatch (repro j2; issue upstream
+// pendente). `category` chega como String e o handler converte com Category.valueOf.
+// Remover quando corrigido (voltar para `Category category`).
+record PersistTransactionInput(String description, Long amount, String category, String currency, String? envelopeId)
 
 // mod_transaction/dto/TransactionOutput.java
 record TransactionOutput(String id, String description, String category, Double value, String currency, String? envelopeId)
@@ -69,115 +59,31 @@ record ListTransactionsByCategoryInput(Category category)
 record TierStatus(String tier, Int messagesUsed, Int messagesLimit, Bool voiceEnabled, Bool canSendMessage)
 
 // =========================================================
-// mod_user/repository/UserEntityRepository.java
-// =========================================================
-
-UserEntity? findUserByEmail(String email) {
-    for (var u in BackendDb.users) {
-        if (u.email == email) {
-            return u
-        }
-    }
-    return null
-}
-
-UserEntity? findUserById(String id) {
-    for (var u in BackendDb.users) {
-        if (u.id == id) {
-            return u
-        }
-    }
-    return null
-}
-
-// CRUD implicito de JpaRepository (save/findById), usado pelos services abaixo
-UserEntity saveUser(UserEntity user) {
-    var i = 0
-    while (i < BackendDb.users.size) {
-        var existing = BackendDb.users.get(i)
-        if (existing.id == user.id) {
-            BackendDb.users.set(i, user)
-            return user
-        }
-        i = i + 1
-    }
-    BackendDb.users.add(user)
-    return user
-}
-
-// =========================================================
 // mod_transaction/repository/TransactionEntityRepository.java
 // (inclui a logica de JpaTransactionRepository/TransactionRepository,
 // colapsada aqui -- ver gap #2 no relatorio: sem camada de dominio
 // Transaction/TransactionId separada da entidade, por idioms/architecture.md)
 // =========================================================
 
-List<TransactionEntity> findTransactionsByCategoryAndUserId(Category category, String userId) {
-    return BackendDb.transactions.filter((t: TransactionEntity) -> t.category == category && t.userId == userId)
-}
+// Persistido com kof.orm em backend/store.kf (T5): findTransactionsByCategoryAndUserId,
+// findTransactionsByUserIdAndCreatedAtAfter, deleteTransactionsByUserId, insertTransaction.
+// As somas trabalham em centavos (Long, soma exata) e so viram reais na borda.
 
-Double sumAmountByCategoryAndUserId(Category category, String userId) {
-    var matching = findTransactionsByCategoryAndUserId(category, userId)
-    var total = 0.0
-    for (var t in matching) {
-        total = total + (t.amount * 1.0)
-    }
-    return total
-}
-
-// GAP (ver relatorio #3): comparacao de datas feita como String
-// (createdAt.compareTo(from) >= 0, confirmado pelo compilador via SEM053 --
-// Kof nao tem operador >= para String) -- sem API de data/hora real
-// confirmada no training/ lido nesta sessao; ordem lexicografica so e
-// correta se os timestamps forem ISO-8601.
-List<TransactionEntity> findTransactionsByUserIdAndCreatedAtAfter(String userId, String from) {
-    var result: List<TransactionEntity> = listOf()
-    for (var t in BackendDb.transactions) {
-        if (t.userId == userId) {
-            var createdAt = t.createdAt
-            if (createdAt == null) {
-                result.add(t)
-            } else {
-                if (createdAt.compareTo(from) >= 0) {
-                    result.add(t)
-                }
-            }
-        }
-    }
-    return result
-}
-
-Long sumAmountByUserIdAndCreatedAtAfter(String userId, String from) {
-    var matching = findTransactionsByUserIdAndCreatedAtAfter(userId, from)
+Long sumAmountCents(List<TransactionEntity> transactions) {
     var sum: Long = 0
-    for (var t in matching) {
-        sum = sum + t.amount
+    for (var t in transactions) {
+        sum = sum + t.amountCents
     }
     return sum
 }
 
-void deleteTransactionsByUserId(String userId) {
-    var remaining: List<TransactionEntity> = listOf()
-    for (var t in BackendDb.transactions) {
-        if (t.userId != userId) {
-            remaining.add(t)
-        }
-    }
-    BackendDb.transactions = remaining
+Double sumAmountByCategoryAndUserId(Category category, String userId) {
+    return centsToReais(sumAmountCents(findTransactionsByCategoryAndUserId(category, userId)))
 }
 
-TransactionEntity saveTransaction(TransactionEntity transaction) {
-    var i = 0
-    while (i < BackendDb.transactions.size) {
-        var existing = BackendDb.transactions.get(i)
-        if (existing.id == transaction.id) {
-            BackendDb.transactions.set(i, transaction)
-            return transaction
-        }
-        i = i + 1
-    }
-    BackendDb.transactions.add(transaction)
-    return transaction
+// Total em CENTAVOS (Long); quem exibe converte com centsToReais.
+Long sumAmountByUserIdAndCreatedAtAfter(String userId, String from) {
+    return sumAmountCents(findTransactionsByUserIdAndCreatedAtAfter(userId, from))
 }
 
 TransactionOutput transactionEntityToOutput(TransactionEntity t) {
@@ -186,125 +92,28 @@ TransactionOutput transactionEntityToOutput(TransactionEntity t) {
     if (category != null) {
         categoryName = category.name()
     }
-    return TransactionOutput(t.id, t.description, categoryName, (t.amount * 1.0), t.currency, t.envelopeId)
+    return TransactionOutput(t.id, t.description, categoryName, centsToReais(t.amountCents), t.currency, t.envelopeId)
 }
 
 // =========================================================
 // mod_budget/repository/EnvelopeEntityRepository.java
+// Persistido com kof.orm em backend/store.kf (T4): findEnvelopesByUserId,
+// findEnvelopeByUserIdAndCategoryName, findEnvelopeById, saveEnvelope, deleteEnvelopeById.
 // =========================================================
-
-List<EnvelopeEntity> findEnvelopesByUserId(String userId) {
-    return BackendDb.envelopes.filter((e: EnvelopeEntity) -> e.userId == userId)
-}
-
-EnvelopeEntity? findEnvelopeByUserIdAndCategoryName(String userId, String categoryName) {
-    for (var e in BackendDb.envelopes) {
-        if (e.userId == userId && e.categoryName == categoryName) {
-            return e
-        }
-    }
-    return null
-}
-
-EnvelopeEntity? findEnvelopeById(String id) {
-    for (var e in BackendDb.envelopes) {
-        if (e.id == id) {
-            return e
-        }
-    }
-    return null
-}
-
-EnvelopeEntity saveEnvelope(EnvelopeEntity envelope) {
-    var i = 0
-    while (i < BackendDb.envelopes.size) {
-        var existing = BackendDb.envelopes.get(i)
-        if (existing.id == envelope.id) {
-            BackendDb.envelopes.set(i, envelope)
-            return envelope
-        }
-        i = i + 1
-    }
-    BackendDb.envelopes.add(envelope)
-    return envelope
-}
-
-void deleteEnvelopeById(String id) {
-    var remaining: List<EnvelopeEntity> = listOf()
-    for (var e in BackendDb.envelopes) {
-        if (e.id != id) {
-            remaining.add(e)
-        }
-    }
-    BackendDb.envelopes = remaining
-}
 
 // =========================================================
 // mod_ai_coach/repository/ChatMessageEntityRepository.java
 // =========================================================
 
-// GAP (ver relatorio #4): sem orderBy/sort confirmados no training/ para
-// List<T> generico (orderBy so existe dentro da Query DSL de kof.orm sobre
-// `entity`, nao para List). Filtra mas NAO ordena.
-List<ChatMessageEntity> findChatMessagesByUserIdOrderByCreatedAtAsc(String userId) {
-    return BackendDb.chatMessages.filter((m: ChatMessageEntity) -> m.userId == userId)
-}
-
-// GAP: idem acima + sem "top N"/limit confirmado para List generico.
-// Retorna todas as mensagens do usuario, sem ordenar nem truncar em 20.
-List<ChatMessageEntity> findTop20ChatMessagesByUserIdOrderByCreatedAtDesc(String userId) {
-    return BackendDb.chatMessages.filter((m: ChatMessageEntity) -> m.userId == userId)
-}
-
-// GAP: comparacao de data como String (compareTo), mesma ressalva do gap #3.
-Int countChatMessagesByUserIdAndRoleAndCreatedAtGreaterThanEqual(String userId, ChatRole role, String since) {
-    var count = 0
-    for (var m in BackendDb.chatMessages) {
-        var createdAt = m.createdAt
-        if (m.userId == userId && m.role == role && createdAt != null) {
-            if (createdAt.compareTo(since) >= 0) {
-                count = count + 1
-            }
-        }
-    }
-    return count
-}
-
-ChatMessageEntity saveChatMessage(ChatMessageEntity message) {
-    var i = 0
-    while (i < BackendDb.chatMessages.size) {
-        var existing = BackendDb.chatMessages.get(i)
-        if (existing.id == message.id) {
-            BackendDb.chatMessages.set(i, message)
-            return message
-        }
-        i = i + 1
-    }
-    BackendDb.chatMessages.add(message)
-    return message
-}
+// countChatMessagesByUserIdAndRoleAndCreatedAtGreaterThanEqual e saveChatMessage: persistidos
+// com kof.orm em backend/store.kf (T6).
 
 // =========================================================
 // mod_variable_income/repository/VariableIncomeEntityRepository.java
 // =========================================================
 
-List<VariableIncomeEntity> findVariableIncomesByUserId(String userId) {
-    return BackendDb.variableIncomes.filter((v: VariableIncomeEntity) -> v.userId == userId)
-}
-
-VariableIncomeEntity saveVariableIncomeEntity(VariableIncomeEntity income) {
-    var i = 0
-    while (i < BackendDb.variableIncomes.size) {
-        var existing = BackendDb.variableIncomes.get(i)
-        if (existing.id == income.id) {
-            BackendDb.variableIncomes.set(i, income)
-            return income
-        }
-        i = i + 1
-    }
-    BackendDb.variableIncomes.add(income)
-    return income
-}
+// Persistido com kof.orm em backend/store.kf (T6): findVariableIncomesByUserId,
+// saveVariableIncomeEntity (valor em centavos no banco, reais na API).
 
 // =========================================================
 // mod_budget/service/BudgetModelSuggestionService.java
@@ -380,8 +189,9 @@ EnvelopeEntity createEnvelope(EnvelopeEntity envelope) {
     return saveEnvelope(envelope)
 }
 
-EnvelopeEntity updateEnvelope(String id, EnvelopeEntity updated) {
-    var envelope = findEnvelopeById(id)
+// Dono sempre explicito (userId das claims): envelope de outro usuario = inexistente (PERS-11).
+EnvelopeEntity updateEnvelope(String userId, String id, EnvelopeEntity updated) {
+    var envelope = findEnvelopeById(userId, id)
     if (envelope != null) {
         envelope.categoryName = updated.categoryName
         envelope.limitAmount = updated.limitAmount
@@ -392,24 +202,19 @@ EnvelopeEntity updateEnvelope(String id, EnvelopeEntity updated) {
     throw "Envelope not found."
 }
 
-void deleteEnvelope(String id) {
-    deleteEnvelopeById(id)
+void deleteEnvelope(String userId, String id) {
+    deleteEnvelopeById(userId, id)
 }
 
-EnvelopeEntity updateEnvelopeSpent(String envelopeId, Double amount) {
-    var envelope = findEnvelopeById(envelopeId)
-    if (envelope != null) {
-        envelope.currentSpent = envelope.currentSpent + amount
-        return saveEnvelope(envelope)
-    }
-    throw "Envelope not found."
+EnvelopeEntity updateEnvelopeSpent(String userId, String envelopeId, Double amount) {
+    return addEnvelopeSpentCents(userId, envelopeId, toCents(amount))
 }
 
 // TODO (preservado do Java original): TransactionEntity ainda nao tem
 // envelope_id (ver PROJECT_STATUS.md). Implementar consulta real dos
 // gastos dos ultimos N meses quando esse campo existir.
-Double calculateMovingAverage(String envelopeId, Int months) {
-    var envelope = findEnvelopeById(envelopeId)
+Double calculateMovingAverage(String userId, String envelopeId, Int months) {
+    var envelope = findEnvelopeById(userId, envelopeId)
     if (envelope != null) {
         return 0.0
     }
@@ -425,11 +230,7 @@ BudgetModelType migrateBudgetModelIfNeeded(UserEntity? user) {
         var current = user.budgetModel
         var incomeType = user.incomeType
         var hasDebt = user.hasDebt
-        var salaryNullable = user.salary
-        var salary = 0.0
-        if (salaryNullable != null) {
-            salary = salaryNullable
-        }
+        var salary = userSalary(user)
 
         if (current == BudgetModelType.ANTI_DEBT_701020 && !hasDebt) {
             return BudgetModelType.STANDARD_503020
@@ -466,8 +267,8 @@ BudgetModelType migrateBudgetModelIfNeeded(UserEntity? user) {
 VariableIncomeDestination decideVariableIncomeDestination(String userId, Double amount) {
     var user = findUserById(userId)
     if (user != null) {
-        var goal = user.emergencyFundGoal
-        if (goal != null) {
+        if (user.hasEmergencyGoal) {
+            var goal = centsToReais(user.emergencyGoalCents)
             var emergencyIncomes = findVariableIncomesByUserId(userId)
             var currentReserve = 0.0
             for (var inc in emergencyIncomes) {
@@ -495,37 +296,49 @@ VariableIncomeEntity saveVariableIncome(VariableIncomeEntity income) {
 // GAP (ver relatorio #5): CurrentUserService (Spring Security) nao tem
 // equivalente confirmado no training/ -- userId passa a ser parametro
 // explicito da funcao em vez de injetado via contexto de autenticacao.
-// GAP (ver relatorio #6): sem UUID.randomUUID() equivalente confirmado
-// no training/ -- id passa a ser parametro explicito (responsabilidade
-// do chamador, ex.: BFF gera e envia o id).
+// Id gerado pelo banco (PERS-06/07); valor gravado em centavos (PERS-17/18).
 // =========================================================
 
-TransactionOutput persistTransaction(String id, PersistTransactionInput input, String userId) {
+// Envelope da transacao: o informado no corpo so vale se for do proprio usuario (PERS-11);
+// senao, o envelope do usuario com o nome da categoria; nenhum = null.
+String? resolveEnvelopeId(String userId, String? given, Category category) {
+    if (given != null) {
+        var owned = findEnvelopeById(userId, given)
+        if (owned != null) {
+            return owned.id
+        }
+    }
+    var env = findEnvelopeByUserIdAndCategoryName(userId, category.name())
+    if (env != null) {
+        return env.id
+    }
+    return null
+}
+
+TransactionOutput persistTransaction(PersistTransactionInput input, Category category, String userId) {
     if (input.amount() <= 0) {
         throw "Operação negada: O valor da transação deve ser maior que zero."
     }
 
-    var envId = input.envelopeId()
-    if (envId == null) {
-        var categoryName = input.category().name()
-        var env = findEnvelopeByUserIdAndCategoryName(userId, categoryName)
-        if (env != null) {
-            envId = env.id
+    var envId = resolveEnvelopeId(userId, input.envelopeId(), category)
+    var amountCents = toCents(input.amount() * 1.0)
+
+    // Transacao + desconto do envelope numa unica transacao do banco (transaction {} do kof.db, na
+    // conexao unica DbConn): qualquer erro desfaz as duas gravacoes e propaga como String (medido no
+    // kof 0.6.3 em H2: commit, rollback e catch (String e) fora do bloco). O bloco nao devolve valor,
+    // entao a transacao gravada sai por uma lista.
+    var saved: List<TransactionEntity> = listOf()
+    transaction {
+        // createdAt fixo ate a issue #44 (datas reais); descricao gravada literal via binds (PERS-15)
+        saved.add(insertTransaction(TransactionEntity("", input.description(), amountCents, category, input.currency(), userId, null, Source.MANUAL, "2026-09-18T12:00:00Z", envId)))
+
+        // Desconto do envelope gravado no banco (soma em centavos)
+        if (envId != null) {
+            addEnvelopeSpentCents(userId, envId, amountCents)
         }
     }
 
-    var transaction = TransactionEntity(id, input.description(), input.amount(), input.category(), input.currency(), userId, null, Source.MANUAL, "2026-09-18T12:00:00Z", envId)
-    saveTransaction(transaction)
-
-    if (envId != null) {
-        var envToUpdate = findEnvelopeById(envId)
-        if (envToUpdate != null) {
-            envToUpdate.currentSpent = envToUpdate.currentSpent + (input.amount() * 1.0)
-            saveEnvelope(envToUpdate)
-        }
-    }
-
-    return transactionEntityToOutput(transaction)
+    return transactionEntityToOutput(saved.get(0))
 }
 
 // =========================================================

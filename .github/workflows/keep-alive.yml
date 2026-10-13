@@ -9,6 +9,6 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping /actuator/health
+      - name: Ping /health (backend Kof)
         run: |
-          curl -sS -o /dev/null -w "HTTP %{http_code}\n" https://organiza-ai-5qzv.onrender.com/actuator/health
+          curl -fsS --max-time 90 -o /dev/null -w "HTTP %{http_code}\n" https://organiza-ai-5qzv.onrender.com/health

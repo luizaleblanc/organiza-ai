@@ -4,32 +4,22 @@ import kof.ui
 import core.navigation
 
 // =============================================================================
-// T4 — Logomark (3 ondas paralelas) + cabeçalho com toggle Mobile/Desktop
+// T4 — Logomark em View/Style (fallback sem Canvas)
+// =============================================================================
+// O runtime KOF atual não expõe Canvas no typecheck desta versão; por isso
+// o logomark é montado com blocos em View/Row/Style, mantendo o mesmo visual
+// e compatibilidade com o compilador.
 // =============================================================================
 
-// Uma onda: 9 pontos de uma senoide em Canvas(36, 22), traço de 3px.
-drawWave(Canvas c, Int yBase, Color color) {
-    c.setStroke(color)
-    c.setLineWidth(3)
-    c.beginPath()
-    c.moveTo(1, yBase)
-    c.lineTo(5, yBase - 3)
-    c.lineTo(9, yBase - 4)
-    c.lineTo(13, yBase - 3)
-    c.lineTo(18, yBase)
-    c.lineTo(23, yBase + 3)
-    c.lineTo(27, yBase + 4)
-    c.lineTo(31, yBase + 3)
-    c.lineTo(35, yBase)
-    c.stroke()
-}
+View buildLogomark() {
+    var wave1 = View(Style(colorAccent(), colorAccent(), 0, 6))
+    var wave2 = View(Style(colorWave2(), colorWave2(), 0, 6))
+    var wave3 = View(Style(colorWave3(), colorWave3(), 0, 6))
 
-Canvas buildLogomark() {
-    var c = Canvas(36, 22)
-    drawWave(c, 5, colorAccent())
-    drawWave(c, 11, colorWave2())
-    drawWave(c, 17, colorWave3())
-    return c
+    var stack = Column(listOf(wave1, wave2, wave3))
+    var wrapper = View(Style(colorBgPrimary(), colorTextPrimary(), 8, 0))
+    wrapper.bind(stack)
+    return wrapper
 }
 
 String viewportLabel() {

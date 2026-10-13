@@ -7,61 +7,58 @@ import core.app_state
 // =============================================================================
 // dashboardScreen
 // =============================================================================
-// Resumo financeiro do usuário baseado no MVP1 / Issue #38.
+// Resumo financeiro do usuário com o tema compatível com o runtime atual.
 // =============================================================================
 
 View dashboardScreen() {
     var title = Label("Dashboard")
-    title.fontSize = AppTypography.titleSize
+    title.fontSize = sizeTitle()
     title.bold = true
     title.color = colorTextPrimary()
 
     var subtitle = Label("Resumo da sua vida financeira")
-    subtitle.fontSize = AppTypography.bodySize
+    subtitle.fontSize = sizeBody()
     subtitle.color = colorTextSecondary()
 
     var headerCol = Column(listOf(title, subtitle))
 
-    // Bloco de Saldo
     var balanceLabel = Label("Saldo disponível: R$ " + DashboardState.monthlyBalance)
-    balanceLabel.fontSize = AppTypography.subtitleSize
+    balanceLabel.fontSize = sizeSubtitle()
     balanceLabel.bold = true
     balanceLabel.color = colorAccent()
 
     var pulseLabel = Label("Pulso diário: " + DashboardState.dailyPulse)
-    pulseLabel.fontSize = AppTypography.bodySize
+    pulseLabel.fontSize = sizeBody()
     pulseLabel.color = colorSuccess()
 
     var modelLabel = Label("Modelo de Orçamento: " + DashboardState.budgetModel)
-    modelLabel.fontSize = AppTypography.captionSize
+    modelLabel.fontSize = sizeCaption()
     modelLabel.color = colorTextMuted()
 
     var summaryCol = Column(listOf(balanceLabel, pulseLabel, modelLabel))
     var summaryCard = View(cardStyle())
     summaryCard.bind(summaryCol)
 
-    // Bloco de Envelopes
     var envTitle = Label("Seus Envelopes")
-    envTitle.fontSize = AppTypography.subtitleSize
+    envTitle.fontSize = sizeSubtitle()
     envTitle.bold = true
     envTitle.color = colorTextPrimary()
 
     var envDesc = Label(DashboardState.envelopes)
-    envDesc.fontSize = AppTypography.bodySize
+    envDesc.fontSize = sizeBody()
     envDesc.color = colorTextSecondary()
 
     var envCol = Column(listOf(envTitle, envDesc))
     var envCard = View(cardSecondaryStyle())
     envCard.bind(envCol)
 
-    // Dica do Coach IA
     var coachTitle = Label("Coach IA")
-    coachTitle.fontSize = AppTypography.subtitleSize
+    coachTitle.fontSize = sizeSubtitle()
     coachTitle.bold = true
     coachTitle.color = colorAccent()
 
     var coachTip = Label("Você está dentro do teto previsto para o mês. Continue assim!")
-    coachTip.fontSize = AppTypography.bodySize
+    coachTip.fontSize = sizeBody()
     coachTip.color = colorTextSecondary()
 
     var coachCol = Column(listOf(coachTitle, coachTip))

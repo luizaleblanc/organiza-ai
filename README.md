@@ -14,7 +14,7 @@ O **Organiza IA** atua oficialmente como caso de estudo e laboratório de valida
 Atualmente, o projeto possui a *arquitetura monolítica modular* e o *produto funcional* operando em KOF (Domínio e UI). No entanto, **a infraestrutura empírica de medição ainda está em construção**. Ainda não possuímos no repositório (mas estamos implementando em Issues ativas):
 - Suítes de extração e análise da AST (*Abstract Syntax Tree*).
 - ~~CI/CD instrumentado para coletar métricas exatas de compilação~~ -- ✅ pipeline inicial no ar (`.github/workflows/benchmarks.yml`), ver [docs/BENCHMARKS.md](docs/BENCHMARKS.md) para metodologia e limitações conhecidas.
-- Benchmarks de alocação de memória e execução (KofJS vs JVM) -- parcial: typecheck (`kof check`), transpilação KofJS (mediana ± desvio), tamanho do bundle e LOC/módulos já medidos (Kof 0.5.0-beta, ver tabela em [docs/BENCHMARKS.md](docs/BENCHMARKS.md)); memória de runtime sob carga segue bloqueada por bugs do Kof4j e `kof check backend` pela [Issue #41](https://github.com/luizaleblanc/organiza-ai/issues/41).
+- Benchmarks de alocação de memória e execução (KofJS vs JVM) -- parcial: typecheck (`kof check`), transpilação KofJS (mediana ± desvio), tamanho do bundle e LOC/módulos já medidos na Kof 0.5.0-beta (versão do benchmark; o projeto usa a 0.6.3 de `KOF_VERSION`; ver tabela em [docs/BENCHMARKS.md](docs/BENCHMARKS.md)); memória de runtime sob carga segue bloqueada por bugs do Kof4j e `kof check backend` pela [Issue #41](https://github.com/luizaleblanc/organiza-ai/issues/41).
 - Análises estatísticas quantitativas de *LLM-friendliness*.
 - Protocolo de validação científica (hipóteses H1–H4, reprodutibilidade e ameaças à validade) -- em definição na [Issue #42](https://github.com/luizaleblanc/organiza-ai/issues/42).
 
@@ -58,11 +58,13 @@ Conheça a interface do Organiza IA:
 | Camada | Tecnologia |
 |---|---|
 | **Arquitetura** | **Monólito Modular (KofLith)** — Unidade de execução coesa com separação estrita por módulos de domínio e de interface |
-| **Monólito Modular Backend** | KOF (`backend/*.kf`) -- Módulos de Domínio (`models.kf`, `auth.kf`, `services.kf`, `coach.kf`, `main.kf`) |
+| **Monólito Modular Backend** | KOF (`backend/*.kf`) -- Módulos de Domínio (`models.kf`, `auth.kf`, `services.kf`, `coach.kf`, `store.kf`, `main.kf`) |
 | **Monólito Modular Frontend** | KOF (`kof.ui`, `frontend/*.kf`) -- Módulos de Core (`core/`), Componentes (`components/`) e Telas (`screens/`) |
 | **Back-end Legado (arquivado)** | Java 17, Spring Boot 3.3.x, Spring AI -- arquivado em `archive/legacy-backend-java/` (tag histórica `legacy/java-spring-boot`), mantido apenas como referência histórica |
-| **Banco de Dados** | MySQL no Render com modelo relacional integrado |
-| **Build & Tooling** | `kof-cli` / Kof Compiler (Java 25 JDK) |
+| **Banco de Dados** | `kof.orm` em `backend/store.kf`: MySQL 8.4 na Aiven em produção (driver MariaDB Connector/J fixado em `kofdeps`), com o app no Render; H2 em arquivo (`./data`) fora de produção. Persistência concluída e em produção desde 12/10/2026, ver [`.specs/features/persistence-kof-orm/`](.specs/features/persistence-kof-orm/): usuários, envelopes, transações, chat, renda variável e Kakeibo no banco |
+| **Build & Tooling** | `kof-cli` / Kof Compiler **0.6.3**, fixado em [`KOF_VERSION`](KOF_VERSION) (Java 25 JDK) |
+
+**Versão do Kof:** fixada em `0.6.3` no arquivo [`KOF_VERSION`](KOF_VERSION), fonte única do `Dockerfile` e do CI (`.github/workflows/kof-check.yml`). Trocar a versão é um commit próprio em `KOF_VERSION`, feito só depois de passar todos os gates; releases prerelease são recusados.
 
 ## Arquitetura Monolítica Modular (KofLith)
 
@@ -120,12 +122,48 @@ O fechamento ponta a ponta do **MVP 1** segue a metodologia **tlc-spec-driven (4
 |---|---|---|---|
 | **Batch 0 — Baseline & Spec** | Expurgo de código alucinado (`5d58ca9150`), Tríade Design System, CI de Benchmarks e SDD (`spec.md`, `design.md`, `tasks.md`) | `kof check backend` (0 erros) + `kof check frontend` (0 erros) | ✅ feito |
 | **Batch 1 — Fundação Core** | `core/theme.kf` (tokens Manrope + funções top-level `Color(r,g,b)`), `core/app_state.kf` (estado `static` + `window.bind`), `core/api_client.kf` (`kof.http` na porta `:3000`) `components/brand_header.kf` + `nav_bar.kf` e `core/navigation.kf` + `main.kf` (Dual Viewport `360×640` Mobile / `1280×800` Desktop) | `kof check frontend` (0 erros) | ✅ feito |
-| **Batch 2 — Auth & Onboarding** | `screens/auth_screens.kf` (Telas 1–3: Boas-vindas, Login, Cadastro) e `screens/onboarding_screens.kf` (Telas 4, 5, 6, 6.1, 7: Salário, Renda, Dívida e Recomendação 50/30/20, 70/20/10 ou Anti-Dívida) | Fluxo `/api/auth/register` → `/api/auth/login` → `/api/onboarding/setup` | ⏳ planejado |
+| **Batch 2 — Auth & Onboarding** | `screens/auth_screens.kf` (Telas 1–3: Boas-vindas, Login, Cadastro) e `screens/onboarding_screens.kf` (Telas 4, 5, 6, 6.1, 7: Salário, Renda, Dívida e Recomendação 50/30/20, 70/20/10 ou Anti-Dívida) | Fluxo `/api/auth/register` → `/api/auth/login` → `/api/users/me` → `/api/users/onboarding`, com `kof build frontend --target js` + screenshot headless + fluxo contra o backend local | 📝 em especificação ([`mvp1-batch2-auth-onboarding`](.specs/features/mvp1-batch2-auth-onboarding/)) |
 | **Batch 3 — Dashboard & Canvas 2D** | `components/pulse_card.kf`, `components/pie_chart.kf` (gráfico de pizza 200×200 via `Canvas` 2D com estados normal/atenção/perigo) e `screens/dashboard_screen.kf` (Tela 8 Mobile + Visão Expandida Desktop) | Consumo real de `/api/coach/daily-pulse` e `/api/envelopes` | ⏳ planejado |
 | **Batch 4 — AI Coach & Caixinhas** | `components/chat_bubble.kf`, `screens/chat_screen.kf` (Tela 9), `components/envelope_card.kf`, `components/notification_toast.kf` e `screens/envelopes_screen.kf` (Telas 10 e 11: Caixinhas por bucket + 5 modelos de notificação) | `kof check frontend` + `kof check backend` (0 erros) | ⏳ planejado |
 | **Batch 5 — Homologação E2E & Benchmarks** | Testes ponta a ponta (`scripts/test_e2e_flow.ps1` 9/9 GREEN) e coleta empírica (`scripts/benchmark_kof.ps1` → `docs/BENCHMARKS.md`) | Monólito KofLith + UI Mobile/Desktop 100% homologados | ⏳ planejado |
 
 **Regra de segurança:** nenhum commit ou push é executado por agentes de IA — cada lote é validado com `kof check` e entregue para revisão e commit manual da maintainer.
+
+### Batch 2: autenticação e onboarding (`mvp1-batch2-auth-onboarding`) -- em especificação
+
+Especificação e design em [`.specs/features/mvp1-batch2-auth-onboarding/`](.specs/features/mvp1-batch2-auth-onboarding/) ([`spec.md`](.specs/features/mvp1-batch2-auth-onboarding/spec.md), [`design.md`](.specs/features/mvp1-batch2-auth-onboarding/design.md)), issue #33. As decisões vêm de medições com o Kof 0.6.3 num navegador real (Edge headless):
+
+- **Mesmo domínio:** o backend serve o frontend (`app.serveDir("/", KOF_WEB_OUT)`) e o frontend chama `/api/...` por caminho relativo. O backend não tem CORS, e fora de `/api/` tudo passa a ser público.
+- **Navegação** continua com `mountScreen` e campos `static`: `Router` e `Component` existem no `kof.ui`, mas no Chromium o re-render deixa a tela em branco.
+- **HTTP** sempre com `spawn` + `await`: no navegador, `http.post` síncrono devolve uma Promise.
+- **Estilo novo** com `Style("css")` (gradiente, borda, altura de 48px).
+- **Backend** ganha `GET /api/users/me`, o nome no cadastro, a dívida (`debtAmount` gravado em `debtCents`) e validação com 400.
+- **Gate** é `kof build frontend --target js`, porque `kof check frontend` dá PKG006.
+- **Regras de validação (backend e cliente):** nome, e-mail e senha obrigatórios; senha com no mínimo 8 caracteres; salário maior que 0; com `hasDebt=true`, dívida maior que 0. Entrada inválida responde 400 com `ApiError` em JSON, nunca 500.
+- **Onboarding concluído** = salário maior que 0, exposto em `GET /api/users/me` (`onboardingCompleted`). Após o login, o app vai para a Tela 4 se for `false` e para a Tela 8 se for `true`.
+- **Coluna `name`** entra por migração condicional (só adiciona se faltar), porque `orm.create` não altera tabela existente. Antes do deploy, ela passa por gate num MySQL local.
+- **Fora do MVP:** a fonte Manrope não carrega e o `index.html` gerado traz a barra de dev; os dois ficam para um `index.html` próprio (tarefa futura).
+- **Plano:** F1–F4 no backend (nome, validações, dívida e `/me`, mesmo domínio + Dockerfile), F5 cliente HTTP assíncrono, F6–F8 telas 1–7, F9 ferramentas de screenshot em `scripts/ui/`.
+
+### Persistência (`persistence-kof-orm`) -- concluída, em produção desde 12/10/2026
+
+Especificação e design em [`.specs/features/persistence-kof-orm/`](.specs/features/persistence-kof-orm/) ([`spec.md`](.specs/features/persistence-kof-orm/spec.md), [`design.md`](.specs/features/persistence-kof-orm/design.md)). Banco de produção: **MySQL 8.4 na Aiven** (database `organiza_kof`), com o app rodando no Render. O driver é o MariaDB Connector/J (`org.mariadb.jdbc:mariadb-java-client:3.5.10` em `kofdeps`, o mesmo que o Kof 0.6.3 usa para `mysql://`).
+
+**Estado:** o backend já abre o banco no boot (`backend/store.kf`, `kof.orm`) e cria as 6 tabelas `*Row` de forma idempotente. **Usuários** (cadastro, login, onboarding) já são gravados no banco (T2): id gerado pelo banco (o JWT `sub` é esse número em texto, ex. `"1"`), senha só como `passwords.hash`, salário em centavos e e-mail repetido barrado com 409 antes de gravar. **Envelopes** também (T4): id do banco, limite e gasto em centavos (a API segue em reais), leitura e gravação sempre filtradas pelo usuário do token (envelope de outro usuário = inexistente). **Transações** também (T5): id do banco, valor em centavos (`amount` 600 grava 60000 e volta `value` 600.0), desconto do envelope gravado no banco **na mesma transação** (`transaction {}` do `kof.db`: se uma das duas gravações falha, nenhuma fica) e texto sempre por bind (gravado literal). **Chat, renda variável e Kakeibo** também (T6), com ids do banco e renda em centavos. A classe `BackendDb` (memória) foi removida (T7): nenhum id por `size + 1` e nenhum SQL montado com `+`. Faltam T8 (build/CI) e T9 (banco de produção).
+
+| Variável | Uso |
+|---|---|
+| `KOF_DB_URL` | URL **sem credenciais** (ex.: `mysql://host:19636/organiza_kof?sslMode=trust`). Sem ela, fora de produção, usa H2 em `./data` |
+| `KOF_DB_USER` / `KOF_DB_PASSWORD` | Credenciais, passadas separadas da URL |
+| `KOF_ENV` | `production` torna `KOF_DB_URL` obrigatória (a imagem Docker já define `KOF_ENV=production`) |
+
+**MySQL:** em produção a URL precisa de `sslMode=` (`trust`, `verify-ca` ou `verify-full`); sem isso o boot falha. O `ssl-mode=REQUIRED` do cliente `mysql` é ignorado pelo driver e a sessão subiria sem TLS (medido na Aiven). O backend acrescenta sozinho `sessionVariables=sql_mode=CONCAT(@@sql_mode,',ANSI_QUOTES')`, porque a Query DSL do `kof.orm` usa aspas duplas em tabelas e colunas. Medido num MySQL 8.4 local: as 6 tabelas, o E2E (só a #44 falha) e o G-RESTART passam.
+
+**Teste de reinício (G-RESTART):** `scripts/test_restart.ps1 -ClassesDir <classes> -ExtraClasspath <jar do H2>` sobe o servidor com H2 em arquivo (pasta temporária, `-DbDir`), cria conta + onboarding 3000 + envelope FOOD 1200 + transação de 600, encerra o processo (Ctrl+C e, depois, kill à força), sobe outro e confere login = 200, `daily-pulse` com `salary` = 3000.0 e `pulse` = 80.0, exatamente 1 envelope FOOD (limite 1200.0, gasto 600.0) e exatamente 1 transação com `value` = 600.0. Com `-DbUrl <url>` (usuário e senha em `KOF_DB_USER`/`KOF_DB_PASSWORD`), o mesmo teste roda contra um banco externo, como o MySQL.
+
+A imagem Docker gera um fat jar com os drivers JDBC do `kofdeps` (H2 e MariaDB, com o registro `java.sql.Driver` mesclado no build) e roda em JRE 25. Validada em 12/10/2026 contra o MySQL da Aiven: E2E 37/38 (só a #44 falha) e dados intactos após `docker restart` e `docker kill`. Passo a passo do Render em [`docs/DEPLOY.md`](docs/DEPLOY.md).
+
+**Em produção desde 12/10/2026:** o backend Kof (commit `708fc17`) roda no Render em <https://organiza-ai-5qzv.onrender.com> com o MySQL da Aiven (`organiza_kof`). Conferido de fora: `GET /health` = 200 `OK` e rota protegida sem token = 401. O backend Spring antigo saiu do ar. O workflow `keep-alive.yml` pinga `/health` a cada 10 minutos (`curl -f`: fica vermelho se o serviço cair).
 
 ## Arquitetura KofLith — Monólito 100% Nativo sobre a JVM (Issue #37)
 
@@ -137,6 +175,7 @@ Na visão KOF, segregar o frontend e o backend em dois mundos artificiais com pr
 - **Entidades e Enums (`backend/models.kf`):** transpilado e validado via `kof check`.
 - **Serviços e Repositórios Core (`backend/services.kf`):** transpilado (`mod_user`, `mod_transaction`, `mod_budget`, `mod_variable_income`, `TierEnforcement`).
 - **Módulo de IA Coach (`backend/coach.kf`):** transpilado (`CategoryBucketMapper`, `calculateDailyPulse`, `calculateBalance`, `registerUserIncome`, `suggestModelChange`, `KakeiboReflection`).
+- **Conexão e schema do banco (`backend/store.kf`):** `main.kf` abre o banco no boot e cria, de forma idempotente, as 6 tabelas `*Row` com `kof.orm`; falha derruba o boot. Usuários, envelopes, transações, chat, renda variável e Kakeibo (`*Row`) já são lidos e gravados ali.
 - **Gateway HTTP & Auth JWT (`backend/main.kf`, `backend/auth.kf`):** operando na porta `3000` com 9/9 fluxos E2E validados (`scripts/test_e2e_flow.ps1`).
 - **Firewall Anti-Alucinação KofUI (`frontend/`):** uso exclusivo de primitivas reais do compilador Kof4j (`Window`, `View`, `Column`, `Row`, `Label`, `Button`, `Input`, `Canvas`, `Style`, `Color`, `Theme`), estado em campos `static` de classe e funções top-level para cores (`Color(r,g,b)`), contornando o bug de inicialização estática no `Default.mjs`.
 - **Código Java legado:** arquivado em `archive/legacy-backend-java/` (não compila mais como parte do projeto), preservado como *Ground Truth* histórico via tag `legacy/java-spring-boot`.
@@ -256,7 +295,7 @@ Todo agente ou subagente de IA usado no projeto deve receber este contexto míni
 
 ```
 Você é um agente de código no projeto organiza-ai (Arquitetura Monolítica KofLith).
-Stack: KOF 100% Nativo (backend/*.kf em kof.web na porta 3000 + frontend/*.kf em kof.ui), MySQL.
+Stack: KOF 100% Nativo (backend/*.kf em kof.web na porta 3000 + frontend/*.kf em kof.ui), MySQL (Aiven) em produção.
 REGRAS ABSOLUTAS:
 1. NUNCA faça git commit ou git push (apenas a maintainer executa commits e push)
 2. Leia obrigatoriamente docs/kof4j/ (README + training/), KOF_REFERENCE.md e docs/LLM_KOF_UI_GUIDELINES.md antes de tocar em qualquer arquivo .kf

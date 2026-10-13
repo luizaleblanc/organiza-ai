@@ -3,28 +3,57 @@ package screens
 import kof.ui
 import core.theme
 import core.app_state
+import core.navigation
 
 // =============================================================================
 // onboardingScreen
 // =============================================================================
-// Tela de onboarding inicial: apresenta o valor principal do usuário e o cenário
-// de renda em um fluxo simples, legível e fácil de evoluir para as próximas
-// telas do app.
+// Segunda etapa do fluxo real: coleta o contexto de renda e mostra um estado
+// inicial vazio até que o onboarding real venha do backend. O objetivo é manter
+// o fluxo estável sem carregar dados simulados ou pessoais no código.
 // =============================================================================
 
-View onboardingScreen() {
+View onboardingScreen(Window w) {
     var title = Label("Vamos organizar sua renda")
-    var subtitle = Label("Em poucos passos, decidimos como você quer separar o dinheiro.")
-    var salary = Label("Salário atual: R$ " + OnboardingState.salary)
-    var model = Label("Modelo sugerido: " + OnboardingState.suggestedModel)
-    var incomeType = Label("Tipo principal: " + OnboardingState.incomeType)
+    title.fontSize = sizeTitle()
+    title.bold = true
+    title.color = colorTextPrimary()
 
-    var introCard = Column(listOf(title, subtitle, salary, model, incomeType))
-    var action = Button("Continuar")
+    var subtitle = Label("Em poucos passos, vamos decidir como separar seu dinheiro com mais clareza.")
+    subtitle.fontSize = sizeBody()
+    subtitle.color = colorTextSecondary()
 
-    var content = Column(listOf(introCard, action))
-    var style = Style(AppTheme.background, AppTheme.textPrimary, 16, 0)
-    var view = View(style)
+    var salaryTitle = Label("Salário mensal")
+    salaryTitle.fontSize = sizeCaption()
+    salaryTitle.color = colorTextMuted()
+
+    var salaryValue = Label("R$ " + OnboardingState.salary)
+    salaryValue.fontSize = sizeMoney()
+    salaryValue.bold = true
+    salaryValue.color = colorAccent()
+
+    var incomeType = Label("Tipo principal de renda: " + OnboardingState.incomeType)
+    incomeType.fontSize = sizeBody()
+    incomeType.color = colorTextSecondary()
+
+    var recommendedModel = Label("Modelo sugerido: " + OnboardingState.suggestedModel)
+    recommendedModel.fontSize = sizeBody()
+    recommendedModel.color = colorSuccess()
+
+    var modelDescription = Label(OnboardingState.modelDescription)
+    modelDescription.fontSize = sizeCaption()
+    modelDescription.color = colorTextSecondary()
+
+    var continueAction = Button("Continuar", () -> {
+        DashboardState.budgetModel = OnboardingState.suggestedModel
+        navigateTo(w, "dashboard")
+    })
+
+    var summaryCard = View(cardStyle())
+    summaryCard.bind(Column(listOf(salaryTitle, salaryValue, incomeType, recommendedModel, modelDescription)))
+
+    var content = Column(listOf(title, subtitle, summaryCard, continueAction))
+    var view = View(screenStyle())
     view.bind(content)
     return view
 }

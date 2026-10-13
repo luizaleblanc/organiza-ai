@@ -65,28 +65,8 @@ Bucket toBucket(BudgetModelType model, Category? category) {
 // Repositório Kakeibo
 // =========================================================
 
-KakeiboReflectionEntity? findKakeiboReflection(String userId, String weekStart) {
-    for (var r in BackendDb.kakeiboReflections) {
-        if (r.userId == userId && r.weekStart == weekStart) {
-            return r
-        }
-    }
-    return null
-}
-
-KakeiboReflectionEntity saveKakeiboReflection(KakeiboReflectionEntity reflection) {
-    var i = 0
-    while (i < BackendDb.kakeiboReflections.size) {
-        var existing = BackendDb.kakeiboReflections.get(i)
-        if (existing.userId == reflection.userId && existing.weekStart == reflection.weekStart) {
-            BackendDb.kakeiboReflections.set(i, reflection)
-            return reflection
-        }
-        i = i + 1
-    }
-    BackendDb.kakeiboReflections.add(reflection)
-    return reflection
-}
+// Persistido com kof.orm em backend/store.kf (T6): findKakeiboReflection, saveKakeiboReflection
+// (respostas em JSON na coluna answersJson; uma reflexao por usuario e semana).
 
 // =========================================================
 // GetDailyPulseFunction -> calculateDailyPulse
@@ -95,14 +75,9 @@ KakeiboReflectionEntity saveKakeiboReflection(KakeiboReflectionEntity reflection
 GetDailyPulseOutput calculateDailyPulse(String userId, Int daysRemaining, String fromIso) {
     var user = findUserById(userId)
     if (user != null) {
-        var salary = 0.0
-        var userSalary = user.salary
-        if (userSalary != null) {
-            salary = userSalary
-        }
+        var salary = userSalary(user)
 
-        var totalSpentLong = sumAmountByUserIdAndCreatedAtAfter(userId, fromIso)
-        var totalSpent = totalSpentLong * 1.0
+        var totalSpent = centsToReais(sumAmountByUserIdAndCreatedAtAfter(userId, fromIso))
 
         var remaining = salary - totalSpent
         if (remaining <= 0.0) {
@@ -122,18 +97,14 @@ GetDailyPulseOutput calculateDailyPulse(String userId, Int daysRemaining, String
 GetBalanceOutput calculateBalance(String userId, String fromIso) {
     var user = findUserById(userId)
     if (user != null) {
-        var salary = 0.0
-        var userSalary = user.salary
-        if (userSalary != null) {
-            salary = userSalary
-        }
+        var salary = userSalary(user)
         var model = user.budgetModel
         var monthTransactions = findTransactionsByUserIdAndCreatedAtAfter(userId, fromIso)
 
         if (model == BudgetModelType.FREELANCER_BASE_ZERO) {
             var totalSpent = 0.0
             for (var t in monthTransactions) {
-                totalSpent = totalSpent + (t.amount * 1.0)
+                totalSpent = totalSpent + centsToReais(t.amountCents)
             }
             var notAllocated = salary - totalSpent
             var emptyList: List<BucketBalanceDTO> = listOf()
@@ -148,7 +119,7 @@ GetBalanceOutput calculateBalance(String userId, String fromIso) {
                 var spent = 0.0
                 for (var t in monthTransactions) {
                     if (toKakeiboBucket(t.category) == b.name) {
-                        spent = spent + (t.amount * 1.0)
+                        spent = spent + centsToReais(t.amountCents)
                     }
                 }
                 var rem = b.amount - spent
@@ -160,9 +131,9 @@ GetBalanceOutput calculateBalance(String userId, String fromIso) {
             for (var t in monthTransactions) {
                 var bucket = toStandardBucket(t.category)
                 if (bucket == Bucket.NEEDS) {
-                    needsSpent = needsSpent + (t.amount * 1.0)
+                    needsSpent = needsSpent + centsToReais(t.amountCents)
                 } else {
-                    wantsSpent = wantsSpent + (t.amount * 1.0)
+                    wantsSpent = wantsSpent + centsToReais(t.amountCents)
                 }
             }
 
@@ -203,7 +174,8 @@ RegisterIncomeOutput registerUserIncome(String userId, Double amount, String sou
         return RegisterIncomeOutput("SALARY", "Beleza, essa é a sua renda fixa. Ela já está considerada no seu orçamento mensal.")
     }
 
-    var incomeItem = VariableIncomeEntity("inc_" + String.valueOf(BackendDb.variableIncomes.size + 1), userId, amount, source, VariableIncomeDestination.EMERGENCY_FUND, null)
+    // id "" = novo: o banco gera o id (PERS-06/07)
+    var incomeItem = VariableIncomeEntity("", userId, amount, source, VariableIncomeDestination.EMERGENCY_FUND, null)
     var saved = saveVariableIncome(incomeItem)
 
     if (saved.destination == VariableIncomeDestination.EMERGENCY_FUND) {
@@ -265,7 +237,7 @@ KakeiboReflectionEntity recordKakeiboReflection(String userId, String weekStart,
             return existing
         }
 
-        var reflection = KakeiboReflectionEntity("ref_" + String.valueOf(BackendDb.kakeiboReflections.size + 1), userId, weekStart, answers, null)
+        var reflection = KakeiboReflectionEntity("", userId, weekStart, answers, null)
         return saveKakeiboReflection(reflection)
     }
     throw "Usuário não encontrado: " + userId

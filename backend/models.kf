@@ -50,43 +50,68 @@ enum VariableIncomeDestination { EMERGENCY_FUND, BUDGET_5030020 }
 // =========================================================
 
 // mod_user/model/UserEntity.java
+// Espelho mutavel de UserRow (backend/store.kf): id = numero gerado pelo banco em texto ("1"),
+// dinheiro em centavos e valores opcionais como par valor + flag (sem T? primitivo: issue #41).
 class UserEntity {
     String id
     String email
-    String password
+    String passwordHash
     Role role
-    Double? salary
+    Long salaryCents
+    Bool hasSalary
     Tier tier
     Bool hasVariableIncome
-    Double? emergencyFundGoal
+    Long emergencyGoalCents
+    Bool hasEmergencyGoal
     BudgetModelType budgetModel
     IncomeType incomeType
     Bool hasDebt
-    Double? debtAmount
+    Long debtCents
 
-    public constructor(String id, String email, String password, Role role,
-            Double? salary, Tier tier, Bool hasVariableIncome, Double? emergencyFundGoal,
-            BudgetModelType budgetModel, IncomeType incomeType, Bool hasDebt, Double? debtAmount) {
+    public constructor(String id, String email, String passwordHash, Role role,
+            Long salaryCents, Bool hasSalary, Tier tier, Bool hasVariableIncome,
+            Long emergencyGoalCents, Bool hasEmergencyGoal, BudgetModelType budgetModel,
+            IncomeType incomeType, Bool hasDebt, Long debtCents) {
         this.id = id
         this.email = email
-        this.password = password
+        this.passwordHash = passwordHash
         this.role = role
-        this.salary = salary
+        this.salaryCents = salaryCents
+        this.hasSalary = hasSalary
         this.tier = tier
         this.hasVariableIncome = hasVariableIncome
-        this.emergencyFundGoal = emergencyFundGoal
+        this.emergencyGoalCents = emergencyGoalCents
+        this.hasEmergencyGoal = hasEmergencyGoal
         this.budgetModel = budgetModel
         this.incomeType = incomeType
         this.hasDebt = hasDebt
-        this.debtAmount = debtAmount
+        this.debtCents = debtCents
     }
 }
 
+// Borda reais <-> centavos. O duplo roundTo evita 1234.565 * 100 = 123456.49999 (medido no 0.6.3).
+Long toCents(Double reais) {
+    return math.roundTo(math.roundTo(reais * 100.0, 6), 0) as Long
+}
+
+Double centsToReais(Long cents) {
+    return cents / 100.0
+}
+
+// Salario em reais para os calculos; sem salario informado = 0.0.
+Double userSalary(UserEntity user) {
+    if (user.hasSalary) {
+        return centsToReais(user.salaryCents)
+    }
+    return 0.0
+}
+
 // mod_transaction/model/TransactionEntity.java
+// Valor em centavos (Long, PERS-17), espelho de TransactionRow; a API devolve reais (centsToReais).
 class TransactionEntity {
     String id
     String description
-    Long amount
+    Long amountCents
     Category? category
     String currency
     String userId
@@ -95,12 +120,12 @@ class TransactionEntity {
     String? createdAt
     String? envelopeId
 
-    public constructor(String id, String description, Long amount, Category? category,
+    public constructor(String id, String description, Long amountCents, Category? category,
             String currency, String userId, Bucket? bucket, Source source, String? createdAt,
             String? envelopeId) {
         this.id = id
         this.description = description
-        this.amount = amount
+        this.amountCents = amountCents
         this.category = category
         this.currency = currency
         this.userId = userId
@@ -196,7 +221,12 @@ class KakeiboReflectionEntity {
 record LoginRequest(String email, String password)
 record OnboardingRequest(Double salary, String incomeType, Bool hasDebt)
 record VariableIncomeInput(Double amount, String source)
-record CreateEnvelopeInput(String userId, String categoryName, Double limitAmount)
+// Sem userId: o dono do envelope vem SEMPRE do token (currentUserId). Um userId enviado no
+// corpo por clientes antigos e ignorado pelo json.decode (chaves extras nao quebram).
+record CreateEnvelopeInput(String categoryName, Double limitAmount)
 record ChatMessageRequest(String message)
+
+// Corpo de erro das rotas: serializado com json.encode (nunca JSON concatenado a mao)
+record ApiError(String error)
 
 

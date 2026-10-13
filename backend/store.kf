@@ -1,0 +1,622 @@
+// backend/store.kf
+// Conexao e schema do banco com kof.orm (spec .specs/features/persistence-kof-orm, T1).
+// Usuarios (T2), envelopes (T4), transacoes (T5), chat, renda variavel e Kakeibo (T6) vivem no banco.
+//
+// Variaveis (kof.config: a chave "db.url" le KOF_DB_URL, como "jwt.secret" le KOF_JWT_SECRET):
+//   KOF_DB_URL      URL SEM credenciais (ex.: mysql://host:3306/organiza?sslMode=trust; o runtime
+//                   troca mysql:// pelo driver MariaDB do kofdeps). Ausente:
+//                   H2 em arquivo (jdbc:h2:file:./data/organiza;WRITE_DELAY=0) fora de producao; erro em producao.
+//   KOF_DB_USER     usuario do banco (opcional)
+//   KOF_DB_PASSWORD senha do banco (opcional)
+//   KOF_ENV         "production" torna KOF_DB_URL obrigatoria (PERS-23)
+// Credencial nunca vai na URL: o erro DB001 do runtime imprime a URL inteira (medido no kof 0.6.3),
+// entao user/senha seguem pelo db.connect de 3 argumentos.
+
+// Entities = tabelas (nome da entity em minusculas). Records imutaveis (SEM038); enums e
+// valores opcionais viram String / par valor+flag, porque o ORM grava enum como objeto
+// serializado e Double? como texto (medido no kof 0.6.3). Dinheiro em centavos (Long).
+entity UserRow {
+    id: Long generated
+    email: String unique
+    passwordHash: String
+    role: String
+    salaryCents: Long
+    hasSalary: Bool
+    tier: String
+    hasVariableIncome: Bool
+    emergencyGoalCents: Long
+    hasEmergencyGoal: Bool
+    budgetModel: String
+    incomeType: String
+    hasDebt: Bool
+    debtCents: Long
+}
+
+entity TransactionRow {
+    id: Long generated
+    userId: Long
+    description: String
+    amountCents: Long
+    category: String
+    currency: String
+    bucket: String
+    source: String
+    createdAt: String
+    envelopeId: Long
+}
+
+entity EnvelopeRow {
+    id: Long generated
+    userId: Long
+    categoryName: String
+    limitCents: Long
+    spentCents: Long
+    limitType: String
+    movingAverageMonths: Int
+    createdAt: String
+}
+
+entity ChatMessageRow {
+    id: Long generated
+    userId: Long
+    role: String
+    content: String
+    createdAt: String
+}
+
+entity VariableIncomeRow {
+    id: Long generated
+    userId: Long
+    amountCents: Long
+    source: String
+    destination: String
+    date: String
+}
+
+entity KakeiboReflectionRow {
+    id: Long generated
+    userId: Long
+    weekStart: String
+    answersJson: String
+    createdAt: String
+}
+
+// Conexao unica do processo (o transaction {} do kof.db usa a ultima conexao aberta).
+class DbConn {
+    static String handle = ""
+}
+
+// WRITE_DELAY=0: o H2 grava no disco a cada commit. Com o padrao (atraso de ~1 s), um processo
+// morto a forca logo depois de escrever perdeu as tabelas recem-criadas (medido no kof 0.6.3).
+String defaultDevDbUrl() {
+    return "jdbc:h2:file:./data/organiza;WRITE_DELAY=0"
+}
+
+Bool isProduction() {
+    var env = config.env("KOF_ENV")
+    if (env != null) {
+        return env.trim() == "production"
+    }
+    return false
+}
+
+// URL escolhida: KOF_DB_URL; sem ela, H2 em arquivo fora de producao (PERS-04) ou erro (PERS-23).
+String databaseUrl() {
+    if (config.has("db.url")) {
+        return config.str("db.url", "").trim()
+    }
+    if (isProduction()) {
+        throw "KOF_DB_URL e obrigatoria quando KOF_ENV=production"
+    }
+    return defaultDevDbUrl()
+}
+
+// "jdbc:h2:file:..." -> "h2"; "mysql://..." -> "mysql". So o esquema vai para o log.
+String dbScheme(String url) {
+    var rest = url
+    if (rest.startsWith("jdbc:")) {
+        rest = rest.substring(5)
+    }
+    var i = rest.indexOf(":")
+    if (i > 0) {
+        return rest.substring(0, i)
+    }
+    return "desconhecido"
+}
+
+Bool urlHasCredentials(String url) {
+    return url.contains("@") || url.toLowerCase().contains("password=")
+}
+
+// MySQL/MariaDB em producao so com TLS. O driver (MariaDB Connector/J) le `sslMode`; o
+// `ssl-mode=REQUIRED` do cliente mysql e ignorado em silencio e a sessao sobe SEM TLS
+// (medido contra MySQL 8.4 na Aiven: Ssl_cipher vazio; com sslMode=trust, TLSv1.3).
+Bool mysqlUrlWithoutTls(String url) {
+    var scheme = dbScheme(url)
+    if (scheme != "mysql" && scheme != "mariadb") {
+        return false
+    }
+    return !url.contains("sslMode=") || url.contains("sslMode=disable")
+}
+
+// A Query DSL do kof.orm (T.query { where ... orderBy ... }) cita tabela e coluna com aspas duplas
+// ANSI; o MySQL so aceita isso com ANSI_QUOTES (sem ele: erro 1064 em toda listagem, medido no
+// MySQL 8.4 com kof 0.6.3). A sessao ganha ANSI_QUOTES sem perder o modo estrito do servidor.
+String withAnsiQuotes(String url) {
+    var scheme = dbScheme(url)
+    if (scheme != "mysql" && scheme != "mariadb") {
+        return url
+    }
+    if (url.contains("ANSI_QUOTES")) {
+        return url
+    }
+    var sep = "?"
+    if (url.contains("?")) {
+        sep = "&"
+    }
+    return url + sep + "sessionVariables=sql_mode=CONCAT(@@sql_mode,',ANSI_QUOTES')"
+}
+
+// Cria as tabelas que faltam (PERS-22): orm.create e idempotente (medido: 3x no mesmo banco = true).
+void ensureSchema(String db) {
+    orm.create<UserRow>(db)
+    orm.create<TransactionRow>(db)
+    orm.create<EnvelopeRow>(db)
+    orm.create<ChatMessageRow>(db)
+    orm.create<VariableIncomeRow>(db)
+    orm.create<KakeiboReflectionRow>(db)
+}
+
+// Abre a conexao e garante o schema. Qualquer falha derruba o boot (PERS-05) sem citar a URL.
+String openDb() {
+    var url = databaseUrl()
+    if (url == "") {
+        throw "KOF_DB_URL esta vazia"
+    }
+    if (urlHasCredentials(url)) {
+        throw "KOF_DB_URL nao pode conter usuario ou senha: use KOF_DB_USER e KOF_DB_PASSWORD"
+    }
+    if (isProduction() && mysqlUrlWithoutTls(url)) {
+        throw "KOF_DB_URL de MySQL em producao exige TLS: acrescente sslMode=trust (ou verify-full com serverSslCert); ssl-mode=REQUIRED e ignorado pelo driver"
+    }
+    var scheme = dbScheme(url)
+    var conn = ""
+    try {
+        conn = db.connect(withAnsiQuotes(url), config.str("db.user", ""), config.str("db.password", ""))
+    } catch (String e) {
+        throw "nao foi possivel abrir o banco (esquema " + scheme + "): driver JDBC ausente ou URL invalida"
+    }
+    ensureSchema(conn)
+    DbConn.handle = conn
+    log.info("banco aberto: esquema " + scheme)
+    return conn
+}
+
+// =========================================================
+// Usuarios (T2): UserRow <-> UserEntity.
+// =========================================================
+
+// Texto do banco -> enum; valor desconhecido cai no padrao do cadastro (dado nao derruba a rota).
+Role roleFromText(String text) {
+    var value = Role.valueOf(text)
+    if (value != null) {
+        return value
+    }
+    return Role.USER
+}
+
+Tier tierFromText(String text) {
+    var value = Tier.valueOf(text)
+    if (value != null) {
+        return value
+    }
+    return Tier.FREE
+}
+
+BudgetModelType budgetModelFromText(String text) {
+    var value = BudgetModelType.valueOf(text)
+    if (value != null) {
+        return value
+    }
+    return BudgetModelType.STANDARD_503020
+}
+
+IncomeType incomeTypeFromText(String text) {
+    var value = IncomeType.valueOf(text)
+    if (value != null) {
+        return value
+    }
+    return IncomeType.FIXED
+}
+
+// O id do banco (Long) vira texto ("1") na borda: JWT sub e o restante do backend usam String.
+UserEntity userFromRow(UserRow row) {
+    return UserEntity(String.valueOf(row.id()), row.email(), row.passwordHash(), roleFromText(row.role()),
+        row.salaryCents(), row.hasSalary(), tierFromText(row.tier()), row.hasVariableIncome(),
+        row.emergencyGoalCents(), row.hasEmergencyGoal(), budgetModelFromText(row.budgetModel()),
+        incomeTypeFromText(row.incomeType()), row.hasDebt(), row.debtCents())
+}
+
+UserRow userToRow(Long id, UserEntity user) {
+    return UserRow(id, user.email, user.passwordHash, user.role.name(), user.salaryCents, user.hasSalary,
+        user.tier.name(), user.hasVariableIncome, user.emergencyGoalCents, user.hasEmergencyGoal,
+        user.budgetModel.name(), user.incomeType.name(), user.hasDebt, user.debtCents)
+}
+
+// Id fora do formato do banco (ex.: "usr_1" de um token antigo) = usuario inexistente.
+UserEntity? findUserById(String id) {
+    if (!strings.isNumeric(id)) {
+        return null
+    }
+    var row = orm.find<UserRow>(DbConn.handle, id.toLong())
+    if (row != null) {
+        return userFromRow(row)
+    }
+    return null
+}
+
+UserEntity? findUserByEmail(String email) {
+    var rows = orm.where<UserRow>(DbConn.handle, "email", email)
+    if (rows.size > 0) {
+        return userFromRow(rows.get(0))
+    }
+    return null
+}
+
+// Cadastro: o id vem do banco (coluna generated, PERS-06). E-mail repetido deve ser barrado ANTES
+// (findUserByEmail): a violacao de unique escapa de catch (String e) (PERS-20, medido no 0.6.3).
+UserEntity insertUser(UserEntity user) {
+    var saved = orm.save(DbConn.handle, userToRow(0, user))
+    return userFromRow(saved)
+}
+
+// Entity e imutavel (SEM038): atualizar = orm.save de uma row nova com o mesmo id (upsert por PK).
+UserEntity updateUser(UserEntity user) {
+    if (!strings.isNumeric(user.id)) {
+        throw "id de usuario invalido"
+    }
+    var saved = orm.save(DbConn.handle, userToRow(user.id.toLong(), user))
+    return userFromRow(saved)
+}
+
+// =========================================================
+// Envelopes (T4): EnvelopeRow <-> EnvelopeEntity. A API continua em reais; o banco guarda centavos.
+// Toda leitura filtra pelo dono (userId das claims): id de outro usuario = inexistente (PERS-09..11).
+// =========================================================
+
+// "" no banco = ausente (entity nao tem coluna nullable; String? so na borda do dominio).
+String? textOrNull(String text) {
+    if (text == "") {
+        return null
+    }
+    return text
+}
+
+String nullToText(String? text) {
+    if (text != null) {
+        return text
+    }
+    return ""
+}
+
+EnvelopeLimitType limitTypeFromText(String text) {
+    var value = EnvelopeLimitType.valueOf(text)
+    if (value != null) {
+        return value
+    }
+    return EnvelopeLimitType.FIXED
+}
+
+EnvelopeEntity envelopeFromRow(EnvelopeRow row) {
+    return EnvelopeEntity(String.valueOf(row.id()), String.valueOf(row.userId()), row.categoryName(),
+        centsToReais(row.limitCents()), centsToReais(row.spentCents()), limitTypeFromText(row.limitType()),
+        row.movingAverageMonths(), textOrNull(row.createdAt()))
+}
+
+EnvelopeRow envelopeToRow(Long id, EnvelopeEntity envelope) {
+    return EnvelopeRow(id, envelope.userId.toLong(), envelope.categoryName, toCents(envelope.limitAmount),
+        toCents(envelope.currentSpent), envelope.limitType.name(), envelope.movingAverageMonths,
+        nullToText(envelope.createdAt))
+}
+
+List<EnvelopeEntity> findEnvelopesByUserId(String userId) {
+    if (!strings.isNumeric(userId)) {
+        return listOf()
+    }
+    var uid = userId.toLong()
+    var rows = EnvelopeRow.query(DbConn.handle) {
+        where userId == uid
+        orderBy id asc
+    }
+    return rows.map((r: EnvelopeRow) -> envelopeFromRow(r))
+}
+
+EnvelopeEntity? findEnvelopeByUserIdAndCategoryName(String userId, String categoryName) {
+    if (!strings.isNumeric(userId)) {
+        return null
+    }
+    var uid = userId.toLong()
+    var rows = EnvelopeRow.query(DbConn.handle) {
+        where userId == uid
+        where categoryName == categoryName
+        orderBy id asc
+    }
+    if (rows.size > 0) {
+        return envelopeFromRow(rows.get(0))
+    }
+    return null
+}
+
+// Row do envelope SO se pertencer ao usuario; id de outro dono ou fora do formato = null.
+EnvelopeRow? findOwnedEnvelopeRow(String userId, String id) {
+    if (!strings.isNumeric(userId) || !strings.isNumeric(id)) {
+        return null
+    }
+    var row = orm.find<EnvelopeRow>(DbConn.handle, id.toLong())
+    if (row != null) {
+        if (row.userId() == userId.toLong()) {
+            return row
+        }
+    }
+    return null
+}
+
+EnvelopeEntity? findEnvelopeById(String userId, String id) {
+    var row = findOwnedEnvelopeRow(userId, id)
+    if (row != null) {
+        return envelopeFromRow(row)
+    }
+    return null
+}
+
+// id "" = envelope novo (id gerado pelo banco, PERS-06); senao atualiza o envelope do proprio dono
+// (row nova com o mesmo id, upsert por PK). Envelope de outro usuario = "Envelope not found." (PERS-11).
+EnvelopeEntity saveEnvelope(EnvelopeEntity envelope) {
+    if (envelope.id == "") {
+        return envelopeFromRow(orm.save(DbConn.handle, envelopeToRow(0, envelope)))
+    }
+    var existing = findOwnedEnvelopeRow(envelope.userId, envelope.id)
+    if (existing == null) {
+        throw "Envelope not found."
+    }
+    return envelopeFromRow(orm.save(DbConn.handle, envelopeToRow(envelope.id.toLong(), envelope)))
+}
+
+// Gasto somado em centavos direto na row (soma Long exata) e gravado no banco.
+EnvelopeEntity addEnvelopeSpentCents(String userId, String envelopeId, Long cents) {
+    var row = findOwnedEnvelopeRow(userId, envelopeId)
+    if (row == null) {
+        throw "Envelope not found."
+    }
+    var saved = orm.save(DbConn.handle, EnvelopeRow(row.id(), row.userId(), row.categoryName(), row.limitCents(),
+        row.spentCents() + cents, row.limitType(), row.movingAverageMonths(), row.createdAt()))
+    return envelopeFromRow(saved)
+}
+
+void deleteEnvelopeById(String userId, String id) {
+    var row = findOwnedEnvelopeRow(userId, id)
+    if (row != null) {
+        orm.delete<EnvelopeRow>(DbConn.handle, row.id())
+    }
+}
+
+// =========================================================
+// Transacoes (T5): TransactionRow <-> TransactionEntity, valor em centavos (PERS-17).
+// Enums e opcionais viram texto/0 no banco ("" = sem categoria/bucket/data; 0 = sem envelope).
+// =========================================================
+
+String categoryText(Category? category) {
+    if (category != null) {
+        return category.name()
+    }
+    return ""
+}
+
+String bucketText(Bucket? bucket) {
+    if (bucket != null) {
+        return bucket.name()
+    }
+    return ""
+}
+
+Source sourceFromText(String text) {
+    var value = Source.valueOf(text)
+    if (value != null) {
+        return value
+    }
+    return Source.MANUAL
+}
+
+String? idOrNull(Long id) {
+    if (id > 0) {
+        return String.valueOf(id)
+    }
+    return null
+}
+
+Long idOrZero(String? id) {
+    if (id != null) {
+        if (strings.isNumeric(id)) {
+            return id.toLong()
+        }
+    }
+    return 0
+}
+
+TransactionEntity transactionFromRow(TransactionRow row) {
+    return TransactionEntity(String.valueOf(row.id()), row.description(), row.amountCents(),
+        Category.valueOf(row.category()), row.currency(), String.valueOf(row.userId()), Bucket.valueOf(row.bucket()),
+        sourceFromText(row.source()), textOrNull(row.createdAt()), idOrNull(row.envelopeId()))
+}
+
+TransactionRow transactionToRow(Long id, TransactionEntity t) {
+    return TransactionRow(id, t.userId.toLong(), t.description, t.amountCents, categoryText(t.category), t.currency,
+        bucketText(t.bucket), t.source.name(), nullToText(t.createdAt), idOrZero(t.envelopeId))
+}
+
+List<TransactionEntity> findTransactionsByCategoryAndUserId(Category category, String userId) {
+    if (!strings.isNumeric(userId)) {
+        return listOf()
+    }
+    var uid = userId.toLong()
+    var categoryName = category.name()
+    var rows = TransactionRow.query(DbConn.handle) {
+        where userId == uid
+        where category == categoryName
+        orderBy id asc
+    }
+    return rows.map((r: TransactionRow) -> transactionFromRow(r))
+}
+
+// Filtro por dono no banco (DSL); o corte por data segue em String ISO (compareTo) e mantem as
+// transacoes sem data, como antes -- datas reais sao a issue #44.
+List<TransactionEntity> findTransactionsByUserIdAndCreatedAtAfter(String userId, String from) {
+    var result: List<TransactionEntity> = listOf()
+    if (!strings.isNumeric(userId)) {
+        return result
+    }
+    var uid = userId.toLong()
+    var rows = TransactionRow.query(DbConn.handle) {
+        where userId == uid
+        orderBy id asc
+    }
+    for (var row in rows) {
+        if (row.createdAt() == "" || row.createdAt().compareTo(from) >= 0) {
+            result.add(transactionFromRow(row))
+        }
+    }
+    return result
+}
+
+void deleteTransactionsByUserId(String userId) {
+    if (strings.isNumeric(userId)) {
+        var uid = userId.toLong()
+        var rows = TransactionRow.query(DbConn.handle) {
+            where userId == uid
+        }
+        for (var row in rows) {
+            orm.delete<TransactionRow>(DbConn.handle, row.id())
+        }
+    }
+}
+
+// Sempre insere: o id vem do banco (PERS-06/07); texto vai por bind, gravado literal (PERS-15).
+TransactionEntity insertTransaction(TransactionEntity transaction) {
+    return transactionFromRow(orm.save(DbConn.handle, transactionToRow(0, transaction)))
+}
+
+// =========================================================
+// Chat, renda variavel e Kakeibo (T6): ids do banco (PERS-06/07), sempre filtrados pelo dono.
+// Registros so sao inseridos (id ""); nenhuma rota os altera depois.
+// =========================================================
+
+ChatRole chatRoleFromText(String text) {
+    var value = ChatRole.valueOf(text)
+    if (value != null) {
+        return value
+    }
+    return ChatRole.USER
+}
+
+ChatMessageEntity chatMessageFromRow(ChatMessageRow row) {
+    return ChatMessageEntity(String.valueOf(row.id()), String.valueOf(row.userId()), chatRoleFromText(row.role()),
+        row.content(), textOrNull(row.createdAt()))
+}
+
+ChatMessageEntity saveChatMessage(ChatMessageEntity message) {
+    if (message.id != "") {
+        throw "Mensagem de chat ja gravada: o historico nao e alterado."
+    }
+    var row = ChatMessageRow(0, message.userId.toLong(), message.role.name(), message.content, nullToText(message.createdAt))
+    return chatMessageFromRow(orm.save(DbConn.handle, row))
+}
+
+// Mensagens sem data ("") ficam de fora do corte: a contagem do limite depende da issue #44.
+Int countChatMessagesByUserIdAndRoleAndCreatedAtGreaterThanEqual(String userId, ChatRole role, String since) {
+    if (!strings.isNumeric(userId)) {
+        return 0
+    }
+    var uid = userId.toLong()
+    var roleName = role.name()
+    var rows = ChatMessageRow.query(DbConn.handle) {
+        where userId == uid
+        where role == roleName
+        where createdAt >= since
+    }
+    return rows.size
+}
+
+VariableIncomeDestination destinationFromText(String text) {
+    var value = VariableIncomeDestination.valueOf(text)
+    if (value != null) {
+        return value
+    }
+    return VariableIncomeDestination.BUDGET_5030020
+}
+
+VariableIncomeEntity variableIncomeFromRow(VariableIncomeRow row) {
+    return VariableIncomeEntity(String.valueOf(row.id()), String.valueOf(row.userId()), centsToReais(row.amountCents()),
+        row.source(), destinationFromText(row.destination()), textOrNull(row.date()))
+}
+
+List<VariableIncomeEntity> findVariableIncomesByUserId(String userId) {
+    if (!strings.isNumeric(userId)) {
+        return listOf()
+    }
+    var uid = userId.toLong()
+    var rows = VariableIncomeRow.query(DbConn.handle) {
+        where userId == uid
+        orderBy id asc
+    }
+    return rows.map((r: VariableIncomeRow) -> variableIncomeFromRow(r))
+}
+
+VariableIncomeEntity saveVariableIncomeEntity(VariableIncomeEntity income) {
+    if (income.id != "") {
+        throw "Renda variavel ja gravada: o registro nao e alterado."
+    }
+    var row = VariableIncomeRow(0, income.userId.toLong(), toCents(income.amount), income.source,
+        income.destination.name(), nullToText(income.date))
+    return variableIncomeFromRow(orm.save(DbConn.handle, row))
+}
+
+KakeiboReflectionEntity kakeiboFromRow(KakeiboReflectionRow row) {
+    return KakeiboReflectionEntity(String.valueOf(row.id()), String.valueOf(row.userId()), row.weekStart(),
+        json.decode<List<String>>(row.answersJson()), textOrNull(row.createdAt()))
+}
+
+KakeiboReflectionRow? findKakeiboRow(String userId, String weekStart) {
+    if (!strings.isNumeric(userId)) {
+        return null
+    }
+    var uid = userId.toLong()
+    var rows = KakeiboReflectionRow.query(DbConn.handle) {
+        where userId == uid
+        where weekStart == weekStart
+        orderBy id asc
+    }
+    if (rows.size > 0) {
+        return rows.get(0)
+    }
+    return null
+}
+
+KakeiboReflectionEntity? findKakeiboReflection(String userId, String weekStart) {
+    var row = findKakeiboRow(userId, weekStart)
+    if (row != null) {
+        return kakeiboFromRow(row)
+    }
+    return null
+}
+
+// Uma reflexao por (usuario, semana): se ja existe, regrava na mesma row (mesmo id).
+KakeiboReflectionEntity saveKakeiboReflection(KakeiboReflectionEntity reflection) {
+    var id: Long = 0
+    var existing = findKakeiboRow(reflection.userId, reflection.weekStart)
+    if (existing != null) {
+        id = existing.id()
+    }
+    var row = KakeiboReflectionRow(id, reflection.userId.toLong(), reflection.weekStart,
+        json.encode(reflection.answers), nullToText(reflection.createdAt))
+    return kakeiboFromRow(orm.save(DbConn.handle, row))
+}

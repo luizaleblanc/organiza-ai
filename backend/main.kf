@@ -3,17 +3,42 @@
 // Substitui a segregação artificial BFF <-> Spring Boot.
 // Todas as rotas chamam diretamente o domínio Kof sem proxy HTTP.
 
+// Porta HTTP: variavel PORT (o Render injeta), padrao 3000. app.listen aceita so Int (SEM025);
+// um PORT que nao e numero derruba o boot com a excecao da conversao (nunca sobe na porta errada).
+Int listenPort() {
+    var raw = config.env("PORT")
+    if (raw != null) {
+        return raw.trim().toInt()
+    }
+    return 3000
+}
+
 main() {
-    auth.secret(jwtSecret())
+    // Boot falha cedo se KOF_JWT_SECRET faltar ou for curta (a mensagem nunca traz o valor).
+    // O mesmo segredo alimenta o pipeline auth.* do runtime, que recusa tokens mal assinados.
+    try {
+        auth.secret(jwtSecret())
+    } catch (String e) {
+        log.error("Boot abortado: " + e)
+        throw e
+    }
+    // Banco (backend/store.kf): conexao + schema antes de aceitar requisicoes; falha derruba o boot.
+    try {
+        openDb()
+    } catch (String e) {
+        log.error("Boot abortado: " + e)
+        throw e
+    }
     var app = web.app()
 
-    // Middleware global de autenticação
+    // Middleware global de autenticação: fora das rotas públicas, exige token válido
+    // (assinatura, exp, iss e aud via currentClaims). As rotas só leem o usuário.
     app.use {
         if (isPublicPath(path())) {
             return null
         }
-        if (!hasBearerToken()) {
-            return status(401, "{\"error\":\"Token não informado\"}")
+        if (currentClaims() == null) {
+            return status(401, json.encode(ApiError("Token ausente, inválido ou expirado")))
         }
         return null
     }
@@ -28,31 +53,29 @@ main() {
 
     app.post("/api/auth/login") {
         var req = json.decode<LoginRequest>(body())
-        var user = findUserByEmail(req.email)
-        if (user != null) {
-            if (user.password == req.password) {
-                var payload = "{\"sub\":\"" + user.id + "\",\"iss\":\"" + expectedIssuer() + "\"}"
-                var token = jwt.create(payload, jwtSecret(), 7200)
-                return token
-            }
+        // Limite de tentativas por e-mail (5 por minuto) contra força bruta
+        if (!security.rateLimit("login:" + req.email, 5, 60)) {
+            return status(429, json.encode(ApiError("Muitas tentativas de login. Tente de novo em 1 minuto.")))
         }
-        return status(401, "{\"error\":\"Credenciais inválidas\"}")
+        // Mesma resposta (401) para e-mail inexistente e senha errada: sem enumeracao de usuario
+        var user = authenticateUser(req.email, req.password)
+        if (user != null) {
+            return issueToken(user.id)
+        }
+        return status(401, json.encode(ApiError("Credenciais inválidas")))
     }
 
     app.post("/api/auth/register") {
         var req = json.decode<LoginRequest>(body())
         var existing = findUserByEmail(req.email)
         if (existing != null) {
-            return status(409, "{\"error\":\"Usuário já cadastrado\"}")
+            return status(409, json.encode(ApiError("Usuário já cadastrado")))
         }
 
-        var newId = "usr_" + String.valueOf(BackendDb.users.size + 1)
-        var newUser = UserEntity(newId, req.email, req.password, Role.USER, 0.0, Tier.FREE, false, 0.0, BudgetModelType.STANDARD_503020, IncomeType.FIXED, false, 0.0)
-        saveUser(newUser)
+        // Senha so como passwords.hash (PERS-12); o id vem do banco, nunca de contagem em memoria (PERS-06)
+        var created = insertUser(UserEntity("", req.email, passwords.hash(req.password), Role.USER, 0, true, Tier.FREE, false, 0, true, BudgetModelType.STANDARD_503020, IncomeType.FIXED, false, 0))
 
-        var payload = "{\"sub\":\"" + newId + "\",\"iss\":\"" + expectedIssuer() + "\"}"
-        var token = jwt.create(payload, jwtSecret(), 7200)
-        return token
+        return issueToken(created.id)
     }
 
     // =========================================================
@@ -60,12 +83,6 @@ main() {
     // =========================================================
 
     app.post("/api/users/onboarding") {
-        try {
-            requireAuth()
-        } catch (String e) {
-            return status(401, "{\"error\":\"" + e + "\"}")
-        }
-
         var req = json.decode<OnboardingRequest>(body())
         var incomeType = IncomeType.FIXED
         if (req.incomeType == "VARIABLE") {
@@ -73,6 +90,19 @@ main() {
         }
 
         var suggested = suggestBudgetModel(req.salary, incomeType, req.hasDebt)
+
+        // Persiste o perfil no usuario autenticado (id sempre das claims, nunca do body)
+        var user = findUserById(currentUserId())
+        if (user == null) {
+            return status(404, json.encode(ApiError("Usuário não encontrado")))
+        }
+        user.salaryCents = toCents(req.salary)
+        user.hasSalary = true
+        user.incomeType = incomeType
+        user.hasDebt = req.hasDebt
+        user.budgetModel = suggested
+        updateUser(user)
+
         var desc = describeBudgetModel(suggested)
         var buckets = buildBudgetBuckets(suggested, req.salary)
 
@@ -89,39 +119,14 @@ main() {
     // =========================================================
 
     app.post("/api/variable-income") {
-        try {
-            requireAuth()
-        } catch (String e) {
-            return status(401, "{\"error\":\"" + e + "\"}")
-        }
-
-        var token = header("Authorization")
-        var rawToken = extractBearerToken(token)
-        var userId = "usr_1"
-        if (rawToken != null) {
-            var claimsJson = jwt.verify(rawToken, jwtSecret())
-            var claims = json.decode<AuthClaims>(claimsJson)
-            userId = claims.sub
-        }
-
         var req = json.decode<VariableIncomeInput>(body())
-        var res = registerUserIncome(userId, req.amount, req.source)
+        var res = registerUserIncome(currentUserId(), req.amount, req.source)
         return json.encode(res)
     }
 
     app.get("/api/variable-income") {
-        try {
-            requireAuth()
-        } catch (String e) {
-            return status(401, "{\"error\":\"" + e + "\"}")
-        }
-
-        var userId = query("userId")
-        if (userId != null) {
-            var list = findVariableIncomesByUserId(userId)
-            return json.encode(list)
-        }
-        return "[]"
+        var list = findVariableIncomesByUserId(currentUserId())
+        return json.encode(list)
     }
 
     // =========================================================
@@ -129,48 +134,20 @@ main() {
     // =========================================================
 
     app.get("/api/budgets/daily-pulse") {
-        try {
-            requireAuth()
-        } catch (String e) {
-            return status(401, "{\"error\":\"" + e + "\"}")
-        }
-
-        var token = header("Authorization")
-        var rawToken = extractBearerToken(token)
-        var userId = "usr_1"
-        if (rawToken != null) {
-            var claimsJson = jwt.verify(rawToken, jwtSecret())
-            var claims = json.decode<AuthClaims>(claimsJson)
-            userId = claims.sub
-        }
-
-        var pulse = calculateDailyPulse(userId, 30, "2026-09-01")
+        var pulse = calculateDailyPulse(currentUserId(), 30, "2026-09-01")
         return json.encode(pulse)
     }
 
     app.post("/api/chat/message") {
-        try {
-            requireAuth()
-        } catch (String e) {
-            return status(401, "{\"error\":\"" + e + "\"}")
-        }
-
-        var token = header("Authorization")
-        var rawToken = extractBearerToken(token)
-        var userId = "usr_1"
-        if (rawToken != null) {
-            var claimsJson = jwt.verify(rawToken, jwtSecret())
-            var claims = json.decode<AuthClaims>(claimsJson)
-            userId = claims.sub
-        }
-
+        var userId = currentUserId()
         var msgReq = json.decode<ChatMessageRequest>(body())
-        var userMsg = ChatMessageEntity("msg_" + String.valueOf(BackendDb.chatMessages.size + 1), userId, ChatRole.USER, msgReq.message, null)
+        // ids gerados pelo banco (PERS-06/07); createdAt fica vazio ate a issue #44
+        var userMsg = ChatMessageEntity("", userId, ChatRole.USER, msgReq.message, null)
         saveChatMessage(userMsg)
 
         var pulse = calculateDailyPulse(userId, 30, "2026-09-01")
         var reply = "Olá! Seu pulso diário disponível hoje é R$ " + String.valueOf(pulse.pulse) + ". O que deseja registrar hoje?"
-        var botMsg = ChatMessageEntity("msg_" + String.valueOf(BackendDb.chatMessages.size + 2), userId, ChatRole.ASSISTANT, reply, null)
+        var botMsg = ChatMessageEntity("", userId, ChatRole.ASSISTANT, reply, null)
         saveChatMessage(botMsg)
 
         return reply
@@ -181,29 +158,14 @@ main() {
     // =========================================================
 
     app.get("/api/envelopes") {
-        try {
-            requireAuth()
-        } catch (String e) {
-            return status(401, "{\"error\":\"" + e + "\"}")
-        }
-
-        var userId = query("userId")
-        if (userId != null) {
-            var envelopes = findEnvelopesByUserId(userId)
-            return json.encode(envelopes)
-        }
-        return "[]"
+        var envelopes = findEnvelopesByUserId(currentUserId())
+        return json.encode(envelopes)
     }
 
     app.post("/api/envelopes") {
-        try {
-            requireAuth()
-        } catch (String e) {
-            return status(401, "{\"error\":\"" + e + "\"}")
-        }
-
         var req = json.decode<CreateEnvelopeInput>(body())
-        var newEnv = EnvelopeEntity("env_" + String.valueOf(BackendDb.envelopes.size + 1), req.userId, req.categoryName, req.limitAmount, 0.0, EnvelopeLimitType.FIXED, 0, null)
+        // id "" = novo: o banco gera o id (PERS-06); o dono vem das claims (PERS-09)
+        var newEnv = EnvelopeEntity("", currentUserId(), req.categoryName, req.limitAmount, 0.0, EnvelopeLimitType.FIXED, 0, null)
         var saved = createEnvelope(newEnv)
         return json.encode(saved)
     }
@@ -213,22 +175,7 @@ main() {
     // =========================================================
 
     app.get("/api/transactions") {
-        try {
-            requireAuth()
-        } catch (String e) {
-            return status(401, "{\"error\":\"" + e + "\"}")
-        }
-
-        var token = header("Authorization")
-        var rawToken = extractBearerToken(token)
-        var userId = "usr_1"
-        if (rawToken != null) {
-            var claimsJson = jwt.verify(rawToken, jwtSecret())
-            var claims = json.decode<AuthClaims>(claimsJson)
-            userId = claims.sub
-        }
-
-        var list = findTransactionsByUserIdAndCreatedAtAfter(userId, "2000-01-01")
+        var list = findTransactionsByUserIdAndCreatedAtAfter(currentUserId(), "2000-01-01")
         var outputs: List<TransactionOutput> = listOf()
         for (var t in list) {
             outputs.add(transactionEntityToOutput(t))
@@ -237,24 +184,15 @@ main() {
     }
 
     app.post("/api/transactions") {
-        try {
-            requireAuth()
-        } catch (String e) {
-            return status(401, "{\"error\":\"" + e + "\"}")
-        }
-
-        var token = header("Authorization")
-        var rawToken = extractBearerToken(token)
-        var userId = "usr_1"
-        if (rawToken != null) {
-            var claimsJson = jwt.verify(rawToken, jwtSecret())
-            var claims = json.decode<AuthClaims>(claimsJson)
-            userId = claims.sub
-        }
-
         var req = json.decode<PersistTransactionInput>(body())
-        var newId = "tx_" + String.valueOf(BackendDb.transactions.size + 1)
-        var created = persistTransaction(newId, req, userId)
+        if (req.amount() <= 0) {
+            return status(400, json.encode(ApiError("O valor da transação deve ser maior que zero.")))
+        }
+        var category = Category.valueOf(req.category())
+        if (category == null) {
+            return status(400, json.encode(ApiError("Categoria inválida: " + req.category())))
+        }
+        var created = persistTransaction(req, category, currentUserId())
         return json.encode(created)
     }
 
@@ -263,48 +201,16 @@ main() {
     // =========================================================
 
     app.get("/api/dashboard") {
-        try {
-            requireAuth()
-        } catch (String e) {
-            return status(401, "{\"error\":\"" + e + "\"}")
-        }
-
-        var token = header("Authorization")
-        var rawToken = extractBearerToken(token)
-        var userId = "usr_1"
-        if (rawToken != null) {
-            var claimsJson = jwt.verify(rawToken, jwtSecret())
-            var claims = json.decode<AuthClaims>(claimsJson)
-            userId = claims.sub
-        }
-
-        var user = findUserById(userId)
-        var totalSpentLong = sumAmountByUserIdAndCreatedAtAfter(userId, "2026-09-01")
-        var totalSpent = totalSpentLong * 1.0
+        var totalSpent = centsToReais(sumAmountByUserIdAndCreatedAtAfter(currentUserId(), "2026-09-01"))
 
         // Formato esperado pelo kof.ui: totalSpent|currency|categories|transactions
         return String.valueOf(totalSpent) + "|BRL|Alimentação:50,Transporte:30,Lazer:20|Supermercado:Alimentação:150.0,"
     }
 
     app.get("/api/users/tier-status") {
-        try {
-            requireAuth()
-        } catch (String e) {
-            return status(401, "{\"error\":\"" + e + "\"}")
-        }
-
-        var token = header("Authorization")
-        var rawToken = extractBearerToken(token)
-        var userId = "usr_1"
-        if (rawToken != null) {
-            var claimsJson = jwt.verify(rawToken, jwtSecret())
-            var claims = json.decode<AuthClaims>(claimsJson)
-            userId = claims.sub
-        }
-
-        var status = getTierStatus(userId, "2026-09-01")
+        var status = getTierStatus(currentUserId(), "2026-09-01")
         return json.encode(status)
     }
 
-    app.listen(3000)
+    app.listen(listenPort())
 }
