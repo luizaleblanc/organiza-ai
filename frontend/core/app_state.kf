@@ -45,17 +45,13 @@ class DashboardState {
     static Int wantsPct = 0
     static Int savingsPct = 0
     static String selectedBucket = ""
-    // Uma caixinha por linha: "nome:gasto:limite"
     static String envelopes = ""
 }
 
 class ChatState {
-    // Uma mensagem por linha: "USER|texto" ou "ASSISTANT|texto"
     static String messages = ""
     static Int remainingFreeMsgs = 10
 }
-
-// ---- Helpers de estado -----------------------------------------------------
 
 Bool isLoggedIn() = SessionState.token != ""
 

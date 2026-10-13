@@ -1,22 +1,23 @@
 import kof.ui
 import core.theme
 import core.app_state
-import core.api_client
-import core.navigation
+import screens.welcome_screen
+import screens.onboarding_screen
 
 // =============================================================================
-// T5 — Entrypoint Organiza AI
+// Organiza IA — shell estável do frontend
 // =============================================================================
-// O dispatcher `buildActiveScreen(Window w)` e a navegação vivem em
-// core/navigation.kf (main.kf não é importável). Re-renderização:
-// AppState.currentScreen = "..." + mountScreen(window).
+// Este padrão usa o runtime KOF compatível do projeto e evita as APIs mais
+// recentes que não existem no compilador atual.
 // =============================================================================
 
 main() {
-    var window = Window("Organiza AI")
+    var window = Window("Organiza IA")
     window.theme = Theme.dark()
-    AppState.currentScreen = "dashboard"
-    applyViewport(window)
-    mountScreen(window)
+    window.size(360, 640)
+
+    AppState.currentScreen = "welcome"
+    var screen = welcomeScreen(window)
+    window.bind(screen)
     window.show()
 }

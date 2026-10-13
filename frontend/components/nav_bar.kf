@@ -1,8 +1,6 @@
 package components
 
 import kof.ui
-import core.theme
-import core.app_state
 import core.navigation
 
 // =============================================================================
@@ -26,7 +24,6 @@ View buildNavItem(Window w, String screen, String text) {
     return item
 }
 
-// Barra inferior de 3 abas (Mobile 360x640).
 View buildNavBar(Window w) {
     var row = Row(listOf(
         buildNavItem(w, "dashboard", "Dashboard"),
@@ -37,7 +34,6 @@ View buildNavBar(Window w) {
     return bar
 }
 
-// Sidebar vertical (Desktop 1280x800).
 View buildSidebar(Window w) {
     var col = Column(listOf(
         buildNavItem(w, "dashboard", "Dashboard"),
