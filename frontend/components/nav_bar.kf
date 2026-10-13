@@ -1,59 +1,45 @@
 package components
 
 import kof.ui
-import core.theme
-import core.app_state
+import core.navigation
 
 // =============================================================================
-// NavBar e Sidebar — Issue #38 (T4)
+// T4 — Navegação: NavBar inferior (Mobile) e Sidebar esquerda (Desktop)
 // =============================================================================
-// - Barra inferior de 3 abas para viewport Mobile (360x640)
-// - Sidebar esquerda estruturada para viewport Desktop (1280x800)
+// Abas: Dashboard, Chat, Caixinhas. A aba ativa usa o accent cyan.
+// Não existe BottomNavigationBar no kof.ui — é um Row manual de Buttons.
 // =============================================================================
 
-View navBar(String activeTab) {
-    var homeBtn = Button("Início")
-    var budgetBtn = Button("Orçamentos")
-    var coachBtn = Button("Coach IA")
-
-    var actions = Row(listOf(homeBtn, budgetBtn, coachBtn))
-    var view = View(navBarStyle())
-    view.bind(actions)
-    return view
+Style navItemStyle(String screen) {
+    if (AppState.currentScreen == screen) {
+        return Style(colorAccent(), colorAccentContrast(), 8, 8)
+    }
+    return Style(colorCard(), colorTextSecondary(), 8, 8)
 }
 
-View desktopSidebar(String activeTab, Button toggleBtn) {
-    var appName = Label("Organiza AI")
-    appName.fontSize = AppTypography.titleSize
-    appName.bold = true
-    appName.color = colorAccent()
+View buildNavItem(Window w, String screen, String text) {
+    var button = Button(text, () -> navigateTo(w, screen))
+    var item = View(navItemStyle(screen))
+    item.bind(button)
+    return item
+}
 
-    var tagline = Label("Coach Financeiro")
-    tagline.fontSize = AppTypography.captionSize
-    tagline.color = colorTextMuted()
+View buildNavBar(Window w) {
+    var row = Row(listOf(
+        buildNavItem(w, "dashboard", "Dashboard"),
+        buildNavItem(w, "chat", "Chat"),
+        buildNavItem(w, "envelopes", "Caixinhas")))
+    var bar = View(navBarStyle())
+    bar.bind(row)
+    return bar
+}
 
-    var headerCol = Column(listOf(appName, tagline))
-
-    var linkDashboard = Button("Dashboard")
-    var linkEnvelopes = Button("Envelopes")
-    var linkCoach = Button("Coach IA")
-    var linkSettings = Button("Configurações")
-
-    var navLinks = Column(listOf(linkDashboard, linkEnvelopes, linkCoach, linkSettings))
-
-    var userTitle = Label(SessionState.userName)
-    userTitle.fontSize = AppTypography.bodySize
-    userTitle.bold = true
-    userTitle.color = colorTextPrimary()
-
-    var userTier = Label("Tier: " + SessionState.tier)
-    userTier.fontSize = AppTypography.captionSize
-    userTier.color = colorSuccess()
-
-    var userCol = Column(listOf(userTitle, userTier, toggleBtn))
-
-    var fullSidebar = Column(listOf(headerCol, navLinks, userCol))
-    var view = View(sidebarStyle())
-    view.bind(fullSidebar)
-    return view
+View buildSidebar(Window w) {
+    var col = Column(listOf(
+        buildNavItem(w, "dashboard", "Dashboard"),
+        buildNavItem(w, "chat", "Chat"),
+        buildNavItem(w, "envelopes", "Caixinhas")))
+    var side = View(sidebarStyle())
+    side.bind(col)
+    return side
 }

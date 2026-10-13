@@ -199,7 +199,7 @@ Toda branch de lote nasce a partir do `HEAD` da `main`:
 
 | Branch | Lote SDD (`.specs/features/mvp1-koflith-attack/tasks.md`) | Escopo Modular |
 |---|---|---|
-| `feat/mvp1-batch1-core-foundation` | **Batch 1 (T1–T5)** | `core/theme.kf`, `core/app_state.kf`, `core/api_client.kf`, `components/brand_header.kf`, `components/nav_bar.kf` e Dual Viewport |
+| `feat/mvp1-batch1-core-foundation` | **Batch 1 (T1–T5)** | `core/theme.kf`, `core/app_state.kf`, `core/api_client.kf`, `components/brand_header.kf`, `components/nav_bar.kf`, `core/navigation.kf` (dispatcher `buildActiveScreen`), `main.kf` e Dual Viewport |
 | `feat/mvp1-batch2-auth-onboarding` | **Batch 2 (T6–T7)** | `screens/auth_screens.kf` (Telas 1–3) e `screens/onboarding_screens.kf` (Telas 4, 5, 6, 6.1 e 7 — Issue #33) |
 | `feat/mvp1-batch3-dashboard-canvas` | **Batch 3 (T8–T9)** | `components/pulse_card.kf`, `components/pie_chart.kf` (Canvas 2D) e `screens/dashboard_screen.kf` (Tela 8 — Issue #32) |
 | `feat/mvp1-batch4-coach-envelopes` | **Batch 4 (T10–T12)** | `screens/chat_screen.kf` (Tela 9) e `screens/envelopes_screen.kf` + 5 modelos de notificação (Telas 10 e 11 — Issue #34) |

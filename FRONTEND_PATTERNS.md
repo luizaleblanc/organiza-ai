@@ -9,6 +9,8 @@
 > oficial do `kof.ui`, dentro do ecossistema KOF/JVM, com renderização real no
 > alvo KofJS.
 
+> **Política do Organiza AI (MVP 1):** este documento descreve o `kof.ui` oficial completo. No projeto, **não use** `Router`, `Component`, `Spacer`, `Box`, `Stack`, `Grid`, `Center` nem `Align` (fora das primitivas confirmadas para o gate `kof check` do lote — ver Issue #38 e `docs/LLM_KOF_UI_GUIDELINES.md`). Navegação: `AppState.currentScreen` + `mountScreen(window)` (`frontend/core/navigation.kf`). Estado: campos `static`. Cores: funções top-level de `core/theme.kf`.
+
 ---
 
 ## 1. Fonte correta

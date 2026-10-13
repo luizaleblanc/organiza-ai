@@ -16,7 +16,7 @@
 ## Handoff Snapshot
 - **Current Feature:** `mvp1-koflith-attack`
 - **Branch:** `main`
-- **Phase:** Tasks Ready / Ready to Execute Batch 1 (SDD 4-Phase Execution Plan generated in `.specs/features/mvp1-koflith-attack/` and `docs/MVP1_EXECUTION_PLAN.md`)
+- **Phase:** Batch 1 implemented (Issue #38, T1–T5) / Ready to execute Batch 2 (SDD 4-Phase Execution Plan generated in `.specs/features/mvp1-koflith-attack/` and `docs/MVP1_EXECUTION_PLAN.md`)
 - **Gate:** `kof check backend` (0 errors) + `kof check frontend` (0 errors) + `scripts/test_e2e_flow.ps1` (9/9 GREEN)
 
 

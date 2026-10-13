@@ -1,63 +1,56 @@
 package components
 
 import kof.ui
-import core.theme
-import core.app_state
+import core.navigation
 
 // =============================================================================
-// BrandHeader — Issue #38 (T4)
-// =============================================================================
-// - Logomark de 3 ondas paralelas (#00D4FF) compatível com o runtime kof.ui
-// - Cabeçalho com título, subtítulo e botão de toggle de viewport (Mobile/Desktop)
+// T4 — Logomark (3 ondas paralelas) + cabeçalho com toggle Mobile/Desktop
 // =============================================================================
 
-View buildLogomark() {
-    var waveLabel = Label("≋")
-    waveLabel.fontSize = 26
-    waveLabel.bold = true
-    waveLabel.color = colorAccent()
-
-    var box = View(Style(colorCardSecondary(), colorAccent(), 6, 8))
-    box.bind(waveLabel)
-    return box
+// Uma onda: 9 pontos de uma senoide em Canvas(36, 22), traço de 3px.
+drawWave(Canvas c, Int yBase, Color color) {
+    c.setStroke(color)
+    c.setLineWidth(3)
+    c.beginPath()
+    c.moveTo(1, yBase)
+    c.lineTo(5, yBase - 3)
+    c.lineTo(9, yBase - 4)
+    c.lineTo(13, yBase - 3)
+    c.lineTo(18, yBase)
+    c.lineTo(23, yBase + 3)
+    c.lineTo(27, yBase + 4)
+    c.lineTo(31, yBase + 3)
+    c.lineTo(35, yBase)
+    c.stroke()
 }
 
-View brandHeader(String title, String subtitle, Button toggleBtn) {
-    var logo = buildLogomark()
-
-    var titleLabel = Label(title)
-    titleLabel.fontSize = AppTypography.subtitleSize
-    titleLabel.bold = true
-    titleLabel.color = colorTextPrimary()
-
-    var subLabel = Label(subtitle)
-    subLabel.fontSize = AppTypography.captionSize
-    subLabel.color = colorTextSecondary()
-
-    var textCol = Column(listOf(titleLabel, subLabel))
-    var headerRow = Row(listOf(logo, textCol, toggleBtn))
-
-    var view = View(cardStyle())
-    view.bind(headerRow)
-    return view
+Canvas buildLogomark() {
+    var c = Canvas(36, 22)
+    drawWave(c, 5, colorAccent())
+    drawWave(c, 11, colorWave2())
+    drawWave(c, 17, colorWave3())
+    return c
 }
 
-View brandHeaderSimple(String title, String subtitle) {
-    var logo = buildLogomark()
+String viewportLabel() {
+    if (AppState.isDesktop) {
+        return "Desktop 1280x800"
+    }
+    return "Mobile 360x640"
+}
 
-    var titleLabel = Label(title)
-    titleLabel.fontSize = AppTypography.subtitleSize
-    titleLabel.bold = true
-    titleLabel.color = colorTextPrimary()
+View buildBrandHeader(Window w) {
+    var name = Label("Organiza AI")
+    name.fontSize = sizeSubtitle()
+    name.bold = true
+    name.color = colorTextPrimary()
 
-    var subLabel = Label(subtitle)
-    subLabel.fontSize = AppTypography.captionSize
-    subLabel.color = colorTextSecondary()
+    var toggle = Button(viewportLabel(), () -> switchViewport(w))
+    var toggleView = View(cardSecondaryStyle())
+    toggleView.bind(toggle)
 
-    var textCol = Column(listOf(titleLabel, subLabel))
-    var headerRow = Row(listOf(logo, textCol))
-
-    var view = View(cardStyle())
-    view.bind(headerRow)
-    return view
+    var row = Row(listOf(buildLogomark(), name, toggleView))
+    var header = View(Style(colorBgPrimary(), colorTextPrimary(), 12, 0))
+    header.bind(row)
+    return header
 }
