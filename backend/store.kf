@@ -81,9 +81,16 @@ entity KakeiboReflectionRow {
     createdAt: String
 }
 
-// Conexao unica do processo (o transaction {} do kof.db usa a ultima conexao aberta).
+// Conexao principal do processo, compartilhada pelas requisicoes (o servidor do kof.web atende cada
+// conexao numa virtual thread: JvmRuntimeWebServer, Thread.startVirtualThread). O db.connect do runtime
+// registra a conexao e a torna a "ultima aberta" (kof_db_register), que e a que o transaction {} usa.
+// `lock` e um canal com UMA ficha (Channel = LinkedBlockingQueue: receive() bloqueia ate haver ficha,
+// JvmOpCollections.emitChannelCall): quem precisa trocar a conexao ou abrir uma transacao pega a
+// ficha e a devolve no finally. Assim nenhum db.connect concorrente muda a "ultima aberta" no meio.
 class DbConn {
     static String handle = ""
+    static String url = ""
+    static Channel<Int> lock = channel<Int>()
 }
 
 // WRITE_DELAY=0: o H2 grava no disco a cada commit. Com o padrao (atraso de ~1 s), um processo
@@ -157,6 +164,29 @@ String withAnsiQuotes(String url) {
     return url + sep + "sessionVariables=sql_mode=CONCAT(@@sql_mode,',ANSI_QUOTES')"
 }
 
+// Timeouts do MariaDB Connector/J 3.5 (parametros de URL documentados pelo driver: connectTimeout,
+// padrao 30000 ms; socketTimeout = SO_TIMEOUT, padrao 0 = sem limite). Sem socketTimeout, uma consulta
+// numa conexao TCP morta (sem RST) fica parada para sempre (medido: com socketTimeout=4000 a consulta
+// num MySQL congelado com `docker pause` falha em ~5,7 s; sem ele nao volta). Valor ja presente na URL vence.
+String withDbTimeouts(String url) {
+    var scheme = dbScheme(url)
+    if (scheme != "mysql" && scheme != "mariadb") {
+        return url
+    }
+    var out = url
+    if (!out.contains("connectTimeout=")) {
+        var sep = "?"
+        if (out.contains("?")) {
+            sep = "&"
+        }
+        out = out + sep + "connectTimeout=5000"
+    }
+    if (!out.contains("socketTimeout=")) {
+        out = out + "&socketTimeout=10000"
+    }
+    return out
+}
+
 // Cria as tabelas que faltam (PERS-22): orm.create e idempotente (medido: 3x no mesmo banco = true).
 void ensureSchema(String db) {
     orm.create<UserRow>(db)
@@ -167,7 +197,78 @@ void ensureSchema(String db) {
     orm.create<KakeiboReflectionRow>(db)
 }
 
-// Abre a conexao e garante o schema. Qualquer falha derruba o boot (PERS-05) sem citar a URL.
+// Abre uma conexao nova com a URL final (DbConn.url) e as credenciais separadas. Falha de rede ou de
+// login chega como excecao Java (SQLException), que `catch (String e)` nao pega; `catch (Exception e)`
+// e o catch de interop aceito pelo compilador (CatchTypeCheck: JAVA_LANG_THROWABLES). A mensagem nunca
+// leva URL, host ou credencial: o DB001 do runtime imprime a URL inteira.
+String connectDb() {
+    var scheme = dbScheme(DbConn.url)
+    try {
+        return db.connect(DbConn.url, config.str("db.user", ""), config.str("db.password", ""))
+    } catch (String e) {
+        throw "nao foi possivel abrir o banco (esquema " + scheme + "): driver JDBC ausente ou URL invalida"
+    } catch (Exception e) {
+        throw "nao foi possivel conectar ao banco (esquema " + scheme + "): servidor inacessivel, tempo esgotado ou credencial recusada"
+    }
+}
+
+void closeDbQuietly(String handle) {
+    if (handle == "") {
+        return
+    }
+    try {
+        db.close(handle)
+    } catch (String e) {
+        log.warn("falha ao fechar conexao antiga do banco")
+    } catch (Exception e) {
+        log.warn("falha ao fechar conexao antiga do banco")
+    }
+}
+
+// SELECT 1 sem bind: true se a conexao responde dentro do socketTimeout.
+Bool pingDb(String handle) {
+    try {
+        db.query(handle, "SELECT 1")
+        return true
+    } catch (String e) {
+        return false
+    } catch (Exception e) {
+        return false
+    }
+}
+
+// Garante uma conexao viva antes de cada requisicao: SELECT 1 na conexao principal (sem a ficha, entao
+// requisicoes saudaveis nao fazem fila). Se falhar (MySQL reiniciado, idle timeout, TCP sem resposta ate
+// o socketTimeout), pega a ficha do DbConn.lock, confere de novo (outra requisicao pode ja ter trocado) e
+// abre uma conexao nova; a antiga e fechada. false = banco inacessivel agora (a rota responde 503).
+Bool ensureDb() {
+    if (pingDb(DbConn.handle)) {
+        return true
+    }
+    var token = DbConn.lock.receive()
+    try {
+        if (pingDb(DbConn.handle)) {
+            return true
+        }
+        var fresh = ""
+        try {
+            fresh = connectDb()
+        } catch (String e) {
+            log.warn("banco indisponivel: " + e)
+            return false
+        }
+        var old = DbConn.handle
+        DbConn.handle = fresh
+        closeDbQuietly(old)
+        log.info("conexao com o banco reaberta: esquema " + dbScheme(DbConn.url))
+        return true
+    } finally {
+        DbConn.lock.send(token)
+    }
+}
+
+// Abre a conexao e garante o schema. Qualquer falha derruba o boot (PERS-05) sem citar a URL; com os
+// timeouts acima, um banco que nao responde derruba o boot em ~5 s (connectTimeout).
 String openDb() {
     var url = databaseUrl()
     if (url == "") {
@@ -180,14 +281,17 @@ String openDb() {
         throw "KOF_DB_URL de MySQL em producao exige TLS: acrescente sslMode=trust (ou verify-full com serverSslCert); ssl-mode=REQUIRED e ignorado pelo driver"
     }
     var scheme = dbScheme(url)
-    var conn = ""
+    DbConn.url = withDbTimeouts(withAnsiQuotes(url))
+    var conn = connectDb()
     try {
-        conn = db.connect(withAnsiQuotes(url), config.str("db.user", ""), config.str("db.password", ""))
+        ensureSchema(conn)
     } catch (String e) {
-        throw "nao foi possivel abrir o banco (esquema " + scheme + "): driver JDBC ausente ou URL invalida"
+        throw "nao foi possivel criar as tabelas (esquema " + scheme + ")"
+    } catch (Exception e) {
+        throw "nao foi possivel criar as tabelas (esquema " + scheme + ")"
     }
-    ensureSchema(conn)
     DbConn.handle = conn
+    DbConn.lock.send(1)
     log.info("banco aberto: esquema " + scheme)
     return conn
 }

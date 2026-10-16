@@ -34,6 +34,11 @@ main() {
     // Middleware global de autenticação: fora das rotas públicas, exige token válido
     // (assinatura, exp, iss e aud via currentClaims). As rotas só leem o usuário.
     app.use {
+        // Conexao morta (MySQL reiniciado, idle timeout) e reaberta aqui, antes da rota; banco fora = 503
+        // sem detalhe. O /health faz o proprio ping.
+        if (path() != "/health" && !ensureDb()) {
+            return status(503, json.encode(ApiError("Serviço temporariamente indisponível. Tente de novo em instantes.")))
+        }
         if (isPublicPath(path())) {
             return null
         }
