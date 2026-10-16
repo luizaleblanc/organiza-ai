@@ -406,6 +406,25 @@ UserEntity insertUser(UserEntity user) {
     return userFromRow(saved)
 }
 
+// Cadastro que sobrevive a corrida: dois POSTs com o mesmo e-mail passam juntos pelo findUserByEmail
+// e o perdedor bate na UNIQUE do banco. A violacao chega como excecao Java (escapa de catch (String e),
+// por isso o catch (Exception e)). Se depois da falha o e-mail existe, devolve null (rota responde
+// 409); qualquer outra falha vira erro sem detalhe do banco.
+UserEntity? insertUserIfNew(UserEntity user) {
+    var failed = false
+    try {
+        return insertUser(user)
+    } catch (String e) {
+        failed = true
+    } catch (Exception e) {
+        failed = true
+    }
+    if (failed && findUserByEmail(user.email) != null) {
+        return null
+    }
+    throw "Não foi possível criar o usuário."
+}
+
 // Entity e imutavel (SEM038): atualizar = orm.save de uma row nova com o mesmo id (upsert por PK).
 UserEntity updateUser(UserEntity user) {
     if (!strings.isNumeric(user.id)) {

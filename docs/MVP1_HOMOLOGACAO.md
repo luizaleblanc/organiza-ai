@@ -32,7 +32,7 @@ Também estão cobertos: autenticação JWT (iss, aud, exp e adulteração), o r
 4. **Freemium sem efeito** (#44). `enforceCanSendMessage` nunca é chamado e `messagesUsed` fica sempre em 0.
 5. **`sslMode=trust`.** O TLS está ativo, mas o certificado não é verificado (`store.kf:131-143`). Um ataque *man-in-the-middle* entre o Render e a Aiven não é detectado. O correto é `verify-full` com o CA da Aiven.
 
-A corrida de cadastro está protegida: com 8 POSTs simultâneos para o mesmo e-mail, 1 deu 200 e 7 deram 409, e ficou 1 linha no banco, porque a coluna tem `UNIQUE KEY email`. Ainda assim, o perdedor da corrida pode receber 500 em vez de 409, porque a violação escapa de `catch (String)` (`store.kf:267`).
+A corrida de cadastro está protegida: com 8 POSTs simultâneos para o mesmo e-mail, 1 deu 200 e 7 deram 409, e ficou 1 linha no banco, porque a coluna tem `UNIQUE KEY email`. Ainda assim, o perdedor da corrida pode receber 500 em vez de 409, porque a violação escapa de `catch (String)` (`store.kf:267`). *(Fases 0.1, 0.2 e 0.4 resolvidas depois desta inspeção; ver a seção 4.)*
 
 ## 2. Matriz Java → Kof
 
@@ -151,7 +151,7 @@ Ordem: primeiro o que derruba a produção, depois o que bloqueia o frontend, de
 | ✅ 0.1 Reconexão ao banco (pool ou reabrir a conexão quando cair) | Probe P10: com o servidor no ar, `docker restart` do MySQL → próximo login = 200 sem reiniciar o app; G-RESTART 25/25 | M | avancado |
 | ✅ 0.2 Transações isoladas por requisição | Teste com 20 POSTs `/api/transactions` em paralelo + 1 falha forçada: soma do envelope = soma das transações gravadas; nenhuma gravação órfã | M | avancado |
 | 0.3 `sslMode=verify-full` com o CA da Aiven | Boot em produção recusa `trust`; teste local com certificado inválido falha no boot | P | intermediario |
-| 0.4 Erros de entrada → 400 (inclui F2 §6) | `curl` com `{"email":`, `{bad`, `"salary":"abc"` → 400 `{"error":"Dados inválidos."}`; violação de unique no cadastro → 409, nunca 500 | P | intermediario |
+| ✅ 0.4 Erros de entrada → 400 (inclui F2 §6) | `curl` com `{"email":`, `{bad`, `"salary":"abc"` → 400 `{"error":"Dados inválidos."}`; violação de unique no cadastro → 409, nunca 500 | P | intermediario |
 
 **0.1 feito** (`fix(backend): reconexao ao banco e timeouts`). Antes de cada requisição, o middleware faz `SELECT 1` na conexão principal (`ensureDb`, `backend/store.kf`). Se o ping falhar, o backend abre uma conexão nova com as mesmas credenciais e fecha a antiga. A troca acontece com a única ficha de um `Channel<Int>` (`DbConn.lock`), para que duas requisições não reabram ao mesmo tempo. Com o banco fora, a rota responde **503** em vez de 500. Na URL do MySQL, o backend acrescenta `connectTimeout=5000&socketTimeout=10000`, que são parâmetros do MariaDB Connector/J 3.5. Os padrões do driver são 30000 ms e 0 (sem limite). No boot, uma falha sai com a mensagem "nao foi possivel conectar ao banco (esquema mysql)", sem URL, usuário ou senha. Evidência (MySQL 8.4 local, kof 0.6.3):
 
@@ -183,6 +183,17 @@ G-DB-PAUSE  health:  MySQL congelado com a conexão viva (TCP sem resposta) → 
 G-DB-BOUNCE health:  login e envelopes 200 em 5,0 s após `docker restart`; transação 200 antes e depois
 G-BOOT-DOWN: MySQL parado → exit=1 em 1,1 s; IP sem resposta → exit=1 em 5,8 s; senha no log: 0
 G-E2E 37/38 (H2 e MySQL, só a #44) · G-RESTART 25/25 (H2 e MySQL) · VerifyAll 70 classes, 0 erros · LinkAll 102/102
+```
+
+**0.4 feito** (`fix(backend): entrada invalida responde 400 e 409`). Esta etapa trata só os erros. As regras de negócio do F2 (senha com 8 ou mais caracteres, formato do e-mail, salário positivo) continuam na Fase 1. Toda rota com corpo lê o JSON por um `decode…` que devolve `null` quando o corpo é inválido, e a rota responde 400 `{"error":"Dados inválidos."}` (`backend/models.kf`, `backend/services.kf`). Medido no kof 0.6.3: JSON malformado, corpo vazio, `null`, array, texto sobrando no fim, número em texto e campo primitivo ausente (JSN004) lançam String. Um campo String ausente chega como `null`. No cadastro, a corrida pelo mesmo e-mail é resolvida em `insertUserIfNew` (`backend/store.kf`): a violação da UNIQUE é uma exceção Java, pega com `catch (Exception e)`. Se o e-mail já existe depois da falha, a resposta é 409. Evidência (`tools/neg.sh`):
+
+```
+antes (0.3) MySQL: 5/26 casos certos; `{"email":` → 500 {"error": "handler error: unexpected end of JSON"};
+                   corrida 16×5: 21 respostas 500 (ex.: 1×200, 10×409, 5×500)
+depois      MySQL e H2: 26/26 casos (21 de 400 com {"error":"Dados inválidos."}, sem token = 401, duplicado = 409, válidos = 200)
+                   corrida 16×5: 1×200 + 15×409 em cada rodada, 0 respostas 500, 1 linha por e-mail no MySQL
+G-E2E 37/38 (H2 e MySQL, só a #44) · G-RESTART 25/25 (H2 e MySQL) · G-CONC verde (H2 e MySQL) · G-DB-BOUNCE 5,2 s
+VerifyAll 70 classes, 0 erros · LinkAll 102/102
 ```
 
 ### Fase 1: Retomada do batch 2 backend (F1 a F4)

@@ -43,6 +43,19 @@ record BucketSummaryDTO(String name, Int percentage, Double amount)
 // Remover quando corrigido (voltar para `Category category`).
 record PersistTransactionInput(String description, Long amount, String category, String currency, String? envelopeId)
 
+// Corpo de POST /api/transactions; null = invalido (400). Ver decodeLoginRequest em models.kf.
+PersistTransactionInput? decodePersistTransactionInput(String raw) {
+    try {
+        var req = json.decode<PersistTransactionInput>(raw)
+        if (req.description() == null || req.category() == null || req.currency() == null) {
+            return null
+        }
+        return req
+    } catch (String e) {
+        return null
+    }
+}
+
 // mod_transaction/dto/TransactionOutput.java
 record TransactionOutput(String id, String description, String category, Double value, String currency, String? envelopeId)
 

@@ -229,4 +229,73 @@ record ChatMessageRequest(String message)
 // Corpo de erro das rotas: serializado com json.encode (nunca JSON concatenado a mao)
 record ApiError(String error)
 
+// =========================================================
+// Leitura do corpo (400 em vez de 500). Medido no kof 0.6.3: JSON malformado, corpo vazio, `null`,
+// array, texto sobrando no fim, numero em texto ("abc") e campo primitivo ausente (JSN004) lancam
+// String, que `catch (String e)` pega; campo String ausente chega como null (o null check funciona).
+// null = corpo invalido; a rota responde 400 com invalidBody().
+// =========================================================
 
+String invalidBody() {
+    return json.encode(ApiError("Dados inválidos."))
+}
+
+LoginRequest? decodeLoginRequest(String raw) {
+    try {
+        var req = json.decode<LoginRequest>(raw)
+        if (req.email() == null || req.password() == null) {
+            return null
+        }
+        return req
+    } catch (String e) {
+        return null
+    }
+}
+
+OnboardingRequest? decodeOnboardingRequest(String raw) {
+    try {
+        var req = json.decode<OnboardingRequest>(raw)
+        if (req.incomeType() == null) {
+            return null
+        }
+        return req
+    } catch (String e) {
+        return null
+    }
+}
+
+VariableIncomeInput? decodeVariableIncomeInput(String raw) {
+    try {
+        var req = json.decode<VariableIncomeInput>(raw)
+        if (req.source() == null) {
+            return null
+        }
+        return req
+    } catch (String e) {
+        return null
+    }
+}
+
+CreateEnvelopeInput? decodeCreateEnvelopeInput(String raw) {
+    try {
+        var req = json.decode<CreateEnvelopeInput>(raw)
+        if (req.categoryName() == null) {
+            return null
+        }
+        return req
+    } catch (String e) {
+        return null
+    }
+}
+
+ChatMessageRequest? decodeChatMessageRequest(String raw) {
+    try {
+        var req = json.decode<ChatMessageRequest>(raw)
+        if (req.message() == null) {
+            return null
+        }
+        return req
+    } catch (String e) {
+        return null
+    }
+}

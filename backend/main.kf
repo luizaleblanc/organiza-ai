@@ -61,31 +61,41 @@ main() {
     // Autenticação Direta (Zero dependência externa)
     // =========================================================
 
+    // Corpo invalido (JSON malformado, campo ausente ou de tipo errado) = 400 em todas as rotas com corpo.
     app.post("/api/auth/login") {
-        var req = json.decode<LoginRequest>(body())
-        // Limite de tentativas por e-mail (5 por minuto) contra força bruta
-        if (!security.rateLimit("login:" + req.email, 5, 60)) {
-            return status(429, json.encode(ApiError("Muitas tentativas de login. Tente de novo em 1 minuto.")))
+        var req = decodeLoginRequest(body())
+        if (req != null) {
+            // Limite de tentativas por e-mail (5 por minuto) contra força bruta
+            if (!security.rateLimit("login:" + req.email, 5, 60)) {
+                return status(429, json.encode(ApiError("Muitas tentativas de login. Tente de novo em 1 minuto.")))
+            }
+            // Mesma resposta (401) para e-mail inexistente e senha errada: sem enumeracao de usuario
+            var user = authenticateUser(req.email, req.password)
+            if (user != null) {
+                return issueToken(user.id)
+            }
+            return status(401, json.encode(ApiError("Credenciais inválidas")))
         }
-        // Mesma resposta (401) para e-mail inexistente e senha errada: sem enumeracao de usuario
-        var user = authenticateUser(req.email, req.password)
-        if (user != null) {
-            return issueToken(user.id)
-        }
-        return status(401, json.encode(ApiError("Credenciais inválidas")))
+        return status(400, invalidBody())
     }
 
     app.post("/api/auth/register") {
-        var req = json.decode<LoginRequest>(body())
-        var existing = findUserByEmail(req.email)
-        if (existing != null) {
+        var req = decodeLoginRequest(body())
+        if (req != null) {
+            var existing = findUserByEmail(req.email)
+            if (existing != null) {
+                return status(409, json.encode(ApiError("Usuário já cadastrado")))
+            }
+
+            // Senha so como passwords.hash (PERS-12); o id vem do banco, nunca de contagem em memoria (PERS-06).
+            // Corrida com o mesmo e-mail: a UNIQUE do banco barra o perdedor, que tambem recebe 409.
+            var created = insertUserIfNew(UserEntity("", req.email, passwords.hash(req.password), Role.USER, 0, true, Tier.FREE, false, 0, true, BudgetModelType.STANDARD_503020, IncomeType.FIXED, false, 0))
+            if (created != null) {
+                return issueToken(created.id)
+            }
             return status(409, json.encode(ApiError("Usuário já cadastrado")))
         }
-
-        // Senha so como passwords.hash (PERS-12); o id vem do banco, nunca de contagem em memoria (PERS-06)
-        var created = insertUser(UserEntity("", req.email, passwords.hash(req.password), Role.USER, 0, true, Tier.FREE, false, 0, true, BudgetModelType.STANDARD_503020, IncomeType.FIXED, false, 0))
-
-        return issueToken(created.id)
+        return status(400, invalidBody())
     }
 
     // =========================================================
@@ -93,35 +103,38 @@ main() {
     // =========================================================
 
     app.post("/api/users/onboarding") {
-        var req = json.decode<OnboardingRequest>(body())
-        var incomeType = IncomeType.FIXED
-        if (req.incomeType == "VARIABLE") {
-            incomeType = IncomeType.VARIABLE
+        var req = decodeOnboardingRequest(body())
+        if (req != null) {
+            var incomeType = IncomeType.FIXED
+            if (req.incomeType == "VARIABLE") {
+                incomeType = IncomeType.VARIABLE
+            }
+
+            var suggested = suggestBudgetModel(req.salary, incomeType, req.hasDebt)
+
+            // Persiste o perfil no usuario autenticado (id sempre das claims, nunca do body)
+            var user = findUserById(currentUserId())
+            if (user == null) {
+                return status(404, json.encode(ApiError("Usuário não encontrado")))
+            }
+            user.salaryCents = toCents(req.salary)
+            user.hasSalary = true
+            user.incomeType = incomeType
+            user.hasDebt = req.hasDebt
+            user.budgetModel = suggested
+            updateUser(user)
+
+            var desc = describeBudgetModel(suggested)
+            var buckets = buildBudgetBuckets(suggested, req.salary)
+
+            var bStr = ""
+            for (var b in buckets) {
+                bStr = bStr + b.name + ":" + String.valueOf(b.percentage) + ":" + String.valueOf(b.amount) + ","
+            }
+
+            return suggested.name() + "|" + desc + "|" + bStr
         }
-
-        var suggested = suggestBudgetModel(req.salary, incomeType, req.hasDebt)
-
-        // Persiste o perfil no usuario autenticado (id sempre das claims, nunca do body)
-        var user = findUserById(currentUserId())
-        if (user == null) {
-            return status(404, json.encode(ApiError("Usuário não encontrado")))
-        }
-        user.salaryCents = toCents(req.salary)
-        user.hasSalary = true
-        user.incomeType = incomeType
-        user.hasDebt = req.hasDebt
-        user.budgetModel = suggested
-        updateUser(user)
-
-        var desc = describeBudgetModel(suggested)
-        var buckets = buildBudgetBuckets(suggested, req.salary)
-
-        var bStr = ""
-        for (var b in buckets) {
-            bStr = bStr + b.name + ":" + String.valueOf(b.percentage) + ":" + String.valueOf(b.amount) + ","
-        }
-
-        return suggested.name() + "|" + desc + "|" + bStr
+        return status(400, invalidBody())
     }
 
     // =========================================================
@@ -129,9 +142,12 @@ main() {
     // =========================================================
 
     app.post("/api/variable-income") {
-        var req = json.decode<VariableIncomeInput>(body())
-        var res = registerUserIncome(currentUserId(), req.amount, req.source)
-        return json.encode(res)
+        var req = decodeVariableIncomeInput(body())
+        if (req != null) {
+            var res = registerUserIncome(currentUserId(), req.amount, req.source)
+            return json.encode(res)
+        }
+        return status(400, invalidBody())
     }
 
     app.get("/api/variable-income") {
@@ -150,17 +166,20 @@ main() {
 
     app.post("/api/chat/message") {
         var userId = currentUserId()
-        var msgReq = json.decode<ChatMessageRequest>(body())
-        // ids gerados pelo banco (PERS-06/07); createdAt fica vazio ate a issue #44
-        var userMsg = ChatMessageEntity("", userId, ChatRole.USER, msgReq.message, null)
-        saveChatMessage(userMsg)
+        var msgReq = decodeChatMessageRequest(body())
+        if (msgReq != null) {
+            // ids gerados pelo banco (PERS-06/07); createdAt fica vazio ate a issue #44
+            var userMsg = ChatMessageEntity("", userId, ChatRole.USER, msgReq.message, null)
+            saveChatMessage(userMsg)
 
-        var pulse = calculateDailyPulse(userId, 30, "2026-09-01")
-        var reply = "Olá! Seu pulso diário disponível hoje é R$ " + String.valueOf(pulse.pulse) + ". O que deseja registrar hoje?"
-        var botMsg = ChatMessageEntity("", userId, ChatRole.ASSISTANT, reply, null)
-        saveChatMessage(botMsg)
+            var pulse = calculateDailyPulse(userId, 30, "2026-09-01")
+            var reply = "Olá! Seu pulso diário disponível hoje é R$ " + String.valueOf(pulse.pulse) + ". O que deseja registrar hoje?"
+            var botMsg = ChatMessageEntity("", userId, ChatRole.ASSISTANT, reply, null)
+            saveChatMessage(botMsg)
 
-        return reply
+            return reply
+        }
+        return status(400, invalidBody())
     }
 
     // =========================================================
@@ -173,11 +192,14 @@ main() {
     }
 
     app.post("/api/envelopes") {
-        var req = json.decode<CreateEnvelopeInput>(body())
-        // id "" = novo: o banco gera o id (PERS-06); o dono vem das claims (PERS-09)
-        var newEnv = EnvelopeEntity("", currentUserId(), req.categoryName, req.limitAmount, 0.0, EnvelopeLimitType.FIXED, 0, null)
-        var saved = createEnvelope(newEnv)
-        return json.encode(saved)
+        var req = decodeCreateEnvelopeInput(body())
+        if (req != null) {
+            // id "" = novo: o banco gera o id (PERS-06); o dono vem das claims (PERS-09)
+            var newEnv = EnvelopeEntity("", currentUserId(), req.categoryName, req.limitAmount, 0.0, EnvelopeLimitType.FIXED, 0, null)
+            var saved = createEnvelope(newEnv)
+            return json.encode(saved)
+        }
+        return status(400, invalidBody())
     }
 
     // =========================================================
@@ -194,16 +216,19 @@ main() {
     }
 
     app.post("/api/transactions") {
-        var req = json.decode<PersistTransactionInput>(body())
-        if (req.amount() <= 0) {
-            return status(400, json.encode(ApiError("O valor da transação deve ser maior que zero.")))
+        var req = decodePersistTransactionInput(body())
+        if (req != null) {
+            if (req.amount() <= 0) {
+                return status(400, json.encode(ApiError("O valor da transação deve ser maior que zero.")))
+            }
+            var category = Category.valueOf(req.category())
+            if (category == null) {
+                return status(400, json.encode(ApiError("Categoria inválida: " + req.category())))
+            }
+            var created = persistTransaction(req, category, currentUserId())
+            return json.encode(created)
         }
-        var category = Category.valueOf(req.category())
-        if (category == null) {
-            return status(400, json.encode(ApiError("Categoria inválida: " + req.category())))
-        }
-        var created = persistTransaction(req, category, currentUserId())
-        return json.encode(created)
+        return status(400, invalidBody())
     }
 
     // =========================================================
