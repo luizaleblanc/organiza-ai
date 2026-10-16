@@ -129,6 +129,15 @@ O fechamento ponta a ponta do **MVP 1** segue a metodologia **tlc-spec-driven (4
 
 **Regra de segurança:** nenhum commit ou push é executado por agentes de IA — cada lote é validado com `kof check` e entregue para revisão e commit manual da maintainer.
 
+### Homologação Java → Kof e roadmap do MVP 1
+
+Inspeção de 16/10/2026 em [`docs/MVP1_HOMOLOGACAO.md`](docs/MVP1_HOMOLOGACAO.md). Ela compara as 52 funções do backend Java arquivado com o backend Kof: **12 homologadas, 24 parciais, 16 ausentes**.
+
+- **Funciona e persiste no banco** (E2E 37/38 e reinício 25/25 em MySQL 8.4 local e H2): cadastro, login, onboarding, envelopes, gasto com desconto atômico, pulso diário e renda variável.
+- **Falta:** coach com LLM (hoje responde texto fixo), voz, nove rotas do legado, datas reais e freemium (#44), Kakeibo agendado e as telas do frontend.
+- **Risco de produção:** sem reconexão ao banco. Se o MySQL reiniciar, o app responde 500 até ser reiniciado.
+- **Roadmap em fases:** 0 estabilidade, 1 batch 2 backend, 2 #44, 3 rotas faltantes + e-mail (esqueci a senha e resumo diário às 20h), 4 coach com OpenAI gpt-4o-mini + leitura de fatura PDF, 6 telas (incluindo o Open Finance demo). A voz fica para o MVP 2. Cada item tem critério de aceite e badge; as decisões de escopo estão na seção 6 do documento.
+
 ### Batch 2: autenticação e onboarding (`mvp1-batch2-auth-onboarding`) -- em especificação
 
 Especificação e design em [`.specs/features/mvp1-batch2-auth-onboarding/`](.specs/features/mvp1-batch2-auth-onboarding/) ([`spec.md`](.specs/features/mvp1-batch2-auth-onboarding/spec.md), [`design.md`](.specs/features/mvp1-batch2-auth-onboarding/design.md)), issue #33. As decisões vêm de medições com o Kof 0.6.3 num navegador real (Edge headless):
