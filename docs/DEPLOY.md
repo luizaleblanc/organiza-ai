@@ -18,6 +18,8 @@ O backend Spring Boot foi arquivado em `archive/` e não é mais publicado; o gu
 | `KOF_JWT_AUDIENCE` | não | `organiza-ai-api` | `aud` gravado e exigido nos tokens. |
 | `KOF_DB_URL` | **sim em produção** | H2 em `./data/organiza;WRITE_DELAY=0` (fora de produção) | URL do banco **sem** usuário/senha, ex.: `mysql://<host>:<porta>/organiza_kof?sslMode=trust`. Uma URL com `@` ou `password=` derruba o boot, porque o runtime do Kof imprime a URL em alguns erros. No MySQL em produção, a URL **precisa** de `sslMode=` (`trust`, `verify-ca` ou `verify-full`), ou o boot falha: o `ssl-mode=REQUIRED` do painel da Aiven é ignorado pelo driver MariaDB, e a sessão subiria sem TLS (medido). O backend acrescenta sozinho o `ANSI_QUOTES` que a Query DSL do `kof.orm` exige. Persistência: [spec](../.specs/features/persistence-kof-orm/spec.md). |
 | `KOF_DB_USER` / `KOF_DB_PASSWORD` | conforme o banco | vazio | Credenciais do banco, passadas separadas da URL. |
+
+Timeouts do banco: em URLs `mysql://` e `mariadb://`, o backend acrescenta `connectTimeout=5000&socketTimeout=8000`, que são parâmetros do MariaDB Connector/J 3.5. Os padrões do driver são 30000 ms e 0 (sem limite). Um valor que já esteja na `KOF_DB_URL` vence. Não é preciso cadastrar variável nova.
 | `KOF_ENV` | não | — | `production` torna `KOF_DB_URL` obrigatória. A imagem Docker já define `KOF_ENV=production`. |
 | `PORT` | não | `3000` | Porta HTTP. O Render injeta a variável sozinho. A imagem Docker define `PORT=8080`. Um valor não numérico derruba o boot. |
 
@@ -89,7 +91,7 @@ Teste local com H2, sem banco externo: `docker run --rm -p 8080:8080 -e KOF_ENV=
    | `KOF_ENV` | `production` (a imagem já define; cadastrar deixa explícito) |
 
    **Não** cadastre `PORT`: o Render injeta sozinho e o backend lê.
-3. **Health Check Path:** `/health` (responde `OK` com 200, sem autenticação).
+3. **Health Check Path:** `/health`, sem autenticação. A rota faz `SELECT 1` no banco e, se a conexão tiver caído, tenta reabri-la. Responde `OK` com 200 quando o banco responde e **503** (`{"error":"Banco de dados indisponível."}`) quando não responde. Com o banco fora, o 503 sai na hora se a porta recusa a conexão, e em até ~21 s se o banco fica mudo (medido com `docker pause`). **Consequência:** se o banco ficar fora, o Render vê o health check falhar e **reinicia o serviço**. Nesse caso, o boot sai com código 1 em menos de 10 s, com a mensagem `nao foi possivel conectar ao banco (esquema mysql)`, até o banco voltar. Quando o banco volta, o processo que está no ar reabre a conexão sozinho, sem precisar de reinício. O keep-alive (`.github/workflows/keep-alive.yml`, `curl -f`) também passa a ficar vermelho quando o banco cai.
 4. Na Aiven, se o serviço tiver lista de IPs permitidos, ela precisa aceitar a saída do Render.
 5. Depois do deploy: `curl -fsS https://<serviço>.onrender.com/health` → `OK`. O log de boot mostra `banco aberto: esquema mysql`.
 6. As variáveis do Spring (`SPRING_DATASOURCE_*`, `OPENAI_API_KEY`, `API_SECURITY_TOKEN_SECRET`) não são lidas pelo

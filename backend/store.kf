@@ -184,7 +184,7 @@ String withDbTimeouts(String url) {
         out = out + sep + "connectTimeout=5000"
     }
     if (!out.contains("socketTimeout=")) {
-        out = out + "&socketTimeout=10000"
+        out = out + "&socketTimeout=8000"
     }
     return out
 }
@@ -239,18 +239,21 @@ Bool pingDb(String handle) {
     }
 }
 
-// Garante uma conexao viva antes de cada requisicao: SELECT 1 na conexao principal (sem a ficha, entao
-// requisicoes saudaveis nao fazem fila). Se falhar (MySQL reiniciado, idle timeout, TCP sem resposta ate
-// o socketTimeout), pega a ficha do DbConn.lock, confere de novo (outra requisicao pode ja ter trocado) e
-// abre uma conexao nova; a antiga e fechada. false = banco inacessivel agora (a rota responde 503).
+// Garante uma conexao viva antes de cada requisicao e no /health: SELECT 1 na conexao principal (sem a
+// ficha, entao requisicoes saudaveis nao fazem fila). Se falhar (MySQL reiniciado, idle timeout, TCP sem
+// resposta ate o socketTimeout), pega a ficha do DbConn.lock e abre uma conexao nova; a antiga e fechada.
+// Pior caso com o banco mudo: socketTimeout (8 s) + connectTimeout (5 s) = ~13 s ate o false.
+// false = banco inacessivel agora (a rota responde 503).
 Bool ensureDb() {
-    if (pingDb(DbConn.handle)) {
+    var seen = DbConn.handle
+    if (pingDb(seen)) {
         return true
     }
     var token = DbConn.lock.receive()
     try {
-        if (pingDb(DbConn.handle)) {
-            return true
+        // Outra requisicao ja trocou a conexao enquanto esta esperava a ficha: usa a nova.
+        if (DbConn.handle != seen) {
+            return pingDb(DbConn.handle)
         }
         var fresh = ""
         try {

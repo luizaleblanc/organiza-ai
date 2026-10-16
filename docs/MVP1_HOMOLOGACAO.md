@@ -174,6 +174,17 @@ G-E2E 37/38 (H2 e MySQL, só a #44) · G-RESTART 25/25 (H2 e MySQL) · VerifyAll
 G-DB-BOUNCE: transação 200 antes e depois do `docker restart` do MySQL, sem reiniciar o app
 ```
 
+**Health com banco** (`feat(backend): health verifica o banco`, parte do aceite da Fase 0). O `/health` usa o mesmo `ensureDb` (`SELECT 1` e reabertura da conexão). Responde `OK` com 200 quando o banco responde e 503 sem detalhe quando não responde, e o Render passa a reiniciar o serviço quando o banco cai (`docs/DEPLOY.md`). Para caber no orçamento de 15 s, o `socketTimeout` padrão caiu de 10000 para 8000 ms. Uma requisição que espera a ficha não pinga de novo quando outra requisição já trocou a conexão. Evidência (MySQL 8.4 local):
+
+```
+G-DB-DOWN   dddde36: MySQL parado → /health 200 "OK" (mentia), login 500
+G-DB-DOWN   health:  MySQL parado → /health 503 em 0,0 s; login 503; `docker start` → /health 200 em 4,1 s
+G-DB-PAUSE  health:  MySQL congelado com a conexão viva (TCP sem resposta) → /health 503 em 21,0 s; volta a 200 após `docker unpause`
+G-DB-BOUNCE health:  login e envelopes 200 em 5,0 s após `docker restart`; transação 200 antes e depois
+G-BOOT-DOWN: MySQL parado → exit=1 em 1,1 s; IP sem resposta → exit=1 em 5,8 s; senha no log: 0
+G-E2E 37/38 (H2 e MySQL, só a #44) · G-RESTART 25/25 (H2 e MySQL) · VerifyAll 70 classes, 0 erros · LinkAll 102/102
+```
+
 ### Fase 1: Retomada do batch 2 backend (F1 a F4)
 
 O clone `%TEMP%\oa-f1` tem um commit local **não publicado** e não presente no repo (`2e34ffb feat(backend): nome no cadastro com migracao condicional da coluna`) e mais um diff não commitado (`backend/main.kf` +64/−10, `backend/models.kf` +52/−1). Decidir se ele será revisado e aproveitado ou refeito. Há também um container `oa-f1-mysql` daquela sessão ainda criado.

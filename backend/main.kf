@@ -35,7 +35,7 @@ main() {
     // (assinatura, exp, iss e aud via currentClaims). As rotas só leem o usuário.
     app.use {
         // Conexao morta (MySQL reiniciado, idle timeout) e reaberta aqui, antes da rota; banco fora = 503
-        // sem detalhe. O /health faz o proprio ping.
+        // sem detalhe. O /health faz o proprio ping (abaixo), por isso fica de fora.
         if (path() != "/health" && !ensureDb()) {
             return status(503, json.encode(ApiError("Serviço temporariamente indisponível. Tente de novo em instantes.")))
         }
@@ -48,8 +48,13 @@ main() {
         return null
     }
 
+    // Health check do Render e do keep-alive: "OK" so com o banco respondendo (SELECT 1, reabrindo a
+    // conexao se ela caiu). Banco fora = 503 sem detalhe; o Render reinicia o servico que fica em 503.
     app.get("/health") {
-        return "OK"
+        if (ensureDb()) {
+            return "OK"
+        }
+        return status(503, json.encode(ApiError("Banco de dados indisponível.")))
     }
 
     // =========================================================
