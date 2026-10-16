@@ -87,9 +87,11 @@ entity KakeiboReflectionRow {
 // `lock` e um canal com UMA ficha (Channel = LinkedBlockingQueue: receive() bloqueia ate haver ficha,
 // JvmOpCollections.emitChannelCall): quem precisa trocar a conexao ou abrir uma transacao pega a
 // ficha e a devolve no finally. Assim nenhum db.connect concorrente muda a "ultima aberta" no meio.
+// `txHandle` e a conexao dedicada das transacoes (txConnection): enquanto nao for "", e a ultima aberta.
 class DbConn {
     static String handle = ""
     static String url = ""
+    static String txHandle = ""
     static Channel<Int> lock = channel<Int>()
 }
 
@@ -260,11 +262,38 @@ Bool ensureDb() {
         var old = DbConn.handle
         DbConn.handle = fresh
         closeDbQuietly(old)
+        // O db.connect acima virou a "ultima aberta": a conexao de transacao sera reaberta na proxima vez.
+        closeDbQuietly(DbConn.txHandle)
+        DbConn.txHandle = ""
         log.info("conexao com o banco reaberta: esquema " + dbScheme(DbConn.url))
         return true
     } finally {
         DbConn.lock.send(token)
     }
+}
+
+// Conexao dedicada das transacoes. So pode ser chamada com a ficha do DbConn.lock. O transaction {} do
+// kof.db roda na ULTIMA conexao aberta (kof_db_transaction usa KOF_DB_DEFAULT, que o kof_db_register
+// troca a cada db.connect): por isso a transacao nao pode usar a conexao principal, onde as outras
+// requisicoes gravam em paralelo (um rollback desfaria as gravacoes delas, e elas cairiam dentro do
+// commit). Medido antes desta correcao (G-CONC, MySQL 8.4): todas as respostas 200, mas 9 de 60
+// transacoes e 4 de 60 cadastros sumiram e o envelope ficou em 230,00 com 510,00 gravados.
+String txConnection() {
+    if (DbConn.txHandle != "") {
+        if (pingDb(DbConn.txHandle)) {
+            return DbConn.txHandle
+        }
+        closeDbQuietly(DbConn.txHandle)
+        DbConn.txHandle = ""
+    }
+    DbConn.txHandle = connectDb()
+    return DbConn.txHandle
+}
+
+// Descarta a conexao de transacao (apos um erro dentro do transaction {}); a proxima e aberta de novo.
+void dropTxConnection() {
+    closeDbQuietly(DbConn.txHandle)
+    DbConn.txHandle = ""
 }
 
 // Abre a conexao e garante o schema. Qualquer falha derruba o boot (PERS-05) sem citar a URL; com os
@@ -453,10 +482,15 @@ EnvelopeEntity? findEnvelopeByUserIdAndCategoryName(String userId, String catego
 
 // Row do envelope SO se pertencer ao usuario; id de outro dono ou fora do formato = null.
 EnvelopeRow? findOwnedEnvelopeRow(String userId, String id) {
+    return findOwnedEnvelopeRowOn(DbConn.handle, userId, id)
+}
+
+// Mesma leitura numa conexao escolhida (a da transacao le o gasto que ela mesma vai somar).
+EnvelopeRow? findOwnedEnvelopeRowOn(String conn, String userId, String id) {
     if (!strings.isNumeric(userId) || !strings.isNumeric(id)) {
         return null
     }
-    var row = orm.find<EnvelopeRow>(DbConn.handle, id.toLong())
+    var row = orm.find<EnvelopeRow>(conn, id.toLong())
     if (row != null) {
         if (row.userId() == userId.toLong()) {
             return row
@@ -488,11 +522,15 @@ EnvelopeEntity saveEnvelope(EnvelopeEntity envelope) {
 
 // Gasto somado em centavos direto na row (soma Long exata) e gravado no banco.
 EnvelopeEntity addEnvelopeSpentCents(String userId, String envelopeId, Long cents) {
-    var row = findOwnedEnvelopeRow(userId, envelopeId)
+    return addEnvelopeSpentCentsOn(DbConn.handle, userId, envelopeId, cents)
+}
+
+EnvelopeEntity addEnvelopeSpentCentsOn(String conn, String userId, String envelopeId, Long cents) {
+    var row = findOwnedEnvelopeRowOn(conn, userId, envelopeId)
     if (row == null) {
         throw "Envelope not found."
     }
-    var saved = orm.save(DbConn.handle, EnvelopeRow(row.id(), row.userId(), row.categoryName(), row.limitCents(),
+    var saved = orm.save(conn, EnvelopeRow(row.id(), row.userId(), row.categoryName(), row.limitCents(),
         row.spentCents() + cents, row.limitType(), row.movingAverageMonths(), row.createdAt()))
     return envelopeFromRow(saved)
 }
@@ -606,7 +644,11 @@ void deleteTransactionsByUserId(String userId) {
 
 // Sempre insere: o id vem do banco (PERS-06/07); texto vai por bind, gravado literal (PERS-15).
 TransactionEntity insertTransaction(TransactionEntity transaction) {
-    return transactionFromRow(orm.save(DbConn.handle, transactionToRow(0, transaction)))
+    return insertTransactionOn(DbConn.handle, transaction)
+}
+
+TransactionEntity insertTransactionOn(String conn, TransactionEntity transaction) {
+    return transactionFromRow(orm.save(conn, transactionToRow(0, transaction)))
 }
 
 // =========================================================

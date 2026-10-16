@@ -136,6 +136,7 @@ Inspeção de 16/10/2026 em [`docs/MVP1_HOMOLOGACAO.md`](docs/MVP1_HOMOLOGACAO.m
 - **Funciona e persiste no banco** (E2E 37/38 e reinício 25/25 em MySQL 8.4 local e H2): cadastro, login, onboarding, envelopes, gasto com desconto atômico, pulso diário e renda variável.
 - **Falta:** coach com LLM (hoje responde texto fixo), voz, nove rotas do legado, datas reais e freemium (#44), Kakeibo agendado e as telas do frontend.
 - **Reconexão ao banco (Fase 0.1, feita):** se o MySQL reiniciar, o backend reabre a conexão sozinho, e o login volta a 200 em cerca de 6 s, sem reiniciar o app. Enquanto o banco está fora, as rotas respondem 503. O boot com o banco inacessível falha em menos de 10 s.
+- **Transações isoladas (Fase 0.2, feita):** a gravação de um gasto usa uma conexão própria, uma transação por vez. Antes, com carga paralela, um rollback desfazia cadastros e gastos de outras requisições que tinham recebido 200.
 - **Roadmap em fases:** 0 estabilidade, 1 batch 2 backend, 2 #44, 3 rotas faltantes + e-mail (esqueci a senha e resumo diário às 20h), 4 coach com OpenAI gpt-4o-mini + leitura de fatura PDF, 6 telas (incluindo o Open Finance demo). A voz fica para o MVP 2. Cada item tem critério de aceite e badge; as decisões de escopo estão na seção 6 do documento.
 
 ### Batch 2: autenticação e onboarding (`mvp1-batch2-auth-onboarding`) -- em especificação

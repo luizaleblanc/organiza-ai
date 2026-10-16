@@ -315,6 +315,20 @@ String? resolveEnvelopeId(String userId, String? given, Category category) {
     return null
 }
 
+// O transaction {} fica numa funcao propria: dentro de um try, o kof 0.6.3 para com "Internal compiler
+// error: null [COMP002]" (medido nesta mudanca). O bloco nao devolve valor, entao a linha gravada sai
+// por uma lista. Desconto do envelope lido e gravado na mesma conexao da transacao (soma em centavos).
+TransactionEntity insertTransactionAndSpend(String tx, TransactionEntity transaction, String userId, String? envId, Long amountCents) {
+    var saved: List<TransactionEntity> = listOf()
+    transaction {
+        saved.add(insertTransactionOn(tx, transaction))
+        if (envId != null) {
+            addEnvelopeSpentCentsOn(tx, userId, envId, amountCents)
+        }
+    }
+    return saved.get(0)
+}
+
 TransactionOutput persistTransaction(PersistTransactionInput input, Category category, String userId) {
     if (input.amount() <= 0) {
         throw "Operação negada: O valor da transação deve ser maior que zero."
@@ -323,19 +337,25 @@ TransactionOutput persistTransaction(PersistTransactionInput input, Category cat
     var envId = resolveEnvelopeId(userId, input.envelopeId(), category)
     var amountCents = toCents(input.amount() * 1.0)
 
-    // Transacao + desconto do envelope numa unica transacao do banco (transaction {} do kof.db, na
-    // conexao unica DbConn): qualquer erro desfaz as duas gravacoes e propaga como String (medido no
-    // kof 0.6.3 em H2: commit, rollback e catch (String e) fora do bloco). O bloco nao devolve valor,
-    // entao a transacao gravada sai por uma lista.
+    // Transacao + desconto do envelope numa unica transacao do banco, isolada das outras requisicoes:
+    // com a ficha do DbConn.lock (uma transacao por vez) e numa conexao so dela (txConnection, a ultima
+    // aberta, que e a que o transaction {} do kof.db usa). Qualquer erro desfaz as duas gravacoes.
     var saved: List<TransactionEntity> = listOf()
-    transaction {
-        // createdAt fixo ate a issue #44 (datas reais); descricao gravada literal via binds (PERS-15)
-        saved.add(insertTransaction(TransactionEntity("", input.description(), amountCents, category, input.currency(), userId, null, Source.MANUAL, "2026-09-18T12:00:00Z", envId)))
-
-        // Desconto do envelope gravado no banco (soma em centavos)
-        if (envId != null) {
-            addEnvelopeSpentCents(userId, envId, amountCents)
+    var token = DbConn.lock.receive()
+    try {
+        var tx = txConnection()
+        try {
+            // createdAt fixo ate a issue #44 (datas reais); descricao gravada literal via binds (PERS-15)
+            saved.add(insertTransactionAndSpend(tx, TransactionEntity("", input.description(), amountCents, category, input.currency(), userId, null, Source.MANUAL, "2026-09-18T12:00:00Z", envId), userId, envId, amountCents))
+        } catch (String e) {
+            // Rollback ja feito pelo runtime; a conexao e descartada (pode ser ela que caiu) e o detalhe
+            // do banco nao vai para a resposta.
+            dropTxConnection()
+            log.warn("transacao desfeita (rollback)")
+            throw "Não foi possível gravar a transação."
         }
+    } finally {
+        DbConn.lock.send(token)
     }
 
     return transactionEntityToOutput(saved.get(0))

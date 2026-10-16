@@ -149,7 +149,7 @@ Ordem: primeiro o que derruba a produção, depois o que bloqueia o frontend, de
 | Item | Aceite verificável | Est. | Nível |
 |---|---|---|---|
 | ✅ 0.1 Reconexão ao banco (pool ou reabrir a conexão quando cair) | Probe P10: com o servidor no ar, `docker restart` do MySQL → próximo login = 200 sem reiniciar o app; G-RESTART 25/25 | M | avancado |
-| 0.2 Transações isoladas por requisição | Teste com 20 POSTs `/api/transactions` em paralelo + 1 falha forçada: soma do envelope = soma das transações gravadas; nenhuma gravação órfã | M | avancado |
+| ✅ 0.2 Transações isoladas por requisição | Teste com 20 POSTs `/api/transactions` em paralelo + 1 falha forçada: soma do envelope = soma das transações gravadas; nenhuma gravação órfã | M | avancado |
 | 0.3 `sslMode=verify-full` com o CA da Aiven | Boot em produção recusa `trust`; teste local com certificado inválido falha no boot | P | intermediario |
 | 0.4 Erros de entrada → 400 (inclui F2 §6) | `curl` com `{"email":`, `{bad`, `"salary":"abc"` → 400 `{"error":"Dados inválidos."}`; violação de unique no cadastro → 409, nunca 500 | P | intermediario |
 
@@ -161,6 +161,17 @@ G-DB-BOUNCE  0.1:     503 em t=2,0 s → login 200 e envelopes 200 em t=6,1 s, m
 G-BOOT-DOWN  dddde36: IP sem resposta → exit=1 em 22,3 s, stack com "Socket fail to connect to 10.255.255.1"
 G-BOOT-DOWN  0.1:     MySQL parado → exit=1 em 1,2 s; IP sem resposta → exit=1 em 6,1 s; senha no log: 0
 G-E2E 37/38 (H2 e MySQL, só a #44) · G-RESTART 25/25 (H2 e MySQL) · VerifyAll 70 classes, 0 erros · LinkAll 102/102
+```
+
+**0.2 feito** (`fix(backend): transacao isolada por requisicao`). O risco 2 da seção 1 foi reproduzido com carga. O `transaction {}` do `kof.db` roda na última conexão aberta (`kof_db_transaction` usa `KOF_DB_DEFAULT`). Por isso a gravação da transação agora acontece numa conexão dedicada (`txConnection`, `backend/store.kf`), e uma transação por vez segura a ficha do `DbConn.lock`. O desconto do envelope é lido e gravado nessa mesma conexão. Se der erro, a conexão dedicada é descartada e a resposta não traz o detalhe do banco. No kof 0.6.3, um `transaction {}` dentro de `try` não compila (`Internal compiler error: null [COMP002]`, repro de 10 linhas). Por isso o bloco ficou numa função própria (`insertTransactionAndSpend`). G-CONC (`tools/conc.sh`): por rodada, 20 transações válidas, 3 que falham no banco (descrição de 300 caracteres) e 20 cadastros, todos em paralelo, em 3 rodadas:
+
+```
+antes (0.1)   MySQL: as 120 respostas esperadas deram 200, mas 51/60 transações gravadas, envelope 230,00 ≠ soma 510,00, 56/60 cadastros   VERMELHO
+antes (0.1)   H2:    60/60 transações, envelope 560,00 ≠ soma 600,00, 58/60 cadastros                                  VERMELHO
+depois (0.2)  MySQL: 60/60 transações, soma 600,00 = envelope 600,00, 60/60 cadastros, as 9 falhas sem linha órfã         VERDE
+depois (0.2)  H2:    60/60 transações, soma 600,00 = envelope 600,00, 60/60 cadastros                                    VERDE
+G-E2E 37/38 (H2 e MySQL, só a #44) · G-RESTART 25/25 (H2 e MySQL) · VerifyAll 70 classes, 0 erros · LinkAll 102/102
+G-DB-BOUNCE: transação 200 antes e depois do `docker restart` do MySQL, sem reiniciar o app
 ```
 
 ### Fase 1: Retomada do batch 2 backend (F1 a F4)
