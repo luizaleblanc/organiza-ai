@@ -46,9 +46,9 @@ RUN set -eu; \
 WORKDIR /src
 COPY kof.toml kofdeps ./
 COPY backend ./backend
-# O `kof build` nao copia o driver JDBC e so auto-provisiona URL literal em db.connect (medido no 0.6.3);
+# O `kof build` nao copia o driver JDBC e so auto-provisiona URL literal em db.connect (medido no 0.6.3 e no 0.6.5);
 # a URL vem de KOF_DB_URL, entao os drivers ficam fixados em `kofdeps` e entram no fat jar via --classpath.
-# O `--fat` do 0.6.3 guarda so o primeiro META-INF/services/java.sql.Driver (o do H2): sem o do MariaDB,
+# O `--fat` (0.6.3 e 0.6.5) guarda so o primeiro META-INF/services/java.sql.Driver (o do H2): sem o do MariaDB,
 # mysql:// falha com "driver ausente" (medido). O arquivo e refeito com os drivers de todos os jars.
 RUN /opt/kof/bin/kof check backend \
  && cp="$(/opt/kof/bin/kof deps resolve . | tail -1)" \

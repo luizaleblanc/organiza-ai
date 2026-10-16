@@ -62,9 +62,9 @@ Conheça a interface do Organiza IA:
 | **Monólito Modular Frontend** | KOF (`kof.ui`, `frontend/*.kf`) -- Módulos de Core (`core/`), Componentes (`components/`) e Telas (`screens/`) |
 | **Back-end Legado (arquivado)** | Java 17, Spring Boot 3.3.x, Spring AI -- arquivado em `archive/legacy-backend-java/` (tag histórica `legacy/java-spring-boot`), mantido apenas como referência histórica |
 | **Banco de Dados** | `kof.orm` em `backend/store.kf`: MySQL 8.4 na Aiven em produção (driver MariaDB Connector/J fixado em `kofdeps`), com o app no Render; H2 em arquivo (`./data`) fora de produção. Persistência concluída e em produção desde 12/10/2026, ver [`.specs/features/persistence-kof-orm/`](.specs/features/persistence-kof-orm/): usuários, envelopes, transações, chat, renda variável e Kakeibo no banco |
-| **Build & Tooling** | `kof-cli` / Kof Compiler **0.6.3**, fixado em [`KOF_VERSION`](KOF_VERSION) (Java 25 JDK) |
+| **Build & Tooling** | `kof-cli` / Kof Compiler **0.6.5**, fixado em [`KOF_VERSION`](KOF_VERSION) (Java 25 JDK) |
 
-**Versão do Kof:** fixada em `0.6.3` no arquivo [`KOF_VERSION`](KOF_VERSION), fonte única do `Dockerfile` e do CI (`.github/workflows/kof-check.yml`). Trocar a versão é um commit próprio em `KOF_VERSION`, feito só depois de passar todos os gates; releases prerelease são recusados.
+**Versão do Kof:** fixada em `0.6.5` no arquivo [`KOF_VERSION`](KOF_VERSION), fonte única do `Dockerfile` e do CI (`.github/workflows/kof-check.yml`). Trocar a versão é um commit próprio em `KOF_VERSION`, feito só depois de passar todos os gates; releases prerelease são recusados. A troca 0.6.3 → 0.6.5 (16/10/2026) e o que mudou nos contornos estão em [`docs/MVP1_HOMOLOGACAO.md`](docs/MVP1_HOMOLOGACAO.md), seção 7.
 
 ## Arquitetura Monolítica Modular (KofLith)
 

@@ -229,7 +229,7 @@ Checklist da tarefa (hex e alturas lidos com `getComputedStyle`, textos exatos) 
 ### 6.3 Gates
 
 - **G-BUILD**: `kof build backend --target jvm` e `kof build frontend --target js` com exit 0 (e `kof check backend`, como no Dockerfile).
-- **G-BYTECODE**: igual à persistência (VerifyAll + LinkAll, controle z1 acusando).
+- **G-BYTECODE**: igual à persistência (VerifyAll + LinkAll, controle positivo sintético acusando; o z1 deixou de acusar no 0.6.5, ver `docs/MVP1_HOMOLOGACAO.md` seção 7).
 - **G-E2E**: `scripts/test_e2e_flow.ps1` com só a #44 falhando, mais os casos novos desta feature.
 - **G-RESTART**: dados criados (incluindo `name` e `debtCents`) sobrevivem a matar e subir o processo.
 - **G-AUTH-STATIC**: sem token, `GET /index.html` → 200 e `GET /api/dashboard`, `GET /api/users/me` e `POST /api/users/onboarding` → 401.

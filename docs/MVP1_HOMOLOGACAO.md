@@ -256,7 +256,7 @@ O clone `%TEMP%\oa-f1` tem um commit local **não publicado** e não presente no
 
 ### Gates permanentes
 
-G-BUILD, G-BYTECODE (VerifyAll/LinkAll), G-E2E e G-RESTART em H2 **e** MySQL 8.4 com `ANSI_QUOTES`, mais o probe de reconexão (P10) a partir da Fase 0. O CI está vermelho segundo a auditoria de 07/10; voltar a deixá-lo verde é pré-requisito para o merge de cada fase.
+G-BUILD, G-BYTECODE (VerifyAll/LinkAll, com o controle positivo sintético da seção 7.2), G-E2E e G-RESTART em H2 **e** MySQL 8.4 com `ANSI_QUOTES`, mais o probe de reconexão (P10) a partir da Fase 0. O CI está vermelho segundo a auditoria de 07/10; voltar a deixá-lo verde é pré-requisito para o merge de cada fase.
 
 ## 5. Evidências
 
@@ -335,3 +335,54 @@ O container `oa-insp-mysql` foi removido (`docker rm -f`). O container `oa-f1-my
 | Commit `2e34ffb` do clone F1 | **Revisar e aproveitar**, passando pelos gates da Fase 1 |
 
 Novos itens no roadmap: e-mail transacional (Fase 3, depois da estabilidade) e leitura de PDF (Fase 4).
+
+## 7. Troca para o Kof 0.6.5 (16/10/2026)
+
+`KOF_VERSION` passou de `kof-0.6.3` para `kof-0.6.5`, a estável mais recente nesta data (conferido com `gh api repos/KofLang/Kof4j/releases`, sem prerelease). Pacote Windows: SHA256 do zip `10059328…1935`; `lib/kof.jar` sha256 `920071c1…e67f`. O `Dockerfile` e o CI leem o mesmo arquivo. O bloco de instalação do CI, extraído e executado localmente, baixou `kof-0.6.5-linux-x86_64`, conferiu o SHA256 (`OK`) e recusou um tag prerelease e um tag inexistente.
+
+### 7.1 Bugs e contornos: 0.6.3 × 0.6.5 (medido)
+
+Repros mínimos fora do repo, compilados com `kof build --target jvm` (ou `--target js` e Edge headless no caso do frontend) nas duas versões.
+
+| Repro | Sintoma no 0.6.3 | 0.6.5 | Contorno no projeto |
+|---|---|---|---|
+| z1 (`Double?` estreitado e retornado) | `VerifyError` ao carregar a classe | **corrigido** | Nenhum (o `orZero` já tinha saído em `7471f78`). O z1 deixou de servir de controle positivo (7.2) |
+| z6, z7, z8c, m3 (outras faces do #41) | `VerifyError` | **corrigido** | Nenhum |
+| m1, m2 (`T?` atribuído a local) | não compila | **corrigido** | Nenhum |
+| `Spacer` no KofJS | `ReferenceError: Spacer is not defined` | **corrigido** | Nenhum hoje; liberado para as telas do Batch 2 |
+| Enum em `json.decode<T>` (jenum, j2b) | falha em runtime | continua | `// WORKAROUND:` do enum como `String` |
+| `math.max(Double, Double)` | não compila | continua | Comparação explícita |
+| `transaction {}` dentro de `try/finally` | não compila (`COMP002`) | continua | Estrutura atual do `store.kf` |
+| `--fat` com vários drivers JDBC | só o `java.sql.Driver` do H2 entra no jar | continua | Dockerfile refaz `META-INF/services/java.sql.Driver` |
+| `kof.orm` sem aspas ANSI no MySQL | erro 1064 sem `ANSI_QUOTES` | continua | Sessão com `ANSI_QUOTES` |
+| `Router`/`Store` no Chromium (`kofUiReuseRoot`) | `TypeError: Cannot set property length of CSSStyleDeclaration` | continua | `mountScreen` + campos `static` (spec do Batch 2, §2.1) |
+| `String.format` no navegador | `kof_platform.stringFormat: not available` | continua | Formatação manual |
+
+### 7.2 G-BYTECODE: novo controle positivo
+
+No 0.6.5 nenhum repro conhecido do #41 gera mais bytecode inválido (tabela 7.1), então o controle passou a ser **sintético**: um programa Kof mínimo (`Int sete() { return 7 }` + `main`) é compilado e, numa cópia, o único `bipush 7; ireturn` (`10 07 AC`) de `Default/Main.class` vira `bipush 7; areturn` (`10 07 B0`). O `.class` continua bem formado, mas devolve um `Int` como referência. A cada rodada do gate:
+
+```
+controle negativo (limpo) VerifyAll exit=0 :: RESUMO geradas: 2 classes, 9 metodos, 0 erros
+controle positivo (sintetico) VerifyAll exit=1 :: 1 GERADA :: GERADA Default/Main :: sete()I @insn#3 :: Error at instruction 3: Expected an object reference, but found I
+controle positivo (sintetico) LinkAll exit=1 :: FAIL Default.Main :: java.lang.VerifyError: Bad type on operand stack ... Default/Main.sete()I @2: areturn
+```
+
+Ou seja, os dois verificadores continuam acusando bytecode inválido, e o "0 erros" do backend não vem de um verificador cego. Se uma versão futura voltar a gerar bytecode inválido num repro real, ele pode substituir o sintético.
+
+### 7.3 Gates no 0.6.5 (HEAD `56804d0` + `KOF_VERSION`)
+
+```
+kof version: kof 0.6.5 | kof.jar sha256: 920071c1283f1e355ff45022c7ad7c3ee47da0e490602a4c5795565a9338e67f | JDK 25.0.3
+G-BUILD check exit=0 :: checked 6 file(s) — no errors | build exit=0
+VerifyAll exit=0 :: RESUMO geradas: 70 classes, 462 metodos, 0 erros | runtime: 32 classes, 1101 metodos, 0 erros
+LinkAll exit=0 :: RESUMO linkadas OK=102 FAIL=0 SKIP=0 total=102
+G-E2E H2:    37 / 38 (só o 29, issue #44)
+G-E2E MySQL: 37 / 38 (só o 29, issue #44)   (MySQL 8.4 local em Docker, ANSI_QUOTES)
+G-RESTART (PowerShell) H2 e MySQL: 25 / 25, sem VerifyError/LinkageError
+G-DB-BOUNCE: VERDE em 4,9 s sem reiniciar o app | G-DB-DOWN: 503 com o banco parado, 200 em 2,1 s após o start
+G-BOOT-DOWN: exit=1 em 0,8 s (parado) e 2,7 s (IP sem rota), sem senha no log
+kof build frontend --target js: exit=0
+docker build: "Kof release: kof-0.6.5-linux-x86_64", java.sql.Driver no jar: org.h2.Driver org.mariadb.jdbc.Driver
+docker run (KOF_ENV vazio, H2): /health 200 em 2 s; cadastro devolve token
+```

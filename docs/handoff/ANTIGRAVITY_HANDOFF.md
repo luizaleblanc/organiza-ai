@@ -35,7 +35,7 @@
 
 | Item | Estado |
 |---|---|
-| Backend (`backend/*.kf`) | Compila no Kof de `KOF_VERSION` (0.6.3). O contorno `orZero` **saiu** no commit `7471f78`: o modelo não tem mais `Double?` (salário em centavos + flag `hasSalary` em `UserEntity`, [models.kf](../../backend/models.kf)). Issue [#41](https://github.com/luizaleblanc/organiza-ai/issues/41) segue aberta no compilador. |
+| Backend (`backend/*.kf`) | Compila no Kof de `KOF_VERSION` (0.6.5). O contorno `orZero` **saiu** no commit `7471f78`: o modelo não tem mais `Double?` (salário em centavos + flag `hasSalary` em `UserEntity`, [models.kf](../../backend/models.kf)). Issue [#41](https://github.com/luizaleblanc/organiza-ai/issues/41) segue aberta no compilador. |
 | Raiz do #41 | Um `T?` primitivo (`Double?`) estreitado, quando atribuído ou retornado, não recebe unbox: dá `COMP002` ou `VerifyError` ao carregar a classe. O upstream §610 (#770, branch `lab`) corrige só parte. |
 | Crash escondido | `kof build` com exit 0 **não prova nada**: o `VerifyError` só aparece quando a classe é carregada. Por isso o gate exige verificação de bytecode (seção 5, gate G-BYTECODE). |
 | `json.decode<T>` com campo enum | `argument type mismatch`. Contornado no 1E: `category` como String + `Category.valueOf`, com 400 para valor inválido. |
@@ -57,7 +57,7 @@
 
 ### 2.1 Instalar a versão do Kof fixada no projeto (Windows, PowerShell)
 
-A versão do projeto vive em um só lugar: o arquivo [`KOF_VERSION`](../../KOF_VERSION) na raiz (hoje `kof-0.6.3`),
+A versão do projeto vive em um só lugar: o arquivo [`KOF_VERSION`](../../KOF_VERSION) na raiz (hoje `kof-0.6.5`),
 lido pelo [Dockerfile](../../Dockerfile) e pelo [kof-check.yml](../../.github/workflows/kof-check.yml). Os dois recusam tags
 marcadas como *prerelease* no GitHub.
 
@@ -84,7 +84,7 @@ kof version; kof info
 
 **Política de versão:**
 - **Trocar de versão é um commit próprio** (`build: fixar kof X.Y.Z ...`) que só edita `KOF_VERSION`, feito **depois** de rodar todos os gates da seção 5 na versão nova, instalada fora do repo. Nunca use "a mais recente" sem fixar: o Kof publica vários releases por dia.
-- Para avaliar uma versão nova: instale-a com o tag explícito e rode **todos** os gates (a linha de base medida é a `0.6.3`; a comparação 0.5.0-beta × 0.6.3 está no relatório de 12/10).
+- Para avaliar uma versão nova: instale-a com o tag explícito e rode **todos** os gates (a linha de base medida é a `0.6.5`; a comparação 0.6.3 × 0.6.5 está em [`docs/MVP1_HOMOLOGACAO.md`](../MVP1_HOMOLOGACAO.md), seção 7, e a 0.5.0-beta × 0.6.3 no relatório de 12/10).
   - Para cada `// WORKAROUND:` (hoje só o do enum; o `orZero` saiu em `7471f78`), teste a forma idiomática num repro **fora do repo**.
   - Se o bug sumiu, proponha remover o contorno como um commit separado.
 - **Se a versão nova quebrar algo** que passava, volte para o `kof-0.5.0-beta-windows-x86_64` e reporte com o repro.
