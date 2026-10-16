@@ -147,6 +147,7 @@ Especificação e design em [`.specs/features/mvp1-batch2-auth-onboarding/`](.sp
 
 - **Mesmo domínio:** o backend serve o frontend (`app.serveDir("/", KOF_WEB_OUT)`) e o frontend chama `/api/...` por caminho relativo. O backend não tem CORS, e fora de `/api/` tudo passa a ser público.
 - **Navegação** continua com `mountScreen` e campos `static`: `Router` e `Component` existem no `kof.ui`, mas no Chromium o re-render deixa a tela em branco.
+- **Correção da navegação (16/10/2026):** depois do PR #43, `main.kf` montava a tela inicial com `window.bind` direto, e o primeiro clique deixava duas telas no DOM. Agora `main.kf` começa em `welcome` com `applyViewport` + `mountScreen`; `welcome` e `onboarding` usam o layout de entrada (cabeçalho com a logomarca de 3 ondas em `Canvas`, sem nav bar) e `dashboard` volta a ser placeholder. Medido no Edge headless em 360×640 com Kof 0.6.3 e 0.6.5: uma tela montada antes e depois do clique em "Começar". As telas reais seguem nas tarefas F6–F8.
 - **HTTP** sempre com `spawn` + `await`: no navegador, `http.post` síncrono devolve uma Promise.
 - **Estilo novo** com `Style("css")` (gradiente, borda, altura de 48px).
 - **Backend** ganha `GET /api/users/me`, o nome no cadastro, a dívida (`debtAmount` gravado em `debtCents`) e validação com 400.

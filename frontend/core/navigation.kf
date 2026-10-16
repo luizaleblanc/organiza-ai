@@ -6,8 +6,6 @@ import core.app_state
 import components.brand_header
 import components.nav_bar
 import screens.welcome_screen
-import screens.onboarding_screen
-import screens.dashboard_screen
 
 // =============================================================================
 // T5 — Dispatcher raiz e navegação (Dual Viewport)
@@ -22,6 +20,9 @@ import screens.dashboard_screen
 // brand_header/nav_bar precisam chamar navigateTo/buildActiveScreen (import
 // cíclico entre módulos não-main é aceito pelo compilador).
 // As telas reais entram nos Batches 2–4; aqui cada rota tem um placeholder.
+// Exceção: as telas de entrada ("welcome" e "onboarding") não têm nav bar nem
+// sidebar (design.md do Batch 2, §2.2); usam o layout de entrada, só com o
+// cabeçalho da marca.
 // =============================================================================
 
 // Root montado atualmente. Window.bind ACRESCENTA ao DOM (não substitui), então o
@@ -65,7 +66,7 @@ switchViewport(Window w) {
 
 String screenTitle() {
     if (AppState.currentScreen == "welcome") {
-        return "Organiza IA"
+        return "Organiza AI"
     }
     if (AppState.currentScreen == "onboarding") {
         return "Onboarding"
@@ -114,6 +115,22 @@ View buildCoachPanel() {
     return panel
 }
 
+// Telas de entrada: sem nav bar e sem sidebar, em Mobile e Desktop.
+Bool isEntryScreen() = AppState.currentScreen == "welcome" || AppState.currentScreen == "onboarding"
+
+View buildEntryContent(Window w) {
+    if (AppState.currentScreen == "welcome") {
+        return welcomeScreen(w)
+    }
+    return buildScreenContent()
+}
+
+View buildEntryLayout(Window w) {
+    var root = View(screenStyle())
+    root.bind(Column(listOf(buildBrandHeader(w), buildEntryContent(w))))
+    return root
+}
+
 View buildMobileLayout(Window w) {
     var root = View(screenStyle())
     root.bind(Column(listOf(buildBrandHeader(w), buildScreenContent(), buildNavBar(w))))
@@ -127,16 +144,10 @@ View buildDesktopLayout(Window w) {
     return root
 }
 
-// Dispatcher raiz: escolhe o layout pela viewport ativa.
+// Dispatcher raiz: escolhe o layout pela rota e pela viewport ativa.
 View buildActiveScreen(Window w) {
-    if (AppState.currentScreen == "welcome") {
-        return welcomeScreen(w)
-    }
-    if (AppState.currentScreen == "onboarding") {
-        return onboardingScreen(w)
-    }
-    if (AppState.currentScreen == "dashboard") {
-        return dashboardScreen()
+    if (isEntryScreen()) {
+        return buildEntryLayout(w)
     }
     if (AppState.isDesktop) {
         return buildDesktopLayout(w)

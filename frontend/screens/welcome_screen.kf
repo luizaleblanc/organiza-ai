@@ -14,7 +14,7 @@ import core.navigation
 // =============================================================================
 
 View welcomeScreen(Window w) {
-    var title = Label("Organiza IA")
+    var title = Label("Organiza AI")
     title.fontSize = sizeTitle()
     title.bold = true
     title.color = colorTextPrimary()

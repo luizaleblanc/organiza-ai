@@ -248,6 +248,7 @@ O clone `%TEMP%\oa-f1` tem um commit local **não publicado** e não presente no
 | Batch | Telas | Depende de | Est. | Nível |
 |---|---|---|---|---|
 | 2 (#33) | 1–8 (auth + onboarding, incluindo chips de gastos → caixinhas) | Fase 1 (+ rota de criação em lote) | G | intermediario |
+| 2 (#33), pré-requisito | Navegação volta a usar `mountScreen` (o PR #43 deixava duas telas no DOM após o primeiro clique); `dashboard` e `onboarding` voltam a placeholder | — | P | **feito** (16/10/2026) |
 | 3 (#32) | 9 Dashboard | Fases 2 e 3 | M | intermediario |
 | 4 (#34) | 10 Chat | Fase 4 (texto) e 5 (voz) | G | avancado |
 | 4 (#11) | 11 Caixinhas, 12 Notificações | Fase 3 + entidade de notificação | G | intermediario |
