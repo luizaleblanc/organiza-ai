@@ -236,6 +236,22 @@ record ChatMessageRequest(String message)
 // Corpo de erro das rotas: serializado com json.encode (nunca JSON concatenado a mao)
 record ApiError(String error)
 
+// GET /api/users/me (Batch 2). onboardingCompleted = hasSalary && salaryCents > 0: contas antigas
+// ficaram com hasSalary = true e salario 0 (o cadastro gravava true ate o F1) e continuam false.
+record MeResponse(String name, String email, Bool onboardingCompleted, String tier)
+
+// Resposta do POST /api/users/onboarding (Batch 2; antes era o texto "MODELO|descricao|nome:pct:valor,").
+// suggestedModel e o nome do enum (ASCII); buckets vazio no FREELANCER_BASE_ZERO.
+record OnboardingResponse(String suggestedModel, String description, List<BucketSummaryDTO> buckets)
+
+Bool onboardingCompleted(UserEntity user) {
+    return user.hasSalary && user.salaryCents > 0
+}
+
+MeResponse meOf(UserEntity user) {
+    return MeResponse(user.name, user.email, onboardingCompleted(user), user.tier.name())
+}
+
 // =========================================================
 // Leitura do corpo (400 em vez de 500). Medido no kof 0.6.3: JSON malformado, corpo vazio, `null`,
 // array, texto sobrando no fim, numero em texto ("abc") e campo primitivo ausente (JSN004) lancam

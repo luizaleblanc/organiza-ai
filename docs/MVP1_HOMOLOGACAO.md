@@ -204,7 +204,7 @@ O commit local `2e34ffb` (clone `%TEMP%\oa-f1`, base anterior à Fase 0) foi rev
 |---|---|---|---|
 | ✅ F1 Coluna `name` + migração condicional + `hasSalary=false` | Cenários do design §2.6: banco novo, banco antigo e 2ª execução sem `ALTER` | M | intermediario |
 | ✅ F2 Validações (spec §P1, itens 1–7) | 1 caso de E2E por linha da tabela, com status e corpo exatos | P | good first issue |
-| F3 `debtAmount → debtCents` + `GET /api/users/me` + resposta do onboarding em JSON | `/me` antes e depois do onboarding; `debtcents` gravado no MySQL | P | intermediario |
+| ✅ F3 `debtAmount → debtCents` + `GET /api/users/me` + resposta do onboarding em JSON | `/me` antes e depois do onboarding; `debtcents` gravado no MySQL | P | intermediario |
 | F4 Mesma origem (`serveDir`) + Dockerfile | G-AUTH-STATIC; `docker run` local com H2 servindo `/index.html` | M | intermediario |
 
 **F1 feito** (`feat(backend): nome no cadastro com migracao condicional da coluna`). `UserRow` ganhou a coluna `name` (a última, para banco novo e banco migrado terem a mesma ordem). `ensureSchema` chama `migrateUserNameColumn` logo depois do `orm.create<UserRow>`: uma consulta fixa a `INFORMATION_SCHEMA.COLUMNS` com `TABLE_SCHEMA = SCHEMA()` e, só se a contagem for 0, `ALTER TABLE "userrow" ADD COLUMN "name" VARCHAR(255) DEFAULT '' NOT NULL`. A DDL é texto fixo, sem bind e sem dado de usuário. Ela roda no boot, na conexão do `openDb` (com os timeouts da 0.1), e qualquer falha aborta o boot com "nao foi possivel criar as tabelas". O cadastro grava `name` (sem espaços nas pontas; ausente = `""`) e `hasSalary = false`. Matriz de migração (`f1b/tools/mig.sh`; o banco antigo é criado pelo build de `5d51896` com 2 contas, onboarding, envelope, transação, chat e renda variável):
@@ -238,6 +238,17 @@ controle: o mesmo E2E contra o build do F1 dá 38/56 (os 17 casos de 400 e o "n�
 neg 41/41 (H2 e MySQL; 15 casos novos, incluindo nome e e-mail de 300 caracteres = 400) · corrida 16×5 sem 500
 G-RESTART 25/25 (H2 e MySQL) · G-CONC verde (H2 e MySQL) · G-DB-BOUNCE 5,0 s · G-BOOT-DOWN exit=1, senha no log: 0
 VerifyAll 71 classes, 482 métodos, 0 erros · LinkAll 103/103 · controle sintético acusa nos dois
+```
+
+**F3 feito** (`feat(backend): debtAmount no onboarding e rota /api/users/me`). `GET /api/users/me` lê o usuário do token e devolve `MeResponse(name, email, onboardingCompleted, tier)`, com `onboardingCompleted = hasSalary && salaryCents > 0`. O onboarding grava `debtCents = toCents(debtAmount)` quando `hasDebt` e 0 quando não, e responde `OnboardingResponse(suggestedModel, description, buckets)` em JSON (`Content-Type: application/json; charset=utf-8`). O formato texto antigo não tinha cliente (as telas ainda são placeholder), e o novo está no `design.md` §4.1 e no `spec.md`. Evidência (kof 0.6.5):
+
+```
+G-E2E H2 60/61 · MySQL 60/61 (só o tier-status, #44): /me antes (false) e depois (true), nome "Ana Júlia E2E" íntegro,
+      /me sem token 401, SURVIVAL 2100/600/300, ANTI_DEBT com "Quitação de Dívida" 600.0, VARIABLE sem buckets
+debtCents gravado (H2 e MySQL): 5000.5 → 500050; hasDebt=false com 999 → 0; 1234.565 → 123457
+banco antigo migrado: /me de conta com onboarding = true; conta só cadastrada (hasSalary=true, salário 0) = false; name ""
+G-RESTART 28/28 (H2 e MySQL, inclui /me com nome após reinício) · neg 41/41 · G-CONC verde · G-DB-BOUNCE 5,1 s
+VerifyAll 74 classes, 501 métodos, 0 erros · LinkAll 106/106 · controle sintético acusa
 ```
 
 ### Fase 2: Datas reais e freemium (#44)

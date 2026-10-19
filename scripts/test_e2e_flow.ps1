@@ -151,7 +151,7 @@ for ($i = 0; $i -lt 40 -and -not $up; $i++) {
 
 try {
     $email = "e2e_$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())@organiza.ai"
-    $cred = (@{ name = "Ana E2E"; email = $email; password = "secretPassword123" } | ConvertTo-Json -Compress)
+    $cred = (@{ name = "Ana Júlia E2E"; email = $email; password = "secretPassword123" } | ConvertTo-Json -Compress)
     $script:token = ""
     $script:userId = ""
 
@@ -274,10 +274,46 @@ try {
         Expect ($r.Status -eq 200 -and $j.salary -eq 0.0) "$($r.Status) $($r.Body)"
     }
 
-    Test-Step "POST /api/users/onboarding (3000, FIXED, sem dívida) sugere SURVIVAL_702010" {
+    Test-Step "GET /api/users/me antes do onboarding: nome, e-mail, FREE, onboardingCompleted=false" {
+        $r = Invoke-Api "GET" "/api/users/me" $script:token
+        $j = $r.Body | ConvertFrom-Json
+        Expect ($r.Status -eq 200 -and $j.name -ceq "Ana Júlia E2E" -and $j.email -eq $email -and $j.tier -eq "FREE" -and $j.onboardingCompleted -eq $false) "$($r.Status) $($r.Body)"
+    }
+
+    Test-Step "GET /api/users/me sem token = 401" {
+        $r = Invoke-Api "GET" "/api/users/me"
+        Expect ($r.Status -eq 401) "$($r.Status) $($r.Body)"
+    }
+
+    Test-Step "POST /api/users/onboarding (3000, FIXED, sem dívida) responde JSON SURVIVAL_702010 70/20/10" {
         $body = (@{ salary = 3000.0; incomeType = "FIXED"; hasDebt = $false } | ConvertTo-Json -Compress)
         $r = Invoke-Api "POST" "/api/users/onboarding" $script:token $body
-        Expect ($r.Status -eq 200 -and $r.Body.StartsWith("SURVIVAL_702010|")) "$($r.Status) $($r.Body)"
+        $j = $r.Body | ConvertFrom-Json
+        $b = @($j.buckets)
+        Expect ($r.Status -eq 200 -and $j.suggestedModel -eq "SURVIVAL_702010" -and $j.description -and $b.Count -eq 3 -and $b[0].percentage -eq 70 -and $b[0].amount -eq 2100.0 -and $b[1].amount -eq 600.0 -and $b[2].amount -eq 300.0) "$($r.Status) $($r.Body)"
+    }
+
+    Test-Step "GET /api/users/me depois do onboarding: onboardingCompleted=true" {
+        $r = Invoke-Api "GET" "/api/users/me" $script:token
+        $j = $r.Body | ConvertFrom-Json
+        Expect ($r.Status -eq 200 -and $j.onboardingCompleted -eq $true -and $j.name -ceq "Ana Júlia E2E") "$($r.Status) $($r.Body)"
+    }
+
+    Test-Step "Onboarding com dívida (5000,50) sugere ANTI_DEBT_701020 com Quitação de Dívida 20%" {
+        $tc = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Caio Dívida"; email = "debt_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaDoC123" } | ConvertTo-Json -Compress)).Body
+        $body = (@{ salary = 3000.0; incomeType = "FIXED"; hasDebt = $true; debtAmount = 5000.5 } | ConvertTo-Json -Compress)
+        $r = Invoke-Api "POST" "/api/users/onboarding" $tc $body
+        $j = $r.Body | ConvertFrom-Json
+        $b = @($j.buckets)
+        $me = (Invoke-Api "GET" "/api/users/me" $tc).Body | ConvertFrom-Json
+        Expect ($r.Status -eq 200 -and $j.suggestedModel -eq "ANTI_DEBT_701020" -and $b.Count -eq 3 -and $b[2].name -ceq "Quitação de Dívida" -and $b[2].amount -eq 600.0 -and $me.onboardingCompleted -eq $true -and $me.name -ceq "Caio Dívida") "$($r.Status) $($r.Body) | me: $($me | ConvertTo-Json -Compress)"
+    }
+
+    Test-Step "Onboarding VARIABLE sugere FREELANCER_BASE_ZERO sem buckets" {
+        $tv = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Vera"; email = "var_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaDaV123" } | ConvertTo-Json -Compress)).Body
+        $r = Invoke-Api "POST" "/api/users/onboarding" $tv (@{ salary = 4000.0; incomeType = "VARIABLE"; hasDebt = $false } | ConvertTo-Json -Compress)
+        $j = $r.Body | ConvertFrom-Json
+        Expect ($r.Status -eq 200 -and $j.suggestedModel -eq "FREELANCER_BASE_ZERO" -and @($j.buckets).Count -eq 0) "$($r.Status) $($r.Body)"
     }
 
     Test-Step "Pulso após onboarding: salary = 3000.0, pulse = 100.0" {

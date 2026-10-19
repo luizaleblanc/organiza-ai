@@ -238,7 +238,7 @@ O frontend em `kof.ui` (Batch 1) só tem a casca: tema, estado, navegação e ca
 **Acceptance Criteria**:
 
 1. WHEN o onboarding é enviado THEN the frontend SHALL chamar `POST /api/users/onboarding` com `Authorization: Bearer <token>` e `{"salary":<Double>,"incomeType":"FIXED|VARIABLE","hasDebt":<Bool>,"debtAmount":<Double>}`
-2. WHEN o backend responde `MODELO|descrição|nome:pct:valor,...` THEN the frontend SHALL mostrar a Tela 7 com o nome amigável do modelo, a descrição e uma barra por bucket com nome, porcentagem e valor em `R$ 1.234,56`
+2. WHEN o backend responde `{"suggestedModel","description","buckets":[{"name","percentage","amount"}]}` (JSON, desde o F3) THEN the frontend SHALL mostrar a Tela 7 com o nome amigável do modelo, a descrição e uma barra por bucket com nome, porcentagem e valor em `R$ 1.234,56`
 3. WHEN o modelo é `FREELANCER_BASE_ZERO` (lista vazia) THEN the frontend SHALL mostrar a descrição sem barras
 4. WHEN a pessoa toca "Começar a organizar" THEN the frontend SHALL navegar para a rota `dashboard`
 5. IF o backend responde `Token ausente` THEN the frontend SHALL limpar a sessão, mostrar a Tela 2 e a mensagem "Sua sessão expirou. Entre de novo."
@@ -286,7 +286,7 @@ O frontend em `kof.ui` (Batch 1) só tem a casca: tema, estado, navegação e ca
 - IF o e-mail tem espaços nas pontas THEN the frontend SHALL enviá-lo sem esses espaços
 - IF a pessoa toca o botão de envio duas vezes seguidas THEN the frontend SHALL fazer uma única chamada
 - WHEN a resposta de erro contém acentos THEN the frontend SHALL mostrar o texto fixo do cliente, nunca o texto decodificado por `json.decode`
-- IF o corpo do onboarding não tem 3 partes separadas por `|` THEN the frontend SHALL mostrar a mensagem de servidor do P2 e continuar na tela atual
+- IF o corpo do onboarding não é o JSON esperado (sem `suggestedModel`) THEN the frontend SHALL mostrar a mensagem de servidor do P2 e continuar na tela atual
 - WHEN a pessoa volta da Tela 6.1 para a Tela 6 e escolhe "Não" THEN the frontend SHALL enviar `hasDebt=false` e `debtAmount=0.0`
 - WHEN uma conta criada antes deste batch faz login THEN the backend SHALL devolver `name: ""` em `/me` e o frontend SHALL seguir o fluxo normalmente
 

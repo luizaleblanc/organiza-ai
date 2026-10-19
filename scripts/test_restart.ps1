@@ -176,6 +176,11 @@ function Assert-Persisted([string]$Label, [string]$Cred) {
         $script:loginToken = $r.Body
         Expect ($r.Status -eq 200 -and $r.Body.Split(".").Length -eq 3) "$($r.Status) $($r.Body)"
     }
+    Test-Step "$Label`: /api/users/me com nome e onboardingCompleted=true" {
+        $r = Invoke-Api "GET" "/api/users/me" $script:loginToken
+        $j = $r.Body | ConvertFrom-Json
+        Expect ($r.Status -eq 200 -and $j.name -like "* Restart" -and $j.onboardingCompleted -eq $true) "$($r.Status) $($r.Body)"
+    }
     Test-Step "$Label`: daily-pulse salary = 3000.0 e pulse = 80.0 (PERS-02/03)" {
         $r = Invoke-Api "GET" "/api/budgets/daily-pulse" $script:loginToken
         $j = $r.Body | ConvertFrom-Json

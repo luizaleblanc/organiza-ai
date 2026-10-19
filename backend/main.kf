@@ -139,18 +139,17 @@ main() {
             user.hasSalary = true
             user.incomeType = incomeType
             user.hasDebt = req.hasDebt
+            // Divida em centavos so com hasDebt; "Nao, estou em dia" grava 0 mesmo se vier um valor.
+            user.debtCents = 0
+            if (req.hasDebt) {
+                user.debtCents = toCents(debtAmountOf(req))
+            }
             user.budgetModel = suggested
             updateUser(user)
 
             var desc = describeBudgetModel(suggested)
             var buckets = buildBudgetBuckets(suggested, req.salary)
-
-            var bStr = ""
-            for (var b in buckets) {
-                bStr = bStr + b.name + ":" + String.valueOf(b.percentage) + ":" + String.valueOf(b.amount) + ","
-            }
-
-            return suggested.name() + "|" + desc + "|" + bStr
+            return json.encode(OnboardingResponse(suggested.name(), desc, buckets))
         }
         return status(400, invalidBody())
     }
@@ -258,6 +257,15 @@ main() {
 
         // Formato esperado pelo kof.ui: totalSpent|currency|categories|transactions
         return String.valueOf(totalSpent) + "|BRL|Alimentação:50,Transporte:30,Lazer:20|Supermercado:Alimentação:150.0,"
+    }
+
+    // Perfil do usuario do token: o frontend decide entre o onboarding (Tela 4) e o dashboard.
+    app.get("/api/users/me") {
+        var user = findUserById(currentUserId())
+        if (user == null) {
+            return status(404, json.encode(ApiError("Usuário não encontrado")))
+        }
+        return json.encode(meOf(user))
     }
 
     app.get("/api/users/tier-status") {
