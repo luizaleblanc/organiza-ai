@@ -29,12 +29,18 @@ String issueToken(String userId) {
     return jwt.create(json.encode(AuthClaims(userId, jwtIssuer(), jwtAudience())), jwtSecret(), 7200)
 }
 
-List<String> publicPaths() {
-    return listOf("/health", "/api/auth/login", "/api/auth/register")
+// Rotas da API que nao pedem token. /health e os arquivos do frontend (servidos por app.serveDir
+// quando KOF_WEB_OUT existe) ficam fora de /api/ e por isso sao publicos (design do Batch 2, §2.3).
+List<String> publicApiPaths() {
+    return listOf("/api/auth/login", "/api/auth/register")
 }
 
+// Publico = fora de /api/ ou uma das rotas de auth. Qualquer outra rota /api/* exige token (401).
 Bool isPublicPath(String path) {
-    return publicPaths().contains(path)
+    if (!path.startsWith("/api/")) {
+        return true
+    }
+    return publicApiPaths().contains(path)
 }
 
 // Hash PBKDF2 de uma senha aleatoria descartada (nao e segredo): o login roda o

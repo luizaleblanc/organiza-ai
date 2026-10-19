@@ -35,8 +35,9 @@ main() {
     // (assinatura, exp, iss e aud via currentClaims). As rotas só leem o usuário.
     app.use {
         // Conexao morta (MySQL reiniciado, idle timeout) e reaberta aqui, antes da rota; banco fora = 503
-        // sem detalhe. O /health faz o proprio ping (abaixo), por isso fica de fora.
-        if (path() != "/health" && !ensureDb()) {
+        // sem detalhe. So /api/* usa o banco: o /health faz o proprio ping (abaixo) e os arquivos do
+        // frontend sao servidos mesmo com o banco fora.
+        if (path().startsWith("/api/") && !ensureDb()) {
             return status(503, json.encode(ApiError("Serviço temporariamente indisponível. Tente de novo em instantes.")))
         }
         if (isPublicPath(path())) {
@@ -271,6 +272,15 @@ main() {
     app.get("/api/users/tier-status") {
         var status = getTierStatus(currentUserId(), "2026-09-01")
         return json.encode(status)
+    }
+
+    // Mesmo dominio (Batch 2, design §2.3): com KOF_WEB_OUT, o backend serve a saida de
+    // `kof build frontend --target js` em / e o frontend chama /api/... por caminho relativo (sem CORS).
+    // Sem a variavel, so a API e o /health, como antes.
+    var webOut = config.env("KOF_WEB_OUT")
+    if (webOut != null) {
+        app.serveDir("/", webOut)
+        log.info("frontend servido de KOF_WEB_OUT")
     }
 
     app.listen(listenPort())

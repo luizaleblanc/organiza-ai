@@ -205,7 +205,7 @@ O commit local `2e34ffb` (clone `%TEMP%\oa-f1`, base anterior à Fase 0) foi rev
 | ✅ F1 Coluna `name` + migração condicional + `hasSalary=false` | Cenários do design §2.6: banco novo, banco antigo e 2ª execução sem `ALTER` | M | intermediario |
 | ✅ F2 Validações (spec §P1, itens 1–7) | 1 caso de E2E por linha da tabela, com status e corpo exatos | P | good first issue |
 | ✅ F3 `debtAmount → debtCents` + `GET /api/users/me` + resposta do onboarding em JSON | `/me` antes e depois do onboarding; `debtcents` gravado no MySQL | P | intermediario |
-| F4 Mesma origem (`serveDir`) + Dockerfile | G-AUTH-STATIC; `docker run` local com H2 servindo `/index.html` | M | intermediario |
+| ✅ F4 Mesma origem (`serveDir`) + Dockerfile | G-AUTH-STATIC; `docker run` local com H2 servindo `/index.html` | M | intermediario |
 
 **F1 feito** (`feat(backend): nome no cadastro com migracao condicional da coluna`). `UserRow` ganhou a coluna `name` (a última, para banco novo e banco migrado terem a mesma ordem). `ensureSchema` chama `migrateUserNameColumn` logo depois do `orm.create<UserRow>`: uma consulta fixa a `INFORMATION_SCHEMA.COLUMNS` com `TABLE_SCHEMA = SCHEMA()` e, só se a contagem for 0, `ALTER TABLE "userrow" ADD COLUMN "name" VARCHAR(255) DEFAULT '' NOT NULL`. A DDL é texto fixo, sem bind e sem dado de usuário. Ela roda no boot, na conexão do `openDb` (com os timeouts da 0.1), e qualquer falha aborta o boot com "nao foi possivel criar as tabelas". O cadastro grava `name` (sem espaços nas pontas; ausente = `""`) e `hasSalary = false`. Matriz de migração (`f1b/tools/mig.sh`; o banco antigo é criado pelo build de `5d51896` com 2 contas, onboarding, envelope, transação, chat e renda variável):
 
@@ -250,6 +250,23 @@ banco antigo migrado: /me de conta com onboarding = true; conta só cadastrada (
 G-RESTART 28/28 (H2 e MySQL, inclui /me com nome após reinício) · neg 41/41 · G-CONC verde · G-DB-BOUNCE 5,1 s
 VerifyAll 74 classes, 501 métodos, 0 erros · LinkAll 106/106 · controle sintético acusa
 ```
+
+**F4 feito** (`feat(backend): servir o frontend no mesmo dominio`). Com `KOF_WEB_OUT`, `main.kf` chama `app.serveDir("/", webOut)` antes do `app.listen` (API documentada no Kof4j, `docs/stdlib/stdlib-web.md`: arquivos servidos depois das rotas dinâmicas, com proteção contra `..`). `isPublicPath` (`backend/auth.kf`) trata como público tudo fora de `/api/` e, dentro de `/api/`, só login e cadastro. O middleware só faz o `ensureDb` em `/api/*`: o `/health` mantém o próprio ping e os arquivos do frontend abrem com o banco fora. O `Dockerfile` compila `frontend` com `--target js` em `/out/web`, confere `index.html` e `Default.mjs`, copia para `/app/web` e define `KOF_WEB_OUT=/app/web`. O `.dockerignore` deixou de excluir `frontend/`. O E2E ganhou `-WebOut` (G-AUTH-STATIC). Evidência (kof 0.6.5):
+
+```
+G-E2E H2 65/66 · MySQL 65/66 (só o tier-status, #44), sem KOF_WEB_OUT: /index.html 404; GET /api/dashboard, GET /api/users/me,
+      POST /api/users/onboarding e GET /api/rota-que-nao-existe sem token = 401 {"error":"Token ausente, inválido ou expirado"}
+G-E2E H2 com -WebOut 67/68: /index.html e /Default.mjs 200 sem token, iguais ao disco; /%2e%2e/backend/main.kf ≠ 200
+controle: o mesmo E2E com -WebOut contra o build do F3 → /index.html e /Default.mjs = 401 (65/68)
+MySQL parado: /index.html 200, /health 503, /api/auth/login 503
+docker build: kof-0.6.5-linux-x86_64, java.sql.Driver no jar: org.h2.Driver org.mariadb.jdbc.Driver, frontend em /app/web
+docker run (H2, KOF_ENV vazio): /health, /, /index.html, /Default.mjs = 200; /api/dashboard, /api/users/me, POST /api/users/onboarding = 401
+Edge headless --headless=new, perfil novo, 360×640, http://localhost:3190/: Tela 1 renderizada, um botão "Começar" no DOM
+G-RESTART 28/28 (H2 e MySQL) · neg 41/41 · G-CONC verde · G-DB-BOUNCE 5,2 s · G-BOOT-DOWN exit=1, senha no log: 0
+VerifyAll 74 classes, 501 métodos, 0 erros · LinkAll 106/106 · controle sintético acusa
+```
+
+**Deploy da Fase 1 no Render:** a migração do F1 roda no primeiro boot contra a Aiven. Antes do deploy, fazer um backup da tabela `userrow` (ou um snapshot da Aiven). O usuário do banco precisa de `ALTER` em `organiza_kof`: sem ele, o boot aborta sem alterar nada (medido) e o Render mantém a versão anterior no ar. A coluna nova é compatível com a versão anterior, que só lê as colunas que conhece, então voltar o deploy não exige desfazer a migração. `KOF_WEB_OUT` vem do `Dockerfile` e não precisa de variável nova no Render.
 
 ### Fase 2: Datas reais e freemium (#44)
 

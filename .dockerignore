@@ -1,4 +1,4 @@
-# A imagem so precisa de kof.toml + backend/ (ver Dockerfile). Tudo o mais fica fora do contexto.
+# A imagem so precisa de kof.toml, kofdeps, KOF_VERSION, backend/ e frontend/ (ver Dockerfile). Tudo o mais fica fora do contexto.
 # Segredos: .env nunca entra na imagem (as variaveis chegam no runtime).
 .env
 .env.*
@@ -21,7 +21,6 @@ out
 
 # Codigo que nao faz parte do backend Kof
 archive
-frontend
 frontend-voice
 bff
 

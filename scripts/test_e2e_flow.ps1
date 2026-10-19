@@ -12,10 +12,14 @@ param(
     [string]$ExtraClasspath = "",
     [string]$JavaExe = "C:\Program Files\Eclipse Adoptium\jdk-25.0.3.9-hotspot\bin\java.exe",
     [int]$Port = 0,
-    [string]$BaseUrl = ""
+    [string]$BaseUrl = "",
+    # Pasta de `kof build frontend --target js` (G-AUTH-STATIC): o servidor sobe com KOF_WEB_OUT e a suíte
+    # confere que o frontend abre sem token no mesmo domínio. Sem ela, KOF_WEB_OUT fica fora do servidor.
+    [string]$WebOut = ""
 )
 
 if ($Port -gt 0) { $env:PORT = "$Port" }
+if ($WebOut) { $env:KOF_WEB_OUT = $WebOut } else { Remove-Item Env:KOF_WEB_OUT -ErrorAction SilentlyContinue }
 $RunClasspath = if ($ExtraClasspath) { "$ClassesDir;$ExtraClasspath" } else { $ClassesDir }
 if (-not $BaseUrl) {
     $porta = if ($env:PORT) { $env:PORT } else { "3000" }
@@ -194,6 +198,33 @@ try {
         $ghost = (@{ email = "ninguem_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaErrada" } | ConvertTo-Json -Compress)
         $r = Invoke-Api "POST" "/api/auth/login" "" $ghost
         Expect ($r.Status -eq 401 -and $r.Body -eq $script:wrongPasswordBody) "$($r.Status) $($r.Body) (senha errada deu: $($script:wrongPasswordBody))"
+    }
+
+    # ---- G-AUTH-STATIC: só /api/* exige token (exceto login e cadastro) ----
+    foreach ($probe in @(@("GET", "/api/dashboard"), @("GET", "/api/users/me"), @("POST", "/api/users/onboarding"), @("GET", "/api/rota-que-nao-existe"))) {
+        Test-Step "$($probe[0]) $($probe[1]) sem token = 401" {
+            $b = if ($probe[0] -eq "POST") { '{"salary":3000.0,"incomeType":"FIXED","hasDebt":false}' } else { $null }
+            $r = Invoke-Api $probe[0] $probe[1] "" $b
+            Expect ($r.Status -eq 401 -and $r.Body -ceq '{"error":"Token ausente, inválido ou expirado"}') "$($r.Status) $($r.Body)"
+        }
+    }
+    if ($WebOut) {
+        foreach ($asset in @("/index.html", "/Default.mjs")) {
+            Test-Step "GET $asset sem token = 200 (frontend no mesmo domínio)" {
+                $r = Invoke-Api "GET" $asset
+                $disk = [System.IO.File]::ReadAllText((Join-Path $WebOut $asset.TrimStart("/")), [System.Text.Encoding]::UTF8)
+                Expect ($r.Status -eq 200 -and $r.Body -eq $disk) "$($r.Status) ($($r.Body.Length) chars; disco $($disk.Length))"
+            }
+        }
+        Test-Step "GET /../backend/main.kf não sai da pasta do frontend" {
+            $r = Invoke-Api "GET" "/%2e%2e/backend/main.kf"
+            Expect ($r.Status -ne 200 -and $r.Body -notmatch "app.listen") "$($r.Status) $($r.Body.Substring(0, [Math]::Min(80, $r.Body.Length)))"
+        }
+    } else {
+        Test-Step "Sem KOF_WEB_OUT: /index.html = 404 (público, mas sem frontend)" {
+            $r = Invoke-Api "GET" "/index.html"
+            Expect ($r.Status -eq 404) "$($r.Status) $($r.Body)"
+        }
     }
 
     Test-Step "Rota protegida sem token = 401" {

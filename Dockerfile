@@ -1,4 +1,5 @@
-# Imagem do backend Kof (monolito KofLith, backend/*.kf) para o Render.
+# Imagem do backend Kof (monolito KofLith, backend/*.kf) para o Render, servindo tambem o frontend
+# (frontend/*.kf compilado com --target js) no mesmo dominio (KOF_WEB_OUT=/app/web).
 #
 # Build:  docker build -t organiza-ai-backend .                                     (versao fixa do arquivo KOF_VERSION)
 #         docker build --build-arg KOF_TAG=kof-0.6.3-linux-x86_64 -t organiza-ai-backend .   (outra versao estavel)
@@ -46,6 +47,7 @@ RUN set -eu; \
 WORKDIR /src
 COPY kof.toml kofdeps ./
 COPY backend ./backend
+COPY frontend ./frontend
 # O `kof build` nao copia o driver JDBC e so auto-provisiona URL literal em db.connect (medido no 0.6.3 e no 0.6.5);
 # a URL vem de KOF_DB_URL, entao os drivers ficam fixados em `kofdeps` e entram no fat jar via --classpath.
 # O `--fat` (0.6.3 e 0.6.5) guarda so o primeiro META-INF/services/java.sql.Driver (o do H2): sem o do MariaDB,
@@ -62,6 +64,10 @@ RUN /opt/kof/bin/kof check backend \
  && echo "java.sql.Driver no jar: $(unzip -p /out/app/kof-app.jar META-INF/services/java.sql.Driver | tr '\n' ' ')" \
  && unzip -p /out/app/kof-app.jar META-INF/services/java.sql.Driver | grep -qx 'org.mariadb.jdbc.Driver' \
  && unzip -p /out/app/kof-app.jar META-INF/services/java.sql.Driver | grep -qx 'org.h2.Driver'
+# Frontend (Batch 2, design 2.7): o mesmo Kof compila frontend/ para JS; o backend serve a pasta em / (app.serveDir).
+# O gate e o build: `kof check frontend` da PKG006 nos imports core.* (medido).
+RUN /opt/kof/bin/kof build frontend --target js --output /out/web \
+ && test -f /out/web/index.html && test -f /out/web/Default.mjs
 
 # ---------------------------------------------------------------------------
 # Run stage: JRE 25. As classes geradas do projeto sao V21 (major 65), mas o runtime do Kof
@@ -77,7 +83,9 @@ RUN useradd --system --uid 10001 --home-dir /app kof \
  && mkdir -p /app/data && chown kof:kof /app/data
 WORKDIR /app
 COPY --from=build --chown=kof:kof /out/app/kof-app.jar /app/kof-app.jar
+COPY --from=build --chown=kof:kof /out/web /app/web
 USER kof
-ENV PORT=8080 KOF_ENV=production
+# KOF_WEB_OUT: pasta servida em / (index.html, Default.mjs); so /api/* exige token.
+ENV PORT=8080 KOF_ENV=production KOF_WEB_OUT=/app/web
 EXPOSE 8080
 ENTRYPOINT ["java", "-Dkof.root=/app", "-jar", "/app/kof-app.jar"]
