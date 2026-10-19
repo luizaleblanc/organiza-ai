@@ -239,6 +239,41 @@ try {
         Expect ($r.Status -eq 200 -and $j.salary -eq 0.0 -and $j.pulse -eq 0.0 -and $j.message -like "*comprometeu*") "$($r.Status) $($r.Body)"
     }
 
+    # ---- Regras de entrada (batch 2, design §4.3): status e corpo exatos, nada gravado ----
+    function Test-Invalid([string]$Name, [string]$Path, [string]$Token, [string]$Body, [string]$Message) {
+        Test-Step $Name {
+            $r = Invoke-Api "POST" $Path $Token $Body
+            $expected = '{"error":"' + $Message + '"}'
+            Expect ($r.Status -eq 400 -and $r.Body -ceq $expected) "$($r.Status) $($r.Body) (esperado 400 $expected)"
+        }
+    }
+    $fresh = "f2_$([Guid]::NewGuid().ToString('N'))@organiza.ai"
+    Test-Invalid "Cadastro sem nome = 400" "/api/auth/register" "" (@{ name = "  "; email = $fresh; password = "senhaValida123" } | ConvertTo-Json -Compress) "Preencha nome, e-mail e senha."
+    Test-Invalid "Cadastro sem campo name = 400" "/api/auth/register" "" (@{ email = $fresh; password = "senhaValida123" } | ConvertTo-Json -Compress) "Preencha nome, e-mail e senha."
+    Test-Invalid "Cadastro com e-mail vazio = 400" "/api/auth/register" "" (@{ name = "Ana"; email = " "; password = "senhaValida123" } | ConvertTo-Json -Compress) "Preencha nome, e-mail e senha."
+    Test-Invalid "Cadastro com senha vazia = 400" "/api/auth/register" "" (@{ name = "Ana"; email = $fresh; password = "" } | ConvertTo-Json -Compress) "Preencha nome, e-mail e senha."
+    Test-Invalid "Cadastro com e-mail sem @ = 400" "/api/auth/register" "" (@{ name = "Ana"; email = "ana.organiza.ai"; password = "senhaValida123" } | ConvertTo-Json -Compress) "Digite um e-mail válido."
+    Test-Invalid "Cadastro com e-mail sem domínio = 400" "/api/auth/register" "" (@{ name = "Ana"; email = "ana@"; password = "senhaValida123" } | ConvertTo-Json -Compress) "Digite um e-mail válido."
+    Test-Invalid "Cadastro com senha de 7 caracteres = 400" "/api/auth/register" "" (@{ name = "Ana"; email = $fresh; password = "1234567" } | ConvertTo-Json -Compress) "A senha precisa ter pelo menos 8 caracteres."
+    Test-Step "Cadastro recusado não gravou: o mesmo e-mail com senha de 8 caracteres = 200" {
+        $r = Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Ana F2"; email = $fresh; password = "12345678" } | ConvertTo-Json -Compress)
+        Expect ($r.Status -eq 200 -and $r.Body.Split(".").Length -eq 3) "$($r.Status) $($r.Body)"
+    }
+    Test-Invalid "Login com e-mail vazio = 400" "/api/auth/login" "" (@{ email = ""; password = "senhaValida123" } | ConvertTo-Json -Compress) "Preencha e-mail e senha."
+    Test-Invalid "Login com senha vazia = 400" "/api/auth/login" "" (@{ email = $email; password = "" } | ConvertTo-Json -Compress) "Preencha e-mail e senha."
+    Test-Invalid "Onboarding com salário 0 = 400" "/api/users/onboarding" $script:token (@{ salary = 0.0; incomeType = "FIXED"; hasDebt = $false } | ConvertTo-Json -Compress) "O salário deve ser maior que zero."
+    Test-Invalid "Onboarding com salário negativo = 400" "/api/users/onboarding" $script:token (@{ salary = -100.0; incomeType = "FIXED"; hasDebt = $false } | ConvertTo-Json -Compress) "O salário deve ser maior que zero."
+    Test-Invalid "Onboarding com dívida e debtAmount 0 = 400" "/api/users/onboarding" $script:token (@{ salary = 3000.0; incomeType = "FIXED"; hasDebt = $true; debtAmount = 0.0 } | ConvertTo-Json -Compress) "O valor da dívida deve ser maior que zero."
+    Test-Invalid "Onboarding com dívida sem debtAmount = 400" "/api/users/onboarding" $script:token (@{ salary = 3000.0; incomeType = "FIXED"; hasDebt = $true } | ConvertTo-Json -Compress) "O valor da dívida deve ser maior que zero."
+    Test-Invalid "Onboarding com debtAmount negativo = 400" "/api/users/onboarding" $script:token (@{ salary = 3000.0; incomeType = "FIXED"; hasDebt = $false; debtAmount = -5.0 } | ConvertTo-Json -Compress) "O valor da dívida deve ser maior que zero."
+    Test-Invalid "Onboarding com incomeType fora da lista = 400" "/api/users/onboarding" $script:token (@{ salary = 3000.0; incomeType = "MENSAL"; hasDebt = $false } | ConvertTo-Json -Compress) "Tipo de renda inválido."
+    Test-Invalid "Onboarding com salary em texto = 400" "/api/users/onboarding" $script:token '{"salary":"abc","incomeType":"FIXED","hasDebt":false}' "Dados inválidos."
+    Test-Step "Onboarding recusado não gravou: pulso continua com salary 0.0" {
+        $r = Invoke-Api "GET" "/api/budgets/daily-pulse" $script:token
+        $j = $r.Body | ConvertFrom-Json
+        Expect ($r.Status -eq 200 -and $j.salary -eq 0.0) "$($r.Status) $($r.Body)"
+    }
+
     Test-Step "POST /api/users/onboarding (3000, FIXED, sem dívida) sugere SURVIVAL_702010" {
         $body = (@{ salary = 3000.0; incomeType = "FIXED"; hasDebt = $false } | ConvertTo-Json -Compress)
         $r = Invoke-Api "POST" "/api/users/onboarding" $script:token $body

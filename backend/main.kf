@@ -65,12 +65,18 @@ main() {
     app.post("/api/auth/login") {
         var req = decodeLoginRequest(body())
         if (req != null) {
+            // Campo vazio = 400 antes do rate limit (nao gasta tentativa); e-mail sem espacos nas pontas.
+            var invalid = loginError(req)
+            if (invalid != null) {
+                return status(400, json.encode(ApiError(invalid)))
+            }
+            var email = req.email.trim()
             // Limite de tentativas por e-mail (5 por minuto) contra força bruta
-            if (!security.rateLimit("login:" + req.email, 5, 60)) {
+            if (!security.rateLimit("login:" + email, 5, 60)) {
                 return status(429, json.encode(ApiError("Muitas tentativas de login. Tente de novo em 1 minuto.")))
             }
             // Mesma resposta (401) para e-mail inexistente e senha errada: sem enumeracao de usuario
-            var user = authenticateUser(req.email, req.password)
+            var user = authenticateUser(email, req.password)
             if (user != null) {
                 return issueToken(user.id)
             }
@@ -82,7 +88,13 @@ main() {
     app.post("/api/auth/register") {
         var req = decodeRegisterRequest(body())
         if (req != null) {
-            var existing = findUserByEmail(req.email)
+            // Regras do cadastro (nome, e-mail, senha >= 8): 400 sem gravar nada.
+            var invalid = registerError(req)
+            if (invalid != null) {
+                return status(400, json.encode(ApiError(invalid)))
+            }
+            var email = req.email.trim()
+            var existing = findUserByEmail(email)
             if (existing != null) {
                 return status(409, json.encode(ApiError("Usuário já cadastrado")))
             }
@@ -90,7 +102,7 @@ main() {
             // Senha so como passwords.hash (PERS-12); o id vem do banco, nunca de contagem em memoria (PERS-06).
             // Corrida com o mesmo e-mail: a UNIQUE do banco barra o perdedor, que tambem recebe 409.
             // hasSalary = false ate o onboarding: o cadastro nao informa salario (onboardingCompleted, Batch 2).
-            var created = insertUserIfNew(UserEntity("", req.email, passwords.hash(req.password), Role.USER, 0, false, Tier.FREE, false, 0, true, BudgetModelType.STANDARD_503020, IncomeType.FIXED, false, 0, nullToText(req.name).trim()))
+            var created = insertUserIfNew(UserEntity("", email, passwords.hash(req.password), Role.USER, 0, false, Tier.FREE, false, 0, true, BudgetModelType.STANDARD_503020, IncomeType.FIXED, false, 0, req.name.trim()))
             if (created != null) {
                 return issueToken(created.id)
             }
@@ -106,6 +118,11 @@ main() {
     app.post("/api/users/onboarding") {
         var req = decodeOnboardingRequest(body())
         if (req != null) {
+            // Salario > 0, divida > 0 quando hasDebt, incomeType FIXED/VARIABLE: 400 sem gravar nada.
+            var invalid = onboardingError(req)
+            if (invalid != null) {
+                return status(400, json.encode(ApiError(invalid)))
+            }
             var incomeType = IncomeType.FIXED
             if (req.incomeType == "VARIABLE") {
                 incomeType = IncomeType.VARIABLE

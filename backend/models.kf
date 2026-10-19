@@ -224,7 +224,9 @@ class KakeiboReflectionEntity {
 record LoginRequest(String email, String password)
 // Cadastro (Batch 2): o nome vai para a coluna name de UserRow.
 record RegisterRequest(String name, String email, String password)
-record OnboardingRequest(Double salary, String incomeType, Bool hasDebt)
+// debtAmount em reais (Batch 2). Opcional para manter os clientes antigos: ausente ou null = 0.0
+// (Double? no json.decode medido no 0.6.5: ausente/null = null, "abc" lanca String -> 400).
+record OnboardingRequest(Double salary, String incomeType, Bool hasDebt, Double? debtAmount)
 record VariableIncomeInput(Double amount, String source)
 // Sem userId: o dono do envelope vem SEMPRE do token (currentUserId). Um userId enviado no
 // corpo por clientes antigos e ignorado pelo json.decode (chaves extras nao quebram).
@@ -257,7 +259,7 @@ LoginRequest? decodeLoginRequest(String raw) {
     }
 }
 
-// name ausente chega como null e e gravado como "" (as regras de preenchimento sao da validacao).
+// name ausente chega como null; quem barra nome vazio e registerError (400 "Preencha nome, e-mail e senha.").
 RegisterRequest? decodeRegisterRequest(String raw) {
     try {
         var req = json.decode<RegisterRequest>(raw)
@@ -316,4 +318,77 @@ ChatMessageRequest? decodeChatMessageRequest(String raw) {
     } catch (String e) {
         return null
     }
+}
+
+// =========================================================
+// Regras de negocio da entrada (Batch 2, design §4.3). Rodam depois do decode: null = valido;
+// senao, a mensagem do 400 (a rota responde json.encode(ApiError(msg))). Nunca gravam nada.
+// =========================================================
+
+// Limite das colunas VARCHAR(255) do ORM: texto maior faria o banco recusar a gravacao (500).
+Int maxTextLength() {
+    return 255
+}
+
+Bool isBlank(String? text) {
+    if (text != null) {
+        return text.trim() == ""
+    }
+    return true
+}
+
+// Formato minimo: um unico @, com texto antes e depois, sem espacos. A confirmacao real do
+// e-mail fica para o "esqueci a senha" (provedor de e-mail, secao 6 do MVP1_HOMOLOGACAO.md).
+Bool isEmailLike(String email) {
+    var at = email.indexOf("@")
+    if (at <= 0 || at != email.lastIndexOf("@")) {
+        return false
+    }
+    return at < email.length() - 1 && !email.contains(" ")
+}
+
+String? registerError(RegisterRequest req) {
+    if (isBlank(req.name()) || isBlank(req.email()) || isBlank(req.password())) {
+        return "Preencha nome, e-mail e senha."
+    }
+    if (req.name().trim().length() > maxTextLength() || req.email().trim().length() > maxTextLength()) {
+        return "Dados inválidos."
+    }
+    if (!isEmailLike(req.email().trim())) {
+        return "Digite um e-mail válido."
+    }
+    if (req.password().length() < 8) {
+        return "A senha precisa ter pelo menos 8 caracteres."
+    }
+    return null
+}
+
+String? loginError(LoginRequest req) {
+    if (isBlank(req.email()) || isBlank(req.password())) {
+        return "Preencha e-mail e senha."
+    }
+    return null
+}
+
+// Valor da divida em reais; ausente = 0.0 (so conta quando hasDebt = true).
+Double debtAmountOf(OnboardingRequest req) {
+    var amount = req.debtAmount()
+    if (amount == null) {
+        return 0.0
+    }
+    return amount
+}
+
+String? onboardingError(OnboardingRequest req) {
+    if (req.salary() <= 0.0) {
+        return "O salário deve ser maior que zero."
+    }
+    var debt = debtAmountOf(req)
+    if (debt < 0.0 || (req.hasDebt() && debt <= 0.0)) {
+        return "O valor da dívida deve ser maior que zero."
+    }
+    if (req.incomeType() != "FIXED" && req.incomeType() != "VARIABLE") {
+        return "Tipo de renda inválido."
+    }
+    return null
 }

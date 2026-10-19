@@ -203,7 +203,7 @@ O commit local `2e34ffb` (clone `%TEMP%\oa-f1`, base anterior à Fase 0) foi rev
 | Item | Aceite | Est. | Nível |
 |---|---|---|---|
 | ✅ F1 Coluna `name` + migração condicional + `hasSalary=false` | Cenários do design §2.6: banco novo, banco antigo e 2ª execução sem `ALTER` | M | intermediario |
-| F2 Validações (spec §P1, itens 1–7) | 1 caso de E2E por linha da tabela, com status e corpo exatos | P | good first issue |
+| ✅ F2 Validações (spec §P1, itens 1–7) | 1 caso de E2E por linha da tabela, com status e corpo exatos | P | good first issue |
 | F3 `debtAmount → debtCents` + `GET /api/users/me` + resposta do onboarding em JSON | `/me` antes e depois do onboarding; `debtcents` gravado no MySQL | P | intermediario |
 | F4 Mesma origem (`serveDir`) + Dockerfile | G-AUTH-STATIC; `docker run` local com H2 servindo `/index.html` | M | intermediario |
 
@@ -228,6 +228,16 @@ VerifyAll exit=0 :: geradas: 71 classes, 474 métodos, 0 erros | LinkAll exit=0 
 G-E2E H2 37/38 · MySQL 37/38 (só o 29, #44) · G-RESTART 25/25 (H2 e MySQL)
 neg 26/26 (H2 e MySQL), corrida 16×5: 1×200 + 15×409, 0 respostas 500 · G-CONC verde (H2 e MySQL)
 G-DB-BOUNCE verde em 5,2 s · G-DB-DOWN 503 → 200 em 2,1 s · G-BOOT-DOWN exit=1 em 0,7 s e 2,7 s, senha no log: 0
+```
+
+**F2 feito** (`fix(backend): regras de validacao do cadastro e onboarding`). As regras rodam depois do `decode…` da 0.4, em `registerError`, `loginError` e `onboardingError` (`backend/models.kf`). Cada uma devolve a mensagem do 400 ou `null`, e a rota responde antes de gravar. O login valida antes do `security.rateLimit`, então campo vazio não gasta tentativa. Cadastro e login usam o e-mail sem espaços nas pontas. Nome ou e-mail com mais de 255 caracteres dão `Dados inválidos.`: antes eles estouravam o `VARCHAR(255)` e davam 500. O `OnboardingRequest` ganhou `Double? debtAmount`. Medido no 0.6.5 (repro fora do repo): ausente ou `null` chega como `null`, e `"abc"` lança String, que vira 400. Ausente conta como 0, então o corpo antigo sem dívida continua 200. Evidência (kof 0.6.5):
+
+```
+G-E2E H2 55/56 · MySQL 55/56 (só o tier-status, #44); 18 casos novos com status e corpo exatos
+controle: o mesmo E2E contra o build do F1 dá 38/56 (os 17 casos de 400 e o "não gravou" falham)
+neg 41/41 (H2 e MySQL; 15 casos novos, incluindo nome e e-mail de 300 caracteres = 400) · corrida 16×5 sem 500
+G-RESTART 25/25 (H2 e MySQL) · G-CONC verde (H2 e MySQL) · G-DB-BOUNCE 5,0 s · G-BOOT-DOWN exit=1, senha no log: 0
+VerifyAll 71 classes, 482 métodos, 0 erros · LinkAll 103/103 · controle sintético acusa nos dois
 ```
 
 ### Fase 2: Datas reais e freemium (#44)
