@@ -194,8 +194,8 @@ function Assert-Persisted([string]$Label, [string]$Cred) {
 }
 
 $stamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-$credA = (@{ email = "restart_a_$stamp@organiza.ai"; password = "senhaRestartA123" } | ConvertTo-Json -Compress)
-$credB = (@{ email = "restart_b_$stamp@organiza.ai"; password = "senhaRestartB123" } | ConvertTo-Json -Compress)
+$credA = (@{ name = "Ana Restart"; email = "restart_a_$stamp@organiza.ai"; password = "senhaRestartA123" } | ConvertTo-Json -Compress)
+$credB = (@{ name = "Bia Restart"; email = "restart_b_$stamp@organiza.ai"; password = "senhaRestartB123" } | ConvertTo-Json -Compress)
 $servers = @()
 
 try {

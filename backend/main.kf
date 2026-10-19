@@ -80,7 +80,7 @@ main() {
     }
 
     app.post("/api/auth/register") {
-        var req = decodeLoginRequest(body())
+        var req = decodeRegisterRequest(body())
         if (req != null) {
             var existing = findUserByEmail(req.email)
             if (existing != null) {
@@ -89,7 +89,8 @@ main() {
 
             // Senha so como passwords.hash (PERS-12); o id vem do banco, nunca de contagem em memoria (PERS-06).
             // Corrida com o mesmo e-mail: a UNIQUE do banco barra o perdedor, que tambem recebe 409.
-            var created = insertUserIfNew(UserEntity("", req.email, passwords.hash(req.password), Role.USER, 0, true, Tier.FREE, false, 0, true, BudgetModelType.STANDARD_503020, IncomeType.FIXED, false, 0))
+            // hasSalary = false ate o onboarding: o cadastro nao informa salario (onboardingCompleted, Batch 2).
+            var created = insertUserIfNew(UserEntity("", req.email, passwords.hash(req.password), Role.USER, 0, false, Tier.FREE, false, 0, true, BudgetModelType.STANDARD_503020, IncomeType.FIXED, false, 0, nullToText(req.name).trim()))
             if (created != null) {
                 return issueToken(created.id)
             }

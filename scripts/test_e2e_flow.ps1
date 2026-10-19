@@ -151,7 +151,7 @@ for ($i = 0; $i -lt 40 -and -not $up; $i++) {
 
 try {
     $email = "e2e_$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())@organiza.ai"
-    $cred = (@{ email = $email; password = "secretPassword123" } | ConvertTo-Json -Compress)
+    $cred = (@{ name = "Ana E2E"; email = $email; password = "secretPassword123" } | ConvertTo-Json -Compress)
     $script:token = ""
     $script:userId = ""
 
@@ -347,7 +347,7 @@ try {
     }
 
     # ---- Isolamento entre usuários (IDOR): B nunca vê nem grava dados de A ----
-    $credB = (@{ email = "b_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaDoB123" } | ConvertTo-Json -Compress)
+    $credB = (@{ name = "Bia E2E"; email = "b_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaDoB123" } | ConvertTo-Json -Compress)
     $script:tokenB = (Invoke-Api "POST" "/api/auth/register" "" $credB).Body
 
     Test-Step "IDOR: B não vê os envelopes de A (nem com ?userId=A)" {

@@ -198,14 +198,37 @@ VerifyAll 70 classes, 0 erros · LinkAll 102/102
 
 ### Fase 1: Retomada do batch 2 backend (F1 a F4)
 
-O clone `%TEMP%\oa-f1` tem um commit local **não publicado** e não presente no repo (`2e34ffb feat(backend): nome no cadastro com migracao condicional da coluna`) e mais um diff não commitado (`backend/main.kf` +64/−10, `backend/models.kf` +52/−1). Decidir se ele será revisado e aproveitado ou refeito. Há também um container `oa-f1-mysql` daquela sessão ainda criado.
+O commit local `2e34ffb` (clone `%TEMP%\oa-f1`, base anterior à Fase 0) foi revisado e portado para cima da Fase 0 (decisão da seção 6). A migração, o `RegisterRequest` e o `hasSalary=false` foram aproveitados. A leitura da contagem passou a aceitar o rótulo `N` do H2, e o cadastro usa um `decodeRegisterRequest` no padrão da 0.4. O diff não commitado daquele clone (validações com `try/catch` em cada rota) não foi usado, porque a Fase 0.4 já resolve o 400 com os `decode…`.
 
 | Item | Aceite | Est. | Nível |
 |---|---|---|---|
-| F1 Coluna `name` + migração condicional + `hasSalary=false` | Cenários do design §2.6: banco novo, banco antigo e 2ª execução sem `ALTER` | M | intermediario |
+| ✅ F1 Coluna `name` + migração condicional + `hasSalary=false` | Cenários do design §2.6: banco novo, banco antigo e 2ª execução sem `ALTER` | M | intermediario |
 | F2 Validações (spec §P1, itens 1–7) | 1 caso de E2E por linha da tabela, com status e corpo exatos | P | good first issue |
 | F3 `debtAmount → debtCents` + `GET /api/users/me` + resposta do onboarding em JSON | `/me` antes e depois do onboarding; `debtcents` gravado no MySQL | P | intermediario |
 | F4 Mesma origem (`serveDir`) + Dockerfile | G-AUTH-STATIC; `docker run` local com H2 servindo `/index.html` | M | intermediario |
+
+**F1 feito** (`feat(backend): nome no cadastro com migracao condicional da coluna`). `UserRow` ganhou a coluna `name` (a última, para banco novo e banco migrado terem a mesma ordem). `ensureSchema` chama `migrateUserNameColumn` logo depois do `orm.create<UserRow>`: uma consulta fixa a `INFORMATION_SCHEMA.COLUMNS` com `TABLE_SCHEMA = SCHEMA()` e, só se a contagem for 0, `ALTER TABLE "userrow" ADD COLUMN "name" VARCHAR(255) DEFAULT '' NOT NULL`. A DDL é texto fixo, sem bind e sem dado de usuário. Ela roda no boot, na conexão do `openDb` (com os timeouts da 0.1), e qualquer falha aborta o boot com "nao foi possivel criar as tabelas". O cadastro grava `name` (sem espaços nas pontas; ausente = `""`) e `hasSalary = false`. Matriz de migração (`f1b/tools/mig.sh`; o banco antigo é criado pelo build de `5d51896` com 2 contas, onboarding, envelope, transação, chat e renda variável):
+
+```
+                      H2 2.5.250                               MySQL 8.4.11 (ANSI_QUOTES; database "decoy" com userrow.name)
+banco novo            boot ok, ALTER 0, cadastro grava "Ana Nova"   boot ok, ALTER 0, cadastro grava "Ana Nova"
+banco antigo          boot ok, ALTER 1, name VARCHAR NOT NULL ''    boot ok, ALTER 1, name varchar(255) NOT NULL ''
+                      dump das 5 tabelas idêntico (22 linhas)       dump das 5 tabelas idêntico (17 linhas)
+                      login antigo 200; contas antigas name = ''    login antigo 200; contas antigas name = ''
+2ª execução           ALTER 0, dump igual ao da 1ª                  ALTER 0, dump igual ao da 1ª
+usuário sem ALTER     —                                             boot exit=1 "nao foi possivel criar as tabelas", 0 linhas alteradas
+```
+
+O database `decoy` (outra tabela `userrow` com coluna `name` no mesmo servidor) não enganou a checagem: o filtro por schema funciona. O nome com acento chega íntegro (`João Ávila` gravado como `4A6FC3A36F20C38176696C61` em `utf8mb4`). Gates (kof 0.6.5):
+
+```
+G-BUILD check exit=0 :: checked 6 file(s) — no errors | build exit=0
+controle positivo (sintético) VerifyAll exit=1 e LinkAll exit=1 (acusam) | controle limpo exit=0
+VerifyAll exit=0 :: geradas: 71 classes, 474 métodos, 0 erros | LinkAll exit=0 :: OK=103 FAIL=0
+G-E2E H2 37/38 · MySQL 37/38 (só o 29, #44) · G-RESTART 25/25 (H2 e MySQL)
+neg 26/26 (H2 e MySQL), corrida 16×5: 1×200 + 15×409, 0 respostas 500 · G-CONC verde (H2 e MySQL)
+G-DB-BOUNCE verde em 5,2 s · G-DB-DOWN 503 → 200 em 2,1 s · G-BOOT-DOWN exit=1 em 0,7 s e 2,7 s, senha no log: 0
+```
 
 ### Fase 2: Datas reais e freemium (#44)
 

@@ -141,7 +141,7 @@ Inspeção de 16/10/2026 em [`docs/MVP1_HOMOLOGACAO.md`](docs/MVP1_HOMOLOGACAO.m
 - **Entrada inválida (Fase 0.4, feita):** JSON malformado, campo ausente ou de tipo errado agora dá 400 `{"error":"Dados inválidos."}`, e não mais 500. Um e-mail duplicado dá 409, inclusive quando dois cadastros chegam ao mesmo tempo. As validações de negócio do batch 2 (F2) continuam pendentes.
 - **Roadmap em fases:** 0 estabilidade, 1 batch 2 backend, 2 #44, 3 rotas faltantes + e-mail (esqueci a senha e resumo diário às 20h), 4 coach com OpenAI gpt-4o-mini + leitura de fatura PDF, 6 telas (incluindo o Open Finance demo). A voz fica para o MVP 2. Cada item tem critério de aceite e badge; as decisões de escopo estão na seção 6 do documento.
 
-### Batch 2: autenticação e onboarding (`mvp1-batch2-auth-onboarding`) -- em especificação
+### Batch 2: autenticação e onboarding (`mvp1-batch2-auth-onboarding`) -- em implementação (backend)
 
 Especificação e design em [`.specs/features/mvp1-batch2-auth-onboarding/`](.specs/features/mvp1-batch2-auth-onboarding/) ([`spec.md`](.specs/features/mvp1-batch2-auth-onboarding/spec.md), [`design.md`](.specs/features/mvp1-batch2-auth-onboarding/design.md)), issue #33. As decisões vêm de medições com o Kof 0.6.3 num navegador real (Edge headless):
 
@@ -157,6 +157,10 @@ Especificação e design em [`.specs/features/mvp1-batch2-auth-onboarding/`](.sp
 - **Coluna `name`** entra por migração condicional (só adiciona se faltar), porque `orm.create` não altera tabela existente. Antes do deploy, ela passa por gate num MySQL local.
 - **Fora do MVP:** a fonte Manrope não carrega e o `index.html` gerado traz a barra de dev; os dois ficam para um `index.html` próprio (tarefa futura).
 - **Plano:** F1–F4 no backend (nome, validações, dívida e `/me`, mesmo domínio + Dockerfile), F5 cliente HTTP assíncrono, F6–F8 telas 1–7, F9 ferramentas de screenshot em `scripts/ui/`.
+
+**Estado da implementação (Kof 0.6.5):**
+
+- **F1 (feito):** `POST /api/auth/register` recebe `{"name","email","password"}`, grava o nome na coluna nova `name` de `userrow` e grava `hasSalary = false` (o salário só chega no onboarding). No boot, logo depois do `orm.create`, o backend procura a coluna em `INFORMATION_SCHEMA.COLUMNS` (filtrada por `TABLE_SCHEMA = SCHEMA()`, que vale no H2 e no MySQL) e, só se ela faltar, roda um `ALTER TABLE "userrow" ADD COLUMN "name" VARCHAR(255) DEFAULT '' NOT NULL` fixo. Se o `ALTER` falhar, o boot é abortado. Testado em H2 e num MySQL 8.4 local com `ANSI_QUOTES`, em 3 cenários: banco novo (sem `ALTER`), banco antigo com dados (um `ALTER`, contas antigas com `name = ''`, dump das 5 tabelas idêntico) e segunda execução (sem `ALTER`).
 
 ### Persistência (`persistence-kof-orm`) -- concluída, em produção desde 12/10/2026
 

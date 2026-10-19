@@ -52,6 +52,7 @@ enum VariableIncomeDestination { EMERGENCY_FUND, BUDGET_5030020 }
 // mod_user/model/UserEntity.java
 // Espelho mutavel de UserRow (backend/store.kf): id = numero gerado pelo banco em texto ("1"),
 // dinheiro em centavos e valores opcionais como par valor + flag (sem T? primitivo: issue #41).
+// name: nome do cadastro (Batch 2); contas anteriores a coluna ficam com "".
 class UserEntity {
     String id
     String email
@@ -67,11 +68,12 @@ class UserEntity {
     IncomeType incomeType
     Bool hasDebt
     Long debtCents
+    String name
 
     public constructor(String id, String email, String passwordHash, Role role,
             Long salaryCents, Bool hasSalary, Tier tier, Bool hasVariableIncome,
             Long emergencyGoalCents, Bool hasEmergencyGoal, BudgetModelType budgetModel,
-            IncomeType incomeType, Bool hasDebt, Long debtCents) {
+            IncomeType incomeType, Bool hasDebt, Long debtCents, String name) {
         this.id = id
         this.email = email
         this.passwordHash = passwordHash
@@ -86,6 +88,7 @@ class UserEntity {
         this.incomeType = incomeType
         this.hasDebt = hasDebt
         this.debtCents = debtCents
+        this.name = name
     }
 }
 
@@ -219,6 +222,8 @@ class KakeiboReflectionEntity {
 // =========================================================
 
 record LoginRequest(String email, String password)
+// Cadastro (Batch 2): o nome vai para a coluna name de UserRow.
+record RegisterRequest(String name, String email, String password)
 record OnboardingRequest(Double salary, String incomeType, Bool hasDebt)
 record VariableIncomeInput(Double amount, String source)
 // Sem userId: o dono do envelope vem SEMPRE do token (currentUserId). Um userId enviado no
@@ -243,6 +248,19 @@ String invalidBody() {
 LoginRequest? decodeLoginRequest(String raw) {
     try {
         var req = json.decode<LoginRequest>(raw)
+        if (req.email() == null || req.password() == null) {
+            return null
+        }
+        return req
+    } catch (String e) {
+        return null
+    }
+}
+
+// name ausente chega como null e e gravado como "" (as regras de preenchimento sao da validacao).
+RegisterRequest? decodeRegisterRequest(String raw) {
+    try {
+        var req = json.decode<RegisterRequest>(raw)
         if (req.email() == null || req.password() == null) {
             return null
         }

@@ -30,6 +30,9 @@ entity UserRow {
     incomeType: String
     hasDebt: Bool
     debtCents: Long
+    // Batch 2. Ultima coluna de proposito: numa tabela antiga o ALTER de migrateUserNameColumn a acrescenta
+    // no fim, e assim banco novo e banco migrado ficam com a mesma ordem de colunas.
+    name: String
 }
 
 entity TransactionRow {
@@ -189,9 +192,50 @@ String withDbTimeouts(String url) {
     return out
 }
 
+// Consulta fixa (sem bind, sem dado de usuario): quantas colunas "name" a tabela "userrow" do schema
+// atual tem. SCHEMA() e o schema da conexao no H2 ("PUBLIC") e sinonimo de DATABASE() no MySQL: uma
+// tabela userrow de outro database do mesmo servidor nao conta (medido nos dois, kof 0.6.5).
+String userNameColumnCountSql() {
+    return "SELECT COUNT(*) AS n FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = SCHEMA() AND LOWER(TABLE_NAME) = 'userrow' AND LOWER(COLUMN_NAME) = 'name'"
+}
+
+// true/false pela contagem; qualquer outra resposta derruba o boot (melhor que adivinhar e falhar no save).
+// db.query devolve cada linha como objeto JSON em texto; o rotulo vem "n" no MySQL e "N" no H2 (medido).
+Bool userNameColumnExists(String conn) {
+    var rows = db.query(conn, userNameColumnCountSql())
+    if (rows.size == 1) {
+        var row = rows.get(0).toLowerCase()
+        if (row == "{\"n\":1}") {
+            return true
+        }
+        if (row == "{\"n\":0}") {
+            return false
+        }
+    }
+    throw "migracao: resposta inesperada ao procurar a coluna userrow.name"
+}
+
+// orm.create nao acrescenta coluna nova a uma tabela que ja existe (medido no 0.6.3 e no 0.6.5: o save
+// seguinte lanca excecao Java). Banco anterior ao Batch 2 ganha a coluna name aqui, com DDL fixa e
+// DEFAULT '' (linhas antigas ficam com nome vazio, nenhuma e apagada). MySQL 8.4 nao tem
+// ADD COLUMN IF NOT EXISTS; as aspas duplas dependem do ANSI_QUOTES ligado na sessao (withAnsiQuotes).
+// Roda no boot, na conexao do openDb (com os timeouts de withDbTimeouts); falha = boot abortado.
+void migrateUserNameColumn(String conn) {
+    if (userNameColumnExists(conn)) {
+        return
+    }
+    db.execute(conn, "ALTER TABLE \"userrow\" ADD COLUMN \"name\" VARCHAR(255) DEFAULT '' NOT NULL")
+    if (!userNameColumnExists(conn)) {
+        throw "migracao: a coluna userrow.name nao foi criada"
+    }
+    log.info("migracao: coluna userrow.name adicionada")
+}
+
 // Cria as tabelas que faltam (PERS-22): orm.create e idempotente (medido: 3x no mesmo banco = true).
+// Banco novo: orm.create ja cria userrow com name e a migracao nao faz nada.
 void ensureSchema(String db) {
     orm.create<UserRow>(db)
+    migrateUserNameColumn(db)
     orm.create<TransactionRow>(db)
     orm.create<EnvelopeRow>(db)
     orm.create<ChatMessageRow>(db)
@@ -370,13 +414,13 @@ UserEntity userFromRow(UserRow row) {
     return UserEntity(String.valueOf(row.id()), row.email(), row.passwordHash(), roleFromText(row.role()),
         row.salaryCents(), row.hasSalary(), tierFromText(row.tier()), row.hasVariableIncome(),
         row.emergencyGoalCents(), row.hasEmergencyGoal(), budgetModelFromText(row.budgetModel()),
-        incomeTypeFromText(row.incomeType()), row.hasDebt(), row.debtCents())
+        incomeTypeFromText(row.incomeType()), row.hasDebt(), row.debtCents(), row.name())
 }
 
 UserRow userToRow(Long id, UserEntity user) {
     return UserRow(id, user.email, user.passwordHash, user.role.name(), user.salaryCents, user.hasSalary,
         user.tier.name(), user.hasVariableIncome, user.emergencyGoalCents, user.hasEmergencyGoal,
-        user.budgetModel.name(), user.incomeType.name(), user.hasDebt, user.debtCents)
+        user.budgetModel.name(), user.incomeType.name(), user.hasDebt, user.debtCents, user.name)
 }
 
 // Id fora do formato do banco (ex.: "usr_1" de um token antigo) = usuario inexistente.
