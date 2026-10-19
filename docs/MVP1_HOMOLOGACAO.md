@@ -448,3 +448,24 @@ kof build frontend --target js: exit=0
 docker build: "Kof release: kof-0.6.5-linux-x86_64", java.sql.Driver no jar: org.h2.Driver org.mariadb.jdbc.Driver
 docker run (KOF_ENV vazio, H2): /health 200 em 2 s; cadastro devolve token
 ```
+
+## 8. Troca 0.6.5 → 0.6.6 (19/10/2026)
+
+Validação feita antes do merge da Fase 1 (regra: toda mudança é validada no release estável mais recente). Kof 0.6.6 (zip `fe57694f…55c2`, conferido no `SHA256SUMS`; `kof.jar` `2dc26ca1…`), sobre `5d51896` + F1–F4.
+
+| Gate | 0.6.5 | 0.6.6 |
+|---|---|---|
+| G-BUILD backend + frontend `--target js` | exit 0 | exit 0 |
+| G-BYTECODE (VerifyAll / LinkAll) | 74 classes, 501 métodos, 0 erros / 106 OK | idêntico |
+| Controle sintético | acusa | acusa |
+| E2E com `-WebOut` (H2 e MySQL) | 67/68 (só #44) | 67/68 (só #44) |
+| G-RESTART (H2 e MySQL) | 28/28 | 28/28 |
+| Negativos / corrida de cadastro | 41/41 / 1×200 + 15×409, 0×500 | idêntico |
+| Concorrência, DB-BOUNCE, DB-DOWN, DB-PAUSE, BOOT-DOWN | verdes | verdes |
+| Migração `name` (3 cenários × H2/MySQL) | dump idêntico, zero perda | idêntico |
+| G-AUTH-STATIC (14 checagens) | 14/14 | 14/14 |
+| Imagem Docker | — | `kof 0.6.6`, `/index.html` 200, `/api/users/me` 401 |
+
+Bugs conhecidos: **nenhum corrigido e nenhuma regressão** na 0.6.6. Continuam os contornos de enum no `json.decode`, `math.max` com `Double`, `transaction {}` dentro de `try` (COMP002), `--fat` com só o primeiro registro de driver, aspas da Query DSL no MySQL (`ANSI_QUOTES`), `Router.back`/`Component.stateSet` no navegador e `String.format` no navegador.
+
+Changelog 0.6.5 → 0.6.6 relevante: #883 (chamada `db.*` não resolvida vira diagnóstico, antes era descartada em silêncio); `size` de coleção/array tipado como `Int`. O resto é AVIF, Gzip/Zip e casos golden.

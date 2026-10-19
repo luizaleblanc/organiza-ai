@@ -62,9 +62,9 @@ Conheça a interface do Organiza IA:
 | **Monólito Modular Frontend** | KOF (`kof.ui`, `frontend/*.kf`) -- Módulos de Core (`core/`), Componentes (`components/`) e Telas (`screens/`) |
 | **Back-end Legado (arquivado)** | Java 17, Spring Boot 3.3.x, Spring AI -- arquivado em `archive/legacy-backend-java/` (tag histórica `legacy/java-spring-boot`), mantido apenas como referência histórica |
 | **Banco de Dados** | `kof.orm` em `backend/store.kf`: MySQL 8.4 na Aiven em produção (driver MariaDB Connector/J fixado em `kofdeps`), com o app no Render; H2 em arquivo (`./data`) fora de produção. Persistência concluída e em produção desde 12/10/2026, ver [`.specs/features/persistence-kof-orm/`](.specs/features/persistence-kof-orm/): usuários, envelopes, transações, chat, renda variável e Kakeibo no banco |
-| **Build & Tooling** | `kof-cli` / Kof Compiler **0.6.5**, fixado em [`KOF_VERSION`](KOF_VERSION) (Java 25 JDK) |
+| **Build & Tooling** | `kof-cli` / Kof Compiler **0.6.6**, fixado em [`KOF_VERSION`](KOF_VERSION) (Java 25 JDK) |
 
-**Versão do Kof:** fixada em `0.6.5` no arquivo [`KOF_VERSION`](KOF_VERSION), fonte única do `Dockerfile` e do CI (`.github/workflows/kof-check.yml`). Trocar a versão é um commit próprio em `KOF_VERSION`, feito só depois de passar todos os gates; releases prerelease são recusados. A troca 0.6.3 → 0.6.5 (16/10/2026) e o que mudou nos contornos estão em [`docs/MVP1_HOMOLOGACAO.md`](docs/MVP1_HOMOLOGACAO.md), seção 7.
+**Versão do Kof:** fixada em `0.6.6` no arquivo [`KOF_VERSION`](KOF_VERSION), fonte única do `Dockerfile` e do CI (`.github/workflows/kof-check.yml`). Trocar a versão é um commit próprio em `KOF_VERSION`, feito só depois de passar todos os gates; releases prerelease são recusados. As trocas 0.6.3 → 0.6.5 (16/10/2026) e 0.6.5 → 0.6.6 (19/10/2026) e o que mudou nos contornos estão em [`docs/MVP1_HOMOLOGACAO.md`](docs/MVP1_HOMOLOGACAO.md), seções 7 e 8.
 
 ## Arquitetura Monolítica Modular (KofLith)
 
@@ -158,7 +158,7 @@ Especificação e design em [`.specs/features/mvp1-batch2-auth-onboarding/`](.sp
 - **Fora do MVP:** a fonte Manrope não carrega e o `index.html` gerado traz a barra de dev; os dois ficam para um `index.html` próprio (tarefa futura).
 - **Plano:** F1–F4 no backend (nome, validações, dívida e `/me`, mesmo domínio + Dockerfile), F5 cliente HTTP assíncrono, F6–F8 telas 1–7, F9 ferramentas de screenshot em `scripts/ui/`.
 
-**Estado da implementação (Kof 0.6.5):**
+**Estado da implementação (Kof 0.6.5, revalidado na 0.6.6):**
 
 - **F1 (feito):** `POST /api/auth/register` recebe `{"name","email","password"}`, grava o nome na coluna nova `name` de `userrow` e grava `hasSalary = false` (o salário só chega no onboarding). No boot, logo depois do `orm.create`, o backend procura a coluna em `INFORMATION_SCHEMA.COLUMNS` (filtrada por `TABLE_SCHEMA = SCHEMA()`, que vale no H2 e no MySQL) e, só se ela faltar, roda um `ALTER TABLE "userrow" ADD COLUMN "name" VARCHAR(255) DEFAULT '' NOT NULL` fixo. Se o `ALTER` falhar, o boot é abortado. Testado em H2 e num MySQL 8.4 local com `ANSI_QUOTES`, em 3 cenários: banco novo (sem `ALTER`), banco antigo com dados (um `ALTER`, contas antigas com `name = ''`, dump das 5 tabelas idêntico) e segunda execução (sem `ALTER`).
 - **F2 (feito):** cadastro, login e onboarding recusam entrada inválida com 400 e `{"error":"..."}`, sem gravar nada: nome, e-mail ou senha vazios (`Preencha nome, e-mail e senha.`), e-mail sem um único `@` com texto dos dois lados ou com espaço (`Digite um e-mail válido.`), senha com menos de 8 caracteres, login com campo vazio (antes do limite de tentativas), salário menor ou igual a 0, dívida negativa ou igual a 0 com `hasDebt=true` e `incomeType` fora de `FIXED`/`VARIABLE`. Nome e e-mail com mais de 255 caracteres dão `Dados inválidos.` (antes davam 500 no banco). O e-mail é gravado e procurado sem espaços nas pontas. `debtAmount` entra no corpo do onboarding como opcional (ausente = 0), então o corpo antigo `{"salary","incomeType","hasDebt":false}` continua valendo.

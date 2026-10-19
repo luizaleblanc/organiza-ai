@@ -32,7 +32,7 @@ Nenhum segredo entra na imagem nem no repositório (`.env` está no `.gitignore`
 ## Rodar e testar localmente (sem Docker)
 
 ```powershell
-# kof da versão em KOF_VERSION (hoje 0.6.5); veja docs/handoff/ANTIGRAVITY_HANDOFF.md, seção 2.1
+# kof da versão em KOF_VERSION (hoje 0.6.6); veja docs/handoff/ANTIGRAVITY_HANDOFF.md, seção 2.1
 kof check backend
 kof build backend --target jvm --output <pasta-fora-do-repo>\classes
 
@@ -64,7 +64,7 @@ curl -fsS http://localhost:8080/health                                          
   baixa o `.tar.gz`, confere o SHA256 contra o `SHA256SUMS` do próprio release e roda `kof check` + `kof build`.
   O tag usado sai sempre no log (`Kof release: ...`).
 - O `kof build` não copia o driver JDBC: o build stage roda `kof deps resolve` (H2 e MariaDB Connector/J fixados em `kofdeps`) e gera um fat jar com `--fat --classpath`.
-- O `--fat` do Kof (medido no 0.6.3 e no 0.6.5) mantém só o primeiro `META-INF/services/java.sql.Driver` (o do H2), e aí `mysql://` falha com "driver ausente". O build stage refaz esse arquivo com os drivers de todos os jars e falha se faltar `org.mariadb.jdbc.Driver` ou `org.h2.Driver`.
+- O `--fat` do Kof (medido no 0.6.3, 0.6.5 e 0.6.6) mantém só o primeiro `META-INF/services/java.sql.Driver` (o do H2), e aí `mysql://` falha com "driver ausente". O build stage refaz esse arquivo com os drivers de todos os jars e falha se faltar `org.mariadb.jdbc.Driver` ou `org.h2.Driver`.
 - **Run stage** (`eclipse-temurin:25-jre`): usuário sem privilégios, `java -Dkof.root=/app -jar /app/kof-app.jar`, com `KOF_ENV=production` (sem `KOF_DB_URL` o container não sobe). `/app/data` pertence ao usuário `kof`, para o H2 funcionar quando `KOF_ENV` vier vazio (teste local).
 
 **Validado em 12/10/2026** (Docker 29.3.1, Kof 0.6.3 linux): `docker build` ok. Com `KOF_ENV` vazio (H2) e com
@@ -73,6 +73,8 @@ criada no container passou intacta por `docker restart` e por `docker kill` + `d
 pulso, envelope com gasto e transação), sem a senha nos logs.
 
 **Revalidado em 16/10/2026** com Kof 0.6.5 linux: `docker build` ok (log `Kof release: kof-0.6.5-linux-x86_64`, `java.sql.Driver no jar: org.h2.Driver org.mariadb.jdbc.Driver`) e `docker run` com H2 respondendo `/health` 200.
+
+**Revalidado em 19/10/2026** com Kof 0.6.6 linux: `docker build --build-arg KOF_TAG=kof-0.6.6-linux-x86_64` ok (drivers H2 e MariaDB no jar) e `docker run` com H2 respondendo `/health` 200, `/index.html` 200, `/Default.mjs` 200 e `/api/users/me` 401 sem token.
 
 Teste local com H2, sem banco externo: `docker run --rm -p 8080:8080 -e KOF_ENV= -e KOF_JWT_SECRET=<64 hex> organiza-ai-backend`.
 
