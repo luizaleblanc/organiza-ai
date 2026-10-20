@@ -96,6 +96,25 @@ entity NotificationRow {
     readFlag: Bool
 }
 
+// Esqueci a senha (email.kf): so o hash SHA-256 do token; expiresAt em UTC ISO-8601; uso unico.
+entity PasswordResetRow {
+    id: Long generated
+    userId: Long
+    tokenHash: String
+    expiresAt: String
+    usedFlag: Bool
+    createdAt: String
+}
+
+// E-mails ja enviados por (usuario, tipo, dia): o resumo diario sai uma vez por dia.
+entity EmailLogRow {
+    id: Long generated
+    userId: Long
+    kind: String
+    dayKey: String
+    createdAt: String
+}
+
 // Preferencias da Tela 13 (e-mail DAILY/WEEKLY/NEVER e push). Uma linha por usuario.
 entity PreferenceRow {
     id: Long generated
@@ -264,6 +283,8 @@ void ensureSchema(String db) {
     orm.create<KakeiboReflectionRow>(db)
     orm.create<NotificationRow>(db)
     orm.create<PreferenceRow>(db)
+    orm.create<PasswordResetRow>(db)
+    orm.create<EmailLogRow>(db)
 }
 
 // Abre uma conexao nova com a URL final (DbConn.url) e as credenciais separadas. Falha de rede ou de
@@ -942,4 +963,57 @@ PreferencesInput savePreferences(String userId, PreferencesInput prefs) {
     }
     var saved = orm.save(DbConn.handle, PreferenceRow(id, userId.toLong(), prefs.emailEnabled(), prefs.frequency(), prefs.pushEnabled()))
     return PreferencesInput(saved.emailEnabled(), saved.frequency(), saved.pushEnabled())
+}
+
+// =========================================================
+// E-mail (email.kf): usuarios do resumo diario, tokens de redefinicao e registro de envio.
+// =========================================================
+
+List<UserEntity> findAllUsers() {
+    var rows = UserRow.query(DbConn.handle) {
+        orderBy id asc
+    }
+    return rows.map((r: UserRow) -> userFromRow(r))
+}
+
+void savePasswordResetToken(String userId, String tokenHash, String expiresAt) {
+    orm.save(DbConn.handle, PasswordResetRow(0, userId.toLong(), tokenHash, expiresAt, false, nowIso()))
+}
+
+// Id do usuario se o token existe, nao foi usado e nao expirou; o token (e qualquer outro pendente do
+// mesmo usuario) fica usado. null = link invalido ou expirado.
+String? consumePasswordResetToken(String hash, String now) {
+    var rows = PasswordResetRow.query(DbConn.handle) {
+        where tokenHash == hash
+        where usedFlag == false
+        where expiresAt > now
+    }
+    if (rows.isEmpty()) {
+        return null
+    }
+    var uid = rows.get(0).userId()
+    var pending = PasswordResetRow.query(DbConn.handle) {
+        where userId == uid
+        where usedFlag == false
+    }
+    for (var r in pending) {
+        orm.save(DbConn.handle, PasswordResetRow(r.id(), r.userId(), r.tokenHash(), r.expiresAt(), true, r.createdAt()))
+    }
+    return String.valueOf(uid)
+}
+
+Bool emailAlreadySent(String userId, String kind, String dayKey) {
+    var uid = userId.toLong()
+    var wantedKind = kind
+    var wantedDay = dayKey
+    var rows = EmailLogRow.query(DbConn.handle) {
+        where userId == uid
+        where kind == wantedKind
+        where dayKey == wantedDay
+    }
+    return !rows.isEmpty()
+}
+
+void recordEmailSent(String userId, String kind, String dayKey) {
+    orm.save(DbConn.handle, EmailLogRow(0, userId.toLong(), kind, dayKey, nowIso()))
 }

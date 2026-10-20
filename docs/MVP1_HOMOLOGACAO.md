@@ -600,3 +600,49 @@ G-DB-BOUNCE 4,9 s · G-DB-DOWN 503 → 200 em 4,1 s · G-BOOT-DOWN exit=1, senha
 Migração 5d51896 → d0: dump idêntico (H2 23 linhas, MySQL 18 linhas)
 ```
 
+## 10. E-mail: esqueci a senha e resumo diário (d1, 19/10/2026)
+
+Provedor: **Resend** (`POST https://api.resend.com/emails`, `Authorization: Bearer`, corpo `{from, to, subject, text}`), chamado por `backend/outbound.kf` (seção 9). Código em `backend/email.kf`.
+
+| Variável | Uso |
+|---|---|
+| `KOF_EMAIL_API_KEY` | Chave do Resend (segredo). Lida com `secrets.secret` e só revelada no cabeçalho; nunca vai para log. Sem ela, o recurso fica **desligado**: as duas rotas respondem 503 com texto honesto e o boot registra o motivo |
+| `KOF_EMAIL_FROM` | Remetente verificado no Resend, ex.: `Organiza AI <nao-responda@seu-dominio>` |
+| `KOF_EMAIL_API_URL` | Opcional (padrão `https://api.resend.com/emails`); só o teste aponta para o mock |
+| `KOF_APP_BASE_URL` | Endereço público do app, para o link de redefinição |
+| `KOF_DIGEST_AT` | Opcional, `HH:MM` local (padrão `20:00`), no fuso da variável `TZ` |
+
+**Rotas novas (públicas, sem token):**
+
+| Rota | Corpo | Resposta |
+|---|---|---|
+| `POST /api/auth/forgot-password` | `{email}` | **202** `{"message":"Se o e-mail estiver cadastrado, enviamos um link..."}` para e-mail cadastrado **ou não** (sem enumeração; o envio roda num `spawn`, então o tempo de resposta também não revela a conta). 400 e-mail inválido; 429 com mais de 3 pedidos por e-mail ou 10 por IP em 1 hora; 503 com o e-mail desligado |
+| `POST /api/auth/reset-password` | `{token, password}` | 200 `{"message":"Senha alterada..."}`; 400 senha com menos de 8 caracteres ou link inválido/expirado/já usado; 429 com mais de 20 tentativas por IP em 1 hora; 503 com o e-mail desligado |
+
+**Token:** 32 bytes aleatórios (`crypto.randomHex`), vai só no link (`<KOF_APP_BASE_URL>/#/redefinir-senha?token=...`). O banco guarda apenas o SHA-256 (`passwordresetrow.tokenHash`), com validade de 30 minutos. Ao usar um token, ele e todos os outros pendentes do mesmo usuário ficam marcados como usados. A senha nova passa por `passwords.hash`. O IP do limite é o **último** item do `X-Forwarded-For` (o que o proxy do Render acrescenta); sem o cabeçalho (local), todos contam como `local`.
+
+**Resumo diário (Tela 13):** `scheduler.at` é stub (`CRON001`), então segue o contorno do training (`idioms/concurrency.md`): um `spawn` calcula os milissegundos até o próximo `KOF_DIGEST_AT` no fuso `TZ`, dorme e rearma. Vai para quem concluiu o onboarding e tem e-mail ligado com frequência `DAILY` (ou `WEEKLY`, só na segunda). O texto traz o pulso do dia, o gasto do mês contra o salário e as caixinhas em Alerta ou Estourada. Cada envio é registrado em `emaillogrow` (usuário, tipo, dia local) antes do próximo, e o registro é conferido antes de enviar. No boot, se o horário de hoje já passou, o backend tenta o envio do dia, e o registro impede a duplicata depois de um reinício.
+
+Tabelas novas criadas no boot por `orm.create`: `passwordresetrow` e `emaillogrow`. Nenhuma tabela existente muda.
+
+**Mock e teste (`scripts/test_integrations_mock.ps1`):** o mock (`scripts/mock_providers/providers_mock.ps1`) é um servidor HTTPS local com certificado autoassinado gerado na hora. O backend só confia nele porque a JVM do teste recebe um truststore de teste, então o teste passa pelo mesmo caminho TLS da produção. O mock não é em Kof porque o servidor do `kof.web` 0.6.6 recusa com 401 qualquer `Authorization: Bearer` que não seja um JWT válido, mesmo sem `app.security` (`JvmRuntimeWebDispatch`, passo 6 da pipeline), e o Resend usa Bearer opaco.
+
+```
+ 1. Mock HTTPS local e backend sobem (e-mail ligado, mock confiado só pelo truststore de teste)
+ 2. Esqueci a senha: 202 e 1 e-mail no provedor com link de token de 64 hex
+ 3. E-mail inexistente: mesma resposta 202 e nenhum e-mail enviado
+ 4. Redefinir: senha curta e token desconhecido = 400; token certo = 200; nova senha entra e a antiga não
+ 5. Token de uso único: 2º uso = 400
+ 6. Limite: 4º pedido no mesmo e-mail em 1 hora = 429
+ 7. Resumo diário no horário KOF_DIGEST_AT: 1 e-mail para quem tem onboarding e DAILY; nenhum para NEVER e sem onboarding
+ 8. Reinício depois do resumo: o boot confere emaillogrow e não reenvia (1 resumo continua 1)
+ 9. Sem KOF_EMAIL_API_KEY: esqueci a senha e redefinir = 503 honesto, log explica e não vaza chave
+RESULTADO INTEGRACOES (mock): 9 / 9
+```
+
+**Achado do teste (H2 local):** com `WRITE_DELAY=0` na URL do H2 (o padrão local do `store.kf` e dos scripts de gate), o H2 2.5 perde linhas já confirmadas quando o processo é morto com kill: a linha do `emaillogrow` aparecia com o servidor vivo e sumia depois do kill, e o resumo saía de novo. Com o padrão do H2 (sem `WRITE_DELAY=0`) a linha fica. O teste de integração usa o padrão do H2; em MySQL o passo 8 passa com o mesmo código. Trocar o padrão local do `store.kf` fica como decisão à parte (não afeta produção).
+
+Não testado de ponta a ponta: a expiração de 30 minutos (a consulta exige `expiresAt > agora`; o teste não espera 30 minutos) e o envio real pelo Resend (proibido nos testes).
+
+Gates do d1 (kof 0.6.6): GATES_D1
+

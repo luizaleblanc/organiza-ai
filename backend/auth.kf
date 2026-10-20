@@ -32,7 +32,7 @@ String issueToken(String userId) {
 // Rotas da API que nao pedem token. /health e os arquivos do frontend (servidos por app.serveDir
 // quando KOF_WEB_OUT existe) ficam fora de /api/ e por isso sao publicos (design do Batch 2, §2.3).
 List<String> publicApiPaths() {
-    return listOf("/api/auth/login", "/api/auth/register")
+    return listOf("/api/auth/login", "/api/auth/register", "/api/auth/forgot-password", "/api/auth/reset-password")
 }
 
 // Publico = fora de /api/ ou uma das rotas de auth. Qualquer outra rota /api/* exige token (401).

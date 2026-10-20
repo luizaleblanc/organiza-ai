@@ -1,0 +1,245 @@
+// backend/email.kf
+// E-mail transacional pelo Resend (decisoes de 16/10 e 19/10: "esqueci a senha" e resumo diario as 20h
+// entram no MVP 1). Envio por backend/outbound.kf (HTTPS com certificado validado). Sem a chave, o recurso
+// fica DESLIGADO: as rotas respondem 503 com texto honesto e o boot nunca cai por isso.
+//   KOF_EMAIL_API_KEY  chave do Resend (segredo; so vai para o cabecalho Authorization, nunca para log)
+//   KOF_EMAIL_FROM     remetente verificado no Resend, ex.: "Organiza AI <nao-responda@dominio>"
+//   KOF_EMAIL_API_URL  opcional; padrao https://api.resend.com/emails (o teste aponta para o mock local)
+//   KOF_APP_BASE_URL   endereco do app, para o link de redefinicao (padrao http://localhost:3000)
+//   KOF_DIGEST_AT      horario local do resumo diario, "HH:MM" (padrao 20:00), no fuso da variavel TZ
+
+// =========================================================
+// Cliente de e-mail (Resend: POST {from, to, subject, text} com Bearer; aceite = 2xx com "id")
+// =========================================================
+
+record EmailMessage(String from, String to, String subject, String text)
+
+String emailApiUrl() {
+    var url = configText("KOF_EMAIL_API_URL")
+    if (url != null) {
+        return url
+    }
+    return "https://api.resend.com/emails"
+}
+
+Bool emailConfigured() {
+    if (configText("KOF_EMAIL_API_KEY") != null && configText("KOF_EMAIL_FROM") != null) {
+        return outboundUrlAllowed(emailApiUrl())
+    }
+    return false
+}
+
+// Motivo de o e-mail estar ligado ou desligado (log do boot; nunca cita a chave).
+String emailStatus() {
+    if (emailConfigured()) {
+        return "e-mail ligado (Resend)"
+    }
+    if (configText("KOF_EMAIL_API_KEY") != null && configText("KOF_EMAIL_FROM") != null) {
+        return "e-mail desligado: KOF_EMAIL_API_URL precisa ser https:// (http local so com KOF_OUTBOUND_ALLOW_LOCAL_HTTP=true)"
+    }
+    return "e-mail desligado: defina KOF_EMAIL_API_KEY e KOF_EMAIL_FROM"
+}
+
+// true = o provedor aceitou (2xx). 4xx/5xx/rede = false com o status no log (nunca a chave nem o corpo).
+Bool sendEmail(String to, String subject, String text) {
+    if (!emailConfigured()) {
+        return false
+    }
+    var key = secrets.secret("KOF_EMAIL_API_KEY")
+    var payload = json.encode(EmailMessage(nullToText(configText("KOF_EMAIL_FROM")), to, subject, text))
+    var resp = outboundPost(emailApiUrl(), payload, jsonBearerHeaders(key.reveal()), 10000)
+    if (resp.status >= 200 && resp.status < 300) {
+        return true
+    }
+    if (resp.status == 0) {
+        log.warn("e-mail nao enviado: " + resp.failure)
+    } else {
+        log.warn("e-mail recusado pelo provedor: status " + resp.status)
+    }
+    return false
+}
+
+// =========================================================
+// Esqueci a senha: token de uso unico, guardado so como hash, valido por 30 minutos
+// =========================================================
+
+record ForgotPasswordRequest(String email)
+record ResetPasswordRequest(String token, String password)
+record MessageResponse(String message)
+
+ForgotPasswordRequest? decodeForgotPasswordRequest(String raw) {
+    try {
+        var req = json.decode<ForgotPasswordRequest>(raw)
+        if (req.email() == null) {
+            return null
+        }
+        return req
+    } catch (String e) {
+        return null
+    }
+}
+
+ResetPasswordRequest? decodeResetPasswordRequest(String raw) {
+    try {
+        var req = json.decode<ResetPasswordRequest>(raw)
+        if (req.token() == null || req.password() == null) {
+            return null
+        }
+        return req
+    } catch (String e) {
+        return null
+    }
+}
+
+Long resetTokenTtlMillis() {
+    var minutes: Long = 30
+    return minutes * 60000
+}
+
+String forgotPasswordAnswer() {
+    return "Se o e-mail estiver cadastrado, enviamos um link para redefinir a senha. Ele vale por 30 minutos."
+}
+
+String appBaseUrl() {
+    var base = configText("KOF_APP_BASE_URL")
+    if (base != null) {
+        return base
+    }
+    return "http://localhost:3000"
+}
+
+// IP do cliente para o limite de pedidos: o ULTIMO item do X-Forwarded-For (o que o proxy do Render
+// acrescenta; os anteriores vem do cliente e podem ser forjados). Sem proxy (local) = "local".
+String clientIpKey(String? forwardedFor) {
+    if (forwardedFor != null) {
+        var parts = forwardedFor.split(",")
+        var last = parts[parts.length - 1].trim()
+        if (last != "") {
+            return last
+        }
+    }
+    return "local"
+}
+
+// Gera o token (32 bytes aleatorios do crypto.randomHex), grava so o hash e manda o link por e-mail.
+// Usuario inexistente nao recebe nada e a resposta da rota e a mesma (sem enumeracao de conta).
+void startPasswordReset(UserEntity user) {
+    var token = crypto.randomHex(32)
+    var expiresAt = time.formatInstantIso(time.now() + resetTokenTtlMillis())
+    savePasswordResetToken(user.id, crypto.sha256(token), expiresAt)
+    var link = appBaseUrl() + "/#/redefinir-senha?token=" + token
+    var text = "Olá, " + user.name + "!\n\nRecebemos um pedido para redefinir a senha da sua conta no Organiza AI. " +
+        "Use o link abaixo em até 30 minutos:\n\n" + link + "\n\nSe não foi você, ignore este e-mail: sua senha continua a mesma."
+    if (!sendEmail(user.email, "Organiza AI: redefinir sua senha", text)) {
+        log.warn("link de redefinicao nao enviado")
+    }
+}
+
+// =========================================================
+// Resumo diario as 20h (Tela 13): scheduler.at e stub (CRON001), entao o contorno do training
+// (idioms/concurrency.md): calcular os ms ate o proximo horario e dormir num spawn, rearmando depois de
+// cada envio. O registro em EmailLogRow garante um envio por usuario e dia, inclusive apos reinicio.
+// =========================================================
+
+Int digestMinuteOfDay() {
+    var at = configText("KOF_DIGEST_AT")
+    if (at != null && at.length() == 5 && at.substring(2, 3) == ":") {
+        var h = at.substring(0, 2)
+        var m = at.substring(3, 5)
+        if (strings.isNumeric(h) && strings.isNumeric(m) && h.toInt() < 24 && m.toInt() < 60) {
+            return h.toInt() * 60 + m.toInt()
+        }
+    }
+    return 20 * 60
+}
+
+// Milissegundos do dia local (fuso TZ) agora.
+Long localMillisOfDay() {
+    var dayMs: Long = 86400000
+    return (time.now() + tzOffsetMillis()) % dayMs
+}
+
+// Milissegundos ate o proximo HH:MM local (sempre > 0).
+Long millisUntilDigest() {
+    var dayMs: Long = 86400000
+    var target: Long = digestMinuteOfDay()
+    var wait = target * 60000 - localMillisOfDay()
+    if (wait <= 0) {
+        wait = wait + dayMs
+    }
+    return wait
+}
+
+// O horario de hoje ja passou? (no boot: recupera o envio de hoje se o processo estava fora as 20h)
+Bool digestTimePassedToday() {
+    var target: Long = digestMinuteOfDay()
+    return localMillisOfDay() >= target * 60000
+}
+
+Bool digestDueToday(PreferencesInput prefs) {
+    if (!prefs.emailEnabled() || prefs.frequency() == "NEVER") {
+        return false
+    }
+    if (prefs.frequency() == "WEEKLY") {
+        var today = localTodayIso()
+        return time.dayOfWeek(today.substring(0, 4).toInt(), today.substring(5, 7).toInt(), today.substring(8, 10).toInt()) == 1
+    }
+    return true
+}
+
+String digestText(UserEntity user) {
+    var monthStart = monthStartIso()
+    var pulse = calculateDailyPulse(user.id, daysRemainingInMonth(), monthStart)
+    var spent = sumAmountCents(findTransactionsByUserIdAndCreatedAtAfter(user.id, monthStart))
+    var alerts = envelopesOverview(user).filter((e: EnvelopeOverview) -> e.status != "EM_DIA")
+    var text = "Olá, " + user.name + "!\n\nSeu resumo de hoje no Organiza AI:\n" +
+        "- Pode gastar por dia até o fim do mês: " + formatBrl(toCents(pulse.pulse)) + " (" + pulse.daysRemaining + " dias restantes)\n" +
+        "- Gastos do mês: " + formatBrl(spent) + " de " + formatBrl(user.salaryCents) + "\n"
+    for (var e in alerts) {
+        text = text + "- Caixinha " + e.categoryName + ": " + e.percent + "% do limite (" + e.status + ")\n"
+    }
+    return text + "\nDiga ao Organiza o que você gastou hoje e mantenha o pulso em dia."
+}
+
+// Um envio por usuario e dia (EmailLogRow): o registro e conferido antes de cada envio.
+Int runDailyDigest() {
+    var sent = 0
+    var today = localTodayIso()
+    for (var user in findAllUsers()) {
+        if (onboardingCompleted(user) && digestDueToday(findPreferences(user.id)) && !emailAlreadySent(user.id, "DIGEST", today)) {
+            if (sendEmail(user.email, "Organiza AI: seu pulso de hoje", digestText(user))) {
+                recordEmailSent(user.id, "DIGEST", today)
+                sent = sent + 1
+            }
+        }
+    }
+    return sent
+}
+
+void runDailyDigestSafely() {
+    try {
+        log.info("resumo diario: " + runDailyDigest() + " e-mail(s) enviados")
+    } catch (String e) {
+        log.warn("resumo diario falhou; nova tentativa no proximo horario")
+    } catch (Exception e) {
+        log.warn("resumo diario falhou; nova tentativa no proximo horario")
+    }
+}
+
+void startDailyDigest() {
+    if (!emailConfigured()) {
+        log.info("resumo diario por e-mail desligado (" + emailStatus() + ")")
+        return
+    }
+    log.info("resumo diario por e-mail agendado para " + digestMinuteOfDay() / 60 + "h" + digestMinuteOfDay() % 60 + " (fuso TZ)")
+    spawn {
+        if (digestTimePassedToday()) {
+            runDailyDigestSafely()
+        }
+        while (true) {
+            time.sleep(millisUntilDigest() as Int)
+            runDailyDigestSafely()
+            time.sleep(61000)
+        }
+    }
+}

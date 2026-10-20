@@ -112,6 +112,64 @@ main() {
         return status(400, invalidBody())
     }
 
+    // Esqueci a senha (email.kf). Mesma resposta 202 para e-mail cadastrado ou nao (sem enumeracao);
+    // o envio roda num spawn, entao o tempo de resposta tambem nao revela a conta. E-mail desligado = 503.
+    app.post("/api/auth/forgot-password") {
+        var req = decodeForgotPasswordRequest(body())
+        if (req == null) {
+            return status(400, invalidBody())
+        }
+        var email = req.email.trim()
+        if (!isEmailLike(email) || email.length() > maxTextLength()) {
+            return status(400, json.encode(ApiError("Digite um e-mail válido.")))
+        }
+        if (!emailConfigured()) {
+            return status(503, json.encode(ApiError("Recuperação de senha indisponível no momento. Tente de novo mais tarde.")))
+        }
+        // Limites por e-mail (3/h) e por IP (10/h). O limite por e-mail vale igual para conta existente ou
+        // nao, entao o 429 tambem nao revela cadastro.
+        if (!security.rateLimit("forgot-ip:" + clientIpKey(header("X-Forwarded-For")), 10, 3600)) {
+            return status(429, json.encode(ApiError("Muitos pedidos de redefinição. Tente de novo mais tarde.")))
+        }
+        if (!security.rateLimit("forgot:" + email.toLowerCase(), 3, 3600)) {
+            return status(429, json.encode(ApiError("Muitos pedidos de redefinição para este e-mail. Tente de novo mais tarde.")))
+        }
+        var user = findUserByEmail(email)
+        if (user != null) {
+            spawn {
+                startPasswordReset(user)
+            }
+        }
+        return status(202, json.encode(MessageResponse(forgotPasswordAnswer())))
+    }
+
+    app.post("/api/auth/reset-password") {
+        var req = decodeResetPasswordRequest(body())
+        if (req == null) {
+            return status(400, invalidBody())
+        }
+        if (req.password.length() < 8 || req.password.length() > maxTextLength()) {
+            return status(400, json.encode(ApiError("A senha precisa ter pelo menos 8 caracteres.")))
+        }
+        if (!emailConfigured()) {
+            return status(503, json.encode(ApiError("Recuperação de senha indisponível no momento. Tente de novo mais tarde.")))
+        }
+        if (!security.rateLimit("reset-ip:" + clientIpKey(header("X-Forwarded-For")), 20, 3600)) {
+            return status(429, json.encode(ApiError("Muitas tentativas. Tente de novo mais tarde.")))
+        }
+        var userId = consumePasswordResetToken(crypto.sha256(req.token), nowIso())
+        if (userId == null) {
+            return status(400, json.encode(ApiError("Link inválido ou expirado. Peça um novo.")))
+        }
+        var user = findUserById(userId)
+        if (user == null) {
+            return status(400, json.encode(ApiError("Link inválido ou expirado. Peça um novo.")))
+        }
+        user.passwordHash = passwords.hash(req.password)
+        updateUser(user)
+        return json.encode(MessageResponse("Senha alterada. Entre com a nova senha."))
+    }
+
     // =========================================================
     // Onboarding — Sugestão e Criação de Orçamento
     // =========================================================
@@ -528,5 +586,7 @@ main() {
         log.info("frontend servido de KOF_WEB_OUT")
     }
 
+    log.info(emailStatus())
+    startDailyDigest()
     app.listen(listenPort())
 }
