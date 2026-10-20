@@ -119,11 +119,8 @@ Int daysRemainingInMonth() {
 // As somas trabalham em centavos (Long, soma exata) e so viram reais na borda.
 
 Long sumAmountCents(List<TransactionEntity> transactions) {
-    var sum: Long = 0
-    for (var t in transactions) {
-        sum = sum + t.amountCents
-    }
-    return sum
+    var zero: Long = 0
+    return transactions.map((t: TransactionEntity) -> t.amountCents).reduce((a: Long, b: Long) -> a + b, zero)
 }
 
 Double sumAmountByCategoryAndUserId(Category category, String userId) {
@@ -318,13 +315,10 @@ VariableIncomeDestination decideVariableIncomeDestination(String userId, Double 
     if (user != null) {
         if (user.hasEmergencyGoal) {
             var goal = centsToReais(user.emergencyGoalCents)
-            var emergencyIncomes = findVariableIncomesByUserId(userId)
-            var currentReserve = 0.0
-            for (var inc in emergencyIncomes) {
-                if (inc.destination == VariableIncomeDestination.EMERGENCY_FUND) {
-                    currentReserve = currentReserve + inc.amount
-                }
-            }
+            var currentReserve = findVariableIncomesByUserId(userId)
+                .filter((inc: VariableIncomeEntity) -> inc.destination == VariableIncomeDestination.EMERGENCY_FUND)
+                .map((inc: VariableIncomeEntity) -> inc.amount)
+                .reduce((a: Double, b: Double) -> a + b, 0.0)
             if (currentReserve < goal) {
                 return VariableIncomeDestination.EMERGENCY_FUND
             }

@@ -296,6 +296,35 @@ G-DB-BOUNCE verde em 8,3 s · G-DB-DOWN 503 → 200 em 4,1 s · G-BOOT-DOWN exit
 MySQL: transactionrow.createdAt = 2026-10-19T13:54:19.402Z, chatmessagerow.createdAt preenchido
 ```
 
+### Fase 2.1: Refatoração idiomática medida (kof 0.6.6)
+
+**`app.security`/`app.policy` não foram adotados**, porque não são equivalentes ao middleware atual (`main.kf`, `app.use`). O código da tag `kof-0.6.6` e um repro fora do repo (`p23/repro/sec`, `app.policy("/api", auth:true, csrf:false, responses)` + `app.policy("/api/auth", auth:false)`) mostram:
+
+| Contrato atual | `app.security`/`app.policy` no 0.6.6 | Medido |
+|---|---|---|
+| Token com `iss` ou `aud` errados = 401 (E2E 11–12) | O passo `auth` valida só a assinatura e o `exp` (`kof_sec_jwt_verify(token, secret)`, `JvmStringSecurityRuntime.java:330-353`) | token de outro emissor e outra audiência = **200** |
+| Login e cadastro públicos, mesmo com um `Authorization` velho no navegador | Com `Authorization` presente, um token inválido nunca passa, nem em rota pública (`JvmRuntimeWebDispatch.java:145-160`) | `POST /api/auth/login` com `Bearer lixo` = **401** |
+| `publicPaths` | Só vale no modo `sessionHeader` (passo 4), não no passo `auth` (passo 6) | — |
+| Rate limit do login: 5 por minuto **por e-mail**, depois da validação (400 não gasta tentativa) | Rate limit por IP + rota, antes do handler | — |
+| 503 do banco antes da autenticação | `app.use` roda antes da pipeline, então o 503 continuaria igual | — |
+| Sem CSRF (API com Bearer) e sem cabeçalhos extras | CSRF ligado por padrão no escopo global; CSP e `X-Frame-Options: DENY` em todas as respostas | CSP presente em `/api/me` |
+
+Adotar a política exigiria aceitar tokens de outra audiência ou recusar login com cabeçalho velho. Por isso o middleware continua. Se o Kof passar a validar `iss`/`aud` no passo `auth` e a aplicar `publicPaths` nele, a troca volta a ser avaliada. **Adotado:** coleções idiomáticas onde reduzem código sem mudar o resultado (`refactor(backend): colecoes idiomaticas do kof 0.6.6`):
+
+- `needsCategories()` com `setOf(...)` + `contains` no lugar de duas cadeias de `||` (`coach.kf`, anti-padrão `chained-or-membership` do training).
+- `listOf(...).any(...)` nas palavras de renda fixa do `registerUserIncome`.
+- `map`/`filter`/`reduce` nas somas (`sumAmountCents`, reserva de emergência, gasto do Base Zero e do Kakeibo) e na lista de `GET /api/transactions`.
+
+As somas continuam da esquerda para a direita, então o resultado é o mesmo. O repro `p23/repro/eqb` compara a versão antiga com a nova em todas as 12 categorias, em `null`, em 7 textos de renda e em somas `Long` e `Double` (`0.1+0.2+0.3+1234.56`): nenhuma diferença. O backend caiu de 1.665 para 1.648 linhas de código (`p23/loc.sh`). Evidência (kof 0.6.6):
+
+```
+G-BUILD check/build exit=0 · frontend --target js exit=0
+VerifyAll 95 classes, 535 métodos, 0 erros (cada lambda vira uma classe) · LinkAll 127/127 · controle sintético acusa
+G-E2E H2 68/68 · MySQL 68/68 · com -WebOut 70/70 (H2 e MySQL) · G-RESTART 28/28 (H2 e MySQL)
+neg 41/41 (H2 e MySQL) · G-CONC verde (H2 e MySQL) · G-AUTH-STATIC 14/14 · G-DB-BOUNCE 5,3 s · G-DB-DOWN 503 → 200 em 4,1 s
+G-BOOT-DOWN exit=1, senha no log: 0 · migração name: dump idêntico (H2 e MySQL)
+```
+
 ### Fase 3: Rotas que faltam (lógica já portada)
 
 | Item | Aceite | Est. | Nível |

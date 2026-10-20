@@ -22,12 +22,13 @@ record SuggestModelChangeOutput(Bool shouldChange, String suggestedModel, String
 // CategoryBucketMapper (Mapeamento de Categoria para Bucket)
 // =========================================================
 
+// Categorias essenciais (CategoryBucketMapper.NEEDS do legado).
+Set<Category> needsCategories() {
+    return setOf(Category.GROCERIES, Category.PHARMA, Category.HEALTH, Category.TRANSPORT, Category.HOUSING, Category.EDUCATION)
+}
+
 Bucket toStandardBucket(Category? category) {
-    if (category == null) {
-        return Bucket.WANTS
-    }
-    if (category == Category.GROCERIES || category == Category.PHARMA || category == Category.HEALTH ||
-        category == Category.TRANSPORT || category == Category.HOUSING || category == Category.EDUCATION) {
+    if (category != null && needsCategories().contains(category)) {
         return Bucket.NEEDS
     }
     return Bucket.WANTS
@@ -37,8 +38,7 @@ String toKakeiboBucket(Category? category) {
     if (category == null) {
         return "Extras"
     }
-    if (category == Category.GROCERIES || category == Category.PHARMA || category == Category.HEALTH ||
-        category == Category.TRANSPORT || category == Category.HOUSING || category == Category.EDUCATION) {
+    if (needsCategories().contains(category)) {
         return "Essencial"
     }
     if (category == Category.SUBSCRIPTIONS) {
@@ -102,10 +102,7 @@ GetBalanceOutput calculateBalance(String userId, String fromIso) {
         var monthTransactions = findTransactionsByUserIdAndCreatedAtAfter(userId, fromIso)
 
         if (model == BudgetModelType.FREELANCER_BASE_ZERO) {
-            var totalSpent = 0.0
-            for (var t in monthTransactions) {
-                totalSpent = totalSpent + centsToReais(t.amountCents)
-            }
+            var totalSpent = monthTransactions.map((t: TransactionEntity) -> centsToReais(t.amountCents)).reduce((a: Double, b: Double) -> a + b, 0.0)
             var notAllocated = salary - totalSpent
             var emptyList: List<BucketBalanceDTO> = listOf()
             return GetBalanceOutput(model.name(), emptyList, totalSpent, notAllocated)
@@ -116,12 +113,10 @@ GetBalanceOutput calculateBalance(String userId, String fromIso) {
 
         if (model == BudgetModelType.KAKEIBO) {
             for (var b in plan) {
-                var spent = 0.0
-                for (var t in monthTransactions) {
-                    if (toKakeiboBucket(t.category) == b.name) {
-                        spent = spent + centsToReais(t.amountCents)
-                    }
-                }
+                var spent = monthTransactions
+                    .filter((t: TransactionEntity) -> toKakeiboBucket(t.category) == b.name)
+                    .map((t: TransactionEntity) -> centsToReais(t.amountCents))
+                    .reduce((x: Double, y: Double) -> x + y, 0.0)
                 var rem = b.amount - spent
                 resultBuckets.add(BucketBalanceDTO(b.name, b.percentage, b.amount, spent, rem))
             }
@@ -170,7 +165,7 @@ GetBalanceOutput calculateBalance(String userId, String fromIso) {
 
 RegisterIncomeOutput registerUserIncome(String userId, Double amount, String source) {
     var lower = source.toLowerCase()
-    if (lower.contains("salari") || lower.contains("salario") || lower.contains("fixo") || lower.contains("clt") || lower.contains("mensal")) {
+    if (listOf("salari", "salario", "fixo", "clt", "mensal").any((word: String) -> lower.contains(word))) {
         return RegisterIncomeOutput("SALARY", "Beleza, essa é a sua renda fixa. Ela já está considerada no seu orçamento mensal.")
     }
 

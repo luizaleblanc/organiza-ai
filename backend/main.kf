@@ -231,11 +231,7 @@ main() {
 
     app.get("/api/transactions") {
         var list = findTransactionsByUserIdAndCreatedAtAfter(currentUserId(), "2000-01-01")
-        var outputs: List<TransactionOutput> = listOf()
-        for (var t in list) {
-            outputs.add(transactionEntityToOutput(t))
-        }
-        return json.encode(outputs)
+        return json.encode(list.map((t: TransactionEntity) -> transactionEntityToOutput(t)))
     }
 
     app.post("/api/transactions") {
