@@ -562,3 +562,41 @@ Validação feita antes do merge da Fase 1 (regra: toda mudança é validada no 
 Bugs conhecidos: **nenhum corrigido e nenhuma regressão** na 0.6.6. Continuam os contornos de enum no `json.decode`, `math.max` com `Double`, `transaction {}` dentro de `try` (COMP002), `--fat` com só o primeiro registro de driver, aspas da Query DSL no MySQL (`ANSI_QUOTES`), `Router.back`/`Component.stateSet` no navegador e `String.format` no navegador.
 
 Changelog 0.6.5 → 0.6.6 relevante: #883 (chamada `db.*` não resolvida vira diagnóstico, antes era descartada em silêncio); `size` de coleção/array tipado como `Int`. O resto é AVIF, Gzip/Zip e casos golden.
+
+## 9. HTTP externo com verificação de certificado (d0, 19/10/2026)
+
+**Problema medido:** o `kof.http` 0.6.6 não valida o certificado TLS. Um servidor local com certificado autoassinado, emitido para outro host, completou o handshake e recebeu o `Authorization: Bearer` do teste (`p23/repro/tls`). Mandar a chave da OpenAI ou do provedor de e-mail por esse caminho expõe a chave a um *man-in-the-middle*.
+
+**Contorno (`backend/outbound.kf`, `// WORKAROUND`):** as chamadas a provedores externos usam o `HttpURLConnection` da JVM por interop (`import java.net.URI` + `import java.net.HttpURLConnection`, caminho de `idioms/interop.md`). Ele valida a cadeia e o nome do host com o truststore do JRE (a imagem usa `eclipse-temurin:25-jre`, que traz os certificados públicos). `outboundPost(url, corpo, headers, timeoutMs)` devolve `OutboundResponse(status, body, failure)`:
+
+- status 4xx/5xx chega ao código Kof com o corpo;
+- rede, TLS ou timeout chegam com `status = 0` e o motivo em `failure` (nome da exceção e mensagem, nunca os cabeçalhos);
+- só `https://`; `http://localhost` e `http://127.0.0.1` só com `KOF_OUTBOUND_ALLOW_LOCAL_HTTP=true` (modo de teste com mock local).
+
+O `java.net.http.HttpClient` não serve no 0.6.6: classe aninhada (`HttpResponse.BodyHandlers`) não resolve por `import` (SEM025, e SEM011 com `$`). Quando o `kof.http` validar o certificado, `outbound.kf` volta a ser `http.post`. Texto da issue upstream preparado, não publicado.
+
+**Gate TLS (`scripts/test_outbound_tls.ps1`, tudo local):** gera um certificado autoassinado na hora (SAN `127.0.0.1`), um truststore PKCS12 de teste só com ele e um servidor HTTPS em PowerShell (`scripts/outbound_probe/https_mock.ps1`). O programa de prova compila `backend/outbound.kf` junto com `scripts/outbound_probe/main.kf`.
+
+```
+ 1. Autoassinado com o truststore padrão do JRE: RECUSADO  falha=SSLHandshakeException: ... PKIX path building failed
+ 2. Mesmo certificado no truststore de teste: ACEITO       status=200 body={"mock":"/ok","auth":true}
+ 3. Confiado, mas host errado (localhost fora do SAN)      falha=SSLHandshakeException: No name matching localhost found
+ 4. 401 do provedor                                         status=401 body={"mock":"/401",...}
+ 5. 500 do provedor                                         status=500 body={"mock":"/500",...}
+ 6. Timeout de leitura (3 s no servidor, limite 1 s)        falha=SocketTimeoutException: Read timed out
+ 7. http:// sem KOF_OUTBOUND_ALLOW_LOCAL_HTTP               falha=endereco recusado: use https://
+ 8. -Online: POST sem Authorization em https://www.google.com (certificado público)  status=405 visível
+RESULTADO TLS (outbound): 8 / 8
+```
+
+Gates do d0 (kof 0.6.6, a estável mais recente em 19/10, conferido com `gh api releases`):
+
+```
+G-BUILD check/build exit=0 (8 arquivos) · frontend --target js exit=0
+VerifyAll 162 classes, 810 métodos, 0 erros · LinkAll 194/194 · controle sintético acusa (VerifyAll e LinkAll)
+G-E2E H2 86/86 · MySQL 86/86 · com -WebOut 88/88 (H2 e MySQL)
+G-RESTART 28/28 (H2 e MySQL) · neg 41/41 (H2 e MySQL) · G-CONC verde (H2 e MySQL) · G-AUTH-STATIC 14/14
+G-DB-BOUNCE 4,9 s · G-DB-DOWN 503 → 200 em 4,1 s · G-BOOT-DOWN exit=1, senha no log: 0
+Migração 5d51896 → d0: dump idêntico (H2 23 linhas, MySQL 18 linhas)
+```
+

@@ -1,0 +1,22 @@
+// scripts/outbound_probe/main.kf
+// Prova do backend/outbound.kf (gate TLS do d0): compilado JUNTO com uma copia de backend/outbound.kf
+// por scripts/test_outbound_tls.ps1. Uso: <url> [timeoutMs] [auth]. Imprime "status=<n> body=<texto>"
+// ou "falha=<motivo>". Sem "auth" nao manda Authorization (endereco publico); com "auth" manda um valor
+// fixo de mock, so para o servidor local do teste.
+main(String[] args) {
+    var timeoutMs = 5000
+    if (args.length > 1) {
+        timeoutMs = args[1].toInt()
+    }
+    var headers: Map<String, String> = mapOf()
+    headers.put("Content-Type", "application/json")
+    if (args.length > 2 && args[2] == "auth") {
+        headers = jsonBearerHeaders("chave-falsa-do-teste")
+    }
+    var resp = outboundPost(args[0], "{\"ping\":1}", headers, timeoutMs)
+    if (resp.status == 0) {
+        println("falha=" + resp.failure)
+    } else {
+        println("status=" + resp.status + " body=" + resp.body)
+    }
+}

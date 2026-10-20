@@ -1,0 +1,104 @@
+// backend/outbound.kf
+// HTTP de saida para provedores externos (e-mail e OpenAI), com verificacao do certificado TLS.
+//
+// WORKAROUND: o kof.http 0.6.6 NAO valida a cadeia do certificado (o cliente HTTPS do runtime aceita
+// qualquer certificado; medido em p23/repro/tls: um servidor autoassinado recebeu o Bearer). Por isso
+// as chamadas com segredo usam o HttpURLConnection da JVM por interop (idioms/interop.md: `import
+// java.X.Y` + nome simples), que valida a cadeia e o nome do host com o truststore padrao do JRE.
+// Medido (d/repro/interop): certificado autoassinado = SSLHandshakeException (PKIX); www.google.com =
+// aceito. O java.net.http.HttpClient nao serve no 0.6.6: classe aninhada (HttpResponse.BodyHandlers)
+// nao resolve por import (SEM025/SEM011). Quando o kof.http validar o TLS, este arquivo volta a ser
+// http.post (texto da issue em docs/MVP1_HOMOLOGACAO.md, secao "HTTP externo").
+//
+// Regras: so https://; http:// apenas para localhost/127.0.0.1 e so com KOF_OUTBOUND_ALLOW_LOCAL_HTTP=true
+// (modo de teste com mock local). Status 4xx/5xx chega ao codigo Kof em OutboundResponse.status com o
+// corpo; falha de rede, TLS ou timeout chega com status 0 e o motivo em `failure` (nunca com headers).
+
+import java.net.URI
+import java.net.HttpURLConnection
+import java.io.InputStream
+import java.util.Scanner
+
+// status 0 = nao houve resposta HTTP (rede, TLS, timeout, URL recusada); `failure` diz o motivo.
+record OutboundResponse(Int status, String body, String failure)
+
+String? configText(String name) {
+    var value = config.env(name)
+    if (value != null) {
+        var trimmed = value.trim()
+        if (trimmed != "") {
+            return trimmed
+        }
+    }
+    return null
+}
+
+Bool outboundLocalHttpAllowed() {
+    return configText("KOF_OUTBOUND_ALLOW_LOCAL_HTTP") == "true"
+}
+
+// https:// sempre; http:// so para o mock local em modo de teste explicito.
+Bool outboundUrlAllowed(String url) {
+    if (url.startsWith("https://")) {
+        return true
+    }
+    if (outboundLocalHttpAllowed()) {
+        return url.startsWith("http://localhost:") || url.startsWith("http://127.0.0.1:")
+    }
+    return false
+}
+
+String readStream(InputStream? stream) {
+    if (stream == null) {
+        return ""
+    }
+    var scanner = new Scanner(stream, "UTF-8").useDelimiter("\\A")
+    var text = ""
+    if (scanner.hasNext()) {
+        text = scanner.next()
+    }
+    scanner.close()
+    return text
+}
+
+// POST com corpo texto (JSON). `headers`: nome -> valor (o Authorization fica so aqui, nunca em log).
+OutboundResponse outboundPost(String url, String body, Map<String, String> headers, Int timeoutMs) {
+    if (!outboundUrlAllowed(url)) {
+        return OutboundResponse(0, "", "endereco recusado: use https://")
+    }
+    try {
+        var conn = URI.create(url).toURL().openConnection() as HttpURLConnection
+        conn.setConnectTimeout(timeoutMs)
+        conn.setReadTimeout(timeoutMs)
+        conn.setRequestMethod("POST")
+        conn.setDoOutput(true)
+        conn.setInstanceFollowRedirects(false)
+        for (var name in headers.keys()) {
+            var value = headers.get(name)
+            if (value != null) {
+                conn.setRequestProperty(name, value)
+            }
+        }
+        var out = conn.getOutputStream()
+        out.write(body.getBytes())
+        out.close()
+        var code = conn.getResponseCode()
+        var text = ""
+        if (code >= 400) {
+            text = readStream(conn.getErrorStream())
+        } else {
+            text = readStream(conn.getInputStream())
+        }
+        conn.disconnect()
+        return OutboundResponse(code, text, "")
+    } catch (Exception e) {
+        return OutboundResponse(0, "", e.getClass().getSimpleName() + ": " + e.getMessage())
+    }
+}
+
+Map<String, String> jsonBearerHeaders(String apiKey) {
+    var headers: Map<String, String> = mapOf()
+    headers.put("Content-Type", "application/json")
+    headers.put("Authorization", "Bearer " + apiKey)
+    return headers
+}
