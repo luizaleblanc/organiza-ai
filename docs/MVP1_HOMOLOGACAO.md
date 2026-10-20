@@ -51,7 +51,7 @@ Os números de teste se referem a `scripts/test_e2e_flow.ps1` (E2E) e `scripts/t
 | 4 | Listar envelopes | `EnvelopeController.java:46` (`?userId=`, IDOR no legado) | `main.kf:160` | EnvelopeRow | E2E 19, 23; RST 10/20/24 | ✅ | Dono vem das claims (melhor que o legado) |
 | 5 | Editar envelope | `EnvelopeController.java:51` `PUT /{id}` | `services.kf:193` (sem rota) | — | — | ❌ | Lógica pronta e segura por dono; falta `app.put` |
 | 6 | Excluir envelope | `EnvelopeController.java:59` | `services.kf:205` → `store.kf:396` (sem rota) | — | — | ❌ | Falta a rota |
-| 7 | Criar transação | `L/mod_transaction/controller/TransactionController.java:41` | `main.kf:186` → `services.kf:318` | TransactionRow + EnvelopeRow | E2E 20–21, 31–32; RST 5/11 | ⚠️ | Atômica e com valores em centavos. `createdAt` fixo `2026-09-18T12:00:00Z` (`services.kf:333`, #44) |
+| 7 | Criar transação | `L/mod_transaction/controller/TransactionController.java:41` | `main.kf:186` → `services.kf:318` | TransactionRow + EnvelopeRow | E2E 20–21, 31–32, "createdAt real"; RST 5/11 | ✅ | Atômica e com valores em centavos. `createdAt` = instante UTC real (`nowIso`, Fase 2) |
 | 8 | Listar por categoria | `TransactionController.java:48` `GET /{category}` | `services.kf:360` (sem rota); existe `GET /api/transactions` (todas) em `main.kf:177` | — | E2E 22 (lista total) | ❌ | — |
 | 9 | Limpar transações | `TransactionController.java:53` `DELETE` | `services.kf:372` (sem rota) | — | — | ❌ | — |
 | 10 | Resumo por categoria | `TransactionController.java:59` `GET /summary` | — | — | — | ❌ | — |
@@ -60,10 +60,10 @@ Os números de teste se referem a `scripts/test_e2e_flow.ps1` (E2E) e `scripts/t
 | 13 | Admin: migrar modelo | `AdminController.java:41` | `services.kf:228` (sem rota) | — | — | ❌ | Lógica portada (ver #32) |
 | 14 | Onboarding | `L/mod_user/controller/OnboardingController.java:36` `/api/users/me/onboarding` | `main.kf:85` `/api/users/onboarding` | UserRow | E2E 16–17; RST 3/13 | ⚠️ | `debtAmount` não é lido nem gravado (`debtCents` fica 0). Aceita salário negativo (P7). Resposta em texto `a|b|c`, não JSON |
 | 15 | Atualizar salário | `L/mod_user/controller/SalaryController.java:26` `PATCH /me/salary` | — | — | 404 (P5) | ❌ | Necessário para "Rever meu salário" (Configurações) |
-| 16 | Status do plano | `L/mod_user/controller/TierStatusController.java:19` | `main.kf:210` | ChatMessageRow (contagem) | E2E 29 **FAIL** | ⚠️ | `messagesUsed` sempre 0 (#44) |
+| 16 | Status do plano | `L/mod_user/controller/TierStatusController.java:19` | `main.kf` `GET /api/users/tier-status` | ChatMessageRow (contagem) | E2E "tier-status", "Freemium" | ✅ | Conta as mensagens do usuário desde a meia-noite local do dia 1 (Fase 2) |
 | 17 | Registrar renda variável | `L/mod_variable_income/controller/VariableIncomeController.java:29` | `main.kf:121` → `coach.kf:171` | VariableIncomeRow | E2E 26 | ✅ | Passa pelo `RegisterIncomeFunction`: texto com "salário"/"fixo" não grava, igual à tool do legado |
 | 18 | Listar renda variável | `VariableIncomeController.java:36` | `main.kf:127` | VariableIncomeRow | E2E 27, 35 | ✅ | — |
-| 19 | Chat de texto (coach) | `L/mod_ai_coach/controller/VoiceCommandController.java:121` `POST /api/coach/chat` | `main.kf:141` `POST /api/chat/message` | ChatMessageRow | E2E 25 | ⚠️ | **Sem LLM**: resposta fixa com o pulso. Sem tools, sem memória, sem `enforceCanSendMessage`. `createdAt` nulo |
+| 19 | Chat de texto (coach) | `L/mod_ai_coach/controller/VoiceCommandController.java:121` `POST /api/coach/chat` | `main.kf:141` `POST /api/chat/message` | ChatMessageRow | E2E 25, "Freemium" | ⚠️ | **Sem LLM**: resposta fixa com o pulso. Sem tools e sem memória. Limite do plano aplicado (402) e `createdAt` real desde a Fase 2 |
 | 20 | Voz (multipart → MP3) | `VoiceCommandController.java:89` `/api/coach/ai` | — | — | — | ❌ | Whisper (`language=pt`) + GPT + TTS `tts-1`/`nova` |
 | 21 | Voz (base64) | `VoiceCommandController.java:97` `/api/coach/ai-base64` | — | — | — | ❌ | Devolvia 402 quando o limite do plano estourava |
 
@@ -72,7 +72,7 @@ Os números de teste se referem a `scripts/test_e2e_flow.ps1` (E2E) e `scripts/t
 | # | Item | Legado | Kof | Persistido | Testado | Status | Observação |
 |---|---|---|---|---|---|---|---|
 | 22 | GetBalance | `L/mod_ai_coach/service/GetBalanceFunction.java` | `coach.kf:97` | (leitura) | — | ⚠️ | Sem rota e sem teste. No caminho não-freelancer devolve `totalSpent=0.0, notAllocated=0.0` fixos (`coach.kf:162`) |
-| 23 | GetDailyPulse | `GetDailyPulseFunction.java` | `coach.kf:75` + `main.kf:136` | (leitura) | E2E 15, 17, 24, 37; RST 9 | ⚠️ | Regra correta: `(salário − gasto)/dias`. Mas `daysRemaining=30` e início do mês fixos (`main.kf:137`) |
+| 23 | GetDailyPulse | `GetDailyPulseFunction.java` | `coach.kf:75` + `main.kf:136` | (leitura) | E2E 15, 17, 24, 37; RST 9 | ✅ | `(salário − gasto do mês)/dias restantes`, com o mês e os dias calculados com `kof.time` (Fase 2) |
 | 24 | RegisterIncome | `RegisterIncomeFunction.java` | `coach.kf:171` | VariableIncomeRow | E2E 26 | ✅ | — |
 | 25 | SuggestModelChange | `SuggestModelChangeFunction.java` | `coach.kf:198` | — | — | ⚠️ | Sem rota nem tool |
 | 26 | AnswerKakeiboReflection | `AnswerKakeiboReflectionFunction.java` | `coach.kf:225` | KakeiboReflectionRow | — | ⚠️ | Sem rota nem tool. Grava só a reflexão da semana; o cálculo de `weekStart` fica com quem chama |
@@ -90,7 +90,7 @@ Os números de teste se referem a `scripts/test_e2e_flow.ps1` (E2E) e `scripts/t
 | 33 | Média móvel do envelope | `EnvelopeService.java` (`calculateMovingAverage` devolve `ZERO`) | `services.kf:216` (devolve `0.0`) | — | — | ⚠️ | Paridade de um **stub**: a funcionalidade não existe em nenhum dos dois |
 | 34 | Desconto do envelope | `EnvelopeService.updateSpent` | `store.kf:386` | EnvelopeRow | E2E 23; RST 10 | ✅ | Feito em centavos e na mesma transação do gasto |
 | 35 | Destino da renda variável | `L/mod_variable_income/service/VariableIncomeService.java` | `services.kf:267` | VariableIncomeRow | E2E 26 | ⚠️ | Equivalente ao legado (meta ≤ 0 → orçamento), mas **não há rota para definir a meta de reserva**, então o destino é sempre o orçamento |
-| 36 | Limites do plano (30 mensagens/mês; voz só no Premium) | `L/shared/service/TierEnforcementService.java` | `services.kf:386-413` | — | E2E 29 FAIL | ⚠️ | `enforce*` nunca é chamado (#44) |
+| 36 | Limites do plano (30 mensagens/mês; voz só no Premium) | `L/shared/service/TierEnforcementService.java` | `services.kf` (`enforceCanSendMessage` chamado no chat) | — | E2E "Freemium" | ✅ | 31ª mensagem do mês = 402 com a mensagem do legado. `enforceVoiceAllowed` fica para a voz (MVP 2) |
 | 37 | Scheduler do Kakeibo (seg 18h) | `L/mod_ai_coach/service/KakeiboReflectionScheduler.java:28` | — | — | — | ❌ | Kof tem `time.interval` (corpus de treinamento); não implementado |
 | 38 | Serviço do Kakeibo (perguntas, `getWeekStart`, `shouldAsk`) | `KakeiboReflectionService.java:18` | `coach.kf:214` | KakeiboReflectionRow | — | ⚠️ | As 4 `QUESTIONS` e o cálculo de `weekStart` não foram portados |
 | 39 | Mapa categoria → bucket | `CategoryBucketMapper.java` | `coach.kf:25-62` | — | parity_test não executável | ⚠️ | Leitura bate com o Java; falta teste que rode |
@@ -107,13 +107,13 @@ Os números de teste se referem a `scripts/test_e2e_flow.ps1` (E2E) e `scripts/t
 |---|---|---|---|---|---|
 | 46 | Envelope | `EnvelopeEntity` (id, userId, categoryName, limitAmount, currentSpent, limitType, movingAverageMonths, createdAt) | `EnvelopeRow` `:48` | ✅ | Valores em centavos |
 | 47 | Usuário | `UserEntity` (+ `debtAmount`, `emergencyFundGoal`) | `UserRow` `:18` (`debtCents`, `emergencyGoalCents`) | ⚠️ | As colunas existem, mas nenhuma rota as preenche. Falta `name` (pedido pelo design; o Java também não tinha) |
-| 48 | Transação | `TransactionEntity` (createdAt `Instant`) | `TransactionRow` `:35` | ⚠️ | `createdAt` fixo |
-| 49 | Mensagem do chat | `ChatMessageEntity` | `ChatMessageRow` `:59` | ⚠️ | `createdAt` nulo |
+| 48 | Transação | `TransactionEntity` (createdAt `Instant`) | `TransactionRow` `:35` | ✅ | `createdAt` = instante UTC ISO-8601 |
+| 49 | Mensagem do chat | `ChatMessageEntity` | `ChatMessageRow` `:59` | ✅ | `createdAt` = instante UTC ISO-8601 |
 | 50 | Reflexão Kakeibo | `KakeiboReflectionEntity` (answers `List`) | `KakeiboReflectionRow` `:76` (`answersJson`) | ⚠️ | Persistência sem rota e sem teste |
-| 51 | Renda variável | `VariableIncomeEntity` (date) | `VariableIncomeRow` `:67` | ⚠️ | `date` nulo |
+| 51 | Renda variável | `VariableIncomeEntity` (date) | `VariableIncomeRow` `:67` | ✅ | `date` = instante UTC ISO-8601 |
 | 52 | Orçamento mensal | `L/mod_budget/model/BudgetEntity.java` | — | ❌ | No legado só existe o repositório, sem uso; avaliar se vale portar ou descartar |
 
-**Contagem:** ✅ 12 · ⚠️ 24 · ❌ 16 (total 52).
+**Contagem:** ✅ 19 · ⚠️ 17 · ❌ 16 (total 52), depois da Fase 2. Na inspeção de 16/10 eram ✅ 12 · ⚠️ 24 · ❌ 16.
 
 ## 3. Escopo do MVP 1 (design Desktop, com Mobile como espelho)
 
@@ -272,8 +272,29 @@ VerifyAll 74 classes, 501 métodos, 0 erros · LinkAll 106/106 · controle sint�
 
 | Item | Aceite | Est. | Nível |
 |---|---|---|---|
-| `createdAt` real em todas as entidades; início do mês e `daysRemaining` vindos de `time.todayIso`/`time.daysInMonth` | E2E 29 verde; pulso muda conforme a data simulada; no MySQL as datas estão preenchidas | M | intermediario |
-| `enforceCanSendMessage` no chat → 402 | 31ª mensagem do mês = 402 com a mensagem do legado | P | good first issue |
+| ✅ `createdAt` real em todas as entidades; início do mês e `daysRemaining` calculados com `kof.time` | E2E do tier-status verde; pulso calculado com os dias restantes reais; no MySQL as datas estão preenchidas | M | intermediario |
+| ✅ `enforceCanSendMessage` no chat → 402 | 31ª mensagem do mês = 402 com a mensagem do legado | P | good first issue |
+
+**Fase 2 feita** (`fix(backend): datas reais e limite freemium do chat (#44)`). As funções do relógio ficam em `backend/services.kf`:
+
+- `nowIso()` grava o instante em UTC com `time.formatInstantIso(time.now())` (formato `2026-10-19T13:54:19.402Z`). Transação, mensagem do chat, envelope, renda variável e reflexão Kakeibo passam a gravar a data real.
+- `localTodayIso()`, `monthStartIso()` e `daysRemainingInMonth()` usam o fuso do servidor (`time.tzOffsetSeconds()`), como o `LocalDate.now()`/`ZoneId.systemDefault()` do legado. O `time.todayIso()` do Kof é sempre UTC (código da tag `kof-0.6.6`, `JvmTimeCalendar.java:198`), e por isso não é usado para "hoje". O início do mês é a meia-noite local do dia 1, convertida para UTC. Os dias restantes seguem o legado (`lengthOfMonth − dayOfMonth + 1`).
+- As consultas do mês filtram `createdAt >= início do mês` no banco, pela Query DSL. Como o texto ISO-8601 em UTC ordena como o tempo, a comparação de texto funciona. Linhas sem data (`""`, de antes desta fase) ficam fora de qualquer mês.
+- O chat chama `enforceCanSendMessage` antes de gravar. A 31ª mensagem do mês de um usuário Gratuito recebe `402 {"error":"Você atingiu o limite de 30 mensagens gratuitas este mês."}` (mesmo status e texto do `GlobalExceptionHandler` do legado) e não é gravada.
+- `GET /api/transactions` passou a trazer `createdAt` em cada item (campo a mais que o legado), para os filtros Semana/Mês/Ano do dashboard.
+
+Em produção, o fuso vem da variável `TZ` (por exemplo, `America/Sao_Paulo`): sem ela, o Render roda em UTC e o "hoje" muda às 21h de Brasília. Repro fora do repo (`p23/repro/time`, kof 0.6.6): `todayLocal=2026-10-19`, `monthStartUtc=2026-10-01T03:00:00.000Z`, `daysRemaining=13`, 29/02/2028 → 1, 01/01/2026 → 31. Evidência (kof 0.6.6):
+
+```
+G-BUILD check/build exit=0 · frontend --target js exit=0
+VerifyAll 75 classes, 510 métodos, 0 erros · LinkAll 107/107 · controle sintético acusa (VerifyAll e LinkAll exit=1)
+G-E2E H2 68/68 · MySQL 68/68 · com -WebOut 70/70 (H2 e MySQL): pulso = round(3000/dias) e round(2400/dias); tier-status
+      messagesUsed=1; createdAt da transação a menos de 10 min de agora; 30 mensagens = 200 e a 31ª = 402, sem gravar
+controle: o mesmo E2E contra o build do 059d962 → 61/68 (falham os 7 casos novos ou alterados)
+G-RESTART 28/28 (H2 e MySQL) · neg 41/41 (H2 e MySQL) · G-CONC verde (H2 e MySQL) · G-AUTH-STATIC 14/14
+G-DB-BOUNCE verde em 8,3 s · G-DB-DOWN 503 → 200 em 4,1 s · G-BOOT-DOWN exit=1, senha no log: 0 · migração name: dump idêntico
+MySQL: transactionrow.createdAt = 2026-10-19T13:54:19.402Z, chatmessagerow.createdAt preenchido
+```
 
 ### Fase 3: Rotas que faltam (lógica já portada)
 

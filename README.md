@@ -131,10 +131,11 @@ O fechamento ponta a ponta do **MVP 1** segue a metodologia **tlc-spec-driven (4
 
 ### Homologação Java → Kof e roadmap do MVP 1
 
-Inspeção de 16/10/2026 em [`docs/MVP1_HOMOLOGACAO.md`](docs/MVP1_HOMOLOGACAO.md). Ela compara as 52 funções do backend Java arquivado com o backend Kof: **12 homologadas, 24 parciais, 16 ausentes**.
+Inspeção de 16/10/2026 em [`docs/MVP1_HOMOLOGACAO.md`](docs/MVP1_HOMOLOGACAO.md). Ela compara as 52 funções do backend Java arquivado com o backend Kof: **19 homologadas, 17 parciais, 16 ausentes** depois da Fase 2 (eram 12, 24 e 16 na inspeção).
 
 - **Funciona e persiste no banco** (E2E 37/38 e reinício 25/25 em MySQL 8.4 local e H2): cadastro, login, onboarding, envelopes, gasto com desconto atômico, pulso diário e renda variável.
-- **Falta:** coach com LLM (hoje responde texto fixo), voz, nove rotas do legado, datas reais e freemium (#44), Kakeibo agendado e as telas do frontend.
+- **Datas reais e freemium (Fase 2, #44, feita):** transações, mensagens do chat, envelopes e renda variável gravam o instante real em UTC. O pulso usa os dias que faltam no mês, e o início do mês é a meia-noite local do dia 1. O fuso é o do servidor (variável `TZ`, `America/Sao_Paulo` em produção). No plano Gratuito, a 31ª mensagem do mês no chat recebe 402 com a mensagem do legado e não é gravada. O E2E passa 100% em H2 e MySQL.
+- **Falta:** coach com LLM (hoje responde texto fixo), voz, nove rotas do legado, Kakeibo agendado e as telas do frontend.
 - **Reconexão ao banco (Fase 0.1, feita):** se o MySQL reiniciar, o backend reabre a conexão sozinho, e o login volta a 200 em cerca de 6 s, sem reiniciar o app. Enquanto o banco está fora, as rotas respondem 503. O boot com o banco inacessível falha em menos de 10 s.
 - **Transações isoladas (Fase 0.2, feita):** a gravação de um gasto usa uma conexão própria, uma transação por vez. Antes, com carga paralela, um rollback desfazia cadastros e gastos de outras requisições que tinham recebido 200.
 - **Health com banco (Fase 0):** o `/health` faz `SELECT 1` e responde 503 quando o banco não responde. Antes, ele dizia `OK` mesmo com o banco fora. Com isso, o health check do Render reinicia o serviço quando o banco cai ([`docs/DEPLOY.md`](docs/DEPLOY.md)).

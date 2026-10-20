@@ -57,7 +57,8 @@ PersistTransactionInput? decodePersistTransactionInput(String raw) {
 }
 
 // mod_transaction/dto/TransactionOutput.java
-record TransactionOutput(String id, String description, String category, Double value, String currency, String? envelopeId)
+// createdAt (instante UTC) a mais que o legado: as telas filtram por periodo (Semana/Mes/Ano).
+record TransactionOutput(String id, String description, String category, Double value, String currency, String? envelopeId, String? createdAt)
 
 // mod_transaction/dto/GetTotalByCategoryInput.java
 record GetTotalByCategoryInput(Category category)
@@ -70,6 +71,41 @@ record ListTransactionsByCategoryInput(Category category)
 
 // shared/service/TierStatus.java
 record TierStatus(String tier, Int messagesUsed, Int messagesLimit, Bool voiceEnabled, Bool canSendMessage)
+
+// =========================================================
+// Relogio (issue #44): datas reais com kof.time.
+// Instantes gravados em UTC ISO-8601 (time.formatInstantIso: "2026-10-19T13:47:08.943Z"), entao a
+// comparacao de texto ordena no tempo. "Hoje" e "inicio do mes" seguem o fuso do servidor
+// (time.tzOffsetSeconds), como o LocalDate.now()/ZoneId.systemDefault() do legado; em producao o fuso
+// vem da variavel TZ (America/Sao_Paulo).
+// =========================================================
+
+Long tzOffsetMillis() {
+    var seconds: Long = time.tzOffsetSeconds()
+    return seconds * 1000
+}
+
+// Instante atual em UTC (createdAt de transacao, chat, envelope, renda variavel e Kakeibo).
+String nowIso() {
+    return time.formatInstantIso(time.now())
+}
+
+// Data local de hoje, "AAAA-MM-DD".
+String localTodayIso() {
+    return time.formatInstantIso(time.now() + tzOffsetMillis()).substring(0, 10)
+}
+
+// Meia-noite local do dia 1 do mes corrente, como instante UTC (corte das consultas do mes).
+String monthStartIso() {
+    var firstDay: Long = time.parseDateIso(time.startOf(localTodayIso(), "month"))
+    return time.formatInstantIso(firstDay * 86400000 - tzOffsetMillis())
+}
+
+// Dias que faltam no mes contando hoje (legado: lengthOfMonth - dayOfMonth + 1).
+Int daysRemainingInMonth() {
+    var today = localTodayIso()
+    return time.diffDays(today, time.endOf(today, "month")) + 1
+}
 
 // =========================================================
 // mod_transaction/repository/TransactionEntityRepository.java
@@ -105,7 +141,7 @@ TransactionOutput transactionEntityToOutput(TransactionEntity t) {
     if (category != null) {
         categoryName = category.name()
     }
-    return TransactionOutput(t.id, t.description, categoryName, centsToReais(t.amountCents), t.currency, t.envelopeId)
+    return TransactionOutput(t.id, t.description, categoryName, centsToReais(t.amountCents), t.currency, t.envelopeId, t.createdAt)
 }
 
 // =========================================================
@@ -358,8 +394,8 @@ TransactionOutput persistTransaction(PersistTransactionInput input, Category cat
     try {
         var tx = txConnection()
         try {
-            // createdAt fixo ate a issue #44 (datas reais); descricao gravada literal via binds (PERS-15)
-            saved.add(insertTransactionAndSpend(tx, TransactionEntity("", input.description(), amountCents, category, input.currency(), userId, null, Source.MANUAL, "2026-09-18T12:00:00Z", envId), userId, envId, amountCents))
+            // createdAt = instante real (issue #44); descricao gravada literal via binds (PERS-15)
+            saved.add(insertTransactionAndSpend(tx, TransactionEntity("", input.description(), amountCents, category, input.currency(), userId, null, Source.MANUAL, nowIso(), envId), userId, envId, amountCents))
         } catch (String e) {
             // Rollback ja feito pelo runtime; a conexao e descartada (pode ser ela que caiu) e o detalhe
             // do banco nao vai para a resposta.
@@ -408,13 +444,13 @@ void clearTransactions(String userId) {
 
 // =========================================================
 // shared/service/TierEnforcementService.java
-// GAP (ver relatorio #3): "inicio do mes" (LocalDate.now().withDayOfMonth(1)...)
-// nao tem API de data/hora confirmada no training/ lido nesta sessao
-// (kof.time existe segundo o README principal, mas seu training especifico
-// nao foi lido nesta tarefa -- nao vou inventar sua assinatura). O calculo
-// da data de corte passa a ser responsabilidade do chamador, via parametro
-// monthStartIso.
+// O corte do mes (monthStartIso) vem do chamador; as rotas passam monthStartIso() (issue #44).
 // =========================================================
+
+// Limite do plano Gratuito (legado: FREE_MESSAGE_LIMIT).
+Int freeMessageLimit() {
+    return 30
+}
 
 TierStatus getTierStatus(String userId, String monthStartIso) {
     var user = findUserById(userId)
@@ -425,8 +461,7 @@ TierStatus getTierStatus(String userId, String monthStartIso) {
             return TierStatus(Tier.PREMIUM.name(), messagesUsed, -1, true, true)
         }
 
-        var canSendMessage = messagesUsed < 30
-        return TierStatus(Tier.FREE.name(), messagesUsed, 30, false, canSendMessage)
+        return TierStatus(Tier.FREE.name(), messagesUsed, freeMessageLimit(), false, messagesUsed < freeMessageLimit())
     }
     throw "User not found."
 }

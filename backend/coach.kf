@@ -175,7 +175,7 @@ RegisterIncomeOutput registerUserIncome(String userId, Double amount, String sou
     }
 
     // id "" = novo: o banco gera o id (PERS-06/07)
-    var incomeItem = VariableIncomeEntity("", userId, amount, source, VariableIncomeDestination.EMERGENCY_FUND, null)
+    var incomeItem = VariableIncomeEntity("", userId, amount, source, VariableIncomeDestination.EMERGENCY_FUND, nowIso())
     var saved = saveVariableIncome(incomeItem)
 
     if (saved.destination == VariableIncomeDestination.EMERGENCY_FUND) {
@@ -237,7 +237,7 @@ KakeiboReflectionEntity recordKakeiboReflection(String userId, String weekStart,
             return existing
         }
 
-        var reflection = KakeiboReflectionEntity("", userId, weekStart, answers, null)
+        var reflection = KakeiboReflectionEntity("", userId, weekStart, answers, nowIso())
         return saveKakeiboReflection(reflection)
     }
     throw "Usuário não encontrado: " + userId

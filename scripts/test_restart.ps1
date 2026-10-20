@@ -5,7 +5,7 @@
 # encerra o processo e sobe outro com o mesmo banco. Dois encerramentos:
 #   (1) normal: Ctrl+C no console do servidor (a JVM roda os shutdown hooks);
 #   (2) à força: Kill() logo depois da última gravação (sem shutdown).
-# Depois de cada reinício: login com as mesmas credenciais = 200, daily-pulse salary = 3000.0 e pulse = 80.0,
+# Depois de cada reinício: login com as mesmas credenciais = 200, daily-pulse salary = 3000.0 e pulse = 2400/dias restantes,
 # exatamente 1 envelope FOOD (limite 1200.0, gasto 600.0) e exatamente 1 transação com value = 600.0.
 # Pré-requisitos: `kof build backend --target jvm` e o jar do driver H2 em -ExtraClasspath (`kof deps resolve`).
 # Exit code 0 somente se todos os asserts passarem e nenhum stderr tiver VerifyError/LinkageError.
@@ -91,6 +91,11 @@ function Test-Step([string]$Name, [scriptblock]$Check) {
 }
 
 function Expect([bool]$Cond, $Got) { if ($Cond) { return $true } else { return "obtido: $Got" } }
+
+# Issue #44: o servidor roda nesta maquina, entao o "hoje" local e o mesmo dos dois lados.
+# Dias restantes no mes contando hoje (legado: lengthOfMonth - dayOfMonth + 1) e pulso esperado.
+function Get-DaysRemaining { $d = Get-Date; return [DateTime]::DaysInMonth($d.Year, $d.Month) - $d.Day + 1 }
+function Get-ExpectedPulse([double]$Remaining) { return [Math]::Round($Remaining / (Get-DaysRemaining), 2, [MidpointRounding]::AwayFromZero) }
 
 # Lista JSON -> array (PowerShell 5.1 devolve o array inteiro como um objeto só)
 function ConvertFrom-JsonList([string]$Json) {
@@ -181,10 +186,10 @@ function Assert-Persisted([string]$Label, [string]$Cred) {
         $j = $r.Body | ConvertFrom-Json
         Expect ($r.Status -eq 200 -and $j.name -like "* Restart" -and $j.onboardingCompleted -eq $true) "$($r.Status) $($r.Body)"
     }
-    Test-Step "$Label`: daily-pulse salary = 3000.0 e pulse = 80.0 (PERS-02/03)" {
+    Test-Step "$Label`: daily-pulse salary = 3000.0 e pulse = 2400/dias restantes (PERS-02/03, #44)" {
         $r = Invoke-Api "GET" "/api/budgets/daily-pulse" $script:loginToken
         $j = $r.Body | ConvertFrom-Json
-        Expect ($r.Status -eq 200 -and $j.salary -eq 3000.0 -and $j.pulse -eq 80.0 -and $j.totalSpent -eq 600.0) "$($r.Status) $($r.Body)"
+        Expect ($r.Status -eq 200 -and $j.salary -eq 3000.0 -and $j.pulse -eq (Get-ExpectedPulse 2400) -and $j.totalSpent -eq 600.0) "$($r.Status) $($r.Body)"
     }
     Test-Step "$Label`: exatamente 1 envelope, FOOD com limite 1200.0 e gasto 600.0 (PERS-03)" {
         $r = Invoke-Api "GET" "/api/envelopes" $script:loginToken

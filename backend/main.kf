@@ -178,22 +178,27 @@ main() {
     // =========================================================
 
     app.get("/api/budgets/daily-pulse") {
-        var pulse = calculateDailyPulse(currentUserId(), 30, "2026-09-01")
-        return json.encode(pulse)
+        return json.encode(calculateDailyPulse(currentUserId(), daysRemainingInMonth(), monthStartIso()))
     }
 
     app.post("/api/chat/message") {
         var userId = currentUserId()
         var msgReq = decodeChatMessageRequest(body())
         if (msgReq != null) {
-            // ids gerados pelo banco (PERS-06/07); createdAt fica vazio ate a issue #44
-            var userMsg = ChatMessageEntity("", userId, ChatRole.USER, msgReq.message, null)
-            saveChatMessage(userMsg)
+            // Limite do plano antes de gravar (legado: enforceCanSendMessage -> 402 {"error": ...});
+            // a mensagem recusada nao e gravada e nao conta no mes.
+            var monthStart = monthStartIso()
+            try {
+                enforceCanSendMessage(userId, monthStart)
+            } catch (String e) {
+                return status(402, json.encode(ApiError(e)))
+            }
+            // ids gerados pelo banco (PERS-06/07); createdAt = instante real (issue #44)
+            saveChatMessage(ChatMessageEntity("", userId, ChatRole.USER, msgReq.message, nowIso()))
 
-            var pulse = calculateDailyPulse(userId, 30, "2026-09-01")
+            var pulse = calculateDailyPulse(userId, daysRemainingInMonth(), monthStart)
             var reply = "Olá! Seu pulso diário disponível hoje é R$ " + String.valueOf(pulse.pulse) + ". O que deseja registrar hoje?"
-            var botMsg = ChatMessageEntity("", userId, ChatRole.ASSISTANT, reply, null)
-            saveChatMessage(botMsg)
+            saveChatMessage(ChatMessageEntity("", userId, ChatRole.ASSISTANT, reply, nowIso()))
 
             return reply
         }
@@ -213,7 +218,7 @@ main() {
         var req = decodeCreateEnvelopeInput(body())
         if (req != null) {
             // id "" = novo: o banco gera o id (PERS-06); o dono vem das claims (PERS-09)
-            var newEnv = EnvelopeEntity("", currentUserId(), req.categoryName, req.limitAmount, 0.0, EnvelopeLimitType.FIXED, 0, null)
+            var newEnv = EnvelopeEntity("", currentUserId(), req.categoryName, req.limitAmount, 0.0, EnvelopeLimitType.FIXED, 0, nowIso())
             var saved = createEnvelope(newEnv)
             return json.encode(saved)
         }
@@ -254,7 +259,7 @@ main() {
     // =========================================================
 
     app.get("/api/dashboard") {
-        var totalSpent = centsToReais(sumAmountByUserIdAndCreatedAtAfter(currentUserId(), "2026-09-01"))
+        var totalSpent = centsToReais(sumAmountByUserIdAndCreatedAtAfter(currentUserId(), monthStartIso()))
 
         // Formato esperado pelo kof.ui: totalSpent|currency|categories|transactions
         return String.valueOf(totalSpent) + "|BRL|Alimentação:50,Transporte:30,Lazer:20|Supermercado:Alimentação:150.0,"
@@ -270,8 +275,7 @@ main() {
     }
 
     app.get("/api/users/tier-status") {
-        var status = getTierStatus(currentUserId(), "2026-09-01")
-        return json.encode(status)
+        return json.encode(getTierStatus(currentUserId(), monthStartIso()))
     }
 
     // Mesmo dominio (Batch 2, design §2.3): com KOF_WEB_OUT, o backend serve a saida de

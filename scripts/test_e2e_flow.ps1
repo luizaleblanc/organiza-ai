@@ -79,6 +79,11 @@ function Test-Step([string]$Name, [scriptblock]$Check) {
 
 function Expect([bool]$Cond, $Got) { if ($Cond) { return $true } else { return "obtido: $Got" } }
 
+# Issue #44: o servidor roda nesta maquina, entao o "hoje" local e o mesmo dos dois lados.
+# Dias restantes no mes contando hoje (legado: lengthOfMonth - dayOfMonth + 1) e pulso esperado.
+function Get-DaysRemaining { $d = Get-Date; return [DateTime]::DaysInMonth($d.Year, $d.Month) - $d.Day + 1 }
+function Get-ExpectedPulse([double]$Remaining) { return [Math]::Round($Remaining / (Get-DaysRemaining), 2, [MidpointRounding]::AwayFromZero) }
+
 # Lista JSON -> array PowerShell de verdade (no PS 5.1, ConvertFrom-Json de "[]" vira 1 objeto, não 0 itens).
 function ConvertFrom-JsonList([string]$Json) {
     $parsed = $Json | ConvertFrom-Json
@@ -347,10 +352,11 @@ try {
         Expect ($r.Status -eq 200 -and $j.suggestedModel -eq "FREELANCER_BASE_ZERO" -and @($j.buckets).Count -eq 0) "$($r.Status) $($r.Body)"
     }
 
-    Test-Step "Pulso após onboarding: salary = 3000.0, pulse = 100.0" {
+    Test-Step "Pulso após onboarding: daysRemaining = dias que faltam no mês (#44), pulse = 3000/daysRemaining" {
         $r = Invoke-Api "GET" "/api/budgets/daily-pulse" $script:token
         $j = $r.Body | ConvertFrom-Json
-        Expect ($r.Status -eq 200 -and $j.salary -eq 3000.0 -and $j.pulse -eq 100.0 -and $null -eq $j.message) "$($r.Status) $($r.Body)"
+        $dias = Get-DaysRemaining; $esperado = Get-ExpectedPulse 3000
+        Expect ($r.Status -eq 200 -and $j.salary -eq 3000.0 -and $j.daysRemaining -eq $dias -and $j.pulse -eq $esperado -and $null -eq $j.message) "$($r.Status) $($r.Body) (esperado daysRemaining=$dias pulse=$esperado)"
     }
 
     Test-Step "POST /api/envelopes cria FOOD com limite 1200" {
@@ -393,17 +399,19 @@ try {
         Expect ($r.Status -eq 200 -and $food.Count -eq 1 -and $food[0].currentSpent -eq 600.0) "$($r.Status) $($r.Body)"
     }
 
-    Test-Step "Pulso após gasto: pulse = roundTo((3000-600)/30, 2) = 80.0, totalSpent = 600.0" {
+    Test-Step "Pulso após gasto: pulse = roundTo((3000-600)/daysRemaining, 2), totalSpent = 600.0" {
         $r = Invoke-Api "GET" "/api/budgets/daily-pulse" $script:token
         $j = $r.Body | ConvertFrom-Json
-        $expected = [Math]::Round((3000 - 600) / 30, 2)
+        $expected = Get-ExpectedPulse 2400
         Expect ($r.Status -eq 200 -and $j.pulse -eq $expected -and $j.totalSpent -eq 600.0 -and $j.salary -eq 3000.0) "$($r.Status) $($r.Body) (esperado pulse=$expected)"
     }
 
     Test-Step "POST /api/chat/message responde com o pulso atual" {
         $body = (@{ message = "Quanto tenho disponível para gastar hoje?" } | ConvertTo-Json -Compress)
         $r = Invoke-Api "POST" "/api/chat/message" $script:token $body
-        Expect ($r.Status -eq 200 -and $r.Body -like "*R$ 80.0*") "$($r.Status) $($r.Body)"
+        $p = [string](Get-ExpectedPulse 2400).ToString([Globalization.CultureInfo]::InvariantCulture)
+        if (-not $p.Contains(".")) { $p = "$p.0" }
+        Expect ($r.Status -eq 200 -and $r.Body -like "*R$ $p.*") "$($r.Status) $($r.Body) (esperado R$ $p)"
     }
 
     Test-Step "POST /api/variable-income define destino" {
@@ -427,7 +435,26 @@ try {
     Test-Step "GET /api/users/tier-status conta as mensagens do chat" {
         $r = Invoke-Api "GET" "/api/users/tier-status" $script:token
         $j = $r.Body | ConvertFrom-Json
-        Expect ($r.Status -eq 200 -and $j.tier -eq "FREE" -and $j.messagesUsed -ge 1) "$($r.Status) $($r.Body) — bug conhecido: issue #44 (createdAt nulo no chat)"
+        Expect ($r.Status -eq 200 -and $j.tier -eq "FREE" -and $j.messagesUsed -eq 1 -and $j.messagesLimit -eq 30 -and $j.canSendMessage -eq $true) "$($r.Status) $($r.Body)"
+    }
+
+    Test-Step "Transação gravada com createdAt real (instante UTC de agora, issue #44)" {
+        $r = Invoke-Api "GET" "/api/transactions" $script:token
+        $t = @((ConvertFrom-JsonList $r.Body) | Where-Object { $_.value -eq 600.0 })
+        if ($t.Count -ne 1) { return "obtido: $($r.Status) $($r.Body)" }
+        $when = [DateTime]::Parse($t[0].createdAt, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::AdjustToUniversal)
+        $diff = [Math]::Abs(([DateTime]::UtcNow - $when).TotalMinutes)
+        Expect ($t[0].createdAt -match '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$' -and $diff -lt 10) "createdAt=$($t[0].createdAt) diferença=$diff min"
+    }
+
+    Test-Step "Freemium: 30 mensagens no mês = 200; a 31ª = 402 com a mensagem do legado e não é gravada" {
+        $tf = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Fê Freemium"; email = "free_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaDaF123" } | ConvertTo-Json -Compress)).Body
+        $msg = (@{ message = "oi" } | ConvertTo-Json -Compress)
+        $codes = @(); for ($k = 1; $k -le 30; $k++) { $codes += (Invoke-Api "POST" "/api/chat/message" $tf $msg).Status }
+        $r31 = Invoke-Api "POST" "/api/chat/message" $tf $msg
+        $e = $r31.Body | ConvertFrom-Json
+        $st = (Invoke-Api "GET" "/api/users/tier-status" $tf).Body | ConvertFrom-Json
+        Expect (@($codes | Where-Object { $_ -eq 200 }).Count -eq 30 -and $r31.Status -eq 402 -and $e.error -ceq "Você atingiu o limite de 30 mensagens gratuitas este mês." -and $st.messagesUsed -eq 30 -and $st.canSendMessage -eq $false) "200s=$(@($codes | Where-Object { $_ -eq 200 }).Count) 31ª=$($r31.Status) $($r31.Body) | tier=$($st | ConvertTo-Json -Compress)"
     }
 
     Test-Step "Rota inexistente = 404" {
@@ -482,7 +509,7 @@ try {
     Test-Step "Pulso de A não muda com dados de B" {
         $r = Invoke-Api "GET" "/api/budgets/daily-pulse" $script:token
         $j = $r.Body | ConvertFrom-Json
-        Expect ($r.Status -eq 200 -and $j.pulse -eq 80.0 -and $j.totalSpent -eq 600.0) "$($r.Status) $($r.Body)"
+        Expect ($r.Status -eq 200 -and $j.pulse -eq (Get-ExpectedPulse 2400) -and $j.totalSpent -eq 600.0) "$($r.Status) $($r.Body)"
     }
 
     Test-Step "Login: 6ª tentativa no mesmo e-mail em 1 minuto = 429" {

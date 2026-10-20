@@ -676,24 +676,19 @@ List<TransactionEntity> findTransactionsByCategoryAndUserId(Category category, S
     return rows.map((r: TransactionRow) -> transactionFromRow(r))
 }
 
-// Filtro por dono no banco (DSL); o corte por data segue em String ISO (compareTo) e mantem as
-// transacoes sem data, como antes -- datas reais sao a issue #44.
+// Dono e corte por data no banco (DSL). createdAt e instante UTC ISO-8601 (nowIso), entao ">=" de texto
+// ordena no tempo; linha sem data ("", anterior a issue #44) fica fora de qualquer periodo.
 List<TransactionEntity> findTransactionsByUserIdAndCreatedAtAfter(String userId, String from) {
-    var result: List<TransactionEntity> = listOf()
     if (!strings.isNumeric(userId)) {
-        return result
+        return listOf()
     }
     var uid = userId.toLong()
     var rows = TransactionRow.query(DbConn.handle) {
         where userId == uid
+        where createdAt >= from
         orderBy id asc
     }
-    for (var row in rows) {
-        if (row.createdAt() == "" || row.createdAt().compareTo(from) >= 0) {
-            result.add(transactionFromRow(row))
-        }
-    }
-    return result
+    return rows.map((r: TransactionRow) -> transactionFromRow(r))
 }
 
 void deleteTransactionsByUserId(String userId) {
@@ -743,7 +738,7 @@ ChatMessageEntity saveChatMessage(ChatMessageEntity message) {
     return chatMessageFromRow(orm.save(DbConn.handle, row))
 }
 
-// Mensagens sem data ("") ficam de fora do corte: a contagem do limite depende da issue #44.
+// Mensagens sem data ("", gravadas antes da issue #44) ficam fora do corte do mes.
 Int countChatMessagesByUserIdAndRoleAndCreatedAtGreaterThanEqual(String userId, ChatRole role, String since) {
     if (!strings.isNumeric(userId)) {
         return 0
