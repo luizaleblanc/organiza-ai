@@ -49,17 +49,17 @@ Os números de teste se referem a `scripts/test_e2e_flow.ps1` (E2E) e `scripts/t
 | 2 | Cadastro | `AuthController.java:48` | `main.kf:68` | UserRow | E2E 4–5 | ⚠️ | Sem validação (aceita e-mail `naoemail`, senha de 1 caractere: P3). JSON malformado ou sem senha dá 500 (P1/P2). Grava `hasSalary=true`, mas a spec do batch 2 pede `false`. Sem `name` |
 | 3 | Criar envelope | `L/mod_budget/controller/EnvelopeController.java:33` | `main.kf:165` | EnvelopeRow | E2E 18, 36 | ⚠️ | Ignora `limitType`/`movingAverageMonths`; devolve 200, e não 201 |
 | 4 | Listar envelopes | `EnvelopeController.java:46` (`?userId=`, IDOR no legado) | `main.kf:160` | EnvelopeRow | E2E 19, 23; RST 10/20/24 | ✅ | Dono vem das claims (melhor que o legado) |
-| 5 | Editar envelope | `EnvelopeController.java:51` `PUT /{id}` | `services.kf:193` (sem rota) | — | — | ❌ | Lógica pronta e segura por dono; falta `app.put` |
-| 6 | Excluir envelope | `EnvelopeController.java:59` | `services.kf:205` → `store.kf:396` (sem rota) | — | — | ❌ | Falta a rota |
+| 5 | Editar envelope | `EnvelopeController.java:51` `PUT /{id}` | `main.kf` `PUT /api/envelopes/:id` → `services.kf` `updateEnvelope` | EnvelopeRow | E2E "PUT /api/envelopes", "IDOR" | ✅ | Padrões do legado (`FIXED`, 3 meses); outro dono ou id inexistente = 404 |
+| 6 | Excluir envelope | `EnvelopeController.java:59` | `main.kf` `DELETE /api/envelopes/:id` | EnvelopeRow | E2E "DELETE", "IDOR" | ✅ | 204; outro dono ou já apagado = 404. As transações ficam com o id antigo, como no legado |
 | 7 | Criar transação | `L/mod_transaction/controller/TransactionController.java:41` | `main.kf:186` → `services.kf:318` | TransactionRow + EnvelopeRow | E2E 20–21, 31–32, "createdAt real"; RST 5/11 | ✅ | Atômica e com valores em centavos. `createdAt` = instante UTC real (`nowIso`, Fase 2) |
-| 8 | Listar por categoria | `TransactionController.java:48` `GET /{category}` | `services.kf:360` (sem rota); existe `GET /api/transactions` (todas) em `main.kf:177` | — | E2E 22 (lista total) | ❌ | — |
+| 8 | Listar por categoria | `TransactionController.java:48` `GET /{category}` | `main.kf` `GET /api/transactions/:category` | (leitura) | E2E "/{category}" | ✅ | Categoria inválida = 400 |
 | 9 | Limpar transações | `TransactionController.java:53` `DELETE` | `services.kf:372` (sem rota) | — | — | ❌ | — |
-| 10 | Resumo por categoria | `TransactionController.java:59` `GET /summary` | — | — | — | ❌ | — |
+| 10 | Resumo por categoria | `TransactionController.java:59` `GET /summary` | `main.kf` `GET /api/transactions/summary` | (leitura) | E2E "/summary" | ✅ | Mapa categoria → total, como no legado |
 | 11 | Dashboard | `TransactionController.java:75` `GET /dashboard` (JSON com categorias, % e transações) | `main.kf:203` `GET /api/dashboard` | — | E2E 28 | ⚠️ | Só o total é real. Categorias e transações são **texto fixo** (`main.kf:207`), num formato `a|b|c` e não JSON |
 | 12 | Admin: listar usuários | `L/mod_user/controller/AdminController.java:35` | — | — | — | ❌ | Não há checagem de `Role.ADMIN` |
 | 13 | Admin: migrar modelo | `AdminController.java:41` | `services.kf:228` (sem rota) | — | — | ❌ | Lógica portada (ver #32) |
 | 14 | Onboarding | `L/mod_user/controller/OnboardingController.java:36` `/api/users/me/onboarding` | `main.kf:85` `/api/users/onboarding` | UserRow | E2E 16–17; RST 3/13 | ⚠️ | `debtAmount` não é lido nem gravado (`debtCents` fica 0). Aceita salário negativo (P7). Resposta em texto `a|b|c`, não JSON |
-| 15 | Atualizar salário | `L/mod_user/controller/SalaryController.java:26` `PATCH /me/salary` | — | — | 404 (P5) | ❌ | Necessário para "Rever meu salário" (Configurações) |
+| 15 | Atualizar salário | `L/mod_user/controller/SalaryController.java:26` `PATCH /me/salary` | `main.kf` `PATCH /api/users/me/salary` | UserRow | E2E "PATCH salary" | ✅ | Também migra o modelo (`migrateBudgetModelIfNeeded`) e devolve os buckets novos |
 | 16 | Status do plano | `L/mod_user/controller/TierStatusController.java:19` | `main.kf` `GET /api/users/tier-status` | ChatMessageRow (contagem) | E2E "tier-status", "Freemium" | ✅ | Conta as mensagens do usuário desde a meia-noite local do dia 1 (Fase 2) |
 | 17 | Registrar renda variável | `L/mod_variable_income/controller/VariableIncomeController.java:29` | `main.kf:121` → `coach.kf:171` | VariableIncomeRow | E2E 26 | ✅ | Passa pelo `RegisterIncomeFunction`: texto com "salário"/"fixo" não grava, igual à tool do legado |
 | 18 | Listar renda variável | `VariableIncomeController.java:36` | `main.kf:127` | VariableIncomeRow | E2E 27, 35 | ✅ | — |
@@ -71,13 +71,13 @@ Os números de teste se referem a `scripts/test_e2e_flow.ps1` (E2E) e `scripts/t
 
 | # | Item | Legado | Kof | Persistido | Testado | Status | Observação |
 |---|---|---|---|---|---|---|---|
-| 22 | GetBalance | `L/mod_ai_coach/service/GetBalanceFunction.java` | `coach.kf:97` | (leitura) | — | ⚠️ | Sem rota e sem teste. No caminho não-freelancer devolve `totalSpent=0.0, notAllocated=0.0` fixos (`coach.kf:162`) |
+| 22 | GetBalance | `L/mod_ai_coach/service/GetBalanceFunction.java` | `coach.kf` + `GET /api/budgets/balance` | (leitura) | E2E "balance" (SURVIVAL e KAKEIBO) | ✅ | Fora do Base Zero, `totalSpent` e `notAllocated` passam a ser o gasto do mês e o que sobra do salário (o legado devolvia `null`) |
 | 23 | GetDailyPulse | `GetDailyPulseFunction.java` | `coach.kf:75` + `main.kf:136` | (leitura) | E2E 15, 17, 24, 37; RST 9 | ✅ | `(salário − gasto do mês)/dias restantes`, com o mês e os dias calculados com `kof.time` (Fase 2) |
 | 24 | RegisterIncome | `RegisterIncomeFunction.java` | `coach.kf:171` | VariableIncomeRow | E2E 26 | ✅ | — |
 | 25 | SuggestModelChange | `SuggestModelChangeFunction.java` | `coach.kf:198` | — | — | ⚠️ | Sem rota nem tool |
 | 26 | AnswerKakeiboReflection | `AnswerKakeiboReflectionFunction.java` | `coach.kf:225` | KakeiboReflectionRow | — | ⚠️ | Sem rota nem tool. Grava só a reflexão da semana; o cálculo de `weekStart` fica com quem chama |
 | 27 | persistTransactionUseCase | `L/mod_transaction/service/PersistTransactionUseCase.java` | `services.kf:318` | TransactionRow | E2E 20 | ✅ | — |
-| 28 | listTransactionsByCategoryUseCase | `ListTransactionsByCategoryUseCase.java` | `services.kf:360` | (leitura) | — | ⚠️ | Sem rota nem tool |
+| 28 | listTransactionsByCategoryUseCase | `ListTransactionsByCategoryUseCase.java` | `services.kf:360` | (leitura) | E2E "/{category}" | ✅ | Rota da Fase 3; como tool do coach, fica para a Fase 4 |
 | 29 | getTotalByCategoryUseCase | `GetTotalByCategoryUseCase.java` | `services.kf:348` | (leitura) | — | ⚠️ | Sem rota nem tool |
 
 ### 2.3 Regras de domínio, agendamento e segurança
@@ -86,10 +86,10 @@ Os números de teste se referem a `scripts/test_e2e_flow.ps1` (E2E) e `scripts/t
 |---|---|---|---|---|---|---|---|
 | 30 | Sugestão de modelo (limiares de 3242 e 5000) | `L/mod_budget/service/BudgetModelSuggestionService.java` | `services.kf:122` | UserRow.budgetModel | E2E 16 (SURVIVAL) | ✅ | Condições idênticas, linha a linha |
 | 31 | Planos 50/30/20, 70/20/10, 70/10/20, 80/20, Kakeibo e Base Zero | `BudgetModelPlanService.java` | `services.kf:142`, `:158` | — | E2E 16 | ✅ | Só o SURVIVAL é exercitado no E2E |
-| 32 | Migração de modelo | `BudgetModelMigrationService.java` | `services.kf:228` | — | — | ⚠️ | Regras transcritas; nenhum chamador e nenhum teste |
+| 32 | Migração de modelo | `BudgetModelMigrationService.java` | `services.kf:228` | UserRow.budgetModel | E2E "PATCH salary" (SURVIVAL → STANDARD) | ⚠️ | Chamada pelo `PATCH salary`. Só 1 das 6 transições tem teste |
 | 33 | Média móvel do envelope | `EnvelopeService.java` (`calculateMovingAverage` devolve `ZERO`) | `services.kf:216` (devolve `0.0`) | — | — | ⚠️ | Paridade de um **stub**: a funcionalidade não existe em nenhum dos dois |
 | 34 | Desconto do envelope | `EnvelopeService.updateSpent` | `store.kf:386` | EnvelopeRow | E2E 23; RST 10 | ✅ | Feito em centavos e na mesma transação do gasto |
-| 35 | Destino da renda variável | `L/mod_variable_income/service/VariableIncomeService.java` | `services.kf:267` | VariableIncomeRow | E2E 26 | ⚠️ | Equivalente ao legado (meta ≤ 0 → orçamento), mas **não há rota para definir a meta de reserva**, então o destino é sempre o orçamento |
+| 35 | Destino da renda variável | `L/mod_variable_income/service/VariableIncomeService.java` | `services.kf:267` + `PUT /api/users/me/emergency-goal` | VariableIncomeRow + UserRow | E2E 26, "Meta da reserva" | ✅ | Reserva até bater a meta, depois orçamento (testado nos dois sentidos) |
 | 36 | Limites do plano (30 mensagens/mês; voz só no Premium) | `L/shared/service/TierEnforcementService.java` | `services.kf` (`enforceCanSendMessage` chamado no chat) | — | E2E "Freemium" | ✅ | 31ª mensagem do mês = 402 com a mensagem do legado. `enforceVoiceAllowed` fica para a voz (MVP 2) |
 | 37 | Scheduler do Kakeibo (seg 18h) | `L/mod_ai_coach/service/KakeiboReflectionScheduler.java:28` | — | — | — | ❌ | Kof tem `time.interval` (corpus de treinamento); não implementado |
 | 38 | Serviço do Kakeibo (perguntas, `getWeekStart`, `shouldAsk`) | `KakeiboReflectionService.java:18` | `coach.kf:214` | KakeiboReflectionRow | — | ⚠️ | As 4 `QUESTIONS` e o cálculo de `weekStart` não foram portados |
@@ -106,14 +106,14 @@ Os números de teste se referem a `scripts/test_e2e_flow.ps1` (E2E) e `scripts/t
 | # | Entidade | Legado | Kof (`store.kf`) | Status | Observação |
 |---|---|---|---|---|---|
 | 46 | Envelope | `EnvelopeEntity` (id, userId, categoryName, limitAmount, currentSpent, limitType, movingAverageMonths, createdAt) | `EnvelopeRow` `:48` | ✅ | Valores em centavos |
-| 47 | Usuário | `UserEntity` (+ `debtAmount`, `emergencyFundGoal`) | `UserRow` `:18` (`debtCents`, `emergencyGoalCents`) | ⚠️ | As colunas existem, mas nenhuma rota as preenche. Falta `name` (pedido pelo design; o Java também não tinha) |
+| 47 | Usuário | `UserEntity` (+ `debtAmount`, `emergencyFundGoal`) | `UserRow` `:18` (`debtCents`, `emergencyGoalCents`, `name`) | ✅ | Dívida pelo onboarding (F3), meta pela rota da Fase 3, `name` pelo cadastro (F1) |
 | 48 | Transação | `TransactionEntity` (createdAt `Instant`) | `TransactionRow` `:35` | ✅ | `createdAt` = instante UTC ISO-8601 |
 | 49 | Mensagem do chat | `ChatMessageEntity` | `ChatMessageRow` `:59` | ✅ | `createdAt` = instante UTC ISO-8601 |
 | 50 | Reflexão Kakeibo | `KakeiboReflectionEntity` (answers `List`) | `KakeiboReflectionRow` `:76` (`answersJson`) | ⚠️ | Persistência sem rota e sem teste |
 | 51 | Renda variável | `VariableIncomeEntity` (date) | `VariableIncomeRow` `:67` | ✅ | `date` = instante UTC ISO-8601 |
 | 52 | Orçamento mensal | `L/mod_budget/model/BudgetEntity.java` | — | ❌ | No legado só existe o repositório, sem uso; avaliar se vale portar ou descartar |
 
-**Contagem:** ✅ 19 · ⚠️ 17 · ❌ 16 (total 52), depois da Fase 2. Na inspeção de 16/10 eram ✅ 12 · ⚠️ 24 · ❌ 16.
+**Contagem:** ✅ 28 · ⚠️ 13 · ❌ 11 (total 52), depois da Fase 3. Depois da Fase 2 eram ✅ 19 · ⚠️ 17 · ❌ 16; na inspeção de 16/10, ✅ 12 · ⚠️ 24 · ❌ 16.
 
 ## 3. Escopo do MVP 1 (design Desktop, com Mobile como espelho)
 
@@ -127,16 +127,16 @@ No frontend Kof existem só `frontend/main.kf`, `core/` (api_client, app_state, 
 | 2 | Login (+ "Esqueci a senha") | `POST /api/auth/login` ✅; recuperar senha | ⚠️ (recuperação de senha ausente; definir se é MVP 2) | #33 | ❌ |
 | 3 | Cadastro (nome, sobrenome, e-mail, senha, confirmação) | register com `name` e validações (F1, F2) | ⚠️ | #33 | ❌ |
 | 4–6.1 | Onboarding: salário, tipo de renda, dívida e valor da dívida | onboarding com `debtAmount`, validação e JSON (F2, F3) | ⚠️ | #33 | ❌ |
-| 7 | Onboarding: gastos fixos e variáveis ("a IA cria as caixinhas") | **nova** criação de envelopes em lote a partir dos chips | ❌ | #33 | ❌ |
+| 7 | Onboarding: gastos fixos e variáveis ("a IA cria as caixinhas") | `POST /api/envelopes/from-chips` (regra fixa chip → categoria) | ✅ (Fase 3) | #33 | ❌ |
 | 8 | Onboarding: resultado (modelo + buckets) | resposta JSON com modelo, descrição e buckets | ⚠️ (texto `a|b|c`) | #33 | ❌ |
-| 9 | Dashboard (pulso, gastos do mês, reserva acumulada, pizza do modelo, últimas transações, Semana/Mês/Ano) | pulso com datas reais (#44); `GetBalance` exposto; reserva = soma de EMERGENCY_FUND; transações reais em JSON; filtro por período | ⚠️ (só total e pulso; datas fixas) | #32 | ❌ |
+| 9 | Dashboard (pulso, gastos do mês, reserva acumulada, pizza do modelo, últimas transações, Semana/Mês/Ano) | `GET /api/dashboard?period=week|month|year` em JSON real + `GET /api/budgets/balance` | ✅ (Fases 2 e 3) | #32 | ❌ |
 | 10 | Organiza AI (chat de texto, voz, upload de fatura PDF) | coach com LLM + tools + memória + limite freemium; voz (Whisper/TTS); leitura de PDF/imagem com confirmação; limite de 1 PDF/mês no Gratuito | ❌ (texto fixo) | #34 | ❌ |
-| 11 | Caixinhas por bucket (status Em dia/Alerta/Estourada, nova caixinha, histórico) | envelopes com bucket; PUT/DELETE; histórico por envelope; limiares de 80% e 100% | ⚠️ (só criar e listar) | #11 | ❌ |
-| 12 | Notificações (estouro, alerta, pulso, meta batida, lembrete; marcar como lidas) | **nova** entidade de notificação + geração por regra + rota para listar e marcar como lida | ❌ | #11 | ❌ |
+| 11 | Caixinhas por bucket (status Em dia/Alerta/Estourada, nova caixinha, histórico) | `GET /api/envelopes/overview`, `PUT`/`DELETE /api/envelopes/:id`; histórico por caixinha só no Mobile | ✅ (Fase 3) | #11 | ❌ |
+| 12 | Notificações (estouro, alerta, pulso, meta batida, lembrete; marcar como lidas) | `NotificationRow` + regras + `GET /api/notifications` e `POST /api/notifications/read-all` | ✅ (Fase 3) | #11 | ❌ |
 | 13 | Configurações: tema | — (local) | n/a | — | ❌ |
-| 13 | Configurações: e-mail/push diário às 20h | **novo**: preferências + job agendado + envio de e-mail | ❌ | — | ❌ |
-| 13 | Configurações: rever salário (refaz o onboarding e migra o modelo) | `PATCH salary`/re-onboarding + `migrateBudgetModelIfNeeded` | ❌ | — | ❌ |
-| 13 | Configurações: Open Finance "Demo · MVP 1" | demo/mock com 5 bancos (decisão de escopo) | ❌ | — | ❌ |
+| 13 | Configurações: e-mail/push diário às 20h | preferências (`GET`/`PUT /api/users/me/preferences`, Fase 3) + job agendado + envio de e-mail | ⚠️ (preferências feitas; envio na Fase 3.1) | — | ❌ |
+| 13 | Configurações: rever salário (refaz o onboarding e migra o modelo) | `PATCH /api/users/me/salary` (migra o modelo) ou um novo `POST /api/users/onboarding`; troca manual `PUT /api/users/me/budget-model` (#11) | ✅ (Fase 3) | — | ❌ |
+| 13 | Configurações: Open Finance "Demo · MVP 1" | `GET /api/open-finance/banks` e `POST /api/open-finance/connect`, marcados `demo: true`, sem conexão nem dado bancário | ✅ (Fase 3) | — | ❌ |
 | 13 | Configurações: conta (e-mail, senha, 2FA) | marcado **MVP 2** no design | fora | — | fora |
 | — | Sessão: `/api/users/me` (nome, e-mail, `onboardingCompleted`, tier) | F3 | ❌ | #33 | ❌ |
 
@@ -334,6 +334,49 @@ G-BOOT-DOWN exit=1, senha no log: 0 · migração name: dump idêntico (H2 e MyS
 | Meta de reserva de emergência (rota) + "reserva acumulada" no dashboard | Renda variável vai para EMERGENCY_FUND até bater a meta e depois para o orçamento (E2E) | P | intermediario |
 | Admin (listar e migrar) com papel ADMIN | Usuário comum = 403 | P | intermediario |
 | `GetBalance` exposto + correção de `totalSpent`/`notAllocated` | Valores por bucket batem com a soma das transações do mês | P | intermediario |
+
+**Fase 3 feita** (`feat(backend): rotas do desktop do MVP 1 (fase 3)`). Contratos novos (todos exigem token; corpo inválido = 400 `{"error":"Dados inválidos."}`; recurso de outro usuário ou inexistente = 404):
+
+| Rota | Tela | Corpo / resposta |
+|---|---|---|
+| `GET /api/dashboard?period=week\|month\|year` | 9 | `{period, from, totalSpent, currency, salary, pulse, daysRemaining, budgetModel, buckets[{name, percentage, plannedAmount, spentAmount, remainingAmount}], reserve{accumulated, goal, hasGoal, percent}, categories[{category, total, count, percentage}], recentTransactions[5]}`. Pulso e buckets são sempre do mês; o resto é do período. Período inválido = 400. Substitui o texto `a|b|c` com valores fixos |
+| `GET /api/budgets/balance` | 9 | `GetBalanceOutput` do legado, com `totalSpent` e `notAllocated` preenchidos |
+| `GET /api/envelopes/overview` | 11 | `[{id, categoryName, bucket, limitAmount, spentThisMonth, percent, status}]`. `status`: `ESTOURADA` se o gasto do mês passa do limite, `ALERTA` acima de 80%, senão `EM_DIA` (no design, 80% = Em dia, 90% = Alerta, 120% = Estourada) |
+| `PUT /api/envelopes/:id` · `DELETE /api/envelopes/:id` | 11 | `{categoryName, limitAmount, limitType?, movingAverageMonths?}` → envelope; `DELETE` = 204 |
+| `POST /api/envelopes/from-chips` | 7 | `{fixed[], variable[]}` → caixinhas criadas. Chip → categoria fixa (Aluguel/Contas → HOUSING, Faculdade/Escola → EDUCATION, Transporte → TRANSPORT, Assinaturas → SUBSCRIPTIONS, Alimentação → GROCERIES, Delivery → FOOD, Lazer/Viagem → LEISURE, Roupas → SHOPPING, Farmácia → PHARMA, Pet → OTHER). O limite é o valor do bucket do plano dividido igualmente entre as categorias escolhidas que caem nele (Base Zero = 0). Sem onboarding = 409; chip desconhecido = 400; categoria que já tem caixinha não é duplicada |
+| `GET /api/transactions/:category` · `GET /api/transactions/summary` | — | Rotas do legado |
+| `PATCH /api/users/me/salary` | 13 | `{salary}` → `{salary, previousModel, budgetModel, migrated, description, buckets}` |
+| `PUT /api/users/me/budget-model` | 13 (#11) | `{model}` → `{suggestedModel, description, buckets}` |
+| `PUT /api/users/me/emergency-goal` | 9 | `{goal}` (0 desliga) → `{goal, hasGoal, accumulated}` |
+| `GET /api/notifications` · `POST /api/notifications/read-all` | 12 | `[{id, kind, title, message, createdAt, read}]`; `kind`: `ENVELOPE_ALERT`, `ENVELOPE_EXCEEDED` (quando a caixinha passa para o status, uma vez por mês), `GOAL_REACHED` (uma vez por valor de meta), `DAILY_PULSE` e `REMINDER` (sem gasto hoje), um por dia, criados na primeira leitura do dia |
+| `GET`/`PUT /api/users/me/preferences` | 13 | `{emailEnabled, frequency: DAILY\|WEEKLY\|NEVER, pushEnabled}`; sem registro = padrão do design (e-mail diário ligado, push desligado) |
+| `GET /api/open-finance/banks` · `POST /api/open-finance/connect` | 13 | `{demo: true, notice, banks[5]}` e `{demo: true, bank, status: "DEMO_NAO_CONECTADO", notice}`. Nenhuma conexão, nenhum dado bancário e nenhuma transação criada |
+
+Fora do escopo desta fase, por não estarem no design Desktop: limpar transações (`DELETE /transactions` do legado), admin, histórico paginado por caixinha (só no Mobile) e a média móvel (stub também no legado). Duas tabelas novas são criadas no boot por `orm.create` (`notificationrow`, `preferencerow`); nenhuma tabela existente muda.
+
+**Dois bugs novos do compilador no 0.6.6**, com contorno no código e repro mínimo fora do repo:
+
+| Repro | Sintoma | Quem pegou | Contorno |
+|---|---|---|---|
+| `p23/repro/find`: `var b = lista.find(...)`, depois `if (b != null) { return b.campo }` com `b` de tipo record | `VerifyError: Bad type on operand stack` ao carregar a classe ("Method owner: expected LBucketSummaryDTO;, but found Ljava/lang/Object;") | G-BYTECODE (VerifyAll e LinkAll, 1 erro) e `kof run` do repro | `filter` + `isEmpty` + `get(0)` (`overview.kf`, `chipLimit`) |
+| `p23/repro/foreachput`: `lista.forEach((n: Int) -> mapa.put(k, f(n)))` com `Map<String, Double>` | `NoSuchMethodError: Double.valueOf(Double)` em runtime | E2E (`/api/transactions/summary` = 500). O VerifyAll e o LinkAll não pegam, porque a chamada só é resolvida ao executar | laço `for` (`main.kf`, rota `/summary`) |
+
+Evidência (kof 0.6.6):
+
+```
+G-BUILD check/build exit=0 (7 arquivos) · frontend --target js exit=0
+VerifyAll 161 classes, 797 métodos, 0 erros · LinkAll 193/193 · controle sintético acusa
+      (antes do contorno do List.find: VerifyAll 1 erro e LinkAll FAIL=1 em chipLimit; o E2E caía no boot, 0/64)
+G-E2E H2 86/86 · MySQL 86/86 · com -WebOut 88/88 (H2 e MySQL). 18 casos novos: dashboard (mês, semana, ano, período
+      inválido), balance (SURVIVAL e KAKEIBO), chips (409 sem onboarding, 400, 4 caixinhas com 700/700/700/600, 2ª chamada
+      sem duplicar), Alerta 83% → Estourada 117% com 1 aviso de cada, pulso do dia sem repetir, read-all 204, lembrete só
+      para quem não gastou, PUT (200, 400 ×3, 404 ×2), IDOR de PUT e DELETE (404 e envelope intacto), DELETE 204 → 404,
+      /{category} e /summary, PATCH salary (SURVIVAL → STANDARD), budget-model, meta da reserva (reserva até a meta, depois
+      orçamento, aviso de meta batida), preferências, Open Finance demo, 17 rotas novas sem token = 401
+G-RESTART 28/28 (H2 e MySQL; a 1ª rodada logo depois do G-DB-* deu timeout de 5 s no login e passou nas duas seguintes)
+neg 41/41 (H2 e MySQL) · G-CONC verde (H2 e MySQL) · G-AUTH-STATIC 14/14 · G-DB-BOUNCE 14,7 s · G-DB-DOWN 503 → 200 em 8,5 s
+G-BOOT-DOWN exit=1, senha no log: 0 · banco do 5d51896 → build da Fase 3: boot ok, dump das tabelas antigas idêntico (H2 e MySQL)
+```
 
 ### Fase 4: Coach com LLM
 

@@ -163,9 +163,34 @@ main() {
         var req = decodeVariableIncomeInput(body())
         if (req != null) {
             var res = registerUserIncome(currentUserId(), req.amount, req.source)
+            var user = findUserById(currentUserId())
+            if (user != null) {
+                notifyReserveGoal(user)
+            }
             return json.encode(res)
         }
         return status(400, invalidBody())
+    }
+
+    // Meta da reserva de emergencia: com meta > 0, a renda variavel vai para a reserva ate bater a meta.
+    // 0 desliga a meta. Avisa (Tela 12) se a reserva ja alcancou a meta nova.
+    app.put("/api/users/me/emergency-goal") {
+        var req = decodeEmergencyGoalInput(body())
+        if (req == null) {
+            return status(400, invalidBody())
+        }
+        if (req.goal < 0.0) {
+            return status(400, json.encode(ApiError("A meta da reserva não pode ser negativa.")))
+        }
+        var user = findUserById(currentUserId())
+        if (user == null) {
+            return status(404, json.encode(ApiError("Usuário não encontrado")))
+        }
+        user.emergencyGoalCents = toCents(req.goal)
+        user.hasEmergencyGoal = user.emergencyGoalCents > 0
+        updateUser(user)
+        notifyReserveGoal(user)
+        return json.encode(EmergencyGoalResponse(centsToReais(user.emergencyGoalCents), user.hasEmergencyGoal, centsToReais(reserveCents(user.id))))
     }
 
     app.get("/api/variable-income") {
@@ -176,6 +201,11 @@ main() {
     // =========================================================
     // Pulso Diário e Coach Cognitivo
     // =========================================================
+
+    // GetBalance do legado: buckets do modelo com planejado, gasto e saldo do mes.
+    app.get("/api/budgets/balance") {
+        return json.encode(calculateBalance(currentUserId(), monthStartIso()))
+    }
 
     app.get("/api/budgets/daily-pulse") {
         return json.encode(calculateDailyPulse(currentUserId(), daysRemainingInMonth(), monthStartIso()))
@@ -214,6 +244,77 @@ main() {
         return json.encode(envelopes)
     }
 
+    // Tela 11: caixinhas com o bucket do modelo, o gasto do mes e o status (Em dia/Alerta/Estourada).
+    app.get("/api/envelopes/overview") {
+        var user = findUserById(currentUserId())
+        if (user == null) {
+            return status(404, json.encode(ApiError("Usuário não encontrado")))
+        }
+        return json.encode(envelopesOverview(user))
+    }
+
+    // Tela 7: chips de gastos fixos/variaveis -> caixinhas (regra fixa). Exige o onboarding feito.
+    app.post("/api/envelopes/from-chips") {
+        var req = decodeChipsInput(body())
+        if (req == null) {
+            return status(400, invalidBody())
+        }
+        var chips: List<String> = listOf()
+        chips.addAll(req.fixed())
+        chips.addAll(req.variable())
+        var invalid = chipsError(chips)
+        if (invalid != null) {
+            return status(400, json.encode(ApiError(invalid)))
+        }
+        var user = findUserById(currentUserId())
+        if (user == null) {
+            return status(404, json.encode(ApiError("Usuário não encontrado")))
+        }
+        if (!onboardingCompleted(user)) {
+            return status(409, json.encode(ApiError("Conclua o onboarding antes de criar as caixinhas.")))
+        }
+        return json.encode(createEnvelopesFromChips(user, chips))
+    }
+
+    // Legado: PUT /api/envelopes/{id}. limitType ausente = FIXED e movingAverageMonths ausente = 3, como no
+    // EnvelopeController. Caixinha de outro usuario ou inexistente = 404.
+    app.put("/api/envelopes/:id") {
+        var req = decodeUpdateEnvelopeInput(body())
+        if (req == null) {
+            return status(400, invalidBody())
+        }
+        var invalid = envelopeError(req.categoryName, req.limitAmount, req.limitType)
+        if (invalid != null) {
+            return status(400, json.encode(ApiError(invalid)))
+        }
+        var userId = currentUserId()
+        var current = findEnvelopeById(userId, param("id"))
+        if (current == null) {
+            return status(404, json.encode(ApiError("Caixinha não encontrada.")))
+        }
+        var limitType = EnvelopeLimitType.FIXED
+        var typeText = req.limitType
+        if (typeText != null) {
+            limitType = limitTypeFromText(typeText)
+        }
+        var months = 3
+        var givenMonths = req.movingAverageMonths
+        if (givenMonths != null) {
+            months = givenMonths
+        }
+        return json.encode(updateEnvelope(userId, current.id, EnvelopeEntity(current.id, userId, req.categoryName.trim(), req.limitAmount, current.currentSpent, limitType, months, current.createdAt)))
+    }
+
+    app.delete("/api/envelopes/:id") {
+        var userId = currentUserId()
+        var current = findEnvelopeById(userId, param("id"))
+        if (current == null) {
+            return status(404, json.encode(ApiError("Caixinha não encontrada.")))
+        }
+        deleteEnvelope(userId, current.id)
+        return status(204, "")
+    }
+
     app.post("/api/envelopes") {
         var req = decodeCreateEnvelopeInput(body())
         if (req != null) {
@@ -245,20 +346,100 @@ main() {
                 return status(400, json.encode(ApiError("Categoria inválida: " + req.category())))
             }
             var created = persistTransaction(req, category, currentUserId())
+            var envId = created.envelopeId
+            if (envId != null) {
+                notifyEnvelopeCrossing(currentUserId(), envId, toCents(req.amount() * 1.0))
+            }
             return json.encode(created)
         }
         return status(400, invalidBody())
     }
 
+    // Legado: GET /transactions/summary (total por categoria, todas as datas, so categorias com gasto).
+    app.get("/api/transactions/summary") {
+        var groups = findTransactionsByUserIdAndCreatedAtAfter(currentUserId(), "2000-01-01").groupBy((t: TransactionEntity) -> categoryText(t.category))
+        // for, nao forEach: no kof 0.6.6, Map<String, Double>.put dentro de lambda chama Double.valueOf(Double),
+        // que nao existe (NoSuchMethodError em runtime; repro p23/repro/foreachput).
+        var summary: Map<String, Double> = mapOf()
+        for (var name in groups.keys()) {
+            summary.put(name, centsToReais(sumAmountCents(groups.getOrDefault(name, listOf()))))
+        }
+        return json.encode(summary)
+    }
+
+    // Legado: GET /transactions/{category}.
+    app.get("/api/transactions/:category") {
+        var category = Category.valueOf(param("category"))
+        if (category == null) {
+            return status(400, json.encode(ApiError("Categoria inválida: " + param("category"))))
+        }
+        return json.encode(listTransactionsByCategory(category, currentUserId()))
+    }
+
     // =========================================================
-    // Dashboard Unificado
+    // Dashboard (Tela 9): JSON real do periodo (?period=week|month|year; padrao month)
     // =========================================================
 
     app.get("/api/dashboard") {
-        var totalSpent = centsToReais(sumAmountByUserIdAndCreatedAtAfter(currentUserId(), monthStartIso()))
+        var period = query("period")
+        var unit = periodUnit(period)
+        if (unit == null) {
+            return status(400, json.encode(ApiError("Período inválido: use week, month ou year.")))
+        }
+        var user = findUserById(currentUserId())
+        if (user == null) {
+            return status(404, json.encode(ApiError("Usuário não encontrado")))
+        }
+        return json.encode(dashboardOf(user, unit, unit))
+    }
 
-        // Formato esperado pelo kof.ui: totalSpent|currency|categories|transactions
-        return String.valueOf(totalSpent) + "|BRL|Alimentação:50,Transporte:30,Lazer:20|Supermercado:Alimentação:150.0,"
+    // Tela 12: avisos do usuario (os do dia sao criados na primeira leitura) e "marcar todas como lidas".
+    app.get("/api/notifications") {
+        var user = findUserById(currentUserId())
+        if (user == null) {
+            return status(404, json.encode(ApiError("Usuário não encontrado")))
+        }
+        ensureDailyNotifications(user)
+        return json.encode(findNotifications(user.id))
+    }
+
+    app.post("/api/notifications/read-all") {
+        markNotificationsRead(currentUserId())
+        return status(204, "")
+    }
+
+    // Tela 13: preferencias de e-mail/push.
+    app.get("/api/users/me/preferences") {
+        return json.encode(findPreferences(currentUserId()))
+    }
+
+    app.put("/api/users/me/preferences") {
+        var req = decodePreferencesInput(body())
+        if (req == null) {
+            return status(400, invalidBody())
+        }
+        var invalid = preferencesError(req)
+        if (invalid != null) {
+            return status(400, json.encode(ApiError(invalid)))
+        }
+        return json.encode(savePreferences(currentUserId(), req))
+    }
+
+    // Tela 13: Open Finance e DEMONSTRACAO (decisao de 16/10): nenhuma conexao, nenhum dado bancario.
+    app.get("/api/open-finance/banks") {
+        return json.encode(OpenFinanceDemo(true, openFinanceNotice(), openFinanceDemoBanks()))
+    }
+
+    app.post("/api/open-finance/connect") {
+        try {
+            var req = json.decode<OpenFinanceConnectInput>(body())
+            if (req.bank() != null && openFinanceDemoBanks().contains(req.bank())) {
+                return json.encode(OpenFinanceConnectResult(true, req.bank(), "DEMO_NAO_CONECTADO", openFinanceNotice()))
+            }
+            return status(400, json.encode(ApiError("Banco fora da demonstração.")))
+        } catch (String e) {
+            return status(400, invalidBody())
+        }
     }
 
     // Perfil do usuario do token: o frontend decide entre o onboarding (Tela 4) e o dashboard.
@@ -268,6 +449,49 @@ main() {
             return status(404, json.encode(ApiError("Usuário não encontrado")))
         }
         return json.encode(meOf(user))
+    }
+
+    // Legado: PATCH /api/users/me/salary. Grava o salario e migra o modelo (BudgetModelMigrationService);
+    // "Rever meu salario" (Tela 13) tambem pode refazer o onboarding inteiro.
+    app.patch("/api/users/me/salary") {
+        var req = decodeSalaryInput(body())
+        if (req == null) {
+            return status(400, invalidBody())
+        }
+        if (req.salary <= 0.0) {
+            return status(400, json.encode(ApiError("O salário deve ser maior que zero.")))
+        }
+        var user = findUserById(currentUserId())
+        if (user == null) {
+            return status(404, json.encode(ApiError("Usuário não encontrado")))
+        }
+        var previous = user.budgetModel
+        user.salaryCents = toCents(req.salary)
+        user.hasSalary = true
+        user.budgetModel = migrateBudgetModelIfNeeded(user)
+        updateUser(user)
+        var salary = userSalary(user)
+        return json.encode(SalaryUpdateResponse(salary, previous.name(), user.budgetModel.name(), previous != user.budgetModel,
+            describeBudgetModel(user.budgetModel), buildBudgetBuckets(user.budgetModel, salary)))
+    }
+
+    // Issue #11: troca manual do modelo de orcamento.
+    app.put("/api/users/me/budget-model") {
+        var req = decodeBudgetModelInput(body())
+        if (req == null) {
+            return status(400, invalidBody())
+        }
+        var model = BudgetModelType.valueOf(req.model)
+        if (model == null) {
+            return status(400, json.encode(ApiError("Modelo inválido: " + req.model)))
+        }
+        var user = findUserById(currentUserId())
+        if (user == null) {
+            return status(404, json.encode(ApiError("Usuário não encontrado")))
+        }
+        user.budgetModel = model
+        updateUser(user)
+        return json.encode(OnboardingResponse(model.name(), describeBudgetModel(model), buildBudgetBuckets(model, userSalary(user))))
     }
 
     app.get("/api/users/tier-status") {

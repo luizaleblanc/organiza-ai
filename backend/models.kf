@@ -232,6 +232,14 @@ record VariableIncomeInput(Double amount, String source)
 // corpo por clientes antigos e ignorado pelo json.decode (chaves extras nao quebram).
 record CreateEnvelopeInput(String categoryName, Double limitAmount)
 record ChatMessageRequest(String message)
+// Fase 3: PUT de caixinha (limitType/movingAverageMonths opcionais como no legado), salario, meta de
+// reserva e troca de modelo. limitType/model chegam como String (WORKAROUND do enum no json.decode).
+record UpdateEnvelopeInput(String categoryName, Double limitAmount, String? limitType, Int? movingAverageMonths)
+record SalaryInput(Double salary)
+record EmergencyGoalInput(Double goal)
+record BudgetModelInput(String model)
+record SalaryUpdateResponse(Double salary, String previousModel, String budgetModel, Bool migrated, String description, List<BucketSummaryDTO> buckets)
+record EmergencyGoalResponse(Double goal, Bool hasGoal, Double accumulated)
 
 // Corpo de erro das rotas: serializado com json.encode (nunca JSON concatenado a mao)
 record ApiError(String error)
@@ -407,4 +415,61 @@ String? onboardingError(OnboardingRequest req) {
         return "Tipo de renda inválido."
     }
     return null
+}
+
+// =========================================================
+// Fase 3: corpo das rotas novas (null = 400) e regras (null = valido).
+// =========================================================
+
+UpdateEnvelopeInput? decodeUpdateEnvelopeInput(String raw) {
+    try {
+        var req = json.decode<UpdateEnvelopeInput>(raw)
+        if (req.categoryName() == null) {
+            return null
+        }
+        return req
+    } catch (String e) {
+        return null
+    }
+}
+
+String? envelopeError(String categoryName, Double limitAmount, String? limitType) {
+    if (isBlank(categoryName) || categoryName.length() > maxTextLength()) {
+        return "Nome da caixinha inválido."
+    }
+    if (limitAmount < 0.0) {
+        return "O limite da caixinha não pode ser negativo."
+    }
+    if (limitType != null && EnvelopeLimitType.valueOf(limitType) == null) {
+        return "Tipo de limite inválido: " + limitType
+    }
+    return null
+}
+
+SalaryInput? decodeSalaryInput(String raw) {
+    try {
+        return json.decode<SalaryInput>(raw)
+    } catch (String e) {
+        return null
+    }
+}
+
+EmergencyGoalInput? decodeEmergencyGoalInput(String raw) {
+    try {
+        return json.decode<EmergencyGoalInput>(raw)
+    } catch (String e) {
+        return null
+    }
+}
+
+BudgetModelInput? decodeBudgetModelInput(String raw) {
+    try {
+        var req = json.decode<BudgetModelInput>(raw)
+        if (req.model() == null) {
+            return null
+        }
+        return req
+    } catch (String e) {
+        return null
+    }
 }

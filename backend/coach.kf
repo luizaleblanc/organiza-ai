@@ -50,6 +50,25 @@ String toKakeiboBucket(Category? category) {
     return "Extras"
 }
 
+// Nome do bucket do plano que recebe o gasto da categoria (mesma regra do GetBalance do legado):
+// Kakeibo pelo nome; plano de 2 buckets (80/20) tudo no primeiro; com 3 ou mais, essencial no primeiro
+// e o resto no segundo. Base Zero (sem buckets) = null.
+String? planBucketFor(BudgetModelType model, List<BucketSummaryDTO> plan, Category? category) {
+    if (model == BudgetModelType.KAKEIBO) {
+        return toKakeiboBucket(category)
+    }
+    if (plan.size == 2) {
+        return plan.get(0).name
+    }
+    if (plan.size > 2) {
+        if (toStandardBucket(category) == Bucket.NEEDS) {
+            return plan.get(0).name
+        }
+        return plan.get(1).name
+    }
+    return null
+}
+
 Bucket toBucket(BudgetModelType model, Category? category) {
     if (model == BudgetModelType.KAKEIBO) {
         var kBucket = toKakeiboBucket(category)
@@ -154,7 +173,9 @@ GetBalanceOutput calculateBalance(String userId, String fromIso) {
             }
         }
 
-        return GetBalanceOutput(model.name(), resultBuckets, 0.0, 0.0)
+        // O legado devolve null nos dois campos fora do Base Zero; aqui vao o gasto do mes e o que sobra do salario.
+        var monthSpent = centsToReais(sumAmountCents(monthTransactions))
+        return GetBalanceOutput(model.name(), resultBuckets, monthSpent, salary - monthSpent)
     }
     throw "Usuário não encontrado."
 }

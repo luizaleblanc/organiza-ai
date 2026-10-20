@@ -1,0 +1,324 @@
+// backend/overview.kf
+// Visoes que o design Desktop do MVP 1 pede e que o legado nao tinha prontas: dashboard em JSON
+// (Tela 9), caixinhas por bucket com status (Tela 11), chips da Tela 7 -> caixinhas, notificacoes
+// (Tela 12), preferencias de e-mail e Open Finance demonstrativo (Tela 13).
+// Compartilha escopo com models.kf, services.kf, coach.kf e store.kf (mesmo diretorio).
+
+// =========================================================
+// Dinheiro em texto (mensagens das notificacoes): "R$ 1.234,56"
+// =========================================================
+
+String formatBrl(Long cents) {
+    var reais = String.valueOf(cents / 100)
+    var grouped = ""
+    var count = 0
+    var i = reais.length() - 1
+    while (i >= 0) {
+        if (count > 0 && count % 3 == 0) {
+            grouped = "." + grouped
+        }
+        grouped = reais.substring(i, i + 1) + grouped
+        count = count + 1
+        i = i - 1
+    }
+    var cent = cents % 100
+    var centText = String.valueOf(cent)
+    if (cent < 10) {
+        centText = "0" + centText
+    }
+    return "R$ " + grouped + "," + centText
+}
+
+// =========================================================
+// Caixinhas por bucket (Tela 11): gasto do mes, percentual e status
+// =========================================================
+
+record EnvelopeOverview(String id, String categoryName, String? bucket, Double limitAmount, Double spentThisMonth, Int percent, String status)
+
+// Status da caixinha pelo gasto do mes (design da Tela 11: 80% = Em dia, 90% = Alerta, 120% = Estourada).
+String envelopeStatus(Long spentCents, Long limitCents) {
+    if (spentCents > limitCents) {
+        return "ESTOURADA"
+    }
+    if (spentCents * 100 > limitCents * 80) {
+        return "ALERTA"
+    }
+    return "EM_DIA"
+}
+
+Int percentOf(Long spentCents, Long limitCents) {
+    if (limitCents <= 0) {
+        return 0
+    }
+    return math.roundTo(spentCents * 100.0 / limitCents, 0) as Int
+}
+
+EnvelopeOverview overviewOf(EnvelopeEntity e, BudgetModelType model, List<BucketSummaryDTO> plan, List<TransactionEntity> month) {
+    var spent = sumAmountCents(month.filter((t: TransactionEntity) -> t.envelopeId == e.id))
+    var limit = toCents(e.limitAmount)
+    return EnvelopeOverview(e.id, e.categoryName, planBucketFor(model, plan, Category.valueOf(e.categoryName)),
+        e.limitAmount, centsToReais(spent), percentOf(spent, limit), envelopeStatus(spent, limit))
+}
+
+List<EnvelopeOverview> envelopesOverview(UserEntity user) {
+    var plan = buildBudgetBuckets(user.budgetModel, userSalary(user))
+    var month = findTransactionsByUserIdAndCreatedAtAfter(user.id, monthStartIso())
+    return findEnvelopesByUserId(user.id).map((e: EnvelopeEntity) -> overviewOf(e, user.budgetModel, plan, month))
+}
+
+// =========================================================
+// Tela 7: chips de gastos -> caixinhas (regra fixa, decisao de 16/10: sem IA)
+// =========================================================
+
+record ChipsInput(List<String> fixed, List<String> variable)
+
+// Chip do design -> categoria da transacao. A caixinha leva o nome da categoria, para os gastos
+// dessa categoria cairem nela (resolveEnvelopeId). Dois chips da mesma categoria = uma caixinha.
+Map<String, String> chipCategories() {
+    var m: Map<String, String> = mapOf()
+    m.put("Aluguel", "HOUSING")
+    m.put("Contas", "HOUSING")
+    m.put("Faculdade", "EDUCATION")
+    m.put("Escola", "EDUCATION")
+    m.put("Transporte", "TRANSPORT")
+    m.put("Assinaturas", "SUBSCRIPTIONS")
+    m.put("Alimentação", "GROCERIES")
+    m.put("Delivery", "FOOD")
+    m.put("Lazer", "LEISURE")
+    m.put("Viagem", "LEISURE")
+    m.put("Roupas", "SHOPPING")
+    m.put("Farmácia", "PHARMA")
+    m.put("Pet", "OTHER")
+    return m
+}
+
+ChipsInput? decodeChipsInput(String raw) {
+    try {
+        var req = json.decode<ChipsInput>(raw)
+        if (req.fixed() == null || req.variable() == null) {
+            return null
+        }
+        return req
+    } catch (String e) {
+        return null
+    }
+}
+
+// null = valido; senao, a mensagem do 400.
+String? chipsError(List<String> chips) {
+    if (chips.isEmpty()) {
+        return "Escolha pelo menos um gasto."
+    }
+    var unknown = chips.find((c: String) -> !chipCategories().containsKey(c))
+    if (unknown != null) {
+        return "Gasto desconhecido: " + unknown
+    }
+    return null
+}
+
+// Limite = valor do bucket do plano dividido igualmente entre as categorias escolhidas que caem nele
+// (Base Zero nao tem buckets: limite 0). Categoria que ja tem caixinha nao ganha outra.
+Double chipLimit(List<BucketSummaryDTO> plan, String bucketName, Int share) {
+    // filter + get(0), nao find: no kof 0.6.6, ler campo do record devolvido por List.find gera bytecode
+    // invalido (VerifyError "Method owner: expected LBucketSummaryDTO;", repro p23/repro/find).
+    var matches = plan.filter((b: BucketSummaryDTO) -> b.name == bucketName)
+    if (matches.isEmpty() || share <= 0) {
+        return 0.0
+    }
+    return math.roundTo(matches.get(0).amount / (share * 1.0), 2)
+}
+
+List<EnvelopeEntity> createEnvelopesFromChips(UserEntity user, List<String> chips) {
+    var model = user.budgetModel
+    var plan = buildBudgetBuckets(model, userSalary(user))
+    var categories = chips.map((c: String) -> chipCategories().getOrDefault(c, "OTHER")).distinct()
+    var byBucket = categories.groupBy((c: String) -> nullToText(planBucketFor(model, plan, Category.valueOf(c))))
+    var existing = findEnvelopesByUserId(user.id).map((e: EnvelopeEntity) -> e.categoryName)
+    return categories.filter((c: String) -> !existing.contains(c))
+        .map((c: String) -> createChipEnvelope(user, plan, byBucket, c))
+}
+
+EnvelopeEntity createChipEnvelope(UserEntity user, List<BucketSummaryDTO> plan, Map<String, List<String>> byBucket, String category) {
+    var bucket = nullToText(planBucketFor(user.budgetModel, plan, Category.valueOf(category)))
+    var limit = chipLimit(plan, bucket, byBucket.getOrDefault(bucket, listOf()).size)
+    return createEnvelope(EnvelopeEntity("", user.id, category, limit, 0.0, EnvelopeLimitType.FIXED, 0, nowIso()))
+}
+
+// =========================================================
+// Dashboard (Tela 9): JSON real, sem valores fixos
+// =========================================================
+
+record CategoryTotal(String category, Double total, Int count, Double percentage)
+record ReserveSummary(Double accumulated, Double goal, Bool hasGoal, Int percent)
+record DashboardResponse(String period, String from, Double totalSpent, String currency, Double salary,
+    Double pulse, Int daysRemaining, String budgetModel, List<BucketBalanceDTO> buckets, ReserveSummary reserve,
+    List<CategoryTotal> categories, List<TransactionOutput> recentTransactions)
+
+// ?period= da Tela 9 (Semana/Mes/Ano); ausente = mes. null = periodo invalido (400).
+String? periodUnit(String? period) {
+    if (period == null) {
+        return "month"
+    }
+    var units = mapOf("week", "week", "month", "month", "year", "year")
+    return units.get(period)
+}
+
+Long reserveCents(String userId) {
+    var zero: Long = 0
+    return findVariableIncomesByUserId(userId)
+        .filter((inc: VariableIncomeEntity) -> inc.destination == VariableIncomeDestination.EMERGENCY_FUND)
+        .map((inc: VariableIncomeEntity) -> toCents(inc.amount))
+        .reduce((a: Long, b: Long) -> a + b, zero)
+}
+
+ReserveSummary reserveOf(UserEntity user) {
+    var accumulated = reserveCents(user.id)
+    var goal: Long = 0
+    if (user.hasEmergencyGoal) {
+        goal = user.emergencyGoalCents
+    }
+    return ReserveSummary(centsToReais(accumulated), centsToReais(goal), user.hasEmergencyGoal, percentOf(accumulated, goal))
+}
+
+List<CategoryTotal> categoryTotals(List<TransactionEntity> transactions) {
+    var total = sumAmountCents(transactions)
+    var groups = transactions.groupBy((t: TransactionEntity) -> categoryText(t.category))
+    var totals = groups.keys().map((name: String) -> categoryTotalOf(name, groups.getOrDefault(name, listOf()), total))
+    return totals.sorted((a: CategoryTotal, b: CategoryTotal) -> compareTotals(a, b))
+}
+
+CategoryTotal categoryTotalOf(String name, List<TransactionEntity> items, Long totalCents) {
+    var cents = sumAmountCents(items)
+    var share = 0.0
+    if (totalCents > 0) {
+        share = math.roundTo(cents * 100.0 / totalCents, 2)
+    }
+    var label = name
+    if (label == "") {
+        label = "OTHER"
+    }
+    return CategoryTotal(label, centsToReais(cents), items.size, share)
+}
+
+// Maior total primeiro; empate pelo nome (ordem estavel entre execucoes).
+Int compareTotals(CategoryTotal a, CategoryTotal b) {
+    if (a.total() > b.total()) {
+        return -1
+    }
+    if (a.total() < b.total()) {
+        return 1
+    }
+    return a.category().compareTo(b.category())
+}
+
+DashboardResponse dashboardOf(UserEntity user, String period, String unit) {
+    var from = periodStartIso(unit)
+    var transactions = findTransactionsByUserIdAndCreatedAtAfter(user.id, from)
+    var monthStart = monthStartIso()
+    var pulse = calculateDailyPulse(user.id, daysRemainingInMonth(), monthStart)
+    var balance = calculateBalance(user.id, monthStart)
+    var recent = findRecentTransactions(user.id, from, 5).map((t: TransactionEntity) -> transactionEntityToOutput(t))
+    return DashboardResponse(period, from, centsToReais(sumAmountCents(transactions)), "BRL", userSalary(user),
+        pulse.pulse, pulse.daysRemaining, user.budgetModel.name(), balance.buckets, reserveOf(user),
+        categoryTotals(transactions), recent)
+}
+
+// =========================================================
+// Notificacoes (Tela 12): geradas por regra e gravadas (marcar como lidas)
+// =========================================================
+
+record NotificationOutput(String id, String kind, String title, String message, String createdAt, Bool read)
+
+// Depois de um gasto numa caixinha: avisa quando ela PASSA para Alerta ou Estourada (uma vez por mes e status).
+void notifyEnvelopeCrossing(String userId, String envelopeId, Long amountCents) {
+    var env = findEnvelopeById(userId, envelopeId)
+    if (env != null) {
+        notifyCrossingOf(env, amountCents)
+    }
+}
+
+void notifyCrossingOf(EnvelopeEntity env, Long amountCents) {
+    var userId = env.userId
+    var envelopeId = env.id
+    var month = findTransactionsByUserIdAndCreatedAtAfter(userId, monthStartIso())
+    var after = sumAmountCents(month.filter((t: TransactionEntity) -> t.envelopeId == envelopeId))
+    var limit = toCents(env.limitAmount)
+    var now = envelopeStatus(after, limit)
+    if (now == "EM_DIA" || now == envelopeStatus(after - amountCents, limit)) {
+        return
+    }
+    var key = localTodayIso().substring(0, 7) + ":" + envelopeId + ":" + now
+    var detail = "Você já gastou " + formatBrl(after) + " de " + formatBrl(limit) + " em " + env.categoryName + " (" + percentOf(after, limit) + "%)."
+    if (now == "ESTOURADA") {
+        insertNotificationOnce(userId, "ENVELOPE_EXCEEDED", "Você estourou a caixinha " + env.categoryName, detail, key)
+    } else {
+        insertNotificationOnce(userId, "ENVELOPE_ALERT", env.categoryName + " quase no limite", detail, key)
+    }
+}
+
+// Depois de uma renda variavel: avisa quando a reserva alcanca a meta (uma vez por valor de meta).
+void notifyReserveGoal(UserEntity user) {
+    if (!user.hasEmergencyGoal || user.emergencyGoalCents <= 0) {
+        return
+    }
+    var accumulated = reserveCents(user.id)
+    if (accumulated >= user.emergencyGoalCents) {
+        insertNotificationOnce(user.id, "GOAL_REACHED", "Meta batida! Reserva de emergência",
+            "Você juntou " + formatBrl(accumulated) + " na reserva. Continue assim.", "goal:" + user.emergencyGoalCents)
+    }
+}
+
+// Avisos do dia, criados na primeira leitura do dia: o pulso (com salario) e o lembrete (sem gasto hoje).
+void ensureDailyNotifications(UserEntity user) {
+    var today = localTodayIso()
+    if (userSalary(user) > 0.0) {
+        var pulse = calculateDailyPulse(user.id, daysRemainingInMonth(), monthStartIso())
+        insertNotificationOnce(user.id, "DAILY_PULSE", "Seu pulso de hoje",
+            "Você pode gastar " + formatBrl(toCents(pulse.pulse)) + " hoje sem sair do combinado.", today)
+    }
+    if (findTransactionsByUserIdAndCreatedAtAfter(user.id, periodStartIso("day")).isEmpty()) {
+        insertNotificationOnce(user.id, "REMINDER", "Já organizou seus gastos hoje?",
+            "Diz ao Organiza quanto você gastou que ele calcula seu pulso pra você terminar o mês no azul.", today)
+    }
+}
+
+// =========================================================
+// Preferencias (Tela 13): e-mail diario/semanal/nunca e push
+// =========================================================
+
+record PreferencesInput(Bool emailEnabled, String frequency, Bool pushEnabled)
+
+PreferencesInput? decodePreferencesInput(String raw) {
+    try {
+        var req = json.decode<PreferencesInput>(raw)
+        if (req.frequency() == null) {
+            return null
+        }
+        return req
+    } catch (String e) {
+        return null
+    }
+}
+
+String? preferencesError(PreferencesInput req) {
+    if (!setOf("DAILY", "WEEKLY", "NEVER").contains(req.frequency())) {
+        return "Frequência inválida: use DAILY, WEEKLY ou NEVER."
+    }
+    return null
+}
+
+// =========================================================
+// Open Finance (Tela 13): DEMONSTRACAO do MVP 1, sem integracao bancaria real
+// =========================================================
+
+record OpenFinanceDemo(Bool demo, String notice, List<String> banks)
+record OpenFinanceConnectInput(String bank)
+record OpenFinanceConnectResult(Bool demo, String bank, String status, String notice)
+
+List<String> openFinanceDemoBanks() {
+    return listOf("Caixa", "Nubank", "Banco do Brasil", "Bradesco", "Itaú")
+}
+
+String openFinanceNotice() {
+    return "Demonstração do MVP 1: nenhuma conta é conectada e nenhum dado bancário é lido."
+}

@@ -95,10 +95,15 @@ String localTodayIso() {
     return time.formatInstantIso(time.now() + tzOffsetMillis()).substring(0, 10)
 }
 
-// Meia-noite local do dia 1 do mes corrente, como instante UTC (corte das consultas do mes).
-String monthStartIso() {
-    var firstDay: Long = time.parseDateIso(time.startOf(localTodayIso(), "month"))
+// Meia-noite local do primeiro dia do periodo ("day", "week" = segunda, "month", "year") como instante
+// UTC: o corte das consultas do periodo.
+String periodStartIso(String unit) {
+    var firstDay: Long = time.parseDateIso(time.startOf(localTodayIso(), unit))
     return time.formatInstantIso(firstDay * 86400000 - tzOffsetMillis())
+}
+
+String monthStartIso() {
+    return periodStartIso("month")
 }
 
 // Dias que faltam no mes contando hoje (legado: lengthOfMonth - dayOfMonth + 1).

@@ -427,9 +427,25 @@ try {
         Expect ($r.Status -eq 200 -and @($list | Where-Object { $_.amount -eq 500.0 }).Count -eq 1) "$($r.Status) $($r.Body)"
     }
 
-    Test-Step "GET /api/dashboard soma o gasto real (600.0|BRL|...)" {
+    Test-Step "GET /api/dashboard em JSON real: total, pulso, buckets, categorias e últimas transações (Tela 9)" {
         $r = Invoke-Api "GET" "/api/dashboard" $script:token
-        Expect ($r.Status -eq 200 -and $r.Body.StartsWith("600.0|BRL|")) "$($r.Status) $($r.Body)"
+        $j = $r.Body | ConvertFrom-Json
+        $b = @($j.buckets); $c = @($j.categories); $t = @($j.recentTransactions)
+        Expect ($r.Status -eq 200 -and $j.period -eq "month" -and $j.totalSpent -eq 600.0 -and $j.currency -eq "BRL" -and $j.salary -eq 3000.0 -and $j.daysRemaining -eq (Get-DaysRemaining) -and $j.pulse -eq (Get-ExpectedPulse 2400) -and $j.budgetModel -eq "SURVIVAL_702010" -and $b.Count -eq 3 -and $b[1].name -ceq "Folga" -and $b[1].spentAmount -eq 600.0 -and $c.Count -eq 1 -and $c[0].category -eq "FOOD" -and $c[0].percentage -eq 100.0 -and $t.Count -eq 1 -and $t[0].value -eq 600.0 -and $j.reserve.accumulated -eq 0.0) "$($r.Status) $($r.Body)"
+    }
+
+    Test-Step "GET /api/dashboard?period=week|year somam o gasto de hoje; period inválido = 400" {
+        $w = (Invoke-Api "GET" "/api/dashboard?period=week" $script:token).Body | ConvertFrom-Json
+        $y = (Invoke-Api "GET" "/api/dashboard?period=year" $script:token).Body | ConvertFrom-Json
+        $bad = Invoke-Api "GET" "/api/dashboard?period=dia" $script:token
+        Expect ($w.period -eq "week" -and $w.totalSpent -eq 600.0 -and $y.totalSpent -eq 600.0 -and $bad.Status -eq 400) "week=$($w.totalSpent) year=$($y.totalSpent) inválido=$($bad.Status) $($bad.Body)"
+    }
+
+    Test-Step "GET /api/budgets/balance (GetBalance): Folga com 600 gastos, totalSpent 600, notAllocated 2400" {
+        $r = Invoke-Api "GET" "/api/budgets/balance" $script:token
+        $j = $r.Body | ConvertFrom-Json
+        $b = @($j.buckets)
+        Expect ($r.Status -eq 200 -and $j.model -eq "SURVIVAL_702010" -and $b[0].spentAmount -eq 0.0 -and $b[1].spentAmount -eq 600.0 -and $b[1].remainingAmount -eq 0.0 -and $j.totalSpent -eq 600.0 -and $j.notAllocated -eq 2400.0) "$($r.Status) $($r.Body)"
     }
 
     Test-Step "GET /api/users/tier-status conta as mensagens do chat" {
@@ -510,6 +526,153 @@ try {
         $r = Invoke-Api "GET" "/api/budgets/daily-pulse" $script:token
         $j = $r.Body | ConvertFrom-Json
         Expect ($r.Status -eq 200 -and $j.pulse -eq (Get-ExpectedPulse 2400) -and $j.totalSpent -eq 600.0) "$($r.Status) $($r.Body)"
+    }
+
+    # ---- Fase 3: rotas do Desktop (usuário D isolado, para não mexer nos totais de A) ----
+    $script:tokenD = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Duda Desktop"; email = "d_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaDaD123" } | ConvertTo-Json -Compress)).Body
+    $script:tokenE = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Edu Sem Onboarding"; email = "e_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaDoE123" } | ConvertTo-Json -Compress)).Body
+    $chips = (@{ fixed = @("Aluguel", "Contas", "Transporte"); variable = @("Alimentação", "Delivery") } | ConvertTo-Json -Compress)
+
+    Test-Step "Chips antes do onboarding = 409; chip desconhecido e lista vazia = 400" {
+        $r1 = Invoke-Api "POST" "/api/envelopes/from-chips" $script:tokenE $chips
+        $r2 = Invoke-Api "POST" "/api/envelopes/from-chips" $script:tokenE (@{ fixed = @("Iate"); variable = @() } | ConvertTo-Json -Compress)
+        $r3 = Invoke-Api "POST" "/api/envelopes/from-chips" $script:tokenE '{"fixed":[],"variable":[]}'
+        $r4 = Invoke-Api "POST" "/api/envelopes/from-chips" $script:tokenE '{"fixed":["Aluguel"]}'
+        Expect ($r1.Status -eq 409 -and $r2.Status -eq 400 -and ($r2.Body | ConvertFrom-Json).error -ceq "Gasto desconhecido: Iate" -and $r3.Status -eq 400 -and $r4.Status -eq 400) "$($r1.Status) | $($r2.Status) $($r2.Body) | $($r3.Status) | $($r4.Status)"
+    }
+
+    Test-Step "Tela 7: chips viram 4 caixinhas por regra fixa (SURVIVAL: 2100/3 = 700 por necessidade, Folga 600 no FOOD)" {
+        Invoke-Api "POST" "/api/users/onboarding" $script:tokenD (@{ salary = 3000.0; incomeType = "FIXED"; hasDebt = $false } | ConvertTo-Json -Compress) | Out-Null
+        $r = Invoke-Api "POST" "/api/envelopes/from-chips" $script:tokenD $chips
+        $l = (ConvertFrom-JsonList $r.Body)
+        $lim = @{}; foreach ($e in $l) { $lim[$e.categoryName] = $e.limitAmount }
+        $again = (ConvertFrom-JsonList (Invoke-Api "POST" "/api/envelopes/from-chips" $script:tokenD $chips).Body)
+        Expect ($r.Status -eq 200 -and $l.Count -eq 4 -and $lim["HOUSING"] -eq 700.0 -and $lim["TRANSPORT"] -eq 700.0 -and $lim["GROCERIES"] -eq 700.0 -and $lim["FOOD"] -eq 600.0 -and $again.Count -eq 0) "$($r.Status) $($r.Body) | 2ª chamada: $($again.Count)"
+    }
+
+    Test-Step "Gastos no FOOD: 500 = Alerta (83%) e +200 = Estourada; notificações geradas uma vez cada" {
+        Invoke-Api "POST" "/api/transactions" $script:tokenD (@{ description = "iFood"; amount = 500; category = "FOOD"; currency = "BRL" } | ConvertTo-Json -Compress) | Out-Null
+        $o1 = @((ConvertFrom-JsonList (Invoke-Api "GET" "/api/envelopes/overview" $script:tokenD).Body) | Where-Object { $_.categoryName -eq "FOOD" })[0]
+        Invoke-Api "POST" "/api/transactions" $script:tokenD (@{ description = "Delivery"; amount = 200; category = "FOOD"; currency = "BRL" } | ConvertTo-Json -Compress) | Out-Null
+        $ov = (ConvertFrom-JsonList (Invoke-Api "GET" "/api/envelopes/overview" $script:tokenD).Body)
+        $o2 = @($ov | Where-Object { $_.categoryName -eq "FOOD" })[0]
+        $h = @($ov | Where-Object { $_.categoryName -eq "HOUSING" })[0]
+        $n = (ConvertFrom-JsonList (Invoke-Api "GET" "/api/notifications" $script:tokenD).Body)
+        $alert = @($n | Where-Object { $_.kind -eq "ENVELOPE_ALERT" }); $over = @($n | Where-Object { $_.kind -eq "ENVELOPE_EXCEEDED" })
+        Expect ($o1.status -eq "ALERTA" -and $o1.percent -eq 83 -and $o2.status -eq "ESTOURADA" -and $o2.spentThisMonth -eq 700.0 -and $o2.percent -eq 117 -and $o2.bucket -ceq "Folga" -and $h.status -eq "EM_DIA" -and $h.bucket -ceq "Necessidades" -and $alert.Count -eq 1 -and $over.Count -eq 1 -and $over[0].title -ceq "Você estourou a caixinha FOOD" -and $over[0].message -like "*R$ 700,00 de R$ 600,00*(117%)*") "o1=$($o1 | ConvertTo-Json -Compress) o2=$($o2 | ConvertTo-Json -Compress) notif=$($n | ConvertTo-Json -Compress)"
+    }
+
+    Test-Step "Notificações: pulso do dia uma vez, sem lembrete (houve gasto hoje); marcar todas como lidas = 204" {
+        $n1 = (ConvertFrom-JsonList (Invoke-Api "GET" "/api/notifications" $script:tokenD).Body)
+        $rr = Invoke-Api "POST" "/api/notifications/read-all" $script:tokenD
+        $n2 = (ConvertFrom-JsonList (Invoke-Api "GET" "/api/notifications" $script:tokenD).Body)
+        Expect (@($n1 | Where-Object { $_.kind -eq "DAILY_PULSE" }).Count -eq 1 -and @($n1 | Where-Object { $_.kind -eq "REMINDER" }).Count -eq 0 -and @($n1 | Where-Object { $_.read -eq $false }).Count -ge 3 -and $rr.Status -eq 204 -and $n2.Count -eq $n1.Count -and @($n2 | Where-Object { $_.read -eq $false }).Count -eq 0) "antes=$($n1 | ConvertTo-Json -Compress) read-all=$($rr.Status) depois=$($n2 | ConvertTo-Json -Compress)"
+    }
+
+    Test-Step "Notificações sem salário e sem gasto: só o lembrete; as de D não aparecem para E (IDOR)" {
+        $n = (ConvertFrom-JsonList (Invoke-Api "GET" "/api/notifications" $script:tokenE).Body)
+        Expect ($n.Count -eq 1 -and $n[0].kind -eq "REMINDER") "$($n | ConvertTo-Json -Compress)"
+    }
+
+    Test-Step "PUT /api/envelopes/{id}: altera limite e tipo (padrão FIXED/3 meses) e mantém o gasto" {
+        $food = @((ConvertFrom-JsonList (Invoke-Api "GET" "/api/envelopes" $script:tokenD).Body) | Where-Object { $_.categoryName -eq "FOOD" })[0]
+        $script:foodD = $food.id
+        $r = Invoke-Api "PUT" "/api/envelopes/$($food.id)" $script:tokenD (@{ categoryName = "FOOD"; limitAmount = 800.0 } | ConvertTo-Json -Compress)
+        $j = $r.Body | ConvertFrom-Json
+        $ov = @((ConvertFrom-JsonList (Invoke-Api "GET" "/api/envelopes/overview" $script:tokenD).Body) | Where-Object { $_.categoryName -eq "FOOD" })[0]
+        Expect ($r.Status -eq 200 -and $j.id -eq $food.id -and $j.limitAmount -eq 800.0 -and $j.currentSpent -eq 700.0 -and $j.movingAverageMonths -eq 3 -and $ov.status -eq "ALERTA") "$($r.Status) $($r.Body) | overview=$($ov | ConvertTo-Json -Compress)"
+    }
+
+    Test-Step "PUT envelope: corpo inválido, limite negativo e tipo inválido = 400; id inexistente = 404" {
+        $id = $script:foodD
+        $a = Invoke-Api "PUT" "/api/envelopes/$id" $script:tokenD "{nao json"
+        $b = Invoke-Api "PUT" "/api/envelopes/$id" $script:tokenD (@{ categoryName = "FOOD"; limitAmount = -1.0 } | ConvertTo-Json -Compress)
+        $c = Invoke-Api "PUT" "/api/envelopes/$id" $script:tokenD (@{ categoryName = "FOOD"; limitAmount = 10.0; limitType = "SEMANAL" } | ConvertTo-Json -Compress)
+        $d = Invoke-Api "PUT" "/api/envelopes/999999999" $script:tokenD (@{ categoryName = "FOOD"; limitAmount = 10.0 } | ConvertTo-Json -Compress)
+        $e = Invoke-Api "PUT" "/api/envelopes/abc" $script:tokenD (@{ categoryName = "FOOD"; limitAmount = 10.0 } | ConvertTo-Json -Compress)
+        Expect ($a.Status -eq 400 -and $b.Status -eq 400 -and $c.Status -eq 400 -and $d.Status -eq 404 -and $e.Status -eq 404) "$($a.Status) $($b.Status) $($c.Status) $($d.Status) $($e.Status)"
+    }
+
+    Test-Step "IDOR: B não altera nem apaga a caixinha de D (404) e ela continua igual" {
+        $id = $script:foodD
+        $p = Invoke-Api "PUT" "/api/envelopes/$id" $script:tokenB (@{ categoryName = "HACK"; limitAmount = 1.0 } | ConvertTo-Json -Compress)
+        $d = Invoke-Api "DELETE" "/api/envelopes/$id" $script:tokenB
+        $food = @((ConvertFrom-JsonList (Invoke-Api "GET" "/api/envelopes" $script:tokenD).Body) | Where-Object { $_.id -eq $id })
+        Expect ($p.Status -eq 404 -and $d.Status -eq 404 -and $food.Count -eq 1 -and $food[0].categoryName -eq "FOOD" -and $food[0].limitAmount -eq 800.0) "PUT=$($p.Status) DELETE=$($d.Status) envelope=$($food | ConvertTo-Json -Compress)"
+    }
+
+    Test-Step "DELETE /api/envelopes/{id} = 204, some da lista; 2º DELETE = 404" {
+        $h = @((ConvertFrom-JsonList (Invoke-Api "GET" "/api/envelopes" $script:tokenD).Body) | Where-Object { $_.categoryName -eq "HOUSING" })[0]
+        $r1 = Invoke-Api "DELETE" "/api/envelopes/$($h.id)" $script:tokenD
+        $r2 = Invoke-Api "DELETE" "/api/envelopes/$($h.id)" $script:tokenD
+        $left = (ConvertFrom-JsonList (Invoke-Api "GET" "/api/envelopes" $script:tokenD).Body)
+        Expect ($r1.Status -eq 204 -and $r2.Status -eq 404 -and $left.Count -eq 3 -and @($left | Where-Object { $_.categoryName -eq "HOUSING" }).Count -eq 0) "$($r1.Status) $($r2.Status) restantes=$($left.Count)"
+    }
+
+    Test-Step "GET /api/transactions/{category} e /summary (legado); categoria inválida = 400; B não vê as de D" {
+        $f = (ConvertFrom-JsonList (Invoke-Api "GET" "/api/transactions/FOOD" $script:tokenD).Body)
+        $x = Invoke-Api "GET" "/api/transactions/XYZ" $script:tokenD
+        $s = (Invoke-Api "GET" "/api/transactions/summary" $script:tokenD).Body | ConvertFrom-Json
+        $fb = (ConvertFrom-JsonList (Invoke-Api "GET" "/api/transactions/FOOD" $script:tokenB).Body)
+        Expect ($f.Count -eq 2 -and $x.Status -eq 400 -and $s.FOOD -eq 700.0 -and $fb.Count -eq 0) "FOOD=$($f.Count) XYZ=$($x.Status) summary=$($s | ConvertTo-Json -Compress) B=$($fb.Count)"
+    }
+
+    Test-Step "PATCH /api/users/me/salary 6000 migra SURVIVAL → STANDARD (BudgetModelMigrationService); 0 e corpo inválido = 400" {
+        $r = Invoke-Api "PATCH" "/api/users/me/salary" $script:tokenD (@{ salary = 6000.0 } | ConvertTo-Json -Compress)
+        $j = $r.Body | ConvertFrom-Json
+        $z = Invoke-Api "PATCH" "/api/users/me/salary" $script:tokenD (@{ salary = 0 } | ConvertTo-Json -Compress)
+        $bad = Invoke-Api "PATCH" "/api/users/me/salary" $script:tokenD '{"salary":"muito"}'
+        $p = (Invoke-Api "GET" "/api/budgets/daily-pulse" $script:tokenD).Body | ConvertFrom-Json
+        Expect ($r.Status -eq 200 -and $j.salary -eq 6000.0 -and $j.previousModel -eq "SURVIVAL_702010" -and $j.budgetModel -eq "STANDARD_503020" -and $j.migrated -eq $true -and @($j.buckets)[0].amount -eq 3000.0 -and $z.Status -eq 400 -and $bad.Status -eq 400 -and $p.salary -eq 6000.0) "$($r.Status) $($r.Body) | 0=$($z.Status) inválido=$($bad.Status)"
+    }
+
+    Test-Step "PUT /api/users/me/budget-model (#11): KAKEIBO com 4 buckets; modelo inválido = 400" {
+        $r = Invoke-Api "PUT" "/api/users/me/budget-model" $script:tokenD (@{ model = "KAKEIBO" } | ConvertTo-Json -Compress)
+        $j = $r.Body | ConvertFrom-Json
+        $bad = Invoke-Api "PUT" "/api/users/me/budget-model" $script:tokenD (@{ model = "TUDO_NO_LAZER" } | ConvertTo-Json -Compress)
+        $bal = (Invoke-Api "GET" "/api/budgets/balance" $script:tokenD).Body | ConvertFrom-Json
+        Expect ($r.Status -eq 200 -and $j.suggestedModel -eq "KAKEIBO" -and @($j.buckets).Count -eq 4 -and $bad.Status -eq 400 -and $bal.model -eq "KAKEIBO" -and @($bal.buckets)[2].spentAmount -eq 700.0) "$($r.Status) $($r.Body) | inválido=$($bad.Status) | balance=$($bal | ConvertTo-Json -Compress -Depth 4)"
+    }
+
+    Test-Step "Meta da reserva: renda variável vai para a reserva até a meta; dashboard mostra a reserva; aviso de meta batida" {
+        $g = Invoke-Api "PUT" "/api/users/me/emergency-goal" $script:tokenD (@{ goal = 100.0 } | ConvertTo-Json -Compress)
+        $neg = Invoke-Api "PUT" "/api/users/me/emergency-goal" $script:tokenD (@{ goal = -1.0 } | ConvertTo-Json -Compress)
+        $v1 = (Invoke-Api "POST" "/api/variable-income" $script:tokenD (@{ amount = 150.0; source = "freela" } | ConvertTo-Json -Compress)).Body | ConvertFrom-Json
+        $v2 = (Invoke-Api "POST" "/api/variable-income" $script:tokenD (@{ amount = 50.0; source = "bico" } | ConvertTo-Json -Compress)).Body | ConvertFrom-Json
+        $dash = (Invoke-Api "GET" "/api/dashboard" $script:tokenD).Body | ConvertFrom-Json
+        $n = (ConvertFrom-JsonList (Invoke-Api "GET" "/api/notifications" $script:tokenD).Body)
+        Expect ($g.Status -eq 200 -and ($g.Body | ConvertFrom-Json).hasGoal -eq $true -and $neg.Status -eq 400 -and $v1.destination -eq "EMERGENCY_FUND" -and $v2.destination -eq "BUDGET_5030020" -and $dash.reserve.accumulated -eq 150.0 -and $dash.reserve.goal -eq 100.0 -and $dash.reserve.percent -eq 150 -and @($n | Where-Object { $_.kind -eq "GOAL_REACHED" }).Count -eq 1) "meta=$($g.Status) neg=$($neg.Status) v1=$($v1.destination) v2=$($v2.destination) reserva=$($dash.reserve | ConvertTo-Json -Compress)"
+    }
+
+    Test-Step "Preferências (Tela 13): padrão DAILY/e-mail ligado; PUT grava; frequência inválida = 400; não vaza para E" {
+        $d0 = (Invoke-Api "GET" "/api/users/me/preferences" $script:tokenD).Body | ConvertFrom-Json
+        $p = Invoke-Api "PUT" "/api/users/me/preferences" $script:tokenD (@{ emailEnabled = $false; frequency = "WEEKLY"; pushEnabled = $true } | ConvertTo-Json -Compress)
+        $d1 = (Invoke-Api "GET" "/api/users/me/preferences" $script:tokenD).Body | ConvertFrom-Json
+        $bad = Invoke-Api "PUT" "/api/users/me/preferences" $script:tokenD (@{ emailEnabled = $true; frequency = "HORA"; pushEnabled = $false } | ConvertTo-Json -Compress)
+        $e = (Invoke-Api "GET" "/api/users/me/preferences" $script:tokenE).Body | ConvertFrom-Json
+        Expect ($d0.emailEnabled -eq $true -and $d0.frequency -eq "DAILY" -and $d0.pushEnabled -eq $false -and $p.Status -eq 200 -and $d1.emailEnabled -eq $false -and $d1.frequency -eq "WEEKLY" -and $d1.pushEnabled -eq $true -and $bad.Status -eq 400 -and $e.frequency -eq "DAILY") "padrão=$($d0 | ConvertTo-Json -Compress) depois=$($d1 | ConvertTo-Json -Compress) inválido=$($bad.Status) E=$($e | ConvertTo-Json -Compress)"
+    }
+
+    Test-Step "Open Finance DEMO: 5 bancos marcados como demonstração; conectar não conecta nada; banco fora = 400" {
+        $b = (Invoke-Api "GET" "/api/open-finance/banks" $script:tokenD).Body | ConvertFrom-Json
+        $c = (Invoke-Api "POST" "/api/open-finance/connect" $script:tokenD (@{ bank = "Nubank" } | ConvertTo-Json -Compress)).Body | ConvertFrom-Json
+        $x = Invoke-Api "POST" "/api/open-finance/connect" $script:tokenD (@{ bank = "Banco Imaginário" } | ConvertTo-Json -Compress)
+        $tx = (ConvertFrom-JsonList (Invoke-Api "GET" "/api/transactions" $script:tokenD).Body)
+        Expect ($b.demo -eq $true -and @($b.banks).Count -eq 5 -and $b.notice -like "Demonstração*" -and $c.demo -eq $true -and $c.status -eq "DEMO_NAO_CONECTADO" -and $x.Status -eq 400 -and $tx.Count -eq 2) "banks=$($b | ConvertTo-Json -Compress) connect=$($c | ConvertTo-Json -Compress) fora=$($x.Status) transações=$($tx.Count)"
+    }
+
+    Test-Step "Rotas novas sem token = 401" {
+        $codes = @(
+            (Invoke-Api "GET" "/api/dashboard?period=week").Status, (Invoke-Api "GET" "/api/budgets/balance").Status,
+            (Invoke-Api "GET" "/api/envelopes/overview").Status, (Invoke-Api "POST" "/api/envelopes/from-chips" "" $chips).Status,
+            (Invoke-Api "PUT" "/api/envelopes/1" "" '{"categoryName":"X","limitAmount":1}').Status, (Invoke-Api "DELETE" "/api/envelopes/1").Status,
+            (Invoke-Api "GET" "/api/transactions/FOOD").Status, (Invoke-Api "GET" "/api/transactions/summary").Status,
+            (Invoke-Api "PATCH" "/api/users/me/salary" "" '{"salary":1}').Status, (Invoke-Api "PUT" "/api/users/me/budget-model" "" '{"model":"KAKEIBO"}').Status,
+            (Invoke-Api "PUT" "/api/users/me/emergency-goal" "" '{"goal":1}').Status, (Invoke-Api "GET" "/api/notifications").Status,
+            (Invoke-Api "POST" "/api/notifications/read-all").Status, (Invoke-Api "GET" "/api/users/me/preferences").Status,
+            (Invoke-Api "PUT" "/api/users/me/preferences" "" '{"emailEnabled":true,"frequency":"DAILY","pushEnabled":false}').Status,
+            (Invoke-Api "GET" "/api/open-finance/banks").Status, (Invoke-Api "POST" "/api/open-finance/connect" "" '{"bank":"Nubank"}').Status)
+        Expect (@($codes | Where-Object { $_ -eq 401 }).Count -eq $codes.Count) "códigos: $($codes -join ',')"
     }
 
     Test-Step "Login: 6ª tentativa no mesmo e-mail em 1 minuto = 429" {

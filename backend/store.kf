@@ -84,6 +84,27 @@ entity KakeiboReflectionRow {
     createdAt: String
 }
 
+// Notificacoes da Tela 12 (overview.kf). dayKey evita repetir o mesmo aviso (dia, mes ou meta).
+entity NotificationRow {
+    id: Long generated
+    userId: Long
+    kind: String
+    title: String
+    message: String
+    dayKey: String
+    createdAt: String
+    readFlag: Bool
+}
+
+// Preferencias da Tela 13 (e-mail DAILY/WEEKLY/NEVER e push). Uma linha por usuario.
+entity PreferenceRow {
+    id: Long generated
+    userId: Long unique
+    emailEnabled: Bool
+    frequency: String
+    pushEnabled: Bool
+}
+
 // Conexao principal do processo, compartilhada pelas requisicoes (o servidor do kof.web atende cada
 // conexao numa virtual thread: JvmRuntimeWebServer, Thread.startVirtualThread). O db.connect do runtime
 // registra a conexao e a torna a "ultima aberta" (kof_db_register), que e a que o transaction {} usa.
@@ -241,6 +262,8 @@ void ensureSchema(String db) {
     orm.create<ChatMessageRow>(db)
     orm.create<VariableIncomeRow>(db)
     orm.create<KakeiboReflectionRow>(db)
+    orm.create<NotificationRow>(db)
+    orm.create<PreferenceRow>(db)
 }
 
 // Abre uma conexao nova com a URL final (DbConn.url) e as credenciais separadas. Falha de rede ou de
@@ -691,6 +714,20 @@ List<TransactionEntity> findTransactionsByUserIdAndCreatedAtAfter(String userId,
     return rows.map((r: TransactionRow) -> transactionFromRow(r))
 }
 
+// As n mais recentes do periodo (id decrescente), para "Ultimas transacoes" do dashboard.
+List<TransactionEntity> findRecentTransactions(String userId, String from, Int n) {
+    if (!strings.isNumeric(userId)) {
+        return listOf()
+    }
+    var uid = userId.toLong()
+    var rows = TransactionRow.query(DbConn.handle) {
+        where userId == uid
+        where createdAt >= from
+        orderBy id desc
+    }
+    return rows.take(n).map((r: TransactionRow) -> transactionFromRow(r))
+}
+
 void deleteTransactionsByUserId(String userId) {
     if (strings.isNumeric(userId)) {
         var uid = userId.toLong()
@@ -826,4 +863,83 @@ KakeiboReflectionEntity saveKakeiboReflection(KakeiboReflectionEntity reflection
     var row = KakeiboReflectionRow(id, reflection.userId.toLong(), reflection.weekStart,
         json.encode(reflection.answers), nullToText(reflection.createdAt))
     return kakeiboFromRow(orm.save(DbConn.handle, row))
+}
+
+// =========================================================
+// Notificacoes e preferencias (Telas 12 e 13): sempre filtradas pelo dono.
+// =========================================================
+
+NotificationOutput notificationFromRow(NotificationRow row) {
+    return NotificationOutput(String.valueOf(row.id()), row.kind(), row.title(), row.message(), row.createdAt(), row.readFlag())
+}
+
+// Grava o aviso so se o mesmo (usuario, tipo, chave) ainda nao existe.
+void insertNotificationOnce(String userId, String kind, String title, String message, String dayKey) {
+    if (!strings.isNumeric(userId)) {
+        return
+    }
+    var uid = userId.toLong()
+    var rows = NotificationRow.query(DbConn.handle) {
+        where userId == uid
+        where kind == kind
+        where dayKey == dayKey
+    }
+    if (rows.isEmpty()) {
+        orm.save(DbConn.handle, NotificationRow(0, uid, kind, title, message, dayKey, nowIso(), false))
+    }
+}
+
+List<NotificationOutput> findNotifications(String userId) {
+    if (!strings.isNumeric(userId)) {
+        return listOf()
+    }
+    var uid = userId.toLong()
+    var rows = NotificationRow.query(DbConn.handle) {
+        where userId == uid
+        orderBy id desc
+    }
+    return rows.map((r: NotificationRow) -> notificationFromRow(r))
+}
+
+Int markNotificationsRead(String userId) {
+    if (!strings.isNumeric(userId)) {
+        return 0
+    }
+    var uid = userId.toLong()
+    var rows = NotificationRow.query(DbConn.handle) {
+        where userId == uid
+        where readFlag == false
+    }
+    rows.forEach((r: NotificationRow) -> orm.save(DbConn.handle, NotificationRow(r.id(), r.userId(), r.kind(), r.title(), r.message(), r.dayKey(), r.createdAt(), true)))
+    return rows.size
+}
+
+// Sem linha gravada = padrao do design (e-mail diario ligado, push desligado).
+PreferencesInput findPreferences(String userId) {
+    var row = findPreferenceRow(userId)
+    if (row != null) {
+        return PreferencesInput(row.emailEnabled(), row.frequency(), row.pushEnabled())
+    }
+    return PreferencesInput(true, "DAILY", false)
+}
+
+PreferenceRow? findPreferenceRow(String userId) {
+    if (!strings.isNumeric(userId)) {
+        return null
+    }
+    var rows = orm.where<PreferenceRow>(DbConn.handle, "userId", userId.toLong())
+    if (rows.isEmpty()) {
+        return null
+    }
+    return rows.get(0)
+}
+
+PreferencesInput savePreferences(String userId, PreferencesInput prefs) {
+    var id: Long = 0
+    var existing = findPreferenceRow(userId)
+    if (existing != null) {
+        id = existing.id()
+    }
+    var saved = orm.save(DbConn.handle, PreferenceRow(id, userId.toLong(), prefs.emailEnabled(), prefs.frequency(), prefs.pushEnabled()))
+    return PreferencesInput(saved.emailEnabled(), saved.frequency(), saved.pushEnabled())
 }
