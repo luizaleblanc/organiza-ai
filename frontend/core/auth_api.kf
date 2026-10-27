@@ -1,0 +1,120 @@
+package core
+
+import kof.json
+import core.app_state
+import core.api_client
+
+// =============================================================================
+// Batch 2 (F5) — Autenticação e onboarding (design §4.1 e §4.2)
+// =============================================================================
+// Cada função devolve o resultado ou lança (throw) a MENSAGEM FIXA que a tela
+// mostra. Os textos vêm da spec; o corpo do backend só escolhe a mensagem,
+// por trechos ASCII (o acento chega corrompido no json.decode do KofJS).
+// =============================================================================
+
+record LoginRequest(String email, String password)
+record RegisterRequest(String name, String email, String password)
+record OnboardingRequest(Double salary, String incomeType, Bool hasDebt, Double debtAmount)
+record MeResponse(String name, String email, Bool onboardingCompleted, String tier)
+record BucketSummary(String name, Int percentage, Double amount)
+record OnboardingResponse(String suggestedModel, String description, List<BucketSummary> buckets)
+
+String msgNetwork() = "Não consegui falar com o servidor. Confira sua internet e tente de novo."
+String msgGeneric() = "Confira os dados e tente de novo."
+String msgSessionExpired() = "Sua sessão expirou. Entre de novo."
+
+// Mensagem fixa para um corpo {"error"...}. Token inválido limpa a sessão.
+String apiErrorMessage(String body) {
+    if (body.contains("Token ausente")) {
+        resetSession()
+        return msgSessionExpired()
+    }
+    if (body.contains("Muitas tentativas")) {
+        return "Muitas tentativas. Espere 1 minuto e tente de novo."
+    }
+    if (body.contains("Credenciais")) {
+        return "E-mail ou senha incorretos."
+    }
+    if (body.contains("cadastrado")) {
+        return "Já existe uma conta com esse e-mail. Quer entrar?"
+    }
+    if (body.contains("8 caracteres")) {
+        return "A senha precisa ter pelo menos 8 caracteres."
+    }
+    if (body.contains("Preencha e-mail")) {
+        return "Preencha e-mail e senha."
+    }
+    return msgGeneric()
+}
+
+// Rede, CORS ou 5xx -> msgNetwork(); {"error"...} -> mensagem fixa.
+String checked(String body) {
+    if (isApiError(body)) {
+        throw apiErrorMessage(body)
+    }
+    return body
+}
+
+String postOrThrow(String path, String payload) {
+    var body = ""
+    try {
+        body = apiPost(path, payload)
+    } catch (String e) {
+        throw msgNetwork()
+    }
+    return checked(body)
+}
+
+String getOrThrow(String path) {
+    var body = ""
+    try {
+        body = apiGet(path)
+    } catch (String e) {
+        throw msgNetwork()
+    }
+    return checked(body)
+}
+
+// Devolve o JWT e grava a sessão. E-mail vai sem espaços nas pontas.
+String login(String email, String password) {
+    val cleanEmail = email.trim()
+    val token = postOrThrow("/api/auth/login", json.encode(LoginRequest(cleanEmail, password)))
+    SessionState.token = token
+    SessionState.userEmail = cleanEmail
+    return token
+}
+
+String register(String name, String email, String password) {
+    val cleanName = name.trim()
+    val cleanEmail = email.trim()
+    val token = postOrThrow("/api/auth/register", json.encode(RegisterRequest(cleanName, cleanEmail, password)))
+    SessionState.token = token
+    SessionState.userEmail = cleanEmail
+    SessionState.userName = cleanName
+    return token
+}
+
+// GET /api/users/me; grava nome, e-mail e tier na sessão (spec B2-02 item 5).
+MeResponse me() {
+    val profile = json.decode<MeResponse>(getOrThrow("/api/users/me"))
+    SessionState.userName = profile.name()
+    SessionState.userEmail = profile.email()
+    SessionState.tier = profile.tier()
+    return profile
+}
+
+// debtAmount em reais; 0.0 quando não há dívida (edge case da Tela 6).
+OnboardingResponse submitOnboarding(Double salary, String incomeType, Bool hasDebt, Double debtAmount) {
+    var debt = 0.0
+    if (hasDebt) {
+        debt = debtAmount
+    }
+    val body = postOrThrow("/api/users/onboarding", json.encode(OnboardingRequest(salary, incomeType, hasDebt, debt)))
+    if (!body.contains("\"suggestedModel\"")) {
+        throw msgNetwork()
+    }
+    val result = json.decode<OnboardingResponse>(body)
+    OnboardingState.suggestedModel = result.suggestedModel()
+    OnboardingState.modelDescription = result.description()
+    return result
+}

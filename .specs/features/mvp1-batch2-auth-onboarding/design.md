@@ -179,6 +179,7 @@ String apiPost(String path, String payload) {
 - Erro = `body.startsWith("{\"error\"")`. Mensagem fixa por rota e trecho ASCII do corpo: `Muitas tentativas`, `Credenciais`, `cadastrado`, `Token ausente`, `8 caracteres`; outro texto → "Confira os dados e tente de novo." Nunca mostrar o texto do `json.decode` (§1 f5).
 - `/api/users/me` é JSON sem acento nos campos de controle; `json.decode<MeResponse>` serve para `onboardingCompleted` e `tier`. O `name` pode ter acento: medir na F3 e, se vier corrompido, mostrar o nome digitado no cadastro (guardado na sessão) e não o devolvido.
 - Envio com `json.encode` de records; medir na F3 no JS. Se falhar, concatenação com escape de `"` e `\`.
+- **Medido na F5 (27/10, kof 0.6.6 e 0.6.7, Edge headless, mesmo domínio, H2):** `json.encode` de records gera JSON certo (acento preservado, `"` escapado); `json.decode<MeResponse>` devolve `name` com acento intacto ("Joana Ávila") e `json.decode<OnboardingResponse>` lê a lista de buckets. O `name` do `/me` vai para a sessão. No KofJS, `String.toLong()` devolve BigInt e `toLong() ... .toDouble()` lança `Cannot mix BigInt and other types` (JVM ok): `parseMoney` usa `Int`. O re-render de "carregando" antes do `await` fica para a F7 (sem telas na F5).
 
 ### 4.3 Validações de backend (novas)
 

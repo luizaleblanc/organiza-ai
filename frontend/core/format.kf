@@ -1,0 +1,122 @@
+package core
+
+// =============================================================================
+// Batch 2 (F5) — Dinheiro e e-mail (design §4.4)
+// =============================================================================
+// Dinheiro trafega em centavos (Long) para não acumular erro de Double.
+// String.format lança no navegador e math.round não existe (design §1 h):
+// a saída é montada aqui com math.roundTo.
+// =============================================================================
+
+Bool isDigit(Char c) = c >= '0' && c <= '9'
+
+// "1234567" -> "1.234.567"
+String groupThousands(String digits) {
+    var out = ""
+    var i = 0
+    val n = digits.length
+    while (i < n) {
+        if (i > 0 && (n - i) % 3 == 0) {
+            out = out + "."
+        }
+        out = out + String.valueOf(digits.charAt(i))
+        i = i + 1
+    }
+    return out
+}
+
+// 1234.5 -> "R$ 1.234,50"; -3.0 -> "- R$ 3,00"
+String brl(Double value) {
+    var cents = math.roundTo(value * 100.0, 0) as Long
+    var sign = ""
+    if (cents < 0) {
+        sign = "- "
+        cents = 0 - cents
+    }
+    val reais = cents / 100
+    val rest = cents % 100
+    var centsText = String.valueOf(rest)
+    if (rest < 10) {
+        centsText = "0" + centsText
+    }
+    return sign + "R$ " + groupThousands(String.valueOf(reais)) + "," + centsText
+}
+
+Int lastIndexOfChar(String s, Char target) {
+    var found = -1
+    var i = 0
+    while (i < s.length) {
+        if (s.charAt(i) == target) {
+            found = i
+        }
+        i = i + 1
+    }
+    return found
+}
+
+// Aceita "3000", "3.000", "3000,5", "3.000,50", "R$ 1.234,56", "3000.50".
+// Com vírgula, os pontos são milhar. Sem vírgula, o último ponto é milhar se
+// tiver exatamente 3 dígitos depois; senão é decimal. Até 2 casas e
+// 0 < valor <= 1.000.000; fora disso lança "valor inválido".
+Double parseMoney(String raw) {
+    var clean = ""
+    for (var c in raw.toCharArray()) {
+        if (isDigit(c) || c == ',' || c == '.') {
+            clean = clean + String.valueOf(c)
+        } else if (c != ' ' && c != 'R' && c != '$') {
+            throw "valor inválido"
+        }
+    }
+    var decimalSep = ' '
+    if (clean.contains(",")) {
+        decimalSep = ','
+    } else {
+        val lastDot = lastIndexOfChar(clean, '.')
+        if (lastDot >= 0 && clean.length - lastDot - 1 != 3) {
+            decimalSep = '.'
+        }
+    }
+    var intDigits = ""
+    var fracDigits = ""
+    var inFrac = false
+    for (var c in clean.toCharArray()) {
+        if (c == decimalSep) {
+            if (inFrac) {
+                throw "valor inválido"
+            }
+            inFrac = true
+        } else if (isDigit(c)) {
+            if (inFrac) {
+                fracDigits = fracDigits + String.valueOf(c)
+            } else {
+                intDigits = intDigits + String.valueOf(c)
+            }
+        }
+    }
+    if (intDigits == "" && fracDigits == "") {
+        throw "valor inválido"
+    }
+    if (fracDigits.length > 2 || intDigits.length > 7) {
+        throw "valor inválido"
+    }
+    while (fracDigits.length < 2) {
+        fracDigits = fracDigits + "0"
+    }
+    if (intDigits == "") {
+        intDigits = "0"
+    }
+    // Int basta (no máximo 7 dígitos inteiros + 2 casas). Não usar
+    // String.toLong(): no KofJS ele devolve BigInt e o toDouble() seguinte
+    // lança "Cannot mix BigInt and other types" (medido no kof 0.6.6 e 0.6.7).
+    val cents = intDigits.toInt() * 100 + fracDigits.toInt()
+    if (cents <= 0 || cents > 100000000) {
+        throw "valor inválido"
+    }
+    return cents.toDouble() / 100.0
+}
+
+// "@" com texto antes e depois, sem espaço (spec B2-03 item 6).
+Bool isEmailLike(String email) {
+    val at = email.indexOf("@")
+    return at > 0 && at < email.length - 1 && !email.contains(" ")
+}
