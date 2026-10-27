@@ -299,8 +299,8 @@ O frontend em `kof.ui` (Batch 1) só tem a casca: tema, estado, navegação e ca
 | B2-01 | P1: Boas-vindas (Tela 1) | F6 | Implemented (G-BUILD e G-UI Mobile/Desktop em kof 0.6.6 e 0.6.7) |
 | B2-02 | P1: Login (Tela 2) | Design | Pending |
 | B2-03 | P1: Cadastro (Tela 3) | Design | Pending |
-| B2-04 | P1: Salário (Tela 4) | Design | Pending |
-| B2-05 | P1: Tipo de renda (Tela 5) | Design | Pending |
+| B2-04 | P1: Salário (Tela 4) | F8a | Done |
+| B2-05 | P1: Tipo de renda (Tela 5) | F8a | Done |
 | B2-06 | P1: Dívidas e valor da dívida (Telas 6 e 6.1) | Design | Pending |
 | B2-07 | P1: Resultado (Tela 7) | Design | Pending |
 | B2-08 | P2: Erros de rede e servidor | Design | Pending |

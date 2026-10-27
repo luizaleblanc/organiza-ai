@@ -55,8 +55,12 @@ Input textField(String placeholder, String type, String id) {
 
 // Campo de dinheiro: type=text (type=number apaga "3.000,50", design.md §1 c);
 // o parse fica em parseMoney (core/format.kf, F5).
-Input moneyField(String placeholder, String id) {
-    var f = Input("")
+Input moneyField(String placeholder, String id) = moneyFieldWith("", placeholder, id)
+
+// Igual a moneyField, já preenchido com `value` (re-render da Tela 4 após erro
+// mantém o que a pessoa digitou; Input não tem setter de texto).
+Input moneyFieldWith(String value, String placeholder, String id) {
+    var f = Input(value)
     f.setId(id)
     f.setType("text")
     f.setPlaceholder(placeholder)

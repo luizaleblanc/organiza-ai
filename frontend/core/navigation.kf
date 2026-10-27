@@ -6,6 +6,8 @@ import core.app_state
 import components.brand_header
 import components.nav_bar
 import screens.welcome_screen
+import screens.onb_salary_screen
+import screens.onb_income_screen
 
 // =============================================================================
 // T5 — Dispatcher raiz e navegação (Dual Viewport)
@@ -133,6 +135,12 @@ Bool isEntryScreen() {
 View buildEntryContent(Window w) {
     if (AppState.currentScreen == "welcome") {
         return welcomeScreen(w)
+    }
+    if (AppState.currentScreen == "onb_salary") {
+        return onbSalaryScreen(w)
+    }
+    if (AppState.currentScreen == "onb_income") {
+        return onbIncomeScreen(w)
     }
     return buildScreenContent()
 }

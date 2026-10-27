@@ -1,0 +1,63 @@
+package screens
+
+import kof.ui
+import core.theme
+import core.app_state
+import core.format
+import core.navigation
+import components.form_widgets
+
+// =============================================================================
+// Tela 4 — Salário (spec B2-04; design.md F8a)
+// =============================================================================
+// Dots com o 1º ativo, título, subtítulo, prefixo "R$" e campo de valor.
+// "Próximo" valida com parseMoney (core/format.kf): válido grava o texto em
+// OnboardingState.salary e vai para "onb_income"; inválido mostra a mensagem
+// da spec e re-renderiza a Tela 4 mantendo o texto digitado.
+// =============================================================================
+
+View onbSalaryScreen(Window w) {
+    var title = Label("Quanto você ganha por mês?")
+    title.setId("onb-title")
+    title.setStyle(titleCss())
+
+    var subtitle = Label("Vamos adaptar tudo ao seu salário")
+    subtitle.setId("onb-subtitle")
+    subtitle.setStyle(captionCss())
+
+    var prefix = Label("R$")
+    prefix.setId("salary-prefix")
+    prefix.setStyle(moneyPrefixCss())
+
+    var field = moneyFieldWith(OnboardingState.salary, "0,00", "salary-input")
+    var amount = Row(listOf(prefix, field))
+    amount.setStyle(moneyRowCss())
+
+    var next = primaryButton("Próximo", "btn-next", false, () -> submitSalary(w, field.text()))
+
+    var items = listOf(progressDots(0), title, subtitle, amount)
+    if (AppState.formError != "") {
+        items.add(errorBanner(AppState.formError))
+    }
+    items.add(next)
+    var col = Column(items)
+    col.setStyle(onbColumnCss())
+
+    var body = View(screenStyle())
+    body.setStyle(entryBodyCss())
+    body.bind(col)
+    return body
+}
+
+submitSalary(Window w, String raw) {
+    OnboardingState.salary = raw.trim()
+    try {
+        parseMoney(OnboardingState.salary)
+    } catch (String e) {
+        AppState.formError = "Digite um valor entre R$ 1 e R$ 1.000.000."
+        mountScreen(w)
+        return
+    }
+    AppState.formError = ""
+    navigateTo(w, "onb_income")
+}

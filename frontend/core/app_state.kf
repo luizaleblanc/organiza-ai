@@ -16,6 +16,9 @@ class AppState {
     static String activeToast = ""
     static String activeNotificationModel = ""
     static Bool showNotificationOverlay = false
+    // Mensagem de erro da tela de entrada ativa ("" = sem erro). Quem navega
+    // limpa antes de trocar de tela (design §2.4).
+    static String formError = ""
 }
 
 class SessionState {
@@ -26,9 +29,16 @@ class SessionState {
     static String tier = "FREE"
 }
 
+// Estado do onboarding (Telas 4 a 7), lido pela Tela 7 para o POST.
+// - salary: texto digitado na Tela 4, já validado por parseMoney (F5); quem
+//   precisa do número chama parseMoney(OnboardingState.salary) de novo.
+// - incomeType: "FIXED" ou "VARIABLE"; só vale se incomeChosen = true.
+// - incomeChosen: a pessoa tocou um card da Tela 5 (habilita "Próximo").
+// Tela 4 -> "onb_income" (Tela 5) -> "onb_debt" (Tela 6, F8b).
 class OnboardingState {
     static String salary = ""
     static String incomeType = "FIXED"
+    static Bool incomeChosen = false
     static Bool hasDebt = false
     static String debtAmount = ""
     static String suggestedModel = ""

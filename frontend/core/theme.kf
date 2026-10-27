@@ -116,7 +116,7 @@ Style secondaryButtonWideCss() = Style("background: transparent; color: #00D4FF;
 
 // ---- Formulário (Telas 2–7) -------------------------------------------------
 Style inputCss()              = Style("background: #12162A; color: #F0F0F0; height: 48; width: 100%; box-sizing: border-box; border: 1px solid rgba(255,255,255,.06); border-radius: 8; padding: 0 16px; font-size: 16")
-Style moneyCss()              = Style("background: transparent; color: #00D4FF; height: 56; width: 100%; box-sizing: border-box; border: none; text-align: center; font-size: 32; font-weight: 600; font-variant: tabular-nums")
+Style moneyCss()              = Style("background: transparent; color: #00D4FF; height: 56; width: 100%; min-width: 0; flex-grow: 1; box-sizing: border-box; border: none; text-align: center; font-size: 32; font-weight: 600; font-variant: tabular-nums")
 Style choiceCss()             = Style("color: #F0F0F0; height: 72; width: 100%; box-sizing: border-box; border-radius: 12; padding: 0 16px; background: #12162A; border: 1px solid rgba(255,255,255,.06); font-size: 16; text-align: left; cursor: pointer")
 Style choiceSelectedCss()     = Style("color: #F0F0F0; height: 72; width: 100%; box-sizing: border-box; border-radius: 12; padding: 0 16px; background: rgba(0,212,255,.08); border: 1px solid #00D4FF; font-size: 16; text-align: left; cursor: pointer")
 Style titleCss()              = Style("color: #F0F0F0; font-size: 24; font-weight: 500; margin: 0")
@@ -127,5 +127,10 @@ Style dotActiveCss()          = Style("width: 8; height: 8; border-radius: 4; ba
 Style dotVisitedCss()         = Style("width: 8; height: 8; border-radius: 4; background: rgba(0,212,255,.4)")
 Style dotInactiveCss()        = Style("width: 8; height: 8; border-radius: 4; background: rgba(255,255,255,.15)")
 // Barra de bucket: a largura do preenchimento vem de setFlexBasis(px) (medido na F6).
+// Telas 4 e 5 (F8a): coluna do onboarding, linha "R$ + valor" e lista de cards.
+Style onbColumnCss()          = Style("display: flex; flex-direction: column; align-items: stretch; gap: 24; width: 100%; max-width: 480")
+Style moneyRowCss()           = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: center; gap: 8; width: 100%")
+Style moneyPrefixCss()        = Style("color: #00D4FF; font-size: 32; font-weight: 600; margin: 0; white-space: nowrap; flex-shrink: 0")
+Style choiceListCss()         = Style("display: flex; flex-direction: column; gap: 12; width: 100%")
 Style trackCss()              = Style("display: flex; height: 8; width: 100%; border-radius: 4; background: #12162A; overflow: hidden")
 Style fillCss()               = Style("height: 8; border-radius: 4; background: #00D4FF; flex-grow: 0; flex-shrink: 0")
