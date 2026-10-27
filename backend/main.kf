@@ -211,6 +211,27 @@ main() {
         return json.encode(calculateDailyPulse(currentUserId(), daysRemainingInMonth(), monthStartIso()))
     }
 
+    // Leitura de fatura PDF (backend/invoice.kf): {"fileBase64": "..."} -> texto + transacoes.
+    // Exige token (middleware); corpo acima do limite = 413; JSON/base64/PDF invalido = 400.
+    app.post("/api/invoices/parse") {
+        var raw = body()
+        if (raw.length() > invoiceMaxBase64Chars() + 1024) {
+            return status(413, json.encode(ApiError("Arquivo grande demais (máximo de 2 MB).")))
+        }
+        var req = decodeInvoiceUploadRequest(raw)
+        if (req == null) {
+            return status(400, invalidBody())
+        }
+        if (req.fileBase64().length() > invoiceMaxBase64Chars()) {
+            return status(413, json.encode(ApiError("Arquivo grande demais (máximo de 2 MB).")))
+        }
+        try {
+            return json.encode(parseInvoicePdf(req.fileBase64()))
+        } catch (String e) {
+            return status(400, json.encode(ApiError("PDF inválido: " + e)))
+        }
+    }
+
     app.post("/api/chat/message") {
         var userId = currentUserId()
         var msgReq = decodeChatMessageRequest(body())

@@ -1,0 +1,368 @@
+// backend/invoice.kf
+// Leitura de fatura PDF (Fase 4, Tela 10): o cliente manda o PDF em base64 num JSON, o backend
+// extrai o texto dos content streams e as transacoes (data, descricao, valor). Sem biblioteca
+// externa: so o JDK (java.util.Base64 e java.util.zip.Inflater, sem classpath extra no --fat).
+// Cobre PDFs de texto com streams sem filtro ou /FlateDecode (o caso das faturas geradas por
+// bancos). PDF escaneado (imagem), criptografado ou com fonte CID/Identity-H nao vira texto aqui:
+// a resposta sai com transactions vazio e o cliente pede confirmacao manual.
+// Funcao publica para o coach: parseInvoicePdf(base64) -> InvoiceResult (lanca String em erro).
+
+import java.util.Base64
+import java.nio.ByteBuffer
+import java.lang.Character
+
+record InvoiceUploadRequest(String fileBase64)
+record InvoiceTransaction(String date, String description, Double amount)
+record InvoiceResult(Int streams, String text, List<InvoiceTransaction> transactions)
+
+// ~2 MB de PDF = ~2,8 milhoes de chars em base64. Acima disso a rota responde 413.
+Int invoiceMaxBase64Chars() {
+    return 2800000
+}
+
+// Corpo da rota: null = JSON malformado ou campo ausente (400).
+InvoiceUploadRequest? decodeInvoiceUploadRequest(String raw) {
+    try {
+        var req = json.decode<InvoiceUploadRequest>(raw)
+        if (req.fileBase64() == null) {
+            return null
+        }
+        return req
+    } catch (String e) {
+        return null
+    }
+}
+
+// O encoding.base64Decode do Kof e tolerante por especificacao e devolve String (UTF-8): nao serve
+// para binario. Aqui o java.util.Base64 estrito decide (caractere invalido = IllegalArgumentException,
+// que o catch (String e) do Kof recebe) e o PDF vira uma String Latin-1 (1 char = 1 byte).
+String pdfBytesAsLatin1(String b64) {
+    var bytes = Base64.getDecoder().decode(b64)
+    return new java.lang.String(bytes, "ISO-8859-1")
+}
+
+// Descomprime o trecho [off, off+len) do PDF (FlateDecode = zlib). Cabecalho zlib conferido antes;
+// dado corrompido no meio lanca DataFormatException, tratada por quem chama (catch (Exception e)).
+String inflateRange(String b64, String pdf, Int off, Int len) {
+    if (len < 2) {
+        throw "stream vazio"
+    }
+    var cmf = pdf.charAt(off)
+    var flg = pdf.charAt(off + 1)
+    if (cmf % 16 != 8 || (cmf * 256 + flg) % 31 != 0) {
+        throw "PDF corrompido"
+    }
+    var bytes = Base64.getDecoder().decode(b64)
+    var inf = new java.util.zip.Inflater()
+    inf.setInput(bytes, off, len)
+    var buf = ByteBuffer.allocate(8192)
+    var out = new java.io.ByteArrayOutputStream()
+    var going = true
+    while (going) {
+        buf.clear()
+        var n = inf.inflate(buf)
+        if (n > 0) {
+            out.write(buf.array(), 0, n)
+        }
+        if (inf.finished() || (n == 0 && (inf.needsInput() || inf.needsDictionary()))) {
+            going = false
+        }
+        // Bomba de descompressao: um stream nao passa de 4 MB de texto.
+        if (out.size() > 4000000) {
+            going = false
+        }
+    }
+    inf.end()
+    return out.toString("ISO-8859-1")
+}
+
+Bool isDelimiter(Int c) {
+    return c == 32 || c == 10 || c == 13 || c == 9 || c == 12 || c == 0 || c == 40 || c == 41 || c == 60 || c == 62 || c == 91 || c == 93 || c == 47
+}
+
+Int hexValue(Int c) {
+    if (c >= 48 && c <= 57) {
+        return c - 48
+    }
+    if (c >= 65 && c <= 70) {
+        return c - 55
+    }
+    if (c >= 97 && c <= 102) {
+        return c - 87
+    }
+    return -1
+}
+
+// Operadores de texto que mudam de linha (Td, TD, T*, Tm, ' e ") e o fim do bloco (ET).
+Bool isLineBreakOperator(String op) {
+    return op == "Td" || op == "TD" || op == "T*" || op == "Tm" || op == "ET" || op == "'" || op == "\""
+}
+
+// Texto de um content stream: as strings literais (...) e hex <...> mostradas por Tj/TJ, uma
+// linha por movimento de linha. Retorna as linhas sem as vazias.
+List<String> contentLines(String content) {
+    var lines: List<String> = listOf()
+    var line = ""
+    var inArray = false
+    var i = 0
+    var n = content.length()
+    while (i < n) {
+        var c = content.charAt(i)
+        if (c == 40) {
+            // String literal com parenteses aninhados e escapes (\n \r \t \( \) \\ \ddd)
+            var depth = 1
+            i = i + 1
+            while (i < n && depth > 0) {
+                var d = content.charAt(i)
+                if (d == 92 && i + 1 < n) {
+                    var e = content.charAt(i + 1)
+                    if (e >= 48 && e <= 55) {
+                        var code = 0
+                        var k = 0
+                        while (k < 3 && i + 1 < n && content.charAt(i + 1) >= 48 && content.charAt(i + 1) <= 55) {
+                            code = code * 8 + (content.charAt(i + 1) - 48)
+                            i = i + 1
+                            k = k + 1
+                        }
+                        line = line + Character.toString(code)
+                        i = i + 1
+                    } else {
+                        if (e == 110) {
+                            line = line + " "
+                        } else if (e == 114 || e == 116) {
+                            line = line + " "
+                        } else if (e != 10 && e != 13) {
+                            line = line + content.substring(i + 1, i + 2)
+                        }
+                        i = i + 2
+                    }
+                } else {
+                    if (d == 40) {
+                        depth = depth + 1
+                    }
+                    if (d == 41) {
+                        depth = depth - 1
+                    }
+                    if (depth > 0) {
+                        line = line + content.substring(i, i + 1)
+                    }
+                    i = i + 1
+                }
+            }
+        } else if (c == 60 && i + 1 < n && content.charAt(i + 1) == 60) {
+            // Dicionario << ... >>: nao e texto
+            i = i + 2
+        } else if (c == 60) {
+            // String hex <48656C6C6F>
+            i = i + 1
+            var hi = -1
+            while (i < n && content.charAt(i) != 62) {
+                var h = hexValue(content.charAt(i))
+                if (h >= 0) {
+                    if (hi < 0) {
+                        hi = h
+                    } else {
+                        line = line + Character.toString(hi * 16 + h)
+                        hi = -1
+                    }
+                }
+                i = i + 1
+            }
+            i = i + 1
+        } else if (c == 91) {
+            inArray = true
+            i = i + 1
+        } else if (c == 93) {
+            inArray = false
+            i = i + 1
+        } else if (!isDelimiter(c) || c == 39 || c == 34) {
+            var start = i
+            while (i < n && !isDelimiter(content.charAt(i))) {
+                i = i + 1
+            }
+            if (i == start) {
+                i = i + 1
+            }
+            var op = content.substring(start, i)
+            // Dentro de um array TJ, um recuo grande (ex.: -250) separa palavras: vira espaco
+            if (inArray && op.matches("-[0-9]+([.][0-9]+)?") && op.toDouble() < -200.0 && !line.endsWith(" ")) {
+                line = line + " "
+            }
+            if (isLineBreakOperator(op)) {
+                var t = line.trim()
+                if (t.length() > 0) {
+                    lines.add(t)
+                }
+                line = ""
+            }
+        } else {
+            i = i + 1
+        }
+    }
+    var last = line.trim()
+    if (last.length() > 0) {
+        lines.add(last)
+    }
+    return lines
+}
+
+// Valor brasileiro: "1.234,56", "-45,90", "R$ 10,00" ou "10,00-" (estorno). null = nao e valor.
+Double? parseBrlAmount(String raw) {
+    var s = raw.trim().replace("R$", "").replace(" ", "")
+    var negative = false
+    if (s.endsWith("-")) {
+        negative = true
+        s = s.substring(0, s.length() - 1)
+    }
+    if (s.startsWith("-")) {
+        negative = true
+        s = s.substring(1, s.length())
+    }
+    if (!s.matches("[0-9]{1,3}(\\.[0-9]{3})*,[0-9]{2}|[0-9]+,[0-9]{2}")) {
+        return null
+    }
+    var v = s.replace(".", "").replace(",", ".").toDouble()
+    if (negative) {
+        return 0.0 - v
+    }
+    return v
+}
+
+Bool isInvoiceDate(String s) {
+    return s.matches("[0-3][0-9]/[01][0-9](/[0-9]{2}([0-9]{2})?)?")
+}
+
+// Uma linha "DD/MM[/AAAA] DESCRICAO VALOR" vira transacao; null = nao e linha de lancamento.
+InvoiceTransaction? parseTransactionLine(String line) {
+    var t = line.trim().replaceAll("\\s+", " ")
+    var firstSpace = t.indexOf(" ")
+    var lastSpace = t.lastIndexOf(" ")
+    if (firstSpace <= 0 || lastSpace <= firstSpace) {
+        return null
+    }
+    var date = t.substring(0, firstSpace)
+    if (!isInvoiceDate(date)) {
+        return null
+    }
+    var valueText = t.substring(lastSpace + 1, t.length())
+    var desc = t.substring(firstSpace + 1, lastSpace).trim()
+    // "R$ 12,34": o valor ficou em dois tokens
+    if (desc.endsWith("R$")) {
+        desc = desc.substring(0, desc.length() - 2).trim()
+    }
+    var amount = parseBrlAmount(valueText)
+    if (desc.length() == 0) {
+        return null
+    }
+    if (amount != null) {
+        return InvoiceTransaction(date, desc, amount)
+    }
+    return null
+}
+
+// Linhas -> transacoes. Quando o PDF posiciona cada coluna com Td (data, descricao e valor em
+// linhas separadas), junta 3 linhas consecutivas que comecam por uma data.
+List<InvoiceTransaction> transactionsFromLines(List<String> lines) {
+    var out: List<InvoiceTransaction> = listOf()
+    var i = 0
+    while (i < lines.size()) {
+        var tx = parseTransactionLine(lines.get(i))
+        if (tx != null) {
+            out.add(tx)
+            i = i + 1
+        } else if (i + 2 < lines.size() && isInvoiceDate(lines.get(i).trim())) {
+            var joined = parseTransactionLine(lines.get(i) + " " + lines.get(i + 1) + " " + lines.get(i + 2))
+            if (joined != null) {
+                out.add(joined)
+                i = i + 3
+            } else {
+                i = i + 1
+            }
+        } else {
+            i = i + 1
+        }
+    }
+    return out
+}
+
+// API publica (rota e coach): base64 do PDF -> texto + transacoes. Lanca String se nao for PDF
+// valido (base64 invalido, sem cabecalho %PDF-, stream corrompido).
+InvoiceResult parseInvoicePdf(String b64) {
+    var clean = b64.trim()
+    if (clean.startsWith("data:")) {
+        clean = clean.substring(clean.indexOf(",") + 1, clean.length())
+    }
+    var pdf = ""
+    try {
+        pdf = pdfBytesAsLatin1(clean)
+    } catch (String e) {
+        throw "base64 invalido"
+    }
+    if (!pdf.startsWith("%PDF-")) {
+        throw "o arquivo nao e um PDF"
+    }
+    var lines: List<String> = listOf()
+    var streams = 0
+    var pos = 0
+    var going = true
+    while (going) {
+        var idx = pdf.indexOf("stream", pos)
+        if (idx < 0) {
+            going = false
+        } else if (idx >= 3 && pdf.substring(idx - 3, idx) == "end") {
+            pos = idx + 6
+        } else {
+            var start = idx + 6
+            if (start < pdf.length() && pdf.charAt(start) == 13) {
+                start = start + 1
+            }
+            if (start < pdf.length() && pdf.charAt(start) == 10) {
+                start = start + 1
+            }
+            var end = pdf.indexOf("endstream", start)
+            if (end < 0) {
+                going = false
+            } else {
+                var objStart = pdf.lastIndexOf(" obj", idx)
+                var dict = ""
+                if (objStart >= 0) {
+                    dict = pdf.substring(objStart, idx)
+                }
+                // Imagens, fontes embutidas e streams de objeto nao tem texto mostravel
+                var skip = dict.contains("/Image") || dict.contains("/FontFile") || dict.contains("/Length1") || dict.contains("/XRef") || dict.contains("/ObjStm")
+                if (!skip) {
+                    var content = ""
+                    if (dict.contains("/FlateDecode")) {
+                        // O Inflater lanca DataFormatException (checked): `catch (String e)` nao pega,
+                        // `catch (Exception e)` pega (mesmo padrao do store.kf). Vira 400 na rota.
+                        var inflated = ""
+                        var corrupt = false
+                        try {
+                            inflated = inflateRange(clean, pdf, start, end - start)
+                        } catch (Exception e) {
+                            corrupt = true
+                        }
+                        if (corrupt) {
+                            throw "PDF corrompido"
+                        }
+                        content = inflated
+                    } else if (!dict.contains("/Filter")) {
+                        content = pdf.substring(start, end)
+                    }
+                    if (content.contains("BT")) {
+                        streams = streams + 1
+                        for (var l in contentLines(content)) {
+                            lines.add(l)
+                        }
+                    }
+                }
+                pos = end + 9
+            }
+        }
+    }
+    var text = ""
+    for (var l in lines) {
+        text = text + l + "\n"
+    }
+    return InvoiceResult(streams, text, transactionsFromLines(lines))
+}

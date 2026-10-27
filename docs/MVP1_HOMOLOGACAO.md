@@ -482,7 +482,7 @@ O container `oa-insp-mysql` foi removido (`docker rm -f`). O container `oa-f1-my
 |---|---|
 | Esqueci a senha | **MVP 1**: exige provedor de e-mail (a escolher) e credencial no Render |
 | E-mail diário às 20h | **MVP 1**: mesmo provedor de e-mail + agendamento (`kof.scheduler`; `scheduler.at` é stub `CRON001`, usar o contorno documentado no training) |
-| Upload de fatura PDF | **MVP 1**: depende da Fase 4 (coach com LLM) e de medir leitura de PDF no Kof |
+| Upload de fatura PDF | **MVP 1**: a leitura no Kof já está medida e pronta (`POST /api/invoices/parse`, `backend/invoice.kf`, JSON com base64 e no máximo 2 MB). Faltam a integração com o coach (Fase 4) e o limite de 1 PDF por mês no plano Gratuito |
 | Open Finance (demo) | **MVP 1**: tela demonstrativa, sem integração bancária real |
 | Voz (Whisper + TTS) | **MVP 2** (Fase 5 sai do MVP 1) |
 | Provedor de IA do coach | **OpenAI gpt-4o-mini**, como no legado; chave como variável secreta no Render |
