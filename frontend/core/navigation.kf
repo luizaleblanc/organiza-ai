@@ -20,9 +20,9 @@ import screens.welcome_screen
 // brand_header/nav_bar precisam chamar navigateTo/buildActiveScreen (import
 // cíclico entre módulos não-main é aceito pelo compilador).
 // As telas reais entram nos Batches 2–4; aqui cada rota tem um placeholder.
-// Exceção: as telas de entrada ("welcome" e "onboarding") não têm nav bar nem
-// sidebar (design.md do Batch 2, §2.2); usam o layout de entrada, só com o
-// cabeçalho da marca.
+// Exceção: as telas de entrada (welcome, login, signup e onb_*) não têm nav bar
+// nem sidebar (design.md do Batch 2, §2.2); usam o layout de entrada com
+// Style("css") e só a barra de dev do toggle de viewport.
 // =============================================================================
 
 // Root montado atualmente. Window.bind ACRESCENTA ao DOM (não substitui), então o
@@ -68,7 +68,13 @@ String screenTitle() {
     if (AppState.currentScreen == "welcome") {
         return "Organiza AI"
     }
-    if (AppState.currentScreen == "onboarding") {
+    if (AppState.currentScreen == "login") {
+        return "Entrar"
+    }
+    if (AppState.currentScreen == "signup") {
+        return "Criar conta"
+    }
+    if (AppState.currentScreen == "onboarding" || AppState.currentScreen.startsWith("onb_")) {
         return "Onboarding"
     }
     if (AppState.currentScreen == "dashboard") {
@@ -115,8 +121,14 @@ View buildCoachPanel() {
     return panel
 }
 
-// Telas de entrada: sem nav bar e sem sidebar, em Mobile e Desktop.
-Bool isEntryScreen() = AppState.currentScreen == "welcome" || AppState.currentScreen == "onboarding"
+// Telas de entrada (design.md §2.2): sem nav bar e sem sidebar, em Mobile e
+// Desktop. Telas 2–7 ainda são placeholder até as tarefas F7/F8.
+Bool isEntryScreen() {
+    var s = AppState.currentScreen
+    return s == "welcome" || s == "login" || s == "signup" || s == "onboarding"
+        || s == "onb_salary" || s == "onb_income" || s == "onb_debt"
+        || s == "onb_debt_amount" || s == "onb_result"
+}
 
 View buildEntryContent(Window w) {
     if (AppState.currentScreen == "welcome") {
@@ -127,7 +139,14 @@ View buildEntryContent(Window w) {
 
 View buildEntryLayout(Window w) {
     var root = View(screenStyle())
-    root.bind(Column(listOf(buildBrandHeader(w), buildEntryContent(w))))
+    if (AppState.isDesktop) {
+        root.setStyle(entryScreenDesktopCss())
+    } else {
+        root.setStyle(entryScreenMobileCss())
+    }
+    var stack = Column(listOf(buildViewportToggle(w), buildEntryContent(w)))
+    stack.setStyle(entryStackCss())
+    root.bind(stack)
     return root
 }
 

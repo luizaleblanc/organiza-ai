@@ -1,0 +1,117 @@
+package components
+
+import kof.ui
+import core.theme
+
+// =============================================================================
+// form_widgets — widgets das telas de entrada (design.md §2.5 e §3)
+// =============================================================================
+// Cada widget recebe um `id` (setId) para o probe clicar/preencher por id.
+// Estilos são as funções Style("css") de core/theme.kf.
+// =============================================================================
+
+// Botão primário: gradiente 90° #00D4FF → #0066FF, 48px, texto #06121C.
+Button primaryButton(String label, String id, Bool wide, () -> Void action) {
+    var b = Button(label, action)
+    b.setId(id)
+    if (wide) {
+        b.setStyle(primaryButtonWideCss())
+    } else {
+        b.setStyle(primaryButtonCss())
+    }
+    return b
+}
+
+// Botão secundário: fundo transparente, borda 1,5px #00D4FF.
+Button secondaryButton(String label, String id, Bool wide, () -> Void action) {
+    var b = Button(label, action)
+    b.setId(id)
+    if (wide) {
+        b.setStyle(secondaryButtonWideCss())
+    } else {
+        b.setStyle(secondaryButtonCss())
+    }
+    return b
+}
+
+// Botão desabilitado (ex.: "Próximo" antes da escolha na Tela 5).
+Button disabledButton(String label, String id) {
+    var b = Button(label, () -> {})
+    b.setId(id)
+    b.setDisabled(true)
+    b.setStyle(disabledButtonCss())
+    return b
+}
+
+// Campo de texto (`type` = text/email/password).
+Input textField(String placeholder, String type, String id) {
+    var f = Input("")
+    f.setId(id)
+    f.setType(type)
+    f.setPlaceholder(placeholder)
+    f.setStyle(inputCss())
+    return f
+}
+
+// Campo de dinheiro: type=text (type=number apaga "3.000,50", design.md §1 c);
+// o parse fica em parseMoney (core/format.kf, F5).
+Input moneyField(String placeholder, String id) {
+    var f = Input("")
+    f.setId(id)
+    f.setType("text")
+    f.setPlaceholder(placeholder)
+    f.setStyle(moneyCss())
+    return f
+}
+
+// Card de escolha (Telas 5 e 6); a seleção re-renderiza a tela com mountScreen.
+Button choiceCard(String label, String id, Bool selected, () -> Void action) {
+    var b = Button(label, action)
+    b.setId(id)
+    if (selected) {
+        b.setStyle(choiceSelectedCss())
+    } else {
+        b.setStyle(choiceCss())
+    }
+    return b
+}
+
+View progressDot(Int index, Int current) {
+    var d = View(screenStyle())
+    if (index == current) {
+        d.setStyle(dotActiveCss())
+    } else if (index < current) {
+        d.setStyle(dotVisitedCss())
+    } else {
+        d.setStyle(dotInactiveCss())
+    }
+    return d
+}
+
+// 4 pontos de progresso do onboarding (Telas 4 a 7); `current` de 0 a 3.
+Row progressDots(Int current) {
+    var r = Row(listOf(progressDot(0, current), progressDot(1, current), progressDot(2, current), progressDot(3, current)))
+    r.setStyle(dotsCss())
+    return r
+}
+
+// Barra de bucket: trilho com `widthPx` e preenchimento de `pct` % (flex-basis em px).
+View bucketBar(Int pct, Int widthPx, String id) {
+    var fill = View(screenStyle())
+    fill.setStyle(fillCss())
+    fill.setFlexBasis(widthPx * pct / 100)
+    var track = View(screenStyle())
+    track.setId(id)
+    track.setStyle(trackCss())
+    track.setMaxWidth(widthPx)
+    track.bind(fill)
+    return track
+}
+
+// Faixa de erro; texto vazio não deve ser montado por quem chama.
+Label errorBanner(String message) {
+    var l = Label(message)
+    l.setId("form-error")
+    l.setStyle(errorBannerCss())
+    return l
+}

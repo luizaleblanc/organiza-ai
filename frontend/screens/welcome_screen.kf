@@ -4,35 +4,56 @@ import kof.ui
 import core.theme
 import core.app_state
 import core.navigation
+import components.brand_mark
+import components.form_widgets
 
 // =============================================================================
-// welcomeScreen
+// Tela 1 — Boas-vindas (spec B2-01; design.md §5)
 // =============================================================================
-// Tela inicial do app. Ela transmite a proposta do produto e dispara a próxima
-// etapa via navegação centralizada no módulo de navigation, seguindo o padrão
-// do projeto em vez de rebind direto sem uma rota explícita.
+// Logomarca de 3 ondas, slogan em caixa alta e duas ações:
+// "Criar conta" → signup (Tela 3) e "Já tenho conta" → login (Tela 2).
+// Mobile: marca 230px e botões empilhados em largura total.
+// Desktop: marca 200px e botões lado a lado com 200px (artefato Desktop).
 // =============================================================================
 
 View welcomeScreen(Window w) {
-    var title = Label("Organiza AI")
-    title.fontSize = sizeTitle()
-    title.bold = true
-    title.color = colorTextPrimary()
+    var desktop = AppState.isDesktop
 
-    var subtitle = Label("Seu coach financeiro pessoal")
-    subtitle.fontSize = sizeBody()
-    subtitle.color = colorTextSecondary()
+    var markWidth = 230
+    if (desktop) {
+        markWidth = 200
+    }
+    var mark = brandMark(markWidth, "brand-mark")
 
-    var helper = Label("Organize sua renda, seus envelopes e seus objetivos em poucos passos.")
-    helper.fontSize = sizeCaption()
-    helper.color = colorTextMuted()
+    var slogan = Label("SUA GRANA ORGANIZADA E SEM ESTRESSE.")
+    slogan.setId("welcome-slogan")
+    if (desktop) {
+        slogan.setStyle(sloganDesktopCss())
+    } else {
+        slogan.setStyle(sloganMobileCss())
+    }
 
-    var primary = Button("Começar", () -> {
-        navigateTo(w, "onboarding")
-    })
+    var signup = primaryButton("Criar conta", "btn-signup", desktop, () -> navigateTo(w, "signup"))
+    var login = secondaryButton("Já tenho conta", "btn-login", desktop, () -> navigateTo(w, "login"))
 
-    var content = Column(listOf(title, subtitle, helper, primary))
-    var view = View(screenStyle())
-    view.bind(content)
-    return view
+    var body = View(screenStyle())
+    body.setStyle(entryBodyCss())
+    body.bind(welcomeColumn(mark, slogan, signup, login, desktop))
+    return body
+}
+
+// Mobile: botões empilhados; Desktop: lado a lado e coluna limitada a 480px.
+Column welcomeColumn(View mark, Label slogan, Button signup, Button login, Bool desktop) {
+    if (desktop) {
+        var row = Row(listOf(signup, login))
+        row.setStyle(actionsDesktopCss())
+        var wide = Column(listOf(mark, slogan, row))
+        wide.setStyle(entryColumnDesktopCss())
+        return wide
+    }
+    var stacked = Column(listOf(signup, login))
+    stacked.setStyle(actionsMobileCss())
+    var narrow = Column(listOf(mark, slogan, stacked))
+    narrow.setStyle(entryColumnMobileCss())
+    return narrow
 }

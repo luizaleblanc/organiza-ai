@@ -70,3 +70,62 @@ Style navBarStyle()        = Style(colorCard(), colorTextSecondary(), 8, 0)
 Style sidebarStyle()       = Style(colorCard(), colorTextSecondary(), 16, 0)
 Style buttonStyle()        = Style(colorAccent(), colorAccentContrast(), 12, 8)
 Style dangerStyle()        = Style(colorDanger(), colorTextPrimary(), 12, 8)
+
+// =============================================================================
+// Styles CSS — Style("<css>") (Batch 2, design.md §3)
+// =============================================================================
+// O compilador valida o texto (SEM076/077/078) e o argumento precisa ser
+// literal, por isso cada estilo é uma função. Int sem unidade = px.
+// Todo texto define `color`: sem cor, o Label herda o verde do index.html.
+// Tokens: #0A0D18 bg · #12162A card · #00D4FF/#0066FF accent ·
+// #06121C texto sobre accent · #F0F0F0/#7B8EAD/#4A5578 texto · #FF4A6E danger.
+// =============================================================================
+
+// ---- Layout das telas de entrada (§2.2) -------------------------------------
+// O View raiz recebe o fundo; a Column filha é que organiza o conteúdo (o
+// layout flex vale para os filhos diretos). A altura vem do viewport canônico
+// (640 / 800): `min-height: 100%` não tem referência no root do runtime.
+Style entryScreenMobileCss()  = Style("background: #0A0D18; color: #F0F0F0; min-height: 640; box-sizing: border-box; padding: 16; display: flex; flex-direction: column; font-family: Manrope, ui-sans-serif, system-ui, sans-serif")
+Style entryScreenDesktopCss() = Style("background: #0A0D18; color: #F0F0F0; min-height: 800; box-sizing: border-box; padding: 16; display: flex; flex-direction: column; font-family: Manrope, ui-sans-serif, system-ui, sans-serif")
+Style entryStackCss()         = Style("display: flex; flex-direction: column; flex-grow: 1; gap: 0; width: 100%")
+// Corpo da tela: ocupa o resto da altura e centraliza na vertical.
+Style entryBodyCss()          = Style("display: flex; flex-direction: column; justify-content: center; align-items: center; flex-grow: 1; width: 100%; padding: 0; background: transparent")
+// Coluna de conteúdo: largura total no Mobile, até 480px no Desktop (§2.2).
+Style entryColumnMobileCss()  = Style("display: flex; flex-direction: column; align-items: stretch; gap: 32; width: 100%")
+Style entryColumnDesktopCss() = Style("display: flex; flex-direction: column; align-items: center; gap: 32; width: 100%; max-width: 480")
+// Barra de dev (toggle de viewport) no topo das telas de entrada.
+Style devBarCss()             = Style("display: flex; flex-direction: row; justify-content: flex-end; width: 100%; padding: 0; background: transparent")
+Style devToggleCss()          = Style("background: transparent; color: #4A5578; border: 1px solid rgba(255,255,255,.06); border-radius: 8; padding: 4px 8px; font-size: 12")
+
+// ---- Tela 1 ----------------------------------------------------------------
+Style markCss()               = Style("align-self: center; padding: 0; background: transparent; line-height: 0")
+// Slogan: captionCss em caixa alta, 600, letter-spacing .08em, max-width 240 (§5).
+Style sloganMobileCss()       = Style("color: #7B8EAD; font-size: 14; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; text-align: center; max-width: 240; align-self: center; margin: 0")
+// Desktop (artefato 64FYjX5UiveVxTtRGYurQP, WelcomeWin): 16px, max-width 320.
+Style sloganDesktopCss()      = Style("color: #7B8EAD; font-size: 16; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; text-align: center; max-width: 320; align-self: center; margin: 0")
+Style actionsMobileCss()      = Style("display: flex; flex-direction: column; align-items: stretch; gap: 12; width: 100%")
+Style actionsDesktopCss()     = Style("display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 16")
+
+// ---- Botões (spec B2-01 AC4) -----------------------------------------------
+Style primaryButtonCss()      = Style("background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 48; width: 100%; border: none; border-radius: 12; font-size: 16; font-weight: 600; cursor: pointer")
+Style secondaryButtonCss()    = Style("background: transparent; color: #00D4FF; height: 48; width: 100%; border: 1.5px solid #00D4FF; border-radius: 12; font-size: 16; font-weight: 600; cursor: pointer")
+Style disabledButtonCss()     = Style("background: #12162A; color: #4A5578; height: 48; width: 100%; border: 1px solid rgba(255,255,255,.06); border-radius: 12; font-size: 16; font-weight: 600")
+// Desktop: botões lado a lado com 200px (artefato Desktop).
+Style primaryButtonWideCss()  = Style("background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 48; width: 200; border: none; border-radius: 12; font-size: 16; font-weight: 600; cursor: pointer")
+Style secondaryButtonWideCss() = Style("background: transparent; color: #00D4FF; height: 48; width: 200; border: 1.5px solid #00D4FF; border-radius: 12; font-size: 16; font-weight: 600; cursor: pointer")
+
+// ---- Formulário (Telas 2–7) -------------------------------------------------
+Style inputCss()              = Style("background: #12162A; color: #F0F0F0; height: 48; width: 100%; box-sizing: border-box; border: 1px solid rgba(255,255,255,.06); border-radius: 8; padding: 0 16px; font-size: 16")
+Style moneyCss()              = Style("background: transparent; color: #00D4FF; height: 56; width: 100%; box-sizing: border-box; border: none; text-align: center; font-size: 32; font-weight: 600; font-variant: tabular-nums")
+Style choiceCss()             = Style("color: #F0F0F0; height: 72; width: 100%; box-sizing: border-box; border-radius: 12; padding: 0 16px; background: #12162A; border: 1px solid rgba(255,255,255,.06); font-size: 16; text-align: left; cursor: pointer")
+Style choiceSelectedCss()     = Style("color: #F0F0F0; height: 72; width: 100%; box-sizing: border-box; border-radius: 12; padding: 0 16px; background: rgba(0,212,255,.08); border: 1px solid #00D4FF; font-size: 16; text-align: left; cursor: pointer")
+Style titleCss()              = Style("color: #F0F0F0; font-size: 24; font-weight: 500; margin: 0")
+Style captionCss()            = Style("color: #7B8EAD; font-size: 14; margin: 0")
+Style errorBannerCss()        = Style("color: #FF4A6E; background: rgba(255,74,110,.12); border: 1px solid #FF4A6E; border-radius: 8; padding: 12; font-size: 14")
+Style dotsCss()               = Style("display: flex; flex-direction: row; gap: 12; justify-content: center")
+Style dotActiveCss()          = Style("width: 8; height: 8; border-radius: 4; background: #00D4FF")
+Style dotVisitedCss()         = Style("width: 8; height: 8; border-radius: 4; background: rgba(0,212,255,.4)")
+Style dotInactiveCss()        = Style("width: 8; height: 8; border-radius: 4; background: rgba(255,255,255,.15)")
+// Barra de bucket: a largura do preenchimento vem de setFlexBasis(px) (medido na F6).
+Style trackCss()              = Style("display: flex; height: 8; width: 100%; border-radius: 4; background: #12162A; overflow: hidden")
+Style fillCss()               = Style("height: 8; border-radius: 4; background: #00D4FF; flex-grow: 0; flex-shrink: 0")

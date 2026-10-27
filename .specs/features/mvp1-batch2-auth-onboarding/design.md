@@ -138,6 +138,14 @@ Componentes novos usam `Style("<css>")` + `setStyle`; o `Style(4 Ints)` do Batch
 | `moneyCss()` | `color: #00D4FF; font-size: 32; font-weight: 600; font-variant: tabular-nums` |
 | `trackCss()` / `fillCss()` | `height: 8; border-radius: 4; background: #12162A` / `#00D4FF`. A largura vem de `setMaxWidth(Int)`/`setFlexBasis(Int)` (existem em `KofUi.java`, **não medidos**) ou de estilos literais de 10% em 10%; medir na F6 |
 
+**Medido na F6 (kof 0.6.6 e 0.6.7, Edge headless):**
+
+- Os estilos acima existem em `theme.kf` com os nomes da tabela, mais os de layout (`entryScreen*Css`, `entryStackCss`, `entryBodyCss`, `entryColumn*Css`), da Tela 1 (`sloganMobileCss`/`sloganDesktopCss`, `actions*Css`, `primaryButtonWideCss`/`secondaryButtonWideCss` de 200px para o Desktop) e de `progressDots`/`errorBanner`. `letter-spacing` usa `0.08em` (o valor `.08em` não foi testado no parser).
+- `getComputedStyle` na Tela 1: primário `linear-gradient(90deg, rgb(0,212,255), rgb(0,102,255))`, texto `rgb(6,18,28)`, 48px; secundário fundo transparente, texto e borda `#00D4FF`, 48px. A borda chega ao DOM como `1.5px solid` (estilo inline), mas o Chromium com DPR 1 arredonda a largura computada para `1px`: limitação do navegador, não do Kof.
+- Layout flex vale para filhos diretos: o `View` só tem um filho (o `Column`/`Row` do `bind`), então o arranjo (`gap`, `justify-content`, `align-items`) vai no `Column`/`Row` via `setStyle`, e o `View` só centraliza esse filho.
+- `Canvas` não tem `setId` nem `setStyle` (`SEM025`): `brandMark(width, id)` devolve um `View` com o `Canvas` dentro. O `Canvas` também não tem `quadraticCurveTo` nem gradiente de traço: as ondas são a Bézier do artefato amostrada em 12 segmentos por metade, em `#00D4FF` com `setGlobalAlpha` 1 / .78 / .58.
+- `setFlexBasis`/`setMaxWidth` (usados em `bucketBar`) compilam, mas continuam **não medidos** no navegador: medir na tarefa da Tela 7.
+
 ---
 
 ## 4. Contratos
@@ -249,7 +257,7 @@ Cada tarefa = 1 commit manual da usuária. Ordem: backend → `api_client` async
 | F3 | Backend: `debtAmount` → `debtCents`; `GET /api/users/me` com `onboardingCompleted` | B2-11 | G-BUILD, G-BYTECODE, G-E2E (`/me` antes e depois do onboarding; `debtcents` gravado), G-RESTART |
 | F4 | Backend same-origin: `serveDir` + `isPublicPath`; Dockerfile e `.dockerignore` (§2.7) | B2-09 | G-BUILD, G-BYTECODE, G-E2E, G-RESTART, **G-AUTH-STATIC**; `docker build` local + `docker run` com H2 servindo `/index.html` (sem tocar a produção) |
 | F5 | Frontend: `api_client.kf` async + `auth_api.kf` + `format.kf`; medir `json.encode` e `json.decode<MeResponse>` no JS | B2-02, B2-03, B2-07, B2-08 | G-BUILD; probe chamando register/login/me/onboarding e imprimindo os resultados do §4.1; backend desligado → `catch` |
-| F6 | Frontend: estilos `Style("css")` + `form_widgets.kf` + `brand_mark.kf` + dispatcher + Tela 1 | B2-01 | G-BUILD, G-UI (Mobile e Desktop; 2 cliques) |
+| F6 | Frontend: estilos `Style("css")` + `form_widgets.kf` + `brand_mark.kf` + dispatcher + Tela 1 | B2-01 | G-BUILD, G-UI (Mobile e Desktop; 2 cliques). **Feito** (0.6.6 e 0.6.7; ver §3) |
 | F7 | Frontend: Telas 2 e 3 | B2-02, B2-03 | G-BUILD, G-UI: vazio, senha errada, 6 erros (429), 409, validações locais, sucesso → Tela 4, conta concluída → `dashboard`, backend fora |
 | F8a | Frontend: Telas 4 e 5 | B2-04, B2-05 | G-BUILD, G-UI: entradas válidas e inválidas; "Próximo" com `disabled=true` antes da escolha |
 | F8b | Frontend: Telas 6, 6.1 e 7 | B2-06, B2-07 | G-BUILD, G-UI: dois caminhos; Tela 7 com os buckets da spec; VARIABLE sem barras; token inválido → Tela 2; `/me` depois → `onboardingCompleted: true` |
