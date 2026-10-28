@@ -43,6 +43,10 @@ class OnboardingState {
     static String debtAmount = ""
     static String suggestedModel = ""
     static String modelDescription = ""
+    // Tela 6 (F8b): "" (nada escolhido), "YES" ou "NO".
+    static String debtChoice = ""
+    // Telas 6/6.1: envio do onboarding em andamento (um toque = uma chamada).
+    static Bool submitting = false
 }
 
 class DashboardState {

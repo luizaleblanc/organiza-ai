@@ -8,6 +8,9 @@ import components.nav_bar
 import screens.welcome_screen
 import screens.onb_salary_screen
 import screens.onb_income_screen
+import screens.onb_debt_screen
+import screens.onb_debt_amount_screen
+import screens.onb_result_screen
 
 // =============================================================================
 // T5 — Dispatcher raiz e navegação (Dual Viewport)
@@ -141,6 +144,15 @@ View buildEntryContent(Window w) {
     }
     if (AppState.currentScreen == "onb_income") {
         return onbIncomeScreen(w)
+    }
+    if (AppState.currentScreen == "onb_debt") {
+        return onbDebtScreen(w)
+    }
+    if (AppState.currentScreen == "onb_debt_amount") {
+        return onbDebtAmountScreen(w)
+    }
+    if (AppState.currentScreen == "onb_result") {
+        return onbResultScreen(w)
     }
     return buildScreenContent()
 }

@@ -99,16 +99,35 @@ Row progressDots(Int current) {
     return r
 }
 
-// Barra de bucket: trilho com `widthPx` e preenchimento de `pct` % (flex-basis em px).
+// Barra de bucket: trilho de até `widthPx` com preenchimento de `pct` % (0 a 100).
+// Medido na F8b (Edge, kof 0.6.6/0.6.7): setFlexBasis(n) grava `flex: 1 1 <n>px`
+// (grow 1), então um filho só enche o trilho todo; e `.kof-row` do index.html
+// tem `flex-wrap: wrap`, por isso o Row interno usa `nowrap`. Por isso são dois filhos,
+// preenchimento e resto, com bases pct*100 e (100-pct)*100 px: a soma (10.000px)
+// passa da largura do trilho e o encolhimento (proporcional à base) deixa o
+// preenchimento em exatamente pct % da largura real. Style("css") não aceita
+// texto calculado (SEM077), então não dá para gravar `width: N%`.
 View bucketBar(Int pct, Int widthPx, String id) {
+    var p = pct
+    if (p > 100) {
+        p = 100
+    }
+    if (p < 0) {
+        p = 0
+    }
     var fill = View(screenStyle())
     fill.setStyle(fillCss())
-    fill.setFlexBasis(widthPx * pct / 100)
+    fill.setFlexBasis(p * 100)
+    var rest = View(screenStyle())
+    rest.setStyle(fillRestCss())
+    rest.setFlexBasis((100 - p) * 100)
     var track = View(screenStyle())
     track.setId(id)
     track.setStyle(trackCss())
     track.setMaxWidth(widthPx)
-    track.bind(fill)
+    var parts = Row(listOf(fill, rest))
+    parts.setStyle(fillRowCss())
+    track.bind(parts)
     return track
 }
 

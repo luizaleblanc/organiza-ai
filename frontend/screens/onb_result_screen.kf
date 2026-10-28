@@ -1,0 +1,161 @@
+package screens
+
+import kof.ui
+import core.theme
+import core.app_state
+import core.format
+import core.auth_api
+import core.navigation
+import components.form_widgets
+
+// =============================================================================
+// Tela 7 — Resultado do onboarding (spec B2-07; design.md §5)
+// =============================================================================
+// `sendOnboarding` é o envio único das Telas 6 ("Não") e 6.1: chama
+// submitOnboarding (F5), guarda a resposta em ResultState e abre a Tela 7.
+// Falha: token inválido (sessão já limpa pelo auth_api) → Tela 2; outra
+// falha → mensagem fixa (AppState.formError) na tela atual e botão reabilitado.
+// Salário e tipo vêm das Telas 4/5 (F8a): parseMoney(salary) e incomeType.
+// FREELANCER_BASE_ZERO chega sem buckets: só a descrição, sem barras.
+// =============================================================================
+
+// Resposta do último envio. `?` sem inicializador lê null até a 1ª escrita.
+class ResultState {
+    static OnboardingResponse? last
+}
+
+sendOnboarding(Window w, Bool hasDebt, Double debtAmount) {
+    if (OnboardingState.submitting) {
+        return
+    }
+    OnboardingState.submitting = true
+    AppState.formError = ""
+    OnboardingState.hasDebt = hasDebt
+    try {
+        val result = submitOnboarding(parseMoney(OnboardingState.salary), OnboardingState.incomeType, hasDebt, debtAmount)
+        ResultState.last = result
+        OnboardingState.submitting = false
+        navigateTo(w, "onb_result")
+    } catch (String e) {
+        OnboardingState.submitting = false
+        if (SessionState.token == "") {
+            // Token inválido: auth_api já limpou a sessão; a Tela 2 mostra a mensagem.
+            AppState.formError = msgSessionExpired()
+            navigateTo(w, "login")
+        } else {
+            AppState.formError = e
+            mountScreen(w)
+        }
+    }
+}
+
+// Nome amigável do modelo (design.md §4.1).
+String modelFriendlyName(String model) {
+    if (model == "STANDARD_503020") {
+        return "50/30/20"
+    }
+    if (model == "SURVIVAL_702010") {
+        return "70/20/10"
+    }
+    if (model == "ANTI_DEBT_701020") {
+        return "Anti-Dívida"
+    }
+    if (model == "SIMPLE_8020") {
+        return "80/20"
+    }
+    if (model == "KAKEIBO") {
+        return "Kakeibo"
+    }
+    if (model == "FREELANCER_BASE_ZERO") {
+        return "Base Zero"
+    }
+    return model
+}
+
+// Largura útil da coluna: Mobile 360 - 2x16 de padding; Desktop max-width 480.
+Int resultBarWidth() {
+    if (AppState.isDesktop) {
+        return 480
+    }
+    return 328
+}
+
+// Nome à esquerda, "70% · R$ 2.100,00" à direita e a barra embaixo.
+View bucketRow(BucketSummary b, Int index) {
+    var name = Label(b.name())
+    name.setId("bucket-name-" + String.valueOf(index))
+    name.setStyle(bucketNameCss())
+    var value = Label(String.valueOf(b.percentage()) + "% · " + brl(b.amount()))
+    value.setId("bucket-value-" + String.valueOf(index))
+    value.setStyle(bucketValueCss())
+    var head = Row(listOf(name, value))
+    head.setStyle(bucketHeadCss())
+    var col = Column(listOf(head, bucketBar(b.percentage(), resultBarWidth(), "bucket-bar-" + String.valueOf(index))))
+    col.setStyle(bucketRowCss())
+    var row = View(screenStyle())
+    row.setStyle(bucketWrapCss())
+    row.bind(col)
+    return row
+}
+
+View onbResultScreen(Window w) {
+    var model = ""
+    var description = ""
+    val r = ResultState.last
+    if (r != null) {
+        model = r.suggestedModel()
+        description = r.description()
+    }
+
+    var title = Label("Seu modelo: " + modelFriendlyName(model))
+    title.setId("result-title")
+    title.setStyle(titleCss())
+    var text = Label(description)
+    text.setId("result-description")
+    text.setStyle(captionCss())
+
+    var items = listOf(dotsBlock(3), titleBlock(title, text))
+    if (r != null) {
+        var i = 0
+        for (var b in r.buckets()) {
+            items.add(bucketRow(b, i))
+            i = i + 1
+        }
+    }
+    items.add(buttonBlock(primaryButton("Começar a organizar", "btn-start", false, () -> navigateTo(w, "dashboard"))))
+
+    return entryBody(items)
+}
+
+// Blocos como View para a lista de filhos ter um tipo só.
+View dotsBlock(Int current) {
+    var v = View(screenStyle())
+    v.setStyle(blockCss())
+    v.bind(progressDots(current))
+    return v
+}
+
+View titleBlock(Label title, Label text) {
+    var col = Column(listOf(title, text))
+    col.setStyle(titleBlockCss())
+    var v = View(screenStyle())
+    v.setStyle(blockCss())
+    v.bind(col)
+    return v
+}
+
+View buttonBlock(Button b) {
+    var v = View(screenStyle())
+    v.setStyle(blockCss())
+    v.bind(b)
+    return v
+}
+
+// Estilos locais das Telas 6, 6.1 e 7 (Style("css"), design.md §3).
+Style blockCss()       = Style("display: flex; flex-direction: column; align-items: stretch; width: 100%; padding: 0; background: transparent")
+Style titleBlockCss()  = Style("display: flex; flex-direction: column; gap: 8; width: 100%")
+Style bucketWrapCss()  = Style("display: flex; flex-direction: column; width: 100%; padding: 0; background: transparent")
+Style bucketRowCss()   = Style("display: flex; flex-direction: column; gap: 8; width: 100%")
+Style bucketHeadCss()  = Style("display: flex; flex-direction: row; justify-content: space-between; align-items: baseline; width: 100%")
+Style bucketNameCss()  = Style("color: #F0F0F0; font-size: 16; font-weight: 600; margin: 0")
+Style bucketValueCss() = Style("color: #00D4FF; font-size: 14; font-variant: tabular-nums; margin: 0")

@@ -1,0 +1,62 @@
+package screens
+
+import kof.ui
+import core.theme
+import core.app_state
+import core.format
+import core.navigation
+import components.form_widgets
+
+// =============================================================================
+// Tela 6.1 — Valor da dívida (spec B2-06; design.md §5)
+// =============================================================================
+// Mesmas regras do salário (parseMoney: 0 < v <= 1.000.000, até 2 casas).
+// Válido → envia hasDebt=true e debtAmount em reais → Tela 7.
+// Inválido → "Digite um valor entre R$ 1 e R$ 1.000.000." e fica na tela.
+// =============================================================================
+
+String msgInvalidAmount() = "Digite um valor entre R$ 1 e R$ 1.000.000."
+
+debtAmountNext(Window w, Input field) {
+    val raw = field.text()
+    OnboardingState.debtAmount = raw
+    var amount = 0.0
+    try {
+        amount = parseMoney(raw)
+    } catch (String e) {
+        AppState.formError = msgInvalidAmount()
+        mountScreen(w)
+        return
+    }
+    sendOnboarding(w, true, amount)
+}
+
+View onbDebtAmountScreen(Window w) {
+
+    var title = Label("Qual o valor aproximado da sua dívida?")
+    title.setId("debt-amount-title")
+    title.setStyle(titleCss())
+    var subtitle = Label("Isso ajuda a modelar o modelo de economia que mais se adequa a sua realidade")
+    subtitle.setStyle(captionCss())
+
+    var prefix = Label("R$")
+    prefix.setStyle(moneyPrefixCss())
+    var field = moneyFieldWith(OnboardingState.debtAmount, "5.000", "debt-amount")
+    var money = Row(listOf(prefix, field))
+    money.setStyle(moneyRowCss())
+    var moneyBlock = View(screenStyle())
+    moneyBlock.setStyle(blockCss())
+    moneyBlock.bind(money)
+
+    var next = disabledButton("Próximo", "btn-next")
+    if (!OnboardingState.submitting) {
+        next = primaryButton("Próximo", "btn-next", false, () -> { spawn { debtAmountNext(w, field) } })
+    }
+
+    var items = listOf(dotsBlock(3), titleBlock(title, subtitle), moneyBlock)
+    if (AppState.formError != "") {
+        items.add(errorBlock(AppState.formError))
+    }
+    items.add(buttonBlock(next))
+    return entryBody(items)
+}
