@@ -75,10 +75,40 @@ String getOrThrow(String path) {
     return checked(body)
 }
 
+// JWT cru (design §4.1): três partes base64url separadas por ".", começando
+// com "eyJ". Nenhum outro corpo vira token (F7): um 4xx com JSON fora do
+// formato {"error"...} e uma página HTML de proxy/404 não podem ser gravados
+// em SessionState.token.
+Bool looksLikeJwt(String body) {
+    if (!body.startsWith("eyJ")) {
+        return false
+    }
+    if (body.contains(" ") || body.contains("
+") || body.contains("<") || body.contains("{") || body.contains("\"")) {
+        return false
+    }
+    val first = body.indexOf(".")
+    val last = body.lastIndexOf(".")
+    return first > 0 && last > first + 1 && last < body.length - 1 && body.indexOf("..") < 0
+}
+
+// Corpo que começa com "{" e não é {"error"...} canônico ainda é tratado
+// como erro de API (mensagem genérica); qualquer outro corpo que não seja JWT
+// é tratado como falha de rede ou servidor.
+String tokenOrThrow(String body) {
+    if (looksLikeJwt(body)) {
+        return body
+    }
+    if (body.trim().startsWith("{")) {
+        throw apiErrorMessage(body)
+    }
+    throw msgNetwork()
+}
+
 // Devolve o JWT e grava a sessão. E-mail vai sem espaços nas pontas.
 String login(String email, String password) {
     val cleanEmail = email.trim()
-    val token = postOrThrow("/api/auth/login", json.encode(LoginRequest(cleanEmail, password)))
+    val token = tokenOrThrow(postOrThrow("/api/auth/login", json.encode(LoginRequest(cleanEmail, password))))
     SessionState.token = token
     SessionState.userEmail = cleanEmail
     return token
@@ -87,7 +117,7 @@ String login(String email, String password) {
 String register(String name, String email, String password) {
     val cleanName = name.trim()
     val cleanEmail = email.trim()
-    val token = postOrThrow("/api/auth/register", json.encode(RegisterRequest(cleanName, cleanEmail, password)))
+    val token = tokenOrThrow(postOrThrow("/api/auth/register", json.encode(RegisterRequest(cleanName, cleanEmail, password))))
     SessionState.token = token
     SessionState.userEmail = cleanEmail
     SessionState.userName = cleanName

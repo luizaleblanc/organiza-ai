@@ -1,0 +1,122 @@
+package screens
+
+import kof.ui
+import core.theme
+import core.app_state
+import core.navigation
+import core.auth_api
+import core.format
+import components.brand_mark
+import components.form_widgets
+import screens.login_screen
+
+// =============================================================================
+// Tela 3 — Cadastro (spec B2-03; design.md §5)
+// =============================================================================
+// brandMark(92) + Form(nome, e-mail, senha, confirmar, Criar conta) +
+// errorBanner + rodapé "Já tem conta?" / "Entrar". Mesmo padrão da Tela 2:
+// Form.onSubmit, valores em SignupForm para sobreviver ao re-render.
+// =============================================================================
+
+class SignupForm {
+    static String name = ""
+    static String email = ""
+    static String password = ""
+    static String confirm = ""
+    static Bool busy = false
+}
+
+clearSignupForm() {
+    SignupForm.name = ""
+    SignupForm.email = ""
+    SignupForm.password = ""
+    SignupForm.confirm = ""
+    AppState.formError = ""
+    SignupForm.busy = false
+}
+
+// Validações locais da spec B2-03 (itens 4–7), na ordem dos campos.
+// "" = válido.
+String signupLocalError(String name, String email, String password, String confirm) {
+    if (name.trim() == "") {
+        return "Digite seu nome."
+    }
+    if (!isEmailLike(email.trim())) {
+        return "Digite um e-mail válido."
+    }
+    if (password.length < 8) {
+        return "A senha precisa ter pelo menos 8 caracteres."
+    }
+    if (password != confirm) {
+        return "As senhas não conferem."
+    }
+    return ""
+}
+
+submitSignup(Window w, Input nameField, Input emailField, Input passwordField, Input confirmField) {
+    if (SignupForm.busy) {
+        return
+    }
+    SignupForm.name = nameField.text()
+    SignupForm.email = emailField.text()
+    SignupForm.password = passwordField.text()
+    SignupForm.confirm = confirmField.text()
+    val localError = signupLocalError(SignupForm.name, SignupForm.email, SignupForm.password, SignupForm.confirm)
+    if (localError != "") {
+        AppState.formError = localError
+        mountScreen(w)
+        return
+    }
+    AppState.formError = ""
+    SignupForm.busy = true
+    mountScreen(w)
+    try {
+        register(SignupForm.name, SignupForm.email, SignupForm.password)
+        clearSignupForm()
+        navigateTo(w, "onb_salary")
+    } catch (String e) {
+        SessionState.token = ""
+        SignupForm.busy = false
+        AppState.formError = e
+        mountScreen(w)
+    }
+}
+
+View signupScreen(Window w) {
+    var mark = brandMark(92, "brand-mark")
+
+    var nameField = filledField("Nome", "text", "signup-name", SignupForm.name)
+    // type=text e não email (medido na F7): com type=email o navegador barra o
+    // submit do <form> com o balão nativo, onSubmit não roda e a mensagem
+    // "Digite um e-mail válido." (B2-03 item 6) nunca aparece; o kof.ui não
+    // expõe `novalidate`. A validação fica em isEmailLike (core/format.kf).
+    var emailField = filledField("E-mail", "text", "signup-email", SignupForm.email)
+    var passwordField = filledField("Senha", "password", "signup-password", SignupForm.password)
+    var confirmField = filledField("Confirmar senha", "password", "signup-confirm", SignupForm.confirm)
+    var submit = submitButton("Criar conta", "Criando conta…", "btn-signup-submit", SignupForm.busy)
+
+    var form = Form(listOf(nameField, emailField, passwordField, confirmField, submit))
+    form.setId("signup-form")
+    form.setStyle(signupFormCss())
+    form.onSubmit(() -> {
+        spawn {
+            submitSignup(w, nameField, emailField, passwordField, confirmField)
+        }
+    })
+
+    var footer = authFooter("Já tem conta?", "Entrar", "link-login", () -> {
+        clearSignupForm()
+        navigateTo(w, "login")
+    })
+
+    var col = Column(listOf(mark, form, footer))
+    if (AppState.formError != "") {
+        col = Column(listOf(mark, errorBanner(AppState.formError), form, footer))
+    }
+    col.setStyle(authColumnCss())
+
+    var body = View(screenStyle())
+    body.setStyle(entryBodyCss())
+    body.bind(col)
+    return body
+}

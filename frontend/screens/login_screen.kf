@@ -1,0 +1,143 @@
+package screens
+
+import kof.ui
+import core.theme
+import core.app_state
+import core.navigation
+import core.auth_api
+import components.brand_mark
+import components.form_widgets
+
+// =============================================================================
+// Tela 2 — Login (spec B2-02; design.md §5)
+// =============================================================================
+// brandMark(120) + Form(e-mail, senha, Entrar) + errorBanner + rodapé
+// "Não tem conta?" / "Cadastre-se". O Form é o dono do envio (onSubmit): o
+// clique em "Entrar" e o Enter disparam o mesmo handler.
+// Erro e "carregando" re-renderizam a tela com mountScreen(w); os valores
+// digitados ficam em LoginForm (campos static) para sobreviver ao re-render.
+// Medido na F7: o re-render de "Entrando…" aparece no DOM antes da resposta
+// do await (o botão já está desabilitado quando o fetch ainda está pendente).
+// =============================================================================
+
+class LoginForm {
+    static String email = ""
+    static String password = ""
+    static Bool busy = false
+}
+
+clearLoginForm() {
+    LoginForm.email = ""
+    LoginForm.password = ""
+    AppState.formError = ""
+    LoginForm.busy = false
+}
+
+// Estilos das telas 2 e 3 (Style("css"), mesmo padrão de core/theme.kf).
+Style authColumnCss()   = Style("display: flex; flex-direction: column; align-items: stretch; gap: 24; width: 100%; max-width: 400")
+Style authFormCss()     = Style("display: flex; flex-direction: column; align-items: stretch; gap: 16; width: 100%; margin: 0")
+Style signupFormCss()   = Style("display: flex; flex-direction: column; align-items: stretch; gap: 20; width: 100%; margin: 0")
+Style authFooterCss()   = Style("display: flex; flex-direction: column; align-items: center; gap: 4; width: 100%")
+Style authLinkCss()     = Style("background: transparent; color: #00D4FF; border: none; padding: 4px 8px; font-size: 14; font-weight: 600; cursor: pointer")
+Style authBusyCss()     = Style("background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 48; width: 100%; border: none; border-radius: 12; font-size: 16; font-weight: 600; opacity: 0.6; cursor: wait")
+Style authSpacerCss()   = Style("height: 4; background: transparent; padding: 0")
+
+// Botão de envio do Form: sem ação própria (o <button> dentro do <form> é
+// submit e dispara onSubmit). Em "busy" fica desabilitado com o texto de espera.
+Button submitButton(String label, String busyLabel, String id, Bool busy) {
+    if (busy) {
+        var b = Button(busyLabel, () -> {})
+        b.setId(id)
+        b.setDisabled(true)
+        b.setStyle(authBusyCss())
+        return b
+    }
+    return primaryButton(label, id, false, () -> {})
+}
+
+// Rodapé "pergunta" + link cyan na linha de baixo (DESIGN_SYSTEM.md, Telas 2 e 3).
+Column authFooter(String question, String linkLabel, String linkId, () -> Void action) {
+    var q = Label(question)
+    q.setStyle(captionCss())
+    var link = Button(linkLabel, action)
+    link.setId(linkId)
+    link.setStyle(authLinkCss())
+    var col = Column(listOf(q, link))
+    col.setStyle(authFooterCss())
+    return col
+}
+
+// Campo de texto já preenchido com o valor guardado.
+Input filledField(String placeholder, String type, String id, String value) {
+    var f = textField(placeholder, type, id)
+    f.setText(value)
+    return f
+}
+
+// Valida, mostra "Entrando…", chama login + me e navega.
+submitLogin(Window w, Input emailField, Input passwordField) {
+    if (LoginForm.busy) {
+        return
+    }
+    LoginForm.email = emailField.text()
+    LoginForm.password = passwordField.text()
+    if (LoginForm.email.trim() == "" || LoginForm.password == "") {
+        AppState.formError = "Preencha e-mail e senha."
+        mountScreen(w)
+        return
+    }
+    AppState.formError = ""
+    LoginForm.busy = true
+    mountScreen(w)
+    try {
+        login(LoginForm.email, LoginForm.password)
+        val profile = me()
+        clearLoginForm()
+        if (profile.onboardingCompleted()) {
+            navigateTo(w, "dashboard")
+        } else {
+            navigateTo(w, "onb_salary")
+        }
+    } catch (String e) {
+        SessionState.token = ""
+        LoginForm.busy = false
+        AppState.formError = e
+        mountScreen(w)
+    }
+}
+
+View loginScreen(Window w) {
+    var markWidth = 120
+    var mark = brandMark(markWidth, "brand-mark")
+
+    var emailField = filledField("E-mail", "email", "login-email", LoginForm.email)
+    var passwordField = filledField("Senha", "password", "login-password", LoginForm.password)
+    var spacer = View(screenStyle())
+    spacer.setStyle(authSpacerCss())
+    var submit = submitButton("Entrar", "Entrando…", "btn-login-submit", LoginForm.busy)
+
+    var form = Form(listOf(emailField, passwordField, spacer, submit))
+    form.setId("login-form")
+    form.setStyle(authFormCss())
+    form.onSubmit(() -> {
+        spawn {
+            submitLogin(w, emailField, passwordField)
+        }
+    })
+
+    var footer = authFooter("Não tem conta?", "Cadastre-se", "link-signup", () -> {
+        clearLoginForm()
+        navigateTo(w, "signup")
+    })
+
+    var col = Column(listOf(mark, form, footer))
+    if (AppState.formError != "") {
+        col = Column(listOf(mark, errorBanner(AppState.formError), form, footer))
+    }
+    col.setStyle(authColumnCss())
+
+    var body = View(screenStyle())
+    body.setStyle(entryBodyCss())
+    body.bind(col)
+    return body
+}
