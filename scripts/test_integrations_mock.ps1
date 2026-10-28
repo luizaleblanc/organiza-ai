@@ -2,7 +2,9 @@
 # Integracoes do MVP 1 contra provedores FALSOS locais (scripts/mock_providers/providers_mock.ps1): nunca
 # chama servico real. Cobre o e-mail no formato do Resend (esqueci a senha com token de uso unico; resumo
 # diario no horario KOF_DIGEST_AT, sem duplicar apos reinicio) e o desligamento honesto (503) sem
-# KOF_EMAIL_API_KEY. O mock e HTTPS com certificado autoassinado gerado na hora; o backend so confia nele
+# KOF_EMAIL_API_KEY; e o coach com OpenAI (resposta simples, tool_call -> resultado -> resposta final, as 8
+# tools, memoria de 20 mensagens, 500/timeout/formato invalido/401 com 503 honesto, freemium, e a resposta
+# fixa sem OPENAI_API_KEY). O mock e HTTPS com certificado autoassinado gerado na hora; o backend so confia nele
 # porque a JVM do teste recebe um truststore de teste (-Djavax.net.ssl.trustStore): o caminho TLS e o real.
 # Pre-requisitos: `kof build backend --target jvm` (-ClassesDir); driver JDBC em -ExtraClasspath; kof.jar em
 # -KofJar; JDK com keytool (-JavaHome). Banco: H2 em arquivo novo em -DbDir, ou o de -DbUrl/-DbUser/-DbPassword
@@ -89,6 +91,7 @@ function ConvertFrom-JsonList([string]$Json) {
     return ,@($parsed | ForEach-Object { $_ })
 }
 function Get-MockEmails { return (ConvertFrom-JsonList (Invoke-Http "GET" "$AdminUrl/_emails").Body) }
+function Get-MockChats { return (ConvertFrom-JsonList (Invoke-Http "GET" "$AdminUrl/_openai").Body) }
 
 # Processo java com variaveis proprias (o ambiente desta sessao nao muda).
 function Start-Java([string]$Classpath, [hashtable]$EnvVars, [string]$LogPrefix) {
@@ -122,15 +125,15 @@ $digestHHMM = $digestAt.ToString("HH:mm")
 # H2 SEM WRITE_DELAY=0: o passo 8 mata o processo (kill), e com WRITE_DELAY=0 o H2 2.5 perde linhas ja
 # confirmadas nesse caso (medido: a linha do emaillogrow aparece com o servidor vivo e some depois do kill;
 # com o padrao do H2 ela fica). Producao e MySQL, onde o passo passa com o mesmo codigo.
-$dbMain = "jdbc:h2:file:$DbDir\int"; $dbOther = "jdbc:h2:file:$DbDir\int2"
-if ($DbUrl) { $dbMain = $DbUrl; $dbOther = $DbUrl }
+$dbMain = "jdbc:h2:file:$DbDir\int"; $dbOther = "jdbc:h2:file:$DbDir\int2"; $dbCoach = "jdbc:h2:file:$DbDir\int3"
+if ($DbUrl) { $dbMain = $DbUrl; $dbOther = $DbUrl; $dbCoach = $DbUrl }
 $base = @{ KOF_JWT_SECRET = $secret; PORT = "$Port"; KOF_DB_URL = $dbMain;
     KOF_EMAIL_API_URL = "$MockUrl/emails"; KOF_EMAIL_API_KEY = "re-test-mock"; KOF_EMAIL_FROM = "Organiza AI <nao-responda@organiza.test>";
     KOF_APP_BASE_URL = "http://app.organiza.test"; KOF_DIGEST_AT = $digestHHMM }
 if ($DbUser) { $base["KOF_DB_USER"] = $DbUser; $base["KOF_DB_PASSWORD"] = $DbPassword }
 
 try {
-    $mock = Start-Process powershell.exe -PassThru -WindowStyle Hidden -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSScriptRoot\mock_providers\providers_mock.ps1`" -Pfx `"$pfx`" -Password $pfxPass -ApiKey re-test-mock -Port $MockPort -AdminPort $AdminPort"
+    $mock = Start-Process powershell.exe -PassThru -WindowStyle Hidden -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSScriptRoot\mock_providers\providers_mock.ps1`" -Pfx `"$pfx`" -Password $pfxPass -ApiKey re-test-mock -OpenAiKey sk-mock-openai -Port $MockPort -AdminPort $AdminPort"
     $mockUp = Wait-Up "$AdminUrl/_emails"
     $server = Start-Java $cp $base "server"
     $up = Wait-Up "$BaseUrl/health"
@@ -216,9 +219,89 @@ try {
     Test-Step "Sem KOF_EMAIL_API_KEY: esqueci a senha e redefinir = 503 honesto, log explica e não vaza chave" {
         $r = Invoke-Api "POST" "/api/auth/forgot-password" "" (@{ email = $mail } | ConvertTo-Json -Compress)
         $r2 = Invoke-Api "POST" "/api/auth/reset-password" "" (@{ token = ("ab" * 32); password = "novaSenha123" } | ConvertTo-Json -Compress)
+        Expect ($up2 -and $r.Status -eq 503 -and $r2.Status -eq 503 -and ($r.Body | ConvertFrom-Json).error -like "Recuperação de senha indisponível*") "$($r.Status) $($r.Body) / $($r2.Status)"
+    }
+
+    Test-Step "Sem OPENAI_API_KEY: o chat mantém a resposta fixa com o pulso e nenhuma chamada ao provedor" {
+        $antes = @(Get-MockChats).Count
+        $tkN = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Sem Chave"; email = "nokey_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaSemChave1" } | ConvertTo-Json -Compress)).Body
+        Invoke-Api "POST" "/api/users/onboarding" $tkN (@{ salary = 3000.0; incomeType = "FIXED"; hasDebt = $false } | ConvertTo-Json -Compress) | Out-Null
+        $r = Invoke-Api "POST" "/api/chat/message" $tkN (@{ message = "oi" } | ConvertTo-Json -Compress)
         Stop-All
         $log = ($script:logs | ForEach-Object { $_.Err.Result + $_.Out.Result }) -join "`n"
-        Expect ($up2 -and $r.Status -eq 503 -and $r2.Status -eq 503 -and ($r.Body | ConvertFrom-Json).error -like "Recuperação de senha indisponível*" -and $log -match "defina KOF_EMAIL_API_KEY" -and $log -notmatch "re-test-mock") "$($r.Status) $($r.Body) / $($r2.Status) | log: $($log.Substring(0, [Math]::Min(400, $log.Length)))"
+        Expect ($r.Status -eq 200 -and $r.Body -like "Olá! Seu pulso diário disponível hoje é R$ *" -and @(Get-MockChats).Count -eq $antes -and $log -match "defina KOF_EMAIL_API_KEY" -and $log -match "sem OPENAI_API_KEY" -and $log -notmatch "re-test-mock") "$($r.Status) $($r.Body) | log: $($log.Substring(0, [Math]::Min(300, $log.Length)))"
+    }
+
+    # ---------------- Coach com OpenAI (mock no formato Chat Completions) ----------------
+    $coach = $base.Clone(); $coach["KOF_DB_URL"] = $dbCoach
+    $coach["OPENAI_API_KEY"] = "sk-mock-openai"; $coach["OPENAI_BASE_URL"] = "$MockUrl/v1"; $coach["OPENAI_TIMEOUT_MS"] = "2000"
+    Start-Java $cp $coach "coach" | Out-Null
+    $up3 = Wait-Up "$BaseUrl/health"
+    $cm = "coach_$([Guid]::NewGuid().ToString('N'))@organiza.ai"
+    $tkC = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Cora Coach"; email = $cm; password = "senhaDoCoach1" } | ConvertTo-Json -Compress)).Body
+    Invoke-Api "POST" "/api/users/onboarding" $tkC (@{ salary = 3000.0; incomeType = "FIXED"; hasDebt = $false } | ConvertTo-Json -Compress) | Out-Null
+    function Chat([string]$Text) { return Invoke-Api "POST" "/api/chat/message" $tkC (@{ message = $Text } | ConvertTo-Json -Compress) }
+    function Used { return ((Invoke-Api "GET" "/api/users/tier-status" $tkC).Body | ConvertFrom-Json).messagesUsed }
+
+    Test-Step "Coach: resposta simples; pedido com gpt-4o-mini, 8 tools do legado e prompt de sistema com a data" {
+        $r = Chat "oi coach"
+        $req = @(Get-MockChats)[-1]
+        $names = @($req.tools | ForEach-Object { $_.function.name }) -join ","
+        $sys = [string]$req.messages[0].content
+        Expect ($up3 -and $r.Status -eq 200 -and $r.Body -ceq "Olá do mock! mensagens=2" -and $req.model -ceq "gpt-4o-mini" -and $names -ceq "persistTransaction,listTransactionsByCategory,getTotalByCategory,registerIncome,getDailyPulse,getBalance,suggestModelChange,answerKakeiboReflection" -and $sys -like "Data atual: $((Get-Date).ToString('yyyy-MM-dd'))*" -and $sys -like "*coach financeiro do Organiza*") "$($r.Status) $($r.Body) | modelo=$($req.model) tools=$names | system=$($sys.Substring(0, [Math]::Min(80, $sys.Length)))"
+    }
+
+    Test-Step "Coach: tool_call persistTransaction -> gasto gravado (R$ 35,50 FOOD) -> resposta final com o resultado" {
+        $r = Chat "gastei 35,50 no almoço"
+        $second = @(Get-MockChats)[-1]
+        $toolMsg = @($second.messages | Where-Object { $_.role -eq "tool" })
+        $asst = @($second.messages | Where-Object { $_.role -eq "assistant" -and $_.tool_calls })
+        $tx = @(((Invoke-Api "GET" "/api/transactions" $tkC).Body | ConvertFrom-Json) | Where-Object { $_.description -eq "almoço no mock" })
+        Expect ($r.Status -eq 200 -and $r.Body -like "Pronto! Resultado das ferramentas:*almoço no mock*" -and $toolMsg.Count -eq 1 -and $toolMsg[0].tool_call_id -eq "call_gasto" -and $asst.Count -eq 1 -and $tx.Count -eq 1 -and [double]$tx[0].value -eq 35.5 -and $tx[0].category -eq "FOOD") "$($r.Status) $($r.Body) | tool=$($toolMsg | ConvertTo-Json -Compress) | tx=$($tx | ConvertTo-Json -Compress)"
+    }
+
+    Test-Step "Coach: as 8 tools numa rodada (pulso, saldo, modelo, total, lista, renda, Kakeibo, gasto) chegam ao modelo" {
+        $r = Chat "use todas as ferramentas"
+        $req = @(Get-MockChats)[-1]
+        $res = @{}; foreach ($m in @($req.messages | Where-Object { $_.role -eq "tool" })) { $res[$m.tool_call_id] = [string]$m.content }
+        $ok = ($res["call_1"] -like '*"pulse":*') -and ($res["call_2"] -like '*"buckets":*') -and ($res["call_3"] -like '*"shouldChange":*') -and ($res["call_4"] -like '*"total":35.5*') -and ($res["call_5"] -like '*almoço no mock*') -and ($res["call_6"] -like '*"destination":*') -and ($res["call_7"] -like '*Kakeibo*') -and ($res["call_8"] -like '*ônibus*')
+        Expect ($r.Status -eq 200 -and $res.Count -eq 8 -and $ok) "$($r.Status) | $($res | ConvertTo-Json -Compress)"
+    }
+
+    Test-Step "Coach: memória = últimas 20 mensagens do banco (sistema + 20 + nova = 22 no pedido), em ordem" {
+        $last = $null
+        for ($k = 1; $k -le 8; $k++) { $last = Chat "conversa $k" }
+        $hist = @(@(Get-MockChats)[-1].messages)
+        $tail = ($hist | Select-Object -Last 3 | ForEach-Object { $_.role + ":" + $_.content }) -join " / "
+        Expect ($last.Status -eq 200 -and $last.Body -ceq "Olá do mock! mensagens=22" -and $hist.Count -eq 22 -and $tail -ceq "user:conversa 7 / assistant:Olá do mock! mensagens=20 / user:conversa 8") "$($last.Status) $($last.Body) | $($hist.Count) mensagens | últimas: $tail"
+    }
+
+    Test-Step "Coach: 500, timeout (2 s) e resposta fora do formato = 503 honesto, nada gravado, chave fora da resposta" {
+        $u0 = Used
+        $a = Chat "falha500"; $sw = [Diagnostics.Stopwatch]::StartNew(); $b = Chat "lento"; $t = $sw.Elapsed.TotalSeconds; $c = Chat "formato quebrado"
+        $u1 = Used
+        $all = "$($a.Body)$($b.Body)$($c.Body)"
+        Expect ($a.Status -eq 503 -and $b.Status -eq 503 -and $c.Status -eq 503 -and ($a.Body | ConvertFrom-Json).error -like "O coach está indisponível*" -and $t -lt 4 -and $u1 -eq $u0 -and $all -notmatch "sk-mock-openai") "500=$($a.Status) lento=$($b.Status) em $([Math]::Round($t,1)) s quebrado=$($c.Status) usadas $u0 -> $u1 | $all"
+    }
+
+    Test-Step "Coach: freemium respeitado (31ª mensagem do mês = 402 sem chamar o provedor)" {
+        $code = 200; $n = 0; $antes = 0
+        while ($code -eq 200 -and $n -lt 35) { $n++; $antes = @(Get-MockChats).Count; $code = (Chat "msg $n").Status }
+        $depois = @(Get-MockChats).Count
+        Expect ($code -eq 402 -and (Used) -eq 30 -and $depois -eq $antes) "parou em $code na tentativa $n | usadas=$(Used) | chamadas ao provedor antes=$antes depois=$depois"
+    }
+
+    Stop-All
+    $coachLog = ($script:logs | ForEach-Object { $_.Err.Result + $_.Out.Result }) -join "`n"
+    $bad = $coach.Clone(); $bad["OPENAI_API_KEY"] = "sk-chave-errada-do-teste"
+    Start-Java $cp $bad "coach-401" | Out-Null
+    $up4 = Wait-Up "$BaseUrl/health"
+    Test-Step "Coach: chave recusada (401) = 503 honesto; log com o status e sem nenhuma das chaves" {
+        $tk4 = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Chave Errada"; email = "bad_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaErrada12" } | ConvertTo-Json -Compress)).Body
+        $r = Invoke-Api "POST" "/api/chat/message" $tk4 (@{ message = "oi" } | ConvertTo-Json -Compress)
+        Stop-All
+        $log = ($script:logs | ForEach-Object { $_.Err.Result + $_.Out.Result }) -join "`n"
+        Expect ($up4 -and $r.Status -eq 503 -and $log -match "OpenAI respondeu status 401" -and $log -notmatch "sk-chave-errada" -and $log -notmatch "sk-mock-openai" -and $coachLog -match "coach com OpenAI ligado" -and $r.Body -notmatch "sk-") "$($r.Status) $($r.Body) | log: $(($log -split "`n" | Where-Object { $_ -match 'coach' }) -join ' / ')"
     }
 } finally {
     Stop-All

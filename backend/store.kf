@@ -271,6 +271,43 @@ void migrateUserNameColumn(String conn) {
     log.info("migracao: coluna userrow.name adicionada")
 }
 
+// O kof.orm cria todo campo String como VARCHAR(255) (JvmOrmRuntime.kof_orm_sql_type, 0.6.6 e 0.6.7) e
+// nao tem anotacao de tamanho. A resposta do coach com LLM passa disso facilmente, entao a coluna
+// chatmessagerow.content ganha espaco no boot: TEXT no MySQL (65.535 bytes) e VARCHAR(16000) no H2.
+// Consulta e DDL fixas (sem dado de usuario); so roda se o tamanho ainda for o de fabrica.
+String chatContentLengthSql() {
+    return "SELECT CHARACTER_MAXIMUM_LENGTH AS n FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = SCHEMA() AND LOWER(TABLE_NAME) = 'chatmessagerow' AND LOWER(COLUMN_NAME) = 'content'"
+}
+
+Long chatContentLength(String conn) {
+    var rows = db.query(conn, chatContentLengthSql())
+    if (rows.size == 1) {
+        var row = rows.get(0).toLowerCase()
+        if (row.startsWith("{\"n\":") && row.endsWith("}")) {
+            var digits = row.substring(5, row.length() - 1)
+            if (strings.isNumeric(digits)) {
+                return digits.toLong()
+            }
+        }
+    }
+    throw "migracao: resposta inesperada ao medir a coluna chatmessagerow.content"
+}
+
+void migrateChatContentColumn(String conn) {
+    if (chatContentLength(conn) > 255) {
+        return
+    }
+    if (dbScheme(DbConn.url) == "mysql") {
+        db.execute(conn, "ALTER TABLE \"chatmessagerow\" MODIFY \"content\" TEXT")
+    } else {
+        db.execute(conn, "ALTER TABLE \"chatmessagerow\" ALTER COLUMN \"content\" VARCHAR(16000)")
+    }
+    if (chatContentLength(conn) <= 255) {
+        throw "migracao: a coluna chatmessagerow.content nao foi ampliada"
+    }
+    log.info("migracao: coluna chatmessagerow.content ampliada")
+}
+
 // Cria as tabelas que faltam (PERS-22): orm.create e idempotente (medido: 3x no mesmo banco = true).
 // Banco novo: orm.create ja cria userrow com name e a migracao nao faz nada.
 void ensureSchema(String db) {
@@ -279,6 +316,7 @@ void ensureSchema(String db) {
     orm.create<TransactionRow>(db)
     orm.create<EnvelopeRow>(db)
     orm.create<ChatMessageRow>(db)
+    migrateChatContentColumn(db)
     orm.create<VariableIncomeRow>(db)
     orm.create<KakeiboReflectionRow>(db)
     orm.create<NotificationRow>(db)
@@ -794,6 +832,28 @@ ChatMessageEntity saveChatMessage(ChatMessageEntity message) {
     }
     var row = ChatMessageRow(0, message.userId.toLong(), message.role.name(), message.content, nullToText(message.createdAt))
     return chatMessageFromRow(orm.save(DbConn.handle, row))
+}
+
+// Memoria do coach (legado: findTop20ByUserIdOrderByCreatedAtDesc): as `limit` mensagens mais recentes,
+// devolvidas em ordem cronologica. O id gerado pelo banco cresce com a gravacao, entao ordena igual ao
+// createdAt e tambem cobre as mensagens antigas sem data.
+List<ChatMessageEntity> findRecentChatMessages(String userId, Int limit) {
+    var out: List<ChatMessageEntity> = listOf()
+    if (!strings.isNumeric(userId)) {
+        return out
+    }
+    var uid = userId.toLong()
+    var newest = ChatMessageRow.query(DbConn.handle) {
+        where userId == uid
+        orderBy id desc
+        limit limit
+    }
+    var i = newest.size - 1
+    while (i >= 0) {
+        out.add(chatMessageFromRow(newest.get(i)))
+        i = i - 1
+    }
+    return out
 }
 
 // Mensagens sem data ("", gravadas antes da issue #44) ficam fora do corte do mes.

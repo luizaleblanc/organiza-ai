@@ -1,0 +1,362 @@
+// backend/coach_llm.kf
+// Coach com OpenAI (gpt-4o-mini, decisao de 16/10), porte do VoiceCommandController do legado:
+// prompt de sistema com data (archive/.../prompts/system-message.st), memoria das ultimas 20 mensagens do
+// banco e tool calling MANUAL (o Spring AI fazia o laco; aqui: tool_calls -> funcoes Kof -> nova chamada).
+// HTTP por backend/outbound.kf (certificado validado). Sem OPENAI_API_KEY, o chat continua com a resposta
+// fixa do pulso (decisao de 19/10).
+//   OPENAI_API_KEY      chave (segredo; so vai para o cabecalho Authorization, nunca para log)
+//   OPENAI_BASE_URL     opcional; padrao https://api.openai.com/v1 (o teste aponta para o mock local)
+//   OPENAI_MODEL        opcional; padrao gpt-4o-mini
+//   OPENAI_TIMEOUT_MS   opcional; padrao 30000 (por chamada)
+
+// =========================================================
+// Configuracao
+// =========================================================
+
+String openAiBaseUrl() {
+    var url = configText("OPENAI_BASE_URL")
+    if (url != null) {
+        return url
+    }
+    return "https://api.openai.com/v1"
+}
+
+String openAiModel() {
+    var model = configText("OPENAI_MODEL")
+    if (model != null) {
+        return model
+    }
+    return "gpt-4o-mini"
+}
+
+Int openAiTimeoutMs() {
+    var raw = configText("OPENAI_TIMEOUT_MS")
+    if (raw != null && strings.isNumeric(raw)) {
+        return raw.toInt()
+    }
+    return 30000
+}
+
+Bool llmConfigured() {
+    if (configText("OPENAI_API_KEY") != null) {
+        return outboundUrlAllowed(openAiBaseUrl() + "/chat/completions")
+    }
+    return false
+}
+
+String llmStatus() {
+    if (llmConfigured()) {
+        return "coach com OpenAI ligado (modelo " + openAiModel() + ")"
+    }
+    if (configText("OPENAI_API_KEY") != null) {
+        return "coach com OpenAI desligado: OPENAI_BASE_URL precisa ser https:// (http local so com KOF_OUTBOUND_ALLOW_LOCAL_HTTP=true)"
+    }
+    return "coach com OpenAI desligado: sem OPENAI_API_KEY (resposta fixa com o pulso)"
+}
+
+// =========================================================
+// Formato da API (Chat Completions)
+// =========================================================
+
+record ChatTextMessage(String role, String content)
+record ChatToolResultMessage(String role, String tool_call_id, String content)
+record ChatToolFunction(String name, String arguments)
+record ChatToolCall(String id, String type, ChatToolFunction function)
+record ChatAssistantMessage(String role, String? content, List<ChatToolCall>? tool_calls)
+record ChatChoice(Int index, ChatAssistantMessage message, String? finish_reason)
+record ChatCompletion(List<ChatChoice> choices)
+
+record ToolProperty(String type, String description)
+record ToolParameters(String type, Map<String, ToolProperty> properties, List<String> required)
+record ToolFunctionDef(String name, String description, ToolParameters parameters)
+record ToolDef(String type, ToolFunctionDef function)
+
+ToolDef toolDef(String name, String description, Map<String, ToolProperty> props, List<String> required) {
+    return ToolDef("function", ToolFunctionDef(name, description, ToolParameters("object", props, required)))
+}
+
+String categoryHelp() {
+    return "Uma de: GROCERIES, LEISURE, FOOD, PHARMA, HEALTH, AUTO, TRANSPORT, HOUSING, EDUCATION, SHOPPING, SUBSCRIPTIONS, OTHER"
+}
+
+// As 8 tools do legado (VoiceCommandController.defaultToolNames), com as descricoes dos @Description.
+// answerKakeiboReflection recebe as 4 respostas num texto separado por " | " (o legado usava List<String>;
+// o schema aqui e montado com records e um so tipo de propriedade).
+List<ToolDef> coachTools() {
+    var none: Map<String, ToolProperty> = mapOf()
+    var noRequired: List<String> = listOf()
+
+    var expense: Map<String, ToolProperty> = mapOf()
+    expense.put("amount", ToolProperty("number", "Valor em reais, maior que zero"))
+    expense.put("category", ToolProperty("string", categoryHelp()))
+    expense.put("description", ToolProperty("string", "Descricao curta do gasto"))
+
+    var byCategory: Map<String, ToolProperty> = mapOf()
+    byCategory.put("category", ToolProperty("string", categoryHelp()))
+
+    var income: Map<String, ToolProperty> = mapOf()
+    income.put("amount", ToolProperty("number", "Valor em reais, maior que zero"))
+    income.put("source", ToolProperty("string", "Origem da renda (freela, show, mentoria, salario...)"))
+
+    var kakeibo: Map<String, ToolProperty> = mapOf()
+    kakeibo.put("answers", ToolProperty("string", "As 4 respostas da reflexao, na ordem, separadas por ' | '"))
+
+    return listOf(
+        toolDef("persistTransaction", "Cria e salva uma nova transação financeira (gasto) do usuário", expense, listOf("amount", "category", "description")),
+        toolDef("listTransactionsByCategory", "Busca e lista as transações do usuário filtradas por uma categoria", byCategory, listOf("category")),
+        toolDef("getTotalByCategory", "Calcula e retorna o valor total gasto em uma categoria", byCategory, listOf("category")),
+        toolDef("registerIncome", "Registra uma renda do usuário, fixa ou variável, e direciona o valor para a reserva de emergência ou para o orçamento", income, listOf("amount", "source")),
+        toolDef("getDailyPulse", "Calcula quanto o usuário ainda pode gastar por dia até o fim do mês", none, noRequired),
+        toolDef("getBalance", "Retorna o resumo dos buckets do modelo de orçamento: planejado, gasto e restante", none, noRequired),
+        toolDef("suggestModelChange", "Verifica se o modelo de orçamento atual ainda faz sentido", none, noRequired),
+        toolDef("answerKakeiboReflection", "Registra as 4 respostas da reflexão semanal do Kakeibo", kakeibo, listOf("answers"))
+    )
+}
+
+// =========================================================
+// Prompt de sistema (system-message.st do legado, com os nomes das tools daqui)
+// =========================================================
+
+String weekdayName(Int dow) {
+    var names = listOf("segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado", "domingo")
+    if (dow >= 1 && dow <= 7) {
+        return names.get(dow - 1)
+    }
+    return ""
+}
+
+// As 4 perguntas do Kakeibo (KakeiboReflectionService.QUESTIONS do legado).
+List<String> kakeiboQuestions() {
+    return listOf(
+        "1) Quais gastos essenciais você conseguiu manter dentro do planejado esta semana?",
+        "2) O que você gastou em cultura e lazer sem culpa ou sem planejar?",
+        "3) Houve algum gasto extra que você percebeu que não era necessário?",
+        "4) Qual ajuste simples você vai fazer na próxima semana para melhorar seu controle?"
+    )
+}
+
+String coachSystemPrompt(UserEntity user, Bool kakeiboPending) {
+    var today = localTodayIso()
+    var dow = time.dayOfWeek(today.substring(0, 4).toInt(), today.substring(5, 7).toInt(), today.substring(8, 10).toInt())
+    var p = "Data atual: " + today + ". Dia da semana: " + weekdayName(dow) + ".\n\n" +
+        "Você é o coach financeiro do Organiza. Regras obrigatórias:\n\n" +
+        "REGRAS DE COMPORTAMENTO:\n" +
+        "1. Responda SEMPRE em português brasileiro.\n" +
+        "2. NUNCA invente valores. Se não souber um saldo ou gasto, use a tool getDailyPulse para consultar.\n" +
+        "3. NUNCA sugira investimentos específicos (ações, fundos, criptomoedas). Diga \"guardar\" ou \"reservar\".\n" +
+        "4. NUNCA julgue o usuário. Oriente com base nos dados reais.\n" +
+        "5. Se o usuário perguntar algo que você não tem dados para responder, diga \"não tenho essa informação ainda\" e sugira registrar o gasto.\n\n" +
+        "REGRAS DE REGISTRO:\n" +
+        "6. Ao registrar um gasto, SEMPRE confirme: valor, categoria e envelope. Ex: \"Registrei R$35,00 em Alimentação (Necessidades). Certo?\"\n" +
+        "7. Ao registrar renda variável, pergunte a origem. Ex: \"De onde veio essa renda? Freela, show, mentoria?\"\n" +
+        "8. Valores monetários SEMPRE no formato R$X.XXX,XX.\n\n" +
+        "REGRAS DE MODELO:\n" +
+        "9. O modelo de orçamento do usuário é " + user.budgetModel.name() + ". Respeite os percentuais dele.\n" +
+        "10. Se o modelo for ANTI_DEBT_701020, priorize orientação sobre quitação de dívida.\n" +
+        "11. Se o modelo for FREELANCER_BASE_ZERO, pergunte \"quanto dessa renda é líquido?\" antes de alocar.\n" +
+        "12. Se o modelo for KAKEIBO, faça as 4 perguntas reflexivas no final da semana.\n" +
+        "13. Se o usuário estiver em KAKEIBO e ainda não tiver respondido a reflexão semanal desta semana, pergunte as 4 perguntas em sequência e, após o usuário responder, chame a tool answerKakeiboReflection com as 4 respostas na ordem correta.\n" +
+        "14. Se detectar que os gastos essenciais passaram do percentual do modelo por 3 meses seguidos, sugira trocar de modelo (tool suggestModelChange).\n\n" +
+        "REGRAS DE CATEGORIZAÇÃO:\n" +
+        "Para cada transação, use OBRIGATORIAMENTE um destes valores exatos: GROCERIES (mercado, feira, padaria), LEISURE (cinema, show, viagem, passeio, ingresso), " +
+        "FOOD (restaurante, lanche, delivery, café, almoço, jantar fora), PHARMA (farmácia, remédio), HEALTH (consulta, exame, dentista, plano de saúde, psicólogo), " +
+        "AUTO (combustível, estacionamento, pedágio, mecânico, seguro do carro), TRANSPORT (uber, táxi, ônibus, metrô, passagem), HOUSING (aluguel, condomínio, luz, água, gás, internet de casa, IPTU), " +
+        "EDUCATION (curso, faculdade, escola, material escolar), SHOPPING (roupa, calçado, eletrônico, presente), SUBSCRIPTIONS (netflix, spotify, software, assinatura mensal), " +
+        "OTHER (só quando nada acima se encaixa). Escolha a categoria mais próxima pelo significado; nunca use GROCERIES como padrão de segurança.\n"
+    if (kakeiboPending) {
+        p = p + "\nO usuário está no KAKEIBO e ainda não respondeu a reflexão desta semana. As 4 perguntas:"
+        for (var q in kakeiboQuestions()) {
+            p = p + " " + q
+        }
+        p = p + "\n"
+    }
+    return p
+}
+
+// =========================================================
+// Execucao das tools (sempre no usuario do token)
+// =========================================================
+
+record ExpenseArgs(Double? amount, String? category, String? description)
+record CategoryArgs(String? category)
+record IncomeArgs(Double? amount, String? source)
+record KakeiboArgs(String? answers)
+record ToolError(String error)
+
+String toolError(String message) {
+    return json.encode(ToolError(message))
+}
+
+Category? parseCategory(String? raw) {
+    if (raw == null) {
+        return null
+    }
+    return Category.valueOf(raw.trim().toUpperCase())
+}
+
+String runCoachTool(String userId, String name, String arguments) {
+    try {
+        if (name == "getDailyPulse") {
+            return json.encode(calculateDailyPulse(userId, daysRemainingInMonth(), monthStartIso()))
+        }
+        if (name == "getBalance") {
+            return json.encode(calculateBalance(userId, monthStartIso()))
+        }
+        if (name == "suggestModelChange") {
+            return json.encode(suggestModelChange(userId))
+        }
+        if (name == "persistTransaction") {
+            var a = json.decode<ExpenseArgs>(arguments)
+            var amount = a.amount()
+            var category = parseCategory(a.category())
+            if (amount != null) {
+                if (category != null) {
+                    var description = category.name()
+                    var given = a.description()
+                    if (given != null && given.trim() != "") {
+                        description = given.trim()
+                    }
+                    return json.encode(persistTransactionAmount(description, amount, category, "BRL", null, userId))
+                }
+            }
+            return toolError("amount e category (" + categoryHelp() + ") sao obrigatorios")
+        }
+        if (name == "listTransactionsByCategory" || name == "getTotalByCategory") {
+            var c = parseCategory(json.decode<CategoryArgs>(arguments).category())
+            if (c == null) {
+                return toolError("category invalida: " + categoryHelp())
+            }
+            if (name == "getTotalByCategory") {
+                return json.encode(GetTotalByCategoryOutput(getTotalByCategory(c, userId)))
+            }
+            return json.encode(listTransactionsByCategory(c, userId).take(30))
+        }
+        if (name == "registerIncome") {
+            var i = json.decode<IncomeArgs>(arguments)
+            var amount = i.amount()
+            var source = i.source()
+            if (amount != null) {
+                if (source != null && amount > 0.0) {
+                    return json.encode(registerUserIncome(userId, amount, source))
+                }
+            }
+            return toolError("amount (> 0) e source sao obrigatorios")
+        }
+        if (name == "answerKakeiboReflection") {
+            var raw = json.decode<KakeiboArgs>(arguments).answers()
+            if (raw == null) {
+                return toolError("answers e obrigatorio")
+            }
+            var answers: List<String> = listOf()
+            for (var part in raw.split("\\|")) {
+                answers.add(part.trim())
+            }
+            var weekStart = time.startOf(localTodayIso(), "week")
+            var saved = recordKakeiboReflection(userId, weekStart, answers)
+            return "{\"saved\":true,\"weekStart\":\"" + saved.weekStart + "\"}"
+        }
+        return toolError("tool desconhecida: " + name)
+    } catch (String e) {
+        return toolError(e)
+    } catch (Exception e) {
+        return toolError("dados invalidos para " + name)
+    }
+}
+
+// =========================================================
+// Laco de conversa
+// =========================================================
+
+// Ultimas 20 mensagens do usuario (legado: findTop20ByUserIdOrderByCreatedAtDesc), em ordem cronologica.
+List<String> chatHistoryJson(String userId) {
+    var out: List<String> = listOf()
+    for (var m in findRecentChatMessages(userId, 20)) {
+        var role = "user"
+        if (m.role == ChatRole.ASSISTANT) {
+            role = "assistant"
+        }
+        out.add(json.encode(ChatTextMessage(role, m.content)))
+    }
+    return out
+}
+
+// Primeira mensagem da resposta; formato inesperado (sem choices) = throw "coach indisponivel".
+ChatAssistantMessage firstChoiceMessage(String body) {
+    try {
+        var completion = json.decode<ChatCompletion>(body)
+        var choices = completion.choices()
+        if (choices != null && !choices.isEmpty()) {
+            return choices.get(0).message()
+        }
+    } catch (String e) {
+        log.warn("coach: resposta da OpenAI fora do formato esperado")
+    } catch (Exception e) {
+        log.warn("coach: resposta da OpenAI fora do formato esperado")
+    }
+    throw "coach indisponivel"
+}
+
+String jsonArray(List<String> items) {
+    var text = ""
+    for (var item in items) {
+        if (text != "") {
+            text = text + ","
+        }
+        text = text + item
+    }
+    return "[" + text + "]"
+}
+
+// Teto do texto gravado no historico (a coluna aguenta mais; a resposta do provedor nao tem limite fixo).
+String clipForHistory(String text) {
+    if (text.length() > 8000) {
+        return text.substring(0, 8000)
+    }
+    return text
+}
+
+// Resposta final do coach, ou throw "coach indisponivel" (rede, timeout, 4xx/5xx, resposta invalida).
+// Nunca registra a chave nem o corpo da resposta no log; so o status.
+String askCoach(UserEntity user, String userText) {
+    var weekStart = time.startOf(localTodayIso(), "week")
+    var messages: List<String> = listOf()
+    messages.add(json.encode(ChatTextMessage("system", coachSystemPrompt(user, shouldAskKakeiboReflection(user.id, weekStart)))))
+    for (var h in chatHistoryJson(user.id)) {
+        messages.add(h)
+    }
+    messages.add(json.encode(ChatTextMessage("user", userText)))
+    var tools = json.encode(coachTools())
+    var headers = jsonBearerHeaders(secrets.secret("OPENAI_API_KEY").reveal())
+    var url = openAiBaseUrl() + "/chat/completions"
+
+    var round = 0
+    while (round < 5) {
+        round = round + 1
+        var body = "{\"model\":" + json.encode(openAiModel()) + ",\"messages\":" + jsonArray(messages) + ",\"tools\":" + tools + ",\"temperature\":0.3}"
+        var resp = outboundPost(url, body, headers, openAiTimeoutMs())
+        if (resp.status != 200) {
+            if (resp.status == 0) {
+                log.warn("coach: OpenAI sem resposta (" + resp.failure + ")")
+            } else {
+                log.warn("coach: OpenAI respondeu status " + resp.status)
+            }
+            throw "coach indisponivel"
+        }
+        var message = firstChoiceMessage(resp.body)
+        var calls = message.tool_calls()
+        if (calls != null && !calls.isEmpty()) {
+            messages.add(json.encode(message))
+            for (var call in calls) {
+                messages.add(json.encode(ChatToolResultMessage("tool", call.id(), runCoachTool(user.id, call.function().name(), call.function().arguments()))))
+            }
+        } else {
+            var content = message.content()
+            if (content != null && content.trim() != "") {
+                return content
+            }
+            throw "coach indisponivel"
+        }
+    }
+    log.warn("coach: mais de 5 rodadas de tools; conversa interrompida")
+    throw "coach indisponivel"
+}

@@ -378,12 +378,17 @@ TransactionEntity insertTransactionAndSpend(String tx, TransactionEntity transac
 }
 
 TransactionOutput persistTransaction(PersistTransactionInput input, Category category, String userId) {
-    if (input.amount() <= 0) {
+    return persistTransactionAmount(input.description(), input.amount() * 1.0, category, input.currency(), input.envelopeId(), userId)
+}
+
+// Mesmo caminho com valor em reais com centavos (tool persistTransaction do coach: "R$ 35,50").
+TransactionOutput persistTransactionAmount(String description, Double amount, Category category, String currency, String? envelopeId, String userId) {
+    if (amount <= 0.0) {
         throw "Operação negada: O valor da transação deve ser maior que zero."
     }
 
-    var envId = resolveEnvelopeId(userId, input.envelopeId(), category)
-    var amountCents = toCents(input.amount() * 1.0)
+    var envId = resolveEnvelopeId(userId, envelopeId, category)
+    var amountCents = toCents(amount)
 
     // Transacao + desconto do envelope numa unica transacao do banco, isolada das outras requisicoes:
     // com a ficha do DbConn.lock (uma transacao por vez) e numa conexao so dela (txConnection, a ultima
@@ -394,7 +399,7 @@ TransactionOutput persistTransaction(PersistTransactionInput input, Category cat
         var tx = txConnection()
         try {
             // createdAt = instante real (issue #44); descricao gravada literal via binds (PERS-15)
-            saved.add(insertTransactionAndSpend(tx, TransactionEntity("", input.description(), amountCents, category, input.currency(), userId, null, Source.MANUAL, nowIso(), envId), userId, envId, amountCents))
+            saved.add(insertTransactionAndSpend(tx, TransactionEntity("", description, amountCents, category, currency, userId, null, Source.MANUAL, nowIso(), envId), userId, envId, amountCents))
         } catch (String e) {
             // Rollback ja feito pelo runtime; a conexao e descartada (pode ser ela que caiu) e o detalhe
             // do banco nao vai para a resposta.

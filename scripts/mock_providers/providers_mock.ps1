@@ -4,16 +4,65 @@
 #     POST /emails  formato do Resend: Bearer obrigatorio = $ApiKey (senao 401); grava {from,to,subject,text}
 #   HTTP em 127.0.0.1:$AdminPort (so para o script de teste ler o que chegou):
 #     GET /_emails  lista JSON dos e-mails recebidos
+#     GET /_openai  lista JSON dos pedidos de chat recebidos (sem cabecalhos)
+#   POST /v1/chat/completions (HTTPS) no formato da OpenAI: Bearer obrigatorio = $OpenAiKey (senao 401).
+#     Roteiro pela ultima mensagem do usuario: "gastei" -> tool_call persistTransaction; "todas as
+#     ferramentas" -> as 8 tools numa resposta; "falha500" -> 500; "lento" -> responde depois de 4 s;
+#     "formato quebrado" -> 200 sem "choices". Com mensagem role=tool no pedido -> resposta final que ecoa os
+#     resultados. Senao -> "Olá do mock! mensagens=<n>" (n = mensagens recebidas, para conferir a memoria).
 # O mock nunca imprime nem devolve o Authorization recebido. Uma conexao por vez.
 # Por que nao em Kof: o servidor do kof.web 0.6.6 recusa com 401 qualquer "Authorization: Bearer" que nao
 # seja um JWT valido, mesmo sem app.security (JvmRuntimeWebDispatch, passo 6), e o Resend usa Bearer opaco.
-param([string]$Pfx, [string]$Password, [string]$ApiKey, [int]$Port = 18443, [int]$AdminPort = 18444)
+param([string]$Pfx, [string]$Password, [string]$ApiKey, [string]$OpenAiKey = "sk-mock-openai", [int]$Port = 18443, [int]$AdminPort = 18444)
 
 $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($Pfx, $Password)
 $tls = New-Object System.Net.Sockets.TcpListener([System.Net.IPAddress]::Loopback, $Port)
 $admin = New-Object System.Net.Sockets.TcpListener([System.Net.IPAddress]::Loopback, $AdminPort)
 $tls.Start(); $admin.Start()
 $script:emails = New-Object System.Collections.ArrayList
+$script:chats = New-Object System.Collections.ArrayList
+
+function Completion($message, [string]$finish) {
+    return (@{ id = "chatcmpl-mock"; object = "chat.completion"; model = "gpt-4o-mini"; choices = @(@{ index = 0; message = $message; finish_reason = $finish }) } | ConvertTo-Json -Depth 10 -Compress)
+}
+function ToolCall([string]$Id, [string]$Name, $ArgsObj) {
+    return @{ id = $Id; type = "function"; function = @{ name = $Name; arguments = ($ArgsObj | ConvertTo-Json -Compress) } }
+}
+function Handle-Chat($req) {
+    if ($req.Headers["authorization"] -ne "Bearer $OpenAiKey") {
+        return @(401, '{"error":{"message":"Incorrect API key provided","type":"invalid_request_error","code":"invalid_api_key"}}')
+    }
+    $j = $req.Body | ConvertFrom-Json
+    [void]$script:chats.Add($j)
+    $msgs = @($j.messages)
+    $lastUser = [string](($msgs | Where-Object { $_.role -eq "user" } | Select-Object -Last 1).content)
+    $toolMsgs = @($msgs | Where-Object { $_.role -eq "tool" })
+    if ($toolMsgs.Count -gt 0) {
+        $echo = ($toolMsgs | ForEach-Object { $_.content }) -join " || "
+        return @(200, (Completion @{ role = "assistant"; content = "Pronto! Resultado das ferramentas: $echo" } "stop"))
+    }
+    if ($lastUser -match "falha500") { return @(500, '{"error":{"message":"The server had an error","type":"server_error"}}') }
+    if ($lastUser -match "formato quebrado") { return @(200, '{"inesperado":true}') }
+    if ($lastUser -match "lento") { Start-Sleep -Seconds 4 }
+    if ($lastUser -match "gastei") {
+        $call = ToolCall "call_gasto" "persistTransaction" @{ amount = 35.5; category = "FOOD"; description = "almoço no mock" }
+        return @(200, (Completion @{ role = "assistant"; content = $null; tool_calls = @($call) } "tool_calls"))
+    }
+    if ($lastUser -match "todas as ferramentas") {
+        $calls = @(
+            (ToolCall "call_1" "getDailyPulse" @{}),
+            (ToolCall "call_2" "getBalance" @{}),
+            (ToolCall "call_3" "suggestModelChange" @{}),
+            (ToolCall "call_4" "getTotalByCategory" @{ category = "FOOD" }),
+            (ToolCall "call_5" "listTransactionsByCategory" @{ category = "FOOD" }),
+            (ToolCall "call_6" "registerIncome" @{ amount = 200.0; source = "freela de teste" }),
+            (ToolCall "call_7" "answerKakeiboReflection" @{ answers = "a | b | c | d" }),
+            (ToolCall "call_8" "persistTransaction" @{ amount = 10.25; category = "TRANSPORT"; description = "ônibus" })
+        )
+        return @(200, (Completion @{ role = "assistant"; content = $null; tool_calls = $calls } "tool_calls"))
+    }
+    return @(200, (Completion @{ role = "assistant"; content = "Olá do mock! mensagens=$($msgs.Count)" } "stop"))
+}
 
 # Le cabecalho e corpo em BYTES (Content-Length conta bytes; o corpo tem acentos em UTF-8).
 function Read-Request($stream) {
@@ -58,6 +107,7 @@ function Handle-Provider($req) {
         [void]$script:emails.Add(($req.Body | ConvertFrom-Json))
         return @(200, ('{"id":"mock-email-' + $script:emails.Count + '"}'))
     }
+    if ($req.Method -eq "POST" -and $req.Path -eq "/v1/chat/completions") { return Handle-Chat $req }
     return @(404, '{"message":"rota do mock inexistente"}')
 }
 
@@ -83,6 +133,7 @@ while ($true) {
             $s = $client.GetStream()
             $req = Read-Request $s
             if ($req.Path -eq "/_emails") { Write-Response $s 200 (ConvertTo-Json -InputObject @($script:emails) -Depth 6 -Compress) }
+            elseif ($req.Path -eq "/_openai") { Write-Response $s 200 (ConvertTo-Json -InputObject @($script:chats) -Depth 12 -Compress) }
             else { Write-Response $s 404 '{}' }
         } catch { } finally { $client.Close() }
     }

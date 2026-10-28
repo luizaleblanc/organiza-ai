@@ -646,3 +646,53 @@ Não testado de ponta a ponta: a expiração de 30 minutos (a consulta exige `ex
 
 Gates do d1 (kof 0.6.6): GATES_D1
 
+## 11. Coach com OpenAI e ferramentas (d2, 27/10/2026)
+
+Código em `backend/coach_llm.kf`, chamado por `POST /api/chat/message`. Porta o `VoiceCommandController` do legado:
+
+- **Modelo:** `gpt-4o-mini` (Chat Completions), por `backend/outbound.kf` (certificado validado, seção 9).
+- **Prompt de sistema:** o `prompts/system-message.st` do legado, com a data local e o dia da semana, o modelo de orçamento do usuário e os nomes das tools daqui. Para usuário KAKEIBO sem a reflexão da semana, as 4 perguntas do `KakeiboReflectionService.QUESTIONS` vão no prompt.
+- **Memória:** as últimas 20 mensagens do usuário no banco, em ordem cronológica (legado: `findTop20ByUserIdOrderByCreatedAtDesc`), lidas antes de gravar a mensagem nova.
+- **Tool calling manual** (o Spring AI fazia o laço): resposta com `tool_calls` → cada tool roda no usuário do token → os resultados voltam como mensagens `role: tool` → nova chamada, até 5 rodadas. As 8 tools do legado: `persistTransaction` (valor em reais com centavos, mesmo caminho transacional do `POST /api/transactions`), `listTransactionsByCategory`, `getTotalByCategory`, `registerIncome`, `getDailyPulse`, `getBalance`, `suggestModelChange` e `answerKakeiboReflection`. Argumento inválido ou erro de regra volta para o modelo como `{"error": ...}`, sem derrubar a conversa. Diferença do legado: `answerKakeiboReflection` recebe as 4 respostas num texto separado por ` | ` (o schema é montado com records de um só tipo de propriedade).
+- **Freemium:** o limite do plano (30 mensagens/mês no Gratuito) é conferido antes de chamar o provedor; a 31ª dá 402 sem chamada.
+- **Falha do provedor** (rede, timeout, 4xx/5xx, resposta fora do formato): 503 `{"error":"O coach está indisponível no momento..."}`. Nada é gravado, então a mensagem não conta no limite. O log registra só o status ou o nome da falha, nunca a chave nem o corpo.
+- **Sem `OPENAI_API_KEY`:** a resposta fixa com o pulso de antes (decisão de 19/10).
+
+| Variável | Uso |
+|---|---|
+| `OPENAI_API_KEY` | Chave da OpenAI (segredo, `secrets.secret`; só vai para o cabeçalho) |
+| `OPENAI_BASE_URL` | Opcional, padrão `https://api.openai.com/v1` (o teste aponta para o mock) |
+| `OPENAI_MODEL` | Opcional, padrão `gpt-4o-mini` |
+| `OPENAI_TIMEOUT_MS` | Opcional, padrão `30000` por chamada |
+
+**Coluna do histórico:** o `kof.orm` cria todo campo `String` como `VARCHAR(255)` e não tem anotação de tamanho (`JvmOrmRuntime.kof_orm_sql_type`, conferido no 0.6.6 e no 0.6.7). Uma resposta do coach acima de 255 caracteres derrubava a gravação com 500 (medido no teste). No boot, se `chatmessagerow.content` ainda tiver 255, ela vira `TEXT` no MySQL e `VARCHAR(16000)` no H2 (DDL fixa, mesmo padrão da coluna `name`, seção da F1). O texto gravado tem teto de 8000 caracteres.
+
+**Teste (`scripts/test_integrations_mock.ps1`, passos 10 a 17):** o mock HTTPS ganhou `POST /v1/chat/completions` no formato da OpenAI, com roteiro pela mensagem do usuário.
+
+```
+10. Sem OPENAI_API_KEY: resposta fixa com o pulso e nenhuma chamada ao provedor
+11. Resposta simples; pedido com gpt-4o-mini, as 8 tools e o prompt com a data de hoje
+12. tool_call persistTransaction -> gasto de R$ 35,50 FOOD gravado -> resposta final com o resultado
+13. As 8 tools numa rodada: os 8 resultados chegam ao modelo (o Kakeibo volta como erro de regra: usuário fora do KAKEIBO)
+14. Memória: pedido com sistema + 20 mensagens do banco + a nova (22), na ordem
+15. 500, timeout de 2 s e resposta fora do formato = 503; nada gravado; chave fora da resposta
+16. Freemium: 31ª mensagem = 402 sem chamar o provedor
+17. Chave recusada (401) = 503; o log tem o status e nenhuma das chaves
+RESULTADO INTEGRACOES (mock): 17 / 17  (kof 0.6.6 e 0.6.7, H2 e MySQL 8.4)
+```
+
+Não testado: a API real da OpenAI (proibido nos testes) e a qualidade das respostas do modelo.
+
+Gates do d2 (sobre d0 + d1), no kof 0.6.6 (`KOF_VERSION`) e no 0.6.7 (estável mais recente em 27/10, zip conferido no `SHA256SUMS`), com resultado idêntico nas duas:
+
+```
+G-BUILD check/build exit=0 (10 arquivos, 224 classes) · frontend --target js exit=0
+G-BYTECODE: todas as 224 classes carregadas e linkadas com -Xverify:all, 0 falhas; controle sintético
+      (ireturn trocado por areturn) acusa VerifyError
+G-E2E com -WebOut: H2 88/88 · MySQL 88/88
+G-RESTART (encerramento normal e kill): H2 28/28 · MySQL 28/28
+Integrações (mock HTTPS): 17/17 em H2 e MySQL · gate TLS do d0: 8/8 (também no 0.6.7)
+```
+
+No 0.6.7 o `kof.http` continua aceitando qualquer certificado (`JvmWebHttpRuntime`, `KOF_HTTP_CLIENT_INSECURE`, conferido no HEAD do Kof4j em 27/10), então o contorno da seção 9 continua necessário. Os gates de negativos, concorrência, DB-BOUNCE/DOWN e AUTH-STATIC rodaram no d0 e no d1 (0.6.6); no d2 não foram repetidos, porque as ferramentas locais desses gates foram apagadas do ambiente de teste.
+

@@ -302,6 +302,25 @@ main() {
             } catch (String e) {
                 return status(402, json.encode(ApiError(e)))
             }
+            // Coach com OpenAI (coach_llm.kf): a memoria e lida ANTES de gravar a mensagem nova. Se o
+            // provedor falhar (rede, timeout, 4xx/5xx), 503 honesto e nada e gravado: a mensagem nao conta
+            // no limite do plano. Sem OPENAI_API_KEY, a resposta fixa com o pulso (decisao de 19/10).
+            if (llmConfigured()) {
+                var user = findUserById(userId)
+                if (user == null) {
+                    return status(404, json.encode(ApiError("Usuário não encontrado.")))
+                }
+                var answer = ""
+                try {
+                    answer = askCoach(user, msgReq.message)
+                } catch (String e) {
+                    return status(503, json.encode(ApiError("O coach está indisponível no momento. Tente de novo em instantes.")))
+                }
+                saveChatMessage(ChatMessageEntity("", userId, ChatRole.USER, msgReq.message, nowIso()))
+                saveChatMessage(ChatMessageEntity("", userId, ChatRole.ASSISTANT, clipForHistory(answer), nowIso()))
+                return answer
+            }
+
             // ids gerados pelo banco (PERS-06/07); createdAt = instante real (issue #44)
             saveChatMessage(ChatMessageEntity("", userId, ChatRole.USER, msgReq.message, nowIso()))
 
@@ -587,6 +606,7 @@ main() {
     }
 
     log.info(emailStatus())
+    log.info(llmStatus())
     startDailyDigest()
     app.listen(listenPort())
 }
