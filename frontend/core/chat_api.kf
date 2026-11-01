@@ -1,0 +1,109 @@
+package core
+
+import kof.json
+import core.app_state
+import core.api_client
+
+// =============================================================================
+// Batch 3 (F2) — API e estado da Tela 10 Organiza AI (chat)
+// =============================================================================
+// Rotas: POST /api/chat/message {message} -> {reply, messagesUsed, messagesLimit}
+// (402 no limite do plano, 503 com o provedor fora), GET /api/chat/messages
+// (página 1 = mais recentes, em ordem cronológica) e GET /api/users/tier-status
+// (contador ao abrir a tela).
+// As mensagens ficam em ChatState.messages (uma por linha, "ROLE|texto"), só
+// via chatAppend. Quebras de linha do texto viram '¶' na linha e voltam ao
+// mostrar.
+// No alvo js o corpo chega sem status: 4xx devolve {"error": ...} (aqui só o
+// 402 do limite) e 5xx/rede lança String (aqui o 503 ou falta de conexão).
+// =============================================================================
+
+record ChatMessageRequest(String message)
+record ChatReplyResponse(String reply, Int messagesUsed, Int messagesLimit)
+record ChatHistoryItem(String role, String content, String createdAt)
+record ChatHistoryPage(List<ChatHistoryItem> items, Int page, Int limit, Int offset, Bool hasNext)
+record ChatTierStatus(String tier, Int messagesUsed, Int messagesLimit, Bool voiceEnabled, Bool canSendMessage)
+
+class ChatUi {
+    static String draft = ""
+    static Bool sending = false
+    static Bool blocked = false
+    // Mensagem do usuário em envio (bolha provisória até a resposta chegar).
+    static String pending = ""
+    // Token para o qual o histórico já foi pedido ("" = nunca).
+    static String loadedFor = ""
+    static Bool loading = false
+    static String error = ""
+    // Contador "N de M"; usageKnown = false até a 1ª leitura. limit -1 = Pro.
+    static Bool usageKnown = false
+    static Int used = 0
+    static Int limit = 0
+}
+
+String chatLimitText() = "Você chegou ao limite de " + String.valueOf(ChatUi.limit) + " mensagens do plano Gratuito neste mês. Assine o Pro para continuar conversando."
+String chatOfflineText() = "O Organiza AI está indisponível agora (serviço fora do ar ou sem conexão). Tente de novo em instantes."
+String chatHistoryErrorText() = "Não foi possível carregar o histórico. Tente de novo em instantes."
+
+String chatEncode(String text) = text.replace('\n', '¶')
+String chatDecode(String text) = text.replace('¶', '\n')
+
+// Carrega contador + página 1 do histórico (uma vez por sessão/token).
+loadChat() {
+    ChatUi.loading = true
+    ChatUi.error = ""
+    try {
+        val tier = json.decode<ChatTierStatus>(apiGet("/api/users/tier-status"))
+        ChatUi.used = tier.messagesUsed()
+        ChatUi.limit = tier.messagesLimit()
+        ChatUi.usageKnown = true
+        ChatUi.blocked = !tier.canSendMessage()
+        val body = apiGet("/api/chat/messages?page=1&limit=50")
+        if (isApiError(body)) {
+            ChatUi.error = chatHistoryErrorText()
+        } else {
+            val page = json.decode<ChatHistoryPage>(body)
+            ChatState.messages = ""
+            for (var item in page.items()) {
+                chatAppend(item.role(), chatEncode(item.content()))
+            }
+        }
+    } catch (String e) {
+        ChatUi.error = chatHistoryErrorText()
+    }
+    ChatUi.loading = false
+}
+
+// Envia uma mensagem. Sucesso: grava as duas bolhas e o contador. 402: bloqueia
+// o envio. 503/rede: mantém o rascunho para tentar de novo.
+sendChatMessage(String text) {
+    ChatUi.sending = true
+    ChatUi.pending = text
+    ChatUi.error = ""
+    try {
+        val body = apiPost("/api/chat/message", json.encode(ChatMessageRequest(text)))
+        if (isApiError(body)) {
+            ChatUi.blocked = true
+            ChatUi.draft = text
+            if (ChatUi.limit > 0) {
+                ChatUi.used = ChatUi.limit
+            }
+            ChatUi.error = chatLimitText()
+        } else {
+            val r = json.decode<ChatReplyResponse>(body)
+            chatAppend("USER", chatEncode(text))
+            chatAppend("ASSISTANT", chatEncode(r.reply()))
+            ChatUi.used = r.messagesUsed()
+            ChatUi.limit = r.messagesLimit()
+            ChatUi.usageKnown = true
+            ChatUi.draft = ""
+            if (ChatUi.limit >= 0 && ChatUi.used >= ChatUi.limit) {
+                ChatUi.blocked = true
+            }
+        }
+    } catch (String e) {
+        ChatUi.draft = text
+        ChatUi.error = chatOfflineText()
+    }
+    ChatUi.pending = ""
+    ChatUi.sending = false
+}

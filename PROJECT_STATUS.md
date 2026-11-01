@@ -53,6 +53,7 @@
 - [x] **Lote 1 (`T1–T5`, Issue #38)**: Tokens `theme.kf`, estado `app_state.kf`, cliente HTTP `api_client.kf`, `brand_header.kf` + `nav_bar.kf`, dispatcher `core/navigation.kf` e `main.kf`
 - [ ] **Lote 2 (`T5–T9`)**: Componentes (`cards.kf`, `visual_widgets.kf`), Auth (`auth_screens.kf` — Telas 1–3) e Onboarding Adaptativo (`onboarding_steps_screens.kf` + `onboarding_result_screen.kf` — Telas 4–7, Issues #11 e #33)
 - [ ] **Lote 3 (`T10–T15`)**: Dashboard (`dashboard_screen.kf` — Tela 8, Issue #32), Chat Coach (`chat_screen.kf` — Tela 9, Issue #34), Caixinhas & Push Toast (`envelopes_screen.kf` — Telas 10–11), Shell Dual Mobile/Desktop (`main.kf`) e fix `ASM COMPUTE_FRAMES` (Issue #41)
+  - Batch 3, F2 (feito): Tela 10 Organiza AI (`screens/chat_screen.kf` + `core/chat_api.kf`): histórico, contador do plano, "digitando", erros 402/503; anexo e voz desativados ("Em breve"). Issue #34.
 
 ### Design System
 - [x] Paleta de cores (base, accent, texto, estado, categoria)
