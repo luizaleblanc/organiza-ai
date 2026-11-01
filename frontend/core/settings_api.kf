@@ -22,6 +22,9 @@ class SettingsState {
     static String bankMsg = ""
     static Bool loaded = false
     static String error = ""
+    static String salaryInput = ""
+    static String salaryMsg = ""
+    static Bool salaryOk = false
 }
 
 resetSettings() {
@@ -33,6 +36,9 @@ resetSettings() {
     SettingsState.bankMsg = ""
     SettingsState.loaded = false
     SettingsState.error = ""
+    SettingsState.salaryInput = ""
+    SettingsState.salaryMsg = ""
+    SettingsState.salaryOk = false
 }
 
 List<String> frequencyCodes() = listOf("DAILY", "WEEKLY", "NEVER")
@@ -86,6 +92,30 @@ Bool savePreferences() {
     } catch (String e) {
         SettingsState.error = "Não foi possível salvar. Verifique sua conexão."
     }
+    SettingsState.saving = false
+    return ok
+}
+
+record SalaryError(String error)
+
+// PATCH /api/users/me/salary com o valor já validado por parseMoney.
+// Sucesso: salaryOk + mensagem de confirmação. Erro de API: mostra a mensagem
+// do backend; rede/5xx: mensagem genérica. O texto digitado fica no campo.
+Bool saveSalary(Double salary) {
+    SettingsState.saving = true
+    var ok = false
+    try {
+        val body = apiPatch("/api/users/me/salary", "{\"salary\":" + salary + "}")
+        if (isApiError(body)) {
+            SettingsState.salaryMsg = json.decode<SalaryError>(body).error()
+        } else {
+            SettingsState.salaryMsg = "Salário atualizado."
+            ok = true
+        }
+    } catch (String e) {
+        SettingsState.salaryMsg = "Não foi possível salvar. Verifique sua conexão."
+    }
+    SettingsState.salaryOk = ok
     SettingsState.saving = false
     return ok
 }

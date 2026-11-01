@@ -43,6 +43,15 @@ String apiPut(String path, String payload) {
     return await h
 }
 
+// PATCH (Batch 3, Z): mesmo padrão de apiPut. http.patch está na tabela do
+// KofHttp.staticCall (KOF_WEB_REFERENCE.md) e o runtime js traz
+// kofHttpPatchHeaders (JsRuntimeOps no 0.6.6 e 0.6.7); medido no Edge headless
+// com PATCH /api/users/me/salary.
+String apiPatch(String path, String payload) {
+    val h = spawn http.patch(path, payload, apiHeaders())
+    return await h
+}
+
 String apiDelete(String path) {
     val h = spawn http.delete(path, apiHeaders())
     return await h

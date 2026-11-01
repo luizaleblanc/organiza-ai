@@ -5,13 +5,15 @@ import core.theme
 import core.app_state
 import core.navigation
 import core.settings_api
+import core.format
+import components.form_widgets
 import components.topbar
 
 // =============================================================================
 // Tela 13 Configurações + modal "Rever meu salário" (Batch 3, F5; spec S13)
 // =============================================================================
 // Seis seções do artefato. Ativas: Notificações (GET/PUT preferências; toggle
-// e select salvam na hora e desfazem se o PUT falhar), o modal (Editar abre,
+// e select salvam na hora e desfazem se o PUT falhar), o modal (Editar abre, Salvar faz PATCH do salário,
 // Cancelar fecha) e Sair (resetSession + "welcome"). Inativas com "Em breve"
 // (decisões da usuária): Modo escuro, Seguir tema, Refazer configuração e
 // Conectar banco. Conta: inerte com badge "MVP 2". Estilos locais só com hex
@@ -158,22 +160,59 @@ View salaryModal(Window w) {
     var body = txt("Mudou de emprego ou de regime de trabalho? O Organiza vai te guiar pelo mesmo processo do começo, rápido e simples, e recalcular o modelo financeiro que mais se adapta à sua nova realidade.", setRowDescCss())
     var example = Column(listOf(txt("Exemplo", setSectionLabelCss()), txt("Se você era CLT e virou PJ, sua renda e seus custos mudam muito. O Organiza recalcula tudo do zero e sugere o modelo ideal para essa nova fase.", setCheckCss())))
     example.setStyle(setExampleCss())
+    var field = moneyFieldWith(SettingsState.salaryInput, "0,00", "salary-modal-input")
     var cancel = Button("Cancelar", () -> {
         SettingsState.salaryModal = false
+        SettingsState.salaryMsg = ""
         mountScreen(w)
     })
     cancel.setId("salary-cancel")
     cancel.setStyle(setBtnGhostCss())
     // Refazer configuração: decisão pendente da usuária (DECISÃO-12), inativo.
-    var actions = Row(listOf(cancel, inactiveButton("Refazer configuração", "salary-redo")))
+    var save = Button("Salvar", () -> submitSalaryEdit(w, field.text()))
+    save.setId("salary-save")
+    save.setStyle(setBtnCss())
+    var actions = Row(listOf(cancel, inactiveButton("Refazer configuração", "salary-redo"), save))
     actions.setStyle(setModalActionsCss())
-    var box = Column(listOf(title, body, example, actions))
+    var items = listOf(title, body, example, txt("Novo salário (R$)", setSectionLabelCss()), field)
+    if (SettingsState.salaryMsg != "") {
+        if (SettingsState.salaryOk) {
+            var okMsg = txt(SettingsState.salaryMsg, setCheckCss())
+            okMsg.setId("salary-msg")
+            items.add(okMsg)
+        } else {
+            var err = errorBanner(SettingsState.salaryMsg)
+            err.setId("salary-msg")
+            items.add(err)
+        }
+    }
+    items.add(actions)
+    var box = Column(items)
     box.setStyle(setModalBoxCss())
     var overlay = View(screenStyle())
     overlay.setId("salary-modal")
     overlay.setStyle(setModalOverlayCss())
     overlay.bind(box)
     return overlay
+}
+
+// "Salvar" do modal: parseMoney valida (mesma regra da Tela 4); válido faz
+// PATCH /api/users/me/salary. O texto digitado volta no re-render.
+submitSalaryEdit(Window w, String raw) {
+    SettingsState.salaryInput = raw.trim()
+    var value = 0.0
+    try {
+        value = parseMoney(SettingsState.salaryInput)
+    } catch (String e) {
+        SettingsState.salaryOk = false
+        SettingsState.salaryMsg = "Digite um valor entre R$ 1 e R$ 1.000.000."
+        mountScreen(w)
+        return
+    }
+    spawn {
+        saveSalary(value)
+        mountScreen(w)
+    }
 }
 
 View settingsScreen(Window w) {
