@@ -1,0 +1,91 @@
+package core
+
+import kof.json
+import core.api_client
+
+// =============================================================================
+// Configurações (Tela 13, Batch 3 F5) — estado e chamadas de preferências
+// =============================================================================
+// Rotas: GET/PUT /api/users/me/preferences (PreferencesInput: emailEnabled,
+// frequency DAILY|WEEKLY|NEVER, pushEnabled). 400 devolve {"error": ...}.
+// Estado próprio da tela (contrato T0): nada em app_state.
+// =============================================================================
+
+record Preferences(Bool emailEnabled, String frequency, Bool pushEnabled)
+
+class SettingsState {
+    static Bool emailEnabled = true
+    static Bool pushEnabled = false
+    static String frequency = "DAILY"
+    static Bool salaryModal = false
+    static Bool saving = false
+    static String bankMsg = ""
+    static Bool loaded = false
+    static String error = ""
+}
+
+resetSettings() {
+    SettingsState.emailEnabled = true
+    SettingsState.pushEnabled = false
+    SettingsState.frequency = "DAILY"
+    SettingsState.salaryModal = false
+    SettingsState.saving = false
+    SettingsState.bankMsg = ""
+    SettingsState.loaded = false
+    SettingsState.error = ""
+}
+
+List<String> frequencyCodes() = listOf("DAILY", "WEEKLY", "NEVER")
+List<String> frequencyLabels() = listOf("Diário", "Semanal", "Nunca")
+
+Int frequencyIndex(String code) {
+    var i = frequencyCodes().indexOf(code)
+    if (i < 0) {
+        return 0
+    }
+    return i
+}
+
+applyPreferences(String body) {
+    val p = json.decode<Preferences>(body)
+    SettingsState.emailEnabled = p.emailEnabled()
+    SettingsState.pushEnabled = p.pushEnabled()
+    SettingsState.frequency = p.frequency()
+}
+
+// GET: preenche o estado. Falha de rede ou erro de API vira SettingsState.error.
+loadPreferences() {
+    try {
+        val body = apiGet("/api/users/me/preferences")
+        if (isApiError(body)) {
+            SettingsState.error = "Não foi possível carregar suas preferências."
+        } else {
+            applyPreferences(body)
+            SettingsState.error = ""
+        }
+    } catch (String e) {
+        SettingsState.error = "Sem conexão. Tente de novo."
+    }
+    SettingsState.loaded = true
+}
+
+// PUT com o estado atual. Em erro, devolve false e o chamador desfaz a mudança.
+Bool savePreferences() {
+    SettingsState.saving = true
+    var ok = false
+    try {
+        val payload = json.encode(Preferences(SettingsState.emailEnabled, SettingsState.frequency, SettingsState.pushEnabled))
+        val body = apiPut("/api/users/me/preferences", payload)
+        if (isApiError(body)) {
+            SettingsState.error = "Não foi possível salvar: valor inválido."
+        } else {
+            applyPreferences(body)
+            SettingsState.error = ""
+            ok = true
+        }
+    } catch (String e) {
+        SettingsState.error = "Não foi possível salvar. Verifique sua conexão."
+    }
+    SettingsState.saving = false
+    return ok
+}

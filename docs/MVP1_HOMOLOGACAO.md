@@ -133,11 +133,11 @@ No frontend Kof existem só `frontend/main.kf`, `core/` (api_client, app_state, 
 | 10 | Organiza AI (chat de texto, voz, upload de fatura PDF) | coach com LLM + tools + memória + limite freemium; voz (Whisper/TTS); leitura de PDF/imagem com confirmação; limite de 1 PDF/mês no Gratuito | ❌ (texto fixo) | #34 | ❌ |
 | 11 | Caixinhas por bucket (status Em dia/Alerta/Estourada, nova caixinha, histórico) | `GET /api/envelopes/overview`, `PUT`/`DELETE /api/envelopes/:id`; histórico por caixinha só no Mobile | ✅ (Fase 3) | #11 | ❌ |
 | 12 | Notificações (estouro, alerta, pulso, meta batida, lembrete; marcar como lidas) | `NotificationRow` + regras + `GET /api/notifications` e `POST /api/notifications/read-all` | ✅ (Fase 3) | #11 | ❌ |
-| 13 | Configurações: tema | — (local) | n/a | — | ❌ |
-| 13 | Configurações: e-mail/push diário às 20h | preferências (`GET`/`PUT /api/users/me/preferences`, Fase 3) + job agendado + envio de e-mail | ⚠️ (preferências feitas; envio na Fase 3.1) | — | ❌ |
-| 13 | Configurações: rever salário (refaz o onboarding e migra o modelo) | `PATCH /api/users/me/salary` (migra o modelo) ou um novo `POST /api/users/onboarding`; troca manual `PUT /api/users/me/budget-model` (#11) | ✅ (Fase 3) | — | ❌ |
-| 13 | Configurações: Open Finance "Demo · MVP 1" | `GET /api/open-finance/banks` e `POST /api/open-finance/connect`, marcados `demo: true`, sem conexão nem dado bancário | ✅ (Fase 3) | — | ❌ |
-| 13 | Configurações: conta (e-mail, senha, 2FA) | marcado **MVP 2** no design | fora | — | fora |
+| 13 | Configurações: tema | — (local) | n/a | inerte com "Em breve" (Batch 3 F5; MVP 1 só escuro, decisão pendente) | ⚠️ |
+| 13 | Configurações: e-mail/push diário às 20h | preferências (`GET`/`PUT /api/users/me/preferences`, Fase 3) + job agendado + envio de e-mail | ⚠️ (preferências feitas; envio na Fase 3.1) | `settings_screen.kf` + `core/settings_api.kf`: toggles e select salvam via PUT e desfazem em erro (Batch 3 F5) | ⚠️ (envio na Fase 3.1) |
+| 13 | Configurações: rever salário (refaz o onboarding e migra o modelo) | `PATCH /api/users/me/salary` (migra o modelo) ou um novo `POST /api/users/onboarding`; troca manual `PUT /api/users/me/budget-model` (#11) | ✅ (Fase 3) | modal abre e fecha; "Refazer configuração" inerte com "Em breve" (DECISÃO-12); `PATCH /api/users/me/salary` sem `apiPatch` no cliente (lacuna) | ⚠️ |
+| 13 | Configurações: Open Finance "Demo · MVP 1" | `GET /api/open-finance/banks` e `POST /api/open-finance/connect`, marcados `demo: true`, sem conexão nem dado bancário | ✅ (Fase 3) | textos e badge renderizados; "Conectar banco" inerte com "Em breve" (DECISÃO-13) | ⚠️ |
+| 13 | Configurações: conta (e-mail, senha, 2FA) | marcado **MVP 2** no design | fora | inerte, opacidade .6, badge "MVP 2" (Batch 3 F5) | fora |
 | — | Sessão: `/api/users/me` (nome, e-mail, `onboardingCompleted`, tier) | F3 | ❌ | #33 | ❌ |
 
 ## 4. Roadmap

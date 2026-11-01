@@ -3,19 +3,273 @@ package screens
 import kof.ui
 import core.theme
 import core.app_state
+import core.navigation
+import core.settings_api
 import components.topbar
 
 // =============================================================================
-// Tela 13 Configurações (F5) — stub do shell (Batch 3, T0)
+// Tela 13 Configurações + modal "Rever meu salário" (Batch 3, F5; spec S13)
 // =============================================================================
-// Contrato: settingsScreen(Window w) devolve o corpo da rota "settings" (o shell já põe a
-// sidebar/barra inferior). Começa pela topbar com o título exato; a tarefa
-// dona da tela substitui o resto do corpo.
+// Seis seções do artefato. Ativas: Notificações (GET/PUT preferências; toggle
+// e select salvam na hora e desfazem se o PUT falhar), o modal (Editar abre,
+// Cancelar fecha) e Sair (resetSession + "welcome"). Inativas com "Em breve"
+// (decisões da usuária): Modo escuro, Seguir tema, Refazer configuração e
+// Conectar banco. Conta: inerte com badge "MVP 2". Estilos locais só com hex
+// do design system.
 // =============================================================================
 
+Style setSectionLabelCss() = Style("color: #7B8EAD; font-size: 12; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; margin: 0")
+Style setRowCss()          = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 16; width: 100%; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,.06)")
+Style setRowTextCss()      = Style("display: flex; flex-direction: column; gap: 4; flex-grow: 1; min-width: 0")
+Style setRowTitleCss()     = Style("color: #F0F0F0; font-size: 15; font-weight: 500; margin: 0")
+Style setRowDescCss()      = Style("color: #7B8EAD; font-size: 13; margin: 0")
+Style setSoonCss()         = Style("color: #4A5578; font-size: 12; font-style: italic; margin: 0")
+Style setSoonColCss()      = Style("display: flex; flex-direction: column; align-items: flex-end; gap: 4; flex-shrink: 0")
+Style setInertCss()        = Style("opacity: 0.6; pointer-events: none")
+Style setToggleOnOffCss()  = Style("width: 44; height: 24; border-radius: 12; border: none; background: #00D4FF; opacity: 0.5; cursor: not-allowed")
+Style setToggleOffOffCss() = Style("width: 44; height: 24; border-radius: 12; border: 1px solid rgba(255,255,255,.1); background: #1A1F3A; opacity: 0.5; cursor: not-allowed")
+Style setBtnCss()          = Style("background: transparent; color: #00D4FF; border: 1.5px solid #00D4FF; border-radius: 8; padding: 8px 16px; font-size: 14; font-weight: 600; cursor: pointer; flex-shrink: 0")
+Style setBtnOffCss()       = Style("background: #12162A; color: #4A5578; border: 1px solid rgba(255,255,255,.06); border-radius: 8; padding: 8px 16px; font-size: 14; font-weight: 600; cursor: not-allowed")
+Style setBtnGhostCss()     = Style("background: transparent; color: #7B8EAD; border: 1px solid rgba(255,255,255,.1); border-radius: 8; padding: 8px 16px; font-size: 14; cursor: pointer")
+Style setLogoutCss()       = Style("background: transparent; color: #FF4A6E; border: 1px solid #FF4A6E; border-radius: 8; padding: 10px 16px; font-size: 14; font-weight: 600; cursor: pointer; align-self: flex-start")
+Style setCheckCss()        = Style("color: #F0F0F0; font-size: 13; margin: 0")
+Style setChecksCss()       = Style("display: flex; flex-direction: column; gap: 6")
+Style setPlanCss()         = Style("display: flex; flex-direction: column; gap: 4; padding: 12; background: #1A1F3A; border-radius: 8")
+Style setModalBoxCss()     = Style("display: flex; flex-direction: column; gap: 16; width: 90%; max-width: 440; padding: 24; box-sizing: border-box; background: #12162A; border: 1px solid rgba(255,255,255,.1); border-radius: 12")
+Style setModalOverlayCss() = Style("position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.65); z-index: 50")
+Style setExampleCss()      = Style("display: flex; flex-direction: column; gap: 4; padding: 12; background: rgba(0,212,255,.08); border: 1px solid rgba(0,212,255,.2); border-radius: 8")
+Style setModalActionsCss() = Style("display: flex; flex-direction: row; justify-content: flex-end; align-items: flex-start; gap: 12; flex-wrap: wrap")
+Style setHeadRowCss()      = Style("display: flex; flex-direction: row; align-items: center; gap: 8")
+// width 0 + min-width 100%: os textos longos não inflam a largura intrínseca do conteúdo,
+// então a Row do shell (sem flex-wrap: nowrap) não joga a tela para baixo da sidebar.
+Style setScreenCss()       = Style("display: flex; flex-direction: column; gap: 16; width: 0; min-width: 100%")
+
+Label txt(String s, Style st) {
+    var l = Label(s)
+    l.setStyle(st)
+    return l
+}
+
+View settingsRow(String title, String desc, View control, String id) {
+    var text = Column(listOf(txt(title, setRowTitleCss()), txt(desc, setRowDescCss())))
+    text.setStyle(setRowTextCss())
+    var row = Row(listOf(text, control))
+    row.setId(id)
+    row.setStyle(setRowCss())
+    return row
+}
+
+// Controle inativo (decisão pendente): controle esmaecido + dica "Em breve".
+View soonControl(View control) {
+    var col = Column(listOf(control, txt("Em breve", setSoonCss())))
+    col.setStyle(setSoonColCss())
+    return col
+}
+
+View inactiveToggle(Bool on, String id) {
+    var b = Button("", () -> {})
+    b.setId(id)
+    if (on) {
+        b.setStyle(setToggleOnOffCss())
+    } else {
+        b.setStyle(setToggleOffOffCss())
+    }
+    return soonControl(b)
+}
+
+View inactiveButton(String text, String id) {
+    var b = Button(text, () -> {})
+    b.setId(id)
+    b.setStyle(setBtnOffCss())
+    return soonControl(b)
+}
+
+View section(String label, List<View> rows, String id) {
+    List<View> items = listOf()
+    if (label != "") {
+        items.add(txt(label, setSectionLabelCss()))
+    }
+    for (var r in rows) {
+        items.add(r)
+    }
+    var card = Column(items)
+    card.setId(id)
+    card.setStyle(cardCss())
+    return card
+}
+
+View checks(List<String> lines) {
+    List<View> items = listOf()
+    for (var s in lines) {
+        items.add(txt("✓ " + s, setCheckCss()))
+    }
+    var col = Column(items)
+    col.setStyle(setChecksCss())
+    return col
+}
+
+flipPref(Bool isEmail) {
+    if (isEmail) {
+        SettingsState.emailEnabled = !SettingsState.emailEnabled
+    } else {
+        SettingsState.pushEnabled = !SettingsState.pushEnabled
+    }
+}
+
+// Toggle ativo: inverte, salva e re-renderiza; se o PUT falhar, desfaz.
+View prefToggle(Window w, Bool on, String id, Bool isEmail) {
+    var b = Button("", () -> {
+        spawn {
+            flipPref(isEmail)
+            mountScreen(w)
+            if (!savePreferences()) {
+                flipPref(isEmail)
+            }
+            mountScreen(w)
+        }
+    })
+    b.setId(id)
+    if (on) {
+        b.setStyle(toggleOnCss())
+    } else {
+        b.setStyle(toggleOffCss())
+    }
+    return b
+}
+
+View frequencySelect(Window w) {
+    var sel = Select(frequencyLabels())
+    sel.setId("pref-frequency")
+    sel.setStyle(selectCss())
+    sel.setSelected(frequencyIndex(SettingsState.frequency))
+    sel.on("change", () -> {
+        spawn {
+            val previous = SettingsState.frequency
+            SettingsState.frequency = frequencyCodes().get(sel.selected())
+            if (!savePreferences()) {
+                SettingsState.frequency = previous
+            }
+            mountScreen(w)
+        }
+    })
+    return sel
+}
+
+View salaryModal(Window w) {
+    var title = txt("Rever meu salário", topbarTitleCss())
+    var body = txt("Mudou de emprego ou de regime de trabalho? O Organiza vai te guiar pelo mesmo processo do começo, rápido e simples, e recalcular o modelo financeiro que mais se adapta à sua nova realidade.", setRowDescCss())
+    var example = Column(listOf(txt("Exemplo", setSectionLabelCss()), txt("Se você era CLT e virou PJ, sua renda e seus custos mudam muito. O Organiza recalcula tudo do zero e sugere o modelo ideal para essa nova fase.", setCheckCss())))
+    example.setStyle(setExampleCss())
+    var cancel = Button("Cancelar", () -> {
+        SettingsState.salaryModal = false
+        mountScreen(w)
+    })
+    cancel.setId("salary-cancel")
+    cancel.setStyle(setBtnGhostCss())
+    // Refazer configuração: decisão pendente da usuária (DECISÃO-12), inativo.
+    var actions = Row(listOf(cancel, inactiveButton("Refazer configuração", "salary-redo")))
+    actions.setStyle(setModalActionsCss())
+    var box = Column(listOf(title, body, example, actions))
+    box.setStyle(setModalBoxCss())
+    var overlay = View(screenStyle())
+    overlay.setId("salary-modal")
+    overlay.setStyle(setModalOverlayCss())
+    overlay.bind(box)
+    return overlay
+}
+
 View settingsScreen(Window w) {
-    var col = Column(listOf(topbar("Configurações", "", null)))
+    if (!SettingsState.loaded) {
+        SettingsState.loaded = true
+        spawn {
+            loadPreferences()
+            mountScreen(w)
+        }
+    }
+
+    var appearance = section("Aparência", listOf(
+        settingsRow("Modo escuro", "Interface no tema escuro (padrão)", inactiveToggle(true, "pref-dark"), "row-dark"),
+        settingsRow("Seguir tema do dispositivo", "Sincroniza com a preferência do sistema operacional", inactiveToggle(false, "pref-system-theme"), "row-system-theme")
+    ), "sec-appearance")
+
+    var notifications = section("Notificações", listOf(
+        settingsRow("Disparo por e-mail", "Resumo diário do pulso + alertas de estouro de caixinha", prefToggle(w, SettingsState.emailEnabled, "pref-email", true), "row-email"),
+        settingsRow("Push no navegador", "Notificações em tempo real enquanto você está online", prefToggle(w, SettingsState.pushEnabled, "pref-push", false), "row-push"),
+        settingsRow("Horário de envio", "E-mail enviado às 20h, após o cálculo do pulso do dia", frequencySelect(w), "row-frequency")
+    ), "sec-notifications")
+
+    var edit = Button("Editar", () -> {
+        SettingsState.salaryModal = true
+        mountScreen(w)
+    })
+    edit.setId("salary-edit")
+    edit.setStyle(setBtnCss())
+    var salary = section("Salário", listOf(
+        settingsRow("Rever meu salário", "Mudou de emprego ou regime de trabalho? Refaça a configuração e o Organiza recalcula seu modelo.", edit, "row-salary")
+    ), "sec-salary")
+
+    var free = Column(listOf(txt("Gratuito", setRowTitleCss()), txt("Até 1 envio de PDF por mês. Também dá pra registrar gastos de até 15 dias ou gastos avulsos via chat.", setRowDescCss())))
+    free.setStyle(setPlanCss())
+    var pro = Column(listOf(txt("Pro", setRowTitleCss()), txt("Envios ilimitados, sem restrição.", setRowDescCss())))
+    pro.setStyle(setPlanCss())
+    var invoice = section("Envio de fatura", listOf(
+        txt("Envie sua fatura ou extrato pelo chat (PDF, DOCX, JPG ou PNG) e o Organiza organiza tudo pra você.", setRowDescCss()),
+        free, pro,
+        checks(listOf("A IA lê e classifica cada gasto em Necessidades, Desejos e Futuro", "Você revisa e confirma os itens antes de qualquer coisa ser salvo", "Seu pulso diário e suas caixinhas são atualizados na hora"))
+    ), "sec-invoice")
+
+    var ofHead = Row(listOf(txt("Open Finance", setRowTitleCss()), txt("Demo · MVP 1", badgeAccentCss())))
+    ofHead.setStyle(setHeadRowCss())
+    var integrations = section("Integrações", listOf(
+        ofHead,
+        txt("Conecte sua conta bancária e seus gastos chegam sozinhos, sem precisar enviar fatura. A demo do MVP 1 começa com os 5 bancos mais usados no Brasil e expande no MVP 2.", setRowDescCss()),
+        checks(listOf("Você autoriza pelo app do banco, sem compartilhar sua senha", "Seus lançamentos chegam automaticamente, atualizados todo dia", "Disponível para Caixa, Nubank, Banco do Brasil, Bradesco e Itaú", "Mais instituições disponíveis a partir do MVP 2")),
+        inactiveButton("Conectar banco", "bank-connect")
+    ), "sec-integrations")
+
+    View accHead = Row(listOf(txt("Conta", setSectionLabelCss()), txt("MVP 2", badgeWarningCss())))
+    accHead.setStyle(setHeadRowCss())
+    View accRows = Column(listOf(
+        settingsRow("Alterar e-mail", "Trocar o e-mail associado à sua conta", txt("›", setRowDescCss()), "row-change-email"),
+        settingsRow("Alterar senha", "Criar uma nova senha de acesso", txt("›", setRowDescCss()), "row-change-password"),
+        settingsRow("Autenticação de dois fatores", "Uma segunda camada de segurança no momento do login", txt("›", setRowDescCss()), "row-2fa")
+    ))
+    accRows.setStyle(setInertCss())
+    List<View> accParts = listOf(accHead, accRows)
+    var account = section("", accParts, "sec-account")
+
+    var logout = Button("Sair", () -> {
+        resetSettings()
+        resetSession()
+        navigateTo(w, "welcome")
+    })
+    logout.setId("btn-logout")
+    logout.setStyle(setLogoutCss())
+
+    List<View> items = listOf()
+    items.add(topbar("Configurações", "", null))
+    if (SettingsState.error != "") {
+        var err = txt(SettingsState.error, errorBannerCss())
+        err.setId("settings-error")
+        items.add(err)
+    }
+    if (SettingsState.saving) {
+        var s = txt("Salvando…", setRowDescCss())
+        s.setId("settings-saving")
+        items.add(s)
+    }
+    items.add(appearance)
+    items.add(notifications)
+    items.add(salary)
+    items.add(invoice)
+    items.add(integrations)
+    items.add(account)
+    items.add(logout)
+    if (SettingsState.salaryModal) {
+        items.add(salaryModal(w))
+    }
+    var col = Column(items)
     col.setId("screen-settings")
-    col.setStyle(stackCss())
+    col.setStyle(setScreenCss())
     return col
 }
