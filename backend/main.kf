@@ -290,6 +290,29 @@ main() {
         }
     }
 
+    // B3 (L6): confirma e grava em lote os itens da fatura. {"items":[{description, amount, category}]}
+    // Exige token; ate 100 itens; um item invalido = 400 e nada gravado; tudo num transaction {}.
+    app.post("/api/invoices/confirm") {
+        var raw = body()
+        if (raw.length() > 65536) {
+            return status(413, json.encode(ApiError("Corpo grande demais.")))
+        }
+        var req = decodeInvoiceConfirmRequest(raw)
+        if (req == null) {
+            return status(400, invalidBody())
+        }
+        var err = invoiceItemsError(req.items())
+        if (err != null) {
+            return status(400, json.encode(ApiError(err)))
+        }
+        try {
+            var saved = confirmInvoiceItems(currentUserId(), req.items())
+            return status(201, json.encode(InvoiceConfirmResponse(saved.size, saved)))
+        } catch (String e) {
+            return status(500, json.encode(ApiError(e)))
+        }
+    }
+
     app.post("/api/chat/message") {
         var userId = currentUserId()
         var msgReq = decodeChatMessageRequest(body())
@@ -400,7 +423,7 @@ main() {
         if (givenMonths != null) {
             months = givenMonths
         }
-        return json.encode(updateEnvelope(userId, current.id, EnvelopeEntity(current.id, userId, req.categoryName.trim(), req.limitAmount, current.currentSpent, limitType, months, current.createdAt)))
+        return json.encode(updateEnvelope(userId, current.id, EnvelopeEntity(current.id, userId, req.categoryName.trim(), req.limitAmount, current.currentSpent, limitType, months, current.createdAt, current.bucket)))
     }
 
     app.delete("/api/envelopes/:id") {
@@ -416,8 +439,17 @@ main() {
     app.post("/api/envelopes") {
         var req = decodeCreateEnvelopeInput(body())
         if (req != null) {
+            // B4: bucket opcional, validado contra os buckets do modelo atual do usuario.
+            var owner = findUserById(currentUserId())
+            if (owner == null) {
+                return status(404, json.encode(ApiError("Usuário não encontrado")))
+            }
+            var bucketErr = envelopeBucketError(owner, req.bucket)
+            if (bucketErr != null) {
+                return status(400, json.encode(ApiError(bucketErr)))
+            }
             // id "" = novo: o banco gera o id (PERS-06); o dono vem das claims (PERS-09)
-            var newEnv = EnvelopeEntity("", currentUserId(), req.categoryName, req.limitAmount, 0.0, EnvelopeLimitType.FIXED, 0, nowIso())
+            var newEnv = EnvelopeEntity("", currentUserId(), req.categoryName, req.limitAmount, 0.0, EnvelopeLimitType.FIXED, 0, nowIso(), req.bucket)
             var saved = createEnvelope(newEnv)
             return json.encode(saved)
         }

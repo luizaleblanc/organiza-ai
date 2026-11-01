@@ -56,7 +56,11 @@ Int percentOf(Long spentCents, Long limitCents) {
 EnvelopeOverview overviewOf(EnvelopeEntity e, BudgetModelType model, List<BucketSummaryDTO> plan, List<TransactionEntity> month) {
     var spent = sumAmountCents(month.filter((t: TransactionEntity) -> t.envelopeId == e.id))
     var limit = toCents(e.limitAmount)
-    return EnvelopeOverview(e.id, e.categoryName, planBucketFor(model, plan, Category.valueOf(e.categoryName)),
+    var bucket = e.bucket
+    if (bucket == null) {
+        bucket = planBucketFor(model, plan, Category.valueOf(e.categoryName))
+    }
+    return EnvelopeOverview(e.id, e.categoryName, bucket,
         e.limitAmount, centsToReais(spent), percentOf(spent, limit), envelopeStatus(spent, limit))
 }
 
@@ -141,7 +145,7 @@ List<EnvelopeEntity> createEnvelopesFromChips(UserEntity user, List<String> chip
 EnvelopeEntity createChipEnvelope(UserEntity user, List<BucketSummaryDTO> plan, Map<String, List<String>> byBucket, String category) {
     var bucket = nullToText(planBucketFor(user.budgetModel, plan, Category.valueOf(category)))
     var limit = chipLimit(plan, bucket, byBucket.getOrDefault(bucket, listOf()).size)
-    return createEnvelope(EnvelopeEntity("", user.id, category, limit, 0.0, EnvelopeLimitType.FIXED, 0, nowIso()))
+    return createEnvelope(EnvelopeEntity("", user.id, category, limit, 0.0, EnvelopeLimitType.FIXED, 0, nowIso(), textOrNull(bucket)))
 }
 
 // =========================================================

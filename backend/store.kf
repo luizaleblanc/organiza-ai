@@ -57,6 +57,8 @@ entity EnvelopeRow {
     limitType: String
     movingAverageMonths: Int
     createdAt: String
+    // B4. Ultima coluna de proposito: banco antigo a ganha em migrateEnvelopeBucketColumn ("" = sem bucket).
+    bucket: String
 }
 
 entity ChatMessageRow {
@@ -271,6 +273,32 @@ void migrateUserNameColumn(String conn) {
     log.info("migracao: coluna userrow.name adicionada")
 }
 
+// B4: mesma regra do migrateUserNameColumn para enveloperow.bucket (DDL fixa, DEFAULT '', nada apagado).
+Bool envelopeBucketColumnExists(String conn) {
+    var rows = db.query(conn, "SELECT COUNT(*) AS n FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = SCHEMA() AND LOWER(TABLE_NAME) = 'enveloperow' AND LOWER(COLUMN_NAME) = 'bucket'")
+    if (rows.size == 1) {
+        var row = rows.get(0).toLowerCase()
+        if (row == "{\"n\":1}") {
+            return true
+        }
+        if (row == "{\"n\":0}") {
+            return false
+        }
+    }
+    throw "migracao: resposta inesperada ao procurar a coluna enveloperow.bucket"
+}
+
+void migrateEnvelopeBucketColumn(String conn) {
+    if (envelopeBucketColumnExists(conn)) {
+        return
+    }
+    db.execute(conn, "ALTER TABLE \"enveloperow\" ADD COLUMN \"bucket\" VARCHAR(255) DEFAULT '' NOT NULL")
+    if (!envelopeBucketColumnExists(conn)) {
+        throw "migracao: a coluna enveloperow.bucket nao foi criada"
+    }
+    log.info("migracao: coluna enveloperow.bucket adicionada")
+}
+
 // O kof.orm cria todo campo String como VARCHAR(255) (JvmOrmRuntime.kof_orm_sql_type, 0.6.6 e 0.6.7) e
 // nao tem anotacao de tamanho. A resposta do coach com LLM passa disso facilmente, entao a coluna
 // chatmessagerow.content ganha espaco no boot: TEXT no MySQL (65.535 bytes) e VARCHAR(16000) no H2.
@@ -315,6 +343,7 @@ void ensureSchema(String db) {
     migrateUserNameColumn(db)
     orm.create<TransactionRow>(db)
     orm.create<EnvelopeRow>(db)
+    migrateEnvelopeBucketColumn(db)
     orm.create<ChatMessageRow>(db)
     migrateChatContentColumn(db)
     orm.create<VariableIncomeRow>(db)
@@ -591,13 +620,13 @@ EnvelopeLimitType limitTypeFromText(String text) {
 EnvelopeEntity envelopeFromRow(EnvelopeRow row) {
     return EnvelopeEntity(String.valueOf(row.id()), String.valueOf(row.userId()), row.categoryName(),
         centsToReais(row.limitCents()), centsToReais(row.spentCents()), limitTypeFromText(row.limitType()),
-        row.movingAverageMonths(), textOrNull(row.createdAt()))
+        row.movingAverageMonths(), textOrNull(row.createdAt()), textOrNull(row.bucket()))
 }
 
 EnvelopeRow envelopeToRow(Long id, EnvelopeEntity envelope) {
     return EnvelopeRow(id, envelope.userId.toLong(), envelope.categoryName, toCents(envelope.limitAmount),
         toCents(envelope.currentSpent), envelope.limitType.name(), envelope.movingAverageMonths,
-        nullToText(envelope.createdAt))
+        nullToText(envelope.createdAt), nullToText(envelope.bucket))
 }
 
 List<EnvelopeEntity> findEnvelopesByUserId(String userId) {
@@ -679,7 +708,7 @@ EnvelopeEntity addEnvelopeSpentCentsOn(String conn, String userId, String envelo
         throw "Envelope not found."
     }
     var saved = orm.save(conn, EnvelopeRow(row.id(), row.userId(), row.categoryName(), row.limitCents(),
-        row.spentCents() + cents, row.limitType(), row.movingAverageMonths(), row.createdAt()))
+        row.spentCents() + cents, row.limitType(), row.movingAverageMonths(), row.createdAt(), row.bucket()))
     return envelopeFromRow(saved)
 }
 

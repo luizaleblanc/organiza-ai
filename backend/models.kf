@@ -28,7 +28,7 @@ enum Category {
 enum Bucket { NEEDS, WANTS, SAVINGS, DEBT_PAYMENT, CULTURAL, LEISURE, EXTRAS }
 
 // mod_transaction/model/Source.java (referenciado por TransactionEntity.source)
-enum Source { MANUAL, VOICE, BANK_NOTIFICATION }
+enum Source { MANUAL, VOICE, BANK_NOTIFICATION, INVOICE }
 
 // mod_budget/model/BudgetModelType.java
 enum BudgetModelType {
@@ -149,9 +149,12 @@ class EnvelopeEntity {
     EnvelopeLimitType limitType
     Int movingAverageMonths
     String? createdAt
+    // Bucket do modelo do usuario (nome de buildBudgetBuckets, ex.: "Necessidades"); null = derivado da categoria.
+    String? bucket
 
     public constructor(String id, String userId, String categoryName, Double limitAmount,
-            Double currentSpent, EnvelopeLimitType limitType, Int movingAverageMonths, String? createdAt) {
+            Double currentSpent, EnvelopeLimitType limitType, Int movingAverageMonths, String? createdAt,
+            String? bucket) {
         this.id = id
         this.userId = userId
         this.categoryName = categoryName
@@ -160,6 +163,7 @@ class EnvelopeEntity {
         this.limitType = limitType
         this.movingAverageMonths = movingAverageMonths
         this.createdAt = createdAt
+        this.bucket = bucket
     }
 }
 
@@ -230,7 +234,8 @@ record OnboardingRequest(Double salary, String incomeType, Bool hasDebt, Double?
 record VariableIncomeInput(Double amount, String source)
 // Sem userId: o dono do envelope vem SEMPRE do token (currentUserId). Um userId enviado no
 // corpo por clientes antigos e ignorado pelo json.decode (chaves extras nao quebram).
-record CreateEnvelopeInput(String categoryName, Double limitAmount)
+// bucket opcional (B4): se vier, tem de ser um dos buckets do modelo atual do usuario.
+record CreateEnvelopeInput(String categoryName, Double limitAmount, String? bucket)
 record ChatMessageRequest(String message)
 // Fase 3: PUT de caixinha (limitType/movingAverageMonths opcionais como no legado), salario, meta de
 // reserva e troca de modelo. limitType/model chegam como String (WORKAROUND do enum no json.decode).

@@ -483,3 +483,132 @@ void enforceVoiceAllowed(String userId, String monthStartIso) {
         throw "Entrada por voz disponível apenas no plano Premium."
     }
 }
+
+// =========================================================
+// B4: bucket da caixinha validado contra os buckets do modelo atual do usuario
+// =========================================================
+
+// null = valido. Bucket ausente e valido (fica derivado da categoria); "" ou nome fora do modelo = erro.
+String? envelopeBucketError(UserEntity user, String? bucket) {
+    if (bucket == null) {
+        return null
+    }
+    var names = buildBudgetBuckets(user.budgetModel, userSalary(user)).map((b: BucketSummaryDTO) -> b.name())
+    if (!names.contains(bucket)) {
+        return "Bucket inválido para o seu modelo: " + bucket
+    }
+    return null
+}
+
+// =========================================================
+// B3: confirmar e gravar em lote os itens extraidos da fatura (L6)
+// =========================================================
+
+record InvoiceConfirmItem(String description, Double amount, String category)
+record InvoiceConfirmRequest(List<InvoiceConfirmItem> items)
+record InvoiceConfirmResponse(Int saved, List<TransactionOutput> transactions)
+
+Int invoiceConfirmMaxItems() {
+    return 100
+}
+
+InvoiceConfirmRequest? decodeInvoiceConfirmRequest(String raw) {
+    try {
+        var req = json.decode<InvoiceConfirmRequest>(raw)
+        if (req.items() == null) {
+            return null
+        }
+        return req
+    } catch (String e) {
+        return null
+    }
+}
+
+// null = item valido; senao a mensagem (com o indice, base 0) para o 400. Nada e gravado se um falhar.
+String? invoiceItemError(InvoiceConfirmItem item, Int index) {
+    var prefix = "Item " + index + ": "
+    if (item == null || item.description() == null || item.amount() == null || item.category() == null) {
+        return prefix + "campos obrigatórios: description, amount, category."
+    }
+    if (isBlank(item.description()) || item.description().length() > maxTextLength()) {
+        return prefix + "descrição inválida."
+    }
+    if (item.amount() <= 0.0 || item.amount() > 1000000000.0) {
+        return prefix + "o valor deve ser maior que zero."
+    }
+    if (Category.valueOf(item.category()) == null) {
+        return prefix + "categoria inválida: " + item.category()
+    }
+    return null
+}
+
+String? invoiceItemsError(List<InvoiceConfirmItem> items) {
+    if (items.size == 0) {
+        return "Nenhum item para gravar."
+    }
+    if (items.size > invoiceConfirmMaxItems()) {
+        return "Itens demais (máximo de " + invoiceConfirmMaxItems() + " por chamada)."
+    }
+    var i = 0
+    while (i < items.size) {
+        var err = invoiceItemError(items.get(i), i)
+        if (err != null) {
+            return err
+        }
+        i = i + 1
+    }
+    return null
+}
+
+// O transaction {} fica numa funcao propria, fora de qualquer try (COMP002). Grava as linhas e os
+// descontos das caixinhas na conexao da transacao; qualquer erro desfaz o lote inteiro.
+List<TransactionEntity> insertInvoiceBatch(String tx, List<TransactionEntity> rows, String userId) {
+    var saved: List<TransactionEntity> = listOf()
+    transaction {
+        for (var t in rows) {
+            saved.add(insertTransactionOn(tx, t))
+            var envId = t.envelopeId
+            if (envId != null) {
+                addEnvelopeSpentCentsOn(tx, userId, envId, t.amountCents)
+            }
+        }
+    }
+    return saved
+}
+
+// Itens ja validados (invoiceItemsError). Caixinha resolvida pela categoria, so entre as do usuario.
+List<TransactionOutput> confirmInvoiceItems(String userId, List<InvoiceConfirmItem> items) {
+    var rows = items.map((it: InvoiceConfirmItem) -> invoiceItemToEntity(userId, it))
+    var saved: List<TransactionEntity> = listOf()
+    var token = DbConn.lock.receive()
+    try {
+        var tx = txConnection()
+        try {
+            saved = insertInvoiceBatch(tx, rows, userId)
+        } catch (String e) {
+            dropTxConnection()
+            log.warn("lote da fatura desfeito (rollback)")
+            throw "Não foi possível gravar os itens da fatura."
+        }
+    } finally {
+        DbConn.lock.send(token)
+    }
+    // Avisos depois do commit: um por caixinha, com o total do lote nela.
+    var envIds: List<String> = listOf()
+    for (var t in saved) {
+        var id = nullToText(t.envelopeId)
+        if (id != "" && !envIds.contains(id)) {
+            envIds.add(id)
+        }
+    }
+    for (var envId in envIds) {
+        notifyEnvelopeCrossing(userId, envId, sumAmountCents(saved.filter((t: TransactionEntity) -> t.envelopeId == envId)))
+    }
+    return saved.map((t: TransactionEntity) -> transactionEntityToOutput(t))
+}
+
+TransactionEntity invoiceItemToEntity(String userId, InvoiceConfirmItem item) {
+    var category = Category.valueOf(item.category())
+    var envId = resolveEnvelopeId(userId, null, category)
+    return TransactionEntity("", item.description().trim(), toCents(item.amount()), category, "BRL", userId, null, Source.INVOICE, nowIso(), envId)
+}
