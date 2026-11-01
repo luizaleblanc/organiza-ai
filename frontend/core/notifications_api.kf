@@ -1,0 +1,75 @@
+package core
+
+import kof.json
+import kof.time
+import core.app_state
+import core.auth_api
+
+// =============================================================================
+// Tela 12 Notificações (Batch 3, F4) — GET /api/notifications
+// =============================================================================
+// NotifState guarda o corpo cru da última leitura (raw) e se ela acabou de
+// chegar (loaded). Título e texto de cada aviso vêm do backend como estão:
+// o frontend só escolhe badge/tom/ícone pelo `kind` (core/format.kf) e
+// calcula o tempo relativo de `createdAt` até agora.
+// =============================================================================
+
+record NotificationItem(String id, String kind, String title, String message, String createdAt, Bool read)
+
+class NotifState {
+    static String raw = ""
+    static Bool loaded = false
+}
+
+// Lança a mensagem fixa da tela (msgNetwork/msgSessionExpired/msgGeneric).
+String fetchNotificationsRaw() = getOrThrow("/api/notifications")
+
+List<NotificationItem> decodeNotifications(String body) {
+    if (body == "") {
+        return listOf()
+    }
+    return json.decode<List<NotificationItem>>(body)
+}
+
+// Dias desde 1970-01-01 (algoritmo days-from-civil, calendário gregoriano).
+Long daysFromCivil(Int year, Int month, Int day) {
+    var y = year
+    if (month <= 2) {
+        y = y - 1
+    }
+    val era = y / 400
+    val yoe = y - era * 400
+    var mp = month - 3
+    if (month <= 2) {
+        mp = month + 9
+    }
+    val doy = (153 * mp + 2) / 5 + day - 1
+    val doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
+    Long days = era * 146097 + doe - 719468
+    return days
+}
+
+// "2026-11-01T15:06:02.351Z" -> segundos desde a época (UTC). Formato
+// inesperado -> -1 (quem chama mostra "agora").
+Long isoToEpochSeconds(String iso) {
+    if (iso.length < 19 || iso.charAt(4) != '-' || iso.charAt(10) != 'T') {
+        return -1
+    }
+    val days = daysFromCivil(iso.substring(0, 4).toInt(), iso.substring(5, 7).toInt(), iso.substring(8, 10).toInt())
+    Long secs = iso.substring(11, 13).toInt() * 3600 + iso.substring(14, 16).toInt() * 60 + iso.substring(17, 19).toInt()
+    return days * 86400 + secs
+}
+
+// Segundos de createdAt até agora (negativo ou inválido -> 0 = "agora").
+Int secondsSince(String createdAt) {
+    val then = isoToEpochSeconds(createdAt)
+    if (then < 0) {
+        return 0
+    }
+    Long nowSecs = time.now() / 1000
+    val diff = nowSecs - then
+    if (diff < 0) {
+        return 0
+    }
+    return diff as Int
+}

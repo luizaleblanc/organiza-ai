@@ -3,18 +3,195 @@ package screens
 import kof.ui
 import core.theme
 import core.app_state
+import core.format
+import core.navigation
+import core.notifications_api
 import components.topbar
+import components.nav_bar
 
 // =============================================================================
-// Tela 12 Notificações (F4) — stub do shell (Batch 3, T0)
+// Tela 12 Notificações (Batch 3, F4)
 // =============================================================================
-// Contrato: notificationsScreen(Window w) devolve o corpo da rota "notifications" (o shell já põe a
-// sidebar/barra inferior). Começa pela topbar com o título exato; a tarefa
-// dona da tela substitui o resto do corpo.
+// Lista de GET /api/notifications (max 560). Item = trilho de 56 px no tom do
+// `kind` com ícone Canvas + corpo (badge, tempo, título, texto). REMINDER não
+// tem badge: o tempo fica ao lado do título. Título e texto vêm do backend sem
+// reescrita (DECISÃO-11 em aberto). Lida/não lida não aparece (DECISÃO-10:
+// o artefato não diferencia).
+// Fluxo: tela montada sem leitura em curso -> spawn GET -> loaded = true ->
+// remonta; a remontagem desenha e zera loaded, então cada entrada na rota
+// relê a lista (sem laço: só o GET remonta).
 // =============================================================================
+
+Style notifListCss()   = Style("display: flex; flex-direction: column; gap: 12; width: 100%; max-width: 560")
+Style notifItemCss()   = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: stretch; gap: 0; background: #12162A; border: 1px solid rgba(255,255,255,.1); border-radius: 12; overflow: hidden; min-width: 0")
+Style notifBodyCss()   = Style("display: flex; flex-direction: column; gap: 6; padding: 14px 16px; min-width: 0; flex: 1 1 0")
+Style notifMetaCss()   = Style("display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8")
+Style notifTimeCss()   = Style("color: #4A5578; font-size: 12; margin: 0")
+Style notifTitleCss()  = Style("color: #F0F0F0; font-size: 15; font-weight: 600; margin: 0")
+Style notifTextCss()   = Style("color: #7B8EAD; font-size: 13; line-height: 1.5; margin: 0")
+Style notifRailIconCss() = Style("display: flex; align-items: center; padding: 0; background: transparent; line-height: 0")
+Style notifEmptyCss()  = Style("color: #7B8EAD; font-size: 14; text-align: center; padding: 32; margin: 0")
+
+Int notifScale(Int v, Int s) = v * s / 24
+
+// Ícone do trilho: aviso (triângulo), raio, troféu ou sino (reusa o da nav).
+Canvas notifIcon(String kind, Int s, Color color) {
+    if (kind == "REMINDER") {
+        return navIcon("notifications", s, color)
+    }
+    var c = Canvas(s, s)
+    c.setStroke(color)
+    c.setLineWidth(2)
+    if (kind == "ENVELOPE_EXCEEDED" || kind == "ENVELOPE_ALERT") {
+        c.beginPath()
+        c.moveTo(notifScale(12, s), notifScale(3, s))
+        c.lineTo(notifScale(22, s), notifScale(20, s))
+        c.lineTo(notifScale(2, s), notifScale(20, s))
+        c.closePath()
+        c.stroke()
+        c.beginPath()
+        c.moveTo(notifScale(12, s), notifScale(9, s))
+        c.lineTo(notifScale(12, s), notifScale(14, s))
+        c.moveTo(notifScale(12, s), notifScale(16, s))
+        c.lineTo(notifScale(12, s), notifScale(17, s))
+        c.stroke()
+    } else if (kind == "GOAL_REACHED") {
+        c.beginPath()
+        c.moveTo(notifScale(7, s), notifScale(4, s))
+        c.lineTo(notifScale(17, s), notifScale(4, s))
+        c.lineTo(notifScale(17, s), notifScale(10, s))
+        c.lineTo(notifScale(12, s), notifScale(14, s))
+        c.lineTo(notifScale(7, s), notifScale(10, s))
+        c.closePath()
+        c.stroke()
+        c.beginPath()
+        c.moveTo(notifScale(12, s), notifScale(14, s))
+        c.lineTo(notifScale(12, s), notifScale(19, s))
+        c.moveTo(notifScale(8, s), notifScale(20, s))
+        c.lineTo(notifScale(16, s), notifScale(20, s))
+        c.stroke()
+    } else {
+        // DAILY_PULSE: raio.
+        c.beginPath()
+        c.moveTo(notifScale(13, s), notifScale(2, s))
+        c.lineTo(notifScale(4, s), notifScale(14, s))
+        c.lineTo(notifScale(12, s), notifScale(14, s))
+        c.lineTo(notifScale(11, s), notifScale(22, s))
+        c.lineTo(notifScale(20, s), notifScale(10, s))
+        c.lineTo(notifScale(12, s), notifScale(10, s))
+        c.closePath()
+        c.stroke()
+    }
+    return c
+}
+
+Style railCssFor(String tone) {
+    if (tone == "danger") { return railDangerCss() }
+    if (tone == "warning") { return railWarningCss() }
+    if (tone == "success") { return railSuccessCss() }
+    return railAccentCss()
+}
+
+Style badgeCssFor(String tone) {
+    if (tone == "danger") { return badgeDangerCss() }
+    if (tone == "warning") { return badgeWarningCss() }
+    if (tone == "success") { return badgeSuccessCss() }
+    return badgeAccentCss()
+}
+
+View notifItem(NotificationItem n) {
+    val tone = notificationTone(n.kind())
+    val badge = notificationBadge(n.kind())
+    var holder = View(screenStyle())
+    holder.setStyle(notifRailIconCss())
+    holder.bind(notifIcon(n.kind(), 22, toneColor(tone)))
+    var rail = Column(listOf(holder))
+    rail.setStyle(railCssFor(tone))
+
+    var time = Label(relativeTime(secondsSince(n.createdAt())))
+    time.setId("notif-time-" + n.kind())
+    time.setStyle(notifTimeCss())
+    var title = Label(n.title())
+    title.setId("notif-title-" + n.kind())
+    title.setStyle(notifTitleCss())
+    var text = Label(n.message())
+    text.setId("notif-text-" + n.kind())
+    text.setStyle(notifTextCss())
+
+    var body = Column(listOf(title, text))
+    if (badge == "") {
+        // REMINDER: sem badge, tempo ao lado do título.
+        var head = Row(listOf(title, time))
+        head.setStyle(notifMetaCss())
+        body = Column(listOf(head, text))
+    } else {
+        var b = Label(badge)
+        b.setId("notif-badge-" + n.kind())
+        b.setStyle(badgeCssFor(tone))
+        var meta = Row(listOf(b, time))
+        meta.setStyle(notifMetaCss())
+        body = Column(listOf(meta, title, text))
+    }
+    body.setStyle(notifBodyCss())
+
+    var item = Row(listOf(rail, body))
+    item.setId("notif-" + n.kind())
+    item.setStyle(notifItemCss())
+    return item
+}
+
+loadNotifications(Window w) {
+    try {
+        NotifState.raw = fetchNotificationsRaw()
+        AppState.loadError = ""
+    } catch (String e) {
+        AppState.loadError = e
+    }
+    AppState.loading = false
+    NotifState.loaded = true
+    if (AppState.currentScreen == "notifications") {
+        mountScreen(w)
+    }
+}
+
+View notifMessage(String id, String text) {
+    var l = Label(text)
+    l.setId(id)
+    l.setStyle(notifEmptyCss())
+    return l
+}
+
+View notifContent() {
+    if (AppState.loadError != "") {
+        var err = Label(AppState.loadError)
+        err.setId("notif-error")
+        err.setStyle(errorBannerCss())
+        return err
+    }
+    if (NotifState.raw == "") {
+        return notifMessage("notif-loading", "Carregando…")
+    }
+    val items = decodeNotifications(NotifState.raw)
+    if (items.isEmpty()) {
+        return notifMessage("notif-empty", "Nenhuma notificação por enquanto.")
+    }
+    var views = items.map((n: NotificationItem) -> notifItem(n))
+    var list = Column(views)
+    list.setId("notif-list")
+    list.setStyle(notifListCss())
+    return list
+}
 
 View notificationsScreen(Window w) {
-    var col = Column(listOf(topbar("Notificações", "", null)))
+    if (NotifState.loaded) {
+        NotifState.loaded = false
+    } else if (!AppState.loading) {
+        AppState.loading = true
+        spawn {
+            loadNotifications(w)
+        }
+    }
+    var col = Column(listOf(topbar("Notificações", "", null), notifContent()))
     col.setId("screen-notifications")
     col.setStyle(stackCss())
     return col
