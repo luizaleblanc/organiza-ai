@@ -14,14 +14,17 @@ import core.api_client
 // As mensagens ficam em ChatState.messages (uma por linha, "ROLE|texto"), só
 // via chatAppend. Quebras de linha do texto viram '¶' na linha e voltam ao
 // mostrar.
-// No alvo js o corpo chega sem status: 4xx devolve {"error": ...} (aqui só o
-// 402 do limite) e 5xx/rede lança String (aqui o 503 ou falta de conexão).
+// No alvo js o corpo chega sem status: 4xx devolve {"error": ...} e 5xx/rede
+// lança String (aqui o 503 ou falta de conexão). Sem status, o 402 do limite
+// é reconhecido pelo texto do backend (enforceCanSendMessage, services.kf);
+// qualquer outro {"error"} mostra a mensagem do backend e mantém o rascunho.
 // =============================================================================
 
 record ChatMessageRequest(String message)
 record ChatReplyResponse(String reply, Int messagesUsed, Int messagesLimit)
 record ChatHistoryItem(String role, String content, String createdAt)
 record ChatHistoryPage(List<ChatHistoryItem> items, Int page, Int limit, Int offset, Bool hasNext)
+record ChatApiError(String error)
 record ChatTierStatus(String tier, Int messagesUsed, Int messagesLimit, Bool voiceEnabled, Bool canSendMessage)
 
 class ChatUi {
@@ -43,6 +46,10 @@ class ChatUi {
 String chatLimitText() = "Você chegou ao limite de " + String.valueOf(ChatUi.limit) + " mensagens do plano Gratuito neste mês. Assine o Pro para continuar conversando."
 String chatOfflineText() = "O Organiza AI está indisponível agora (serviço fora do ar ou sem conexão). Tente de novo em instantes."
 String chatHistoryErrorText() = "Não foi possível carregar o histórico. Tente de novo em instantes."
+
+// Texto do 402 em backend/services.kf: "Você atingiu o limite de 30 mensagens
+// gratuitas este mês." Só ele bloqueia o envio.
+Bool isChatLimitError(String message) = message.contains("limite de") && message.contains("mensagens")
 
 String chatEncode(String text) = text.replace('\n', '¶')
 String chatDecode(String text) = text.replace('¶', '\n')
@@ -73,8 +80,9 @@ loadChat() {
     ChatUi.loading = false
 }
 
-// Envia uma mensagem. Sucesso: grava as duas bolhas e o contador. 402: bloqueia
-// o envio. 503/rede: mantém o rascunho para tentar de novo.
+// Envia uma mensagem. Sucesso: grava as duas bolhas e o contador. 402 (texto do
+// limite): bloqueia o envio. Outro {"error"}: mostra a mensagem do backend.
+// 503/rede: mensagem fixa. Nos erros o rascunho fica para tentar de novo.
 sendChatMessage(String text) {
     ChatUi.sending = true
     ChatUi.pending = text
@@ -82,12 +90,17 @@ sendChatMessage(String text) {
     try {
         val body = apiPost("/api/chat/message", json.encode(ChatMessageRequest(text)))
         if (isApiError(body)) {
-            ChatUi.blocked = true
             ChatUi.draft = text
-            if (ChatUi.limit > 0) {
-                ChatUi.used = ChatUi.limit
+            val message = json.decode<ChatApiError>(body).error()
+            if (isChatLimitError(message)) {
+                ChatUi.blocked = true
+                if (ChatUi.limit > 0) {
+                    ChatUi.used = ChatUi.limit
+                }
+                ChatUi.error = chatLimitText()
+            } else {
+                ChatUi.error = message
             }
-            ChatUi.error = chatLimitText()
         } else {
             val r = json.decode<ChatReplyResponse>(body)
             chatAppend("USER", chatEncode(text))

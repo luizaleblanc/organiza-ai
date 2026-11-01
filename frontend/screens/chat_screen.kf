@@ -13,7 +13,7 @@ import components.form_widgets
 // =============================================================================
 // Topbar "Organiza AI" + "Assistente online"; bolhas IA (esquerda) e usuário
 // (direita); saudação fixa quando o histórico está vazio; "digitando…" durante
-// o envio; contador "N de M mensagens"; erros 402 (limite) e 503/rede.
+// o envio; contador "N de M mensagens"; erros 402 (limite, bloqueia), outros 4xx (mensagem do backend) e 503/rede.
 // Anexo (+) e voz ficam DESATIVADOS com "Em breve" (decisões 5 e 6 pendentes).
 // A lista usa column-reverse: o navegador mantém o scroll no fim sem JS.
 // =============================================================================
