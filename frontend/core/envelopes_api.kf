@@ -1,0 +1,89 @@
+package core
+
+import kof.json
+import core.app_state
+import core.api_client
+import core.auth_api
+
+// =============================================================================
+// Tela 11 Caixinhas (Batch 3, F3) — estado e chamadas de /api/envelopes
+// =============================================================================
+// GET /api/envelopes/overview devolve cada caixinha com bucket, gasto do mês,
+// percent e status (EM_DIA|ALERTA|ESTOURADA). `limitType` não é lido aqui: o
+// JSON dele ainda está sendo corrigido no backend.
+// =============================================================================
+
+record EnvelopeItem(String id, String categoryName, String? bucket, Double limitAmount, Double spentThisMonth, Int percent, String status)
+record CreateEnvelopeRequest(String categoryName, Double limitAmount, String bucket)
+
+class EnvState {
+    static String raw = ""
+    static Bool loaded = false
+    static Bool showNew = false
+    static Bool loading = false
+    static Bool busy = false
+    static String loadError = ""
+    static String formError = ""
+    // Formulário provisório "Nova caixinha" (DECISÃO-9 ainda aberta).
+    static String newCategory = ""
+    static String newLimit = ""
+    static String newBucket = ""
+}
+
+String msgEnvelopeBucket() = "Esse grupo não existe no seu modelo de orçamento. Escolha um dos grupos sugeridos."
+
+resetEnvelopes() {
+    EnvState.raw = ""
+    EnvState.loaded = false
+    EnvState.loadError = ""
+}
+
+// Carrega o overview; falha vira EnvState.loadError (texto fixo em PT).
+loadEnvelopes() {
+    EnvState.loading = true
+    try {
+        EnvState.raw = getOrThrow("/api/envelopes/overview")
+        EnvState.loadError = ""
+    } catch (String e) {
+        EnvState.loadError = e
+    }
+    EnvState.loaded = true
+    EnvState.loading = false
+}
+
+List<EnvelopeItem> envelopeItems() {
+    if (EnvState.raw == "") {
+        return listOf()
+    }
+    return json.decode<List<EnvelopeItem>>(EnvState.raw)
+}
+
+// POST /api/envelopes {categoryName, limitAmount, bucket}. Bucket fora do
+// modelo = 400 "Bucket inválido..." -> mensagem fixa.
+createEnvelope(String category, Double limit, String bucket) {
+    var body = ""
+    try {
+        body = apiPost("/api/envelopes", json.encode(CreateEnvelopeRequest(category, limit, bucket)))
+    } catch (String e) {
+        throw msgNetwork()
+    }
+    if (isApiError(body)) {
+        if (body.contains("Bucket")) {
+            throw msgEnvelopeBucket()
+        }
+        throw apiErrorMessage(body)
+    }
+}
+
+// DELETE /api/envelopes/:id (204 = corpo vazio).
+deleteEnvelope(String id) {
+    var body = ""
+    try {
+        body = apiDelete("/api/envelopes/" + id)
+    } catch (String e) {
+        throw msgNetwork()
+    }
+    if (isApiError(body)) {
+        throw apiErrorMessage(body)
+    }
+}

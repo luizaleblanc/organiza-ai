@@ -737,3 +737,7 @@ E2E H2 89/89 (0.6.6 e 0.6.7) · E2E MySQL 8.4 (ANSI_QUOTES) 89/89 (0.6.7)
 G-RESTART H2 28/28 e MySQL 28/28 (0.6.7) · integrações com mock 17/17 (H2, 0.6.7)
 Passos novos do E2E: 54 histórico cronológico · 55 sem token = 401 e limit=-1 = 400 · 64 paginação + isolamento entre usuários
 ```
+
+## 13. Tela 11 Caixinhas no frontend (Batch 3, F3, 01/11/2026)
+
+`frontend/screens/envelopes_screen.kf` consome `GET /api/envelopes/overview` (agrupado por `bucket`), `POST /api/envelopes {categoryName, limitAmount, bucket}` e `DELETE /api/envelopes/:id`. O formulário "Nova caixinha" é provisório até a DECISÃO-9 (categoria, limite e grupo, com os widgets existentes). Bucket fora do modelo (400 `Bucket inválido...`) vira mensagem fixa em PT. Ainda sem UI: edição (`PUT`) e histórico por caixinha.

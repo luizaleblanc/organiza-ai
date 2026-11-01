@@ -3,19 +3,300 @@ package screens
 import kof.ui
 import core.theme
 import core.app_state
+import core.format
+import core.navigation
+import core.envelopes_api
 import components.topbar
+import components.form_widgets
 
 // =============================================================================
-// Tela 11 Caixinhas (F3) — stub do shell (Batch 3, T0)
+// Tela 11 Caixinhas (Batch 3, F3; spec b3 S11)
 // =============================================================================
-// Contrato: envelopesScreen(Window w) devolve o corpo da rota "envelopes" (o shell já põe a
-// sidebar/barra inferior). Começa pela topbar com o título exato; a tarefa
-// dona da tela substitui o resto do corpo.
+// GET /api/envelopes/overview agrupado por `bucket` (Necessidades/Desejos/
+// Futuro no 50/30/20; outros modelos usam os nomes do próprio modelo). Bucket
+// nulo cai em "Outras" (DECISÃO-8 provisória). Badge e tom vêm de format.kf.
+// "+ Nova caixinha" abre um formulário PROVISÓRIO (DECISÃO-9: o artefato não
+// desenha o formulário): categoria, limite e grupo -> POST /api/envelopes.
+// Cada card tem "Excluir" -> DELETE /api/envelopes/:id.
 // =============================================================================
+
+String bucketOf(EnvelopeItem e) {
+    val b = e.bucket()
+    if (b != null) {
+        if (b != "") {
+            return b
+        }
+    }
+    return "Outras"
+}
+
+// Ordem dos grupos: os 3 do 50/30/20 primeiro, depois os demais na ordem em que aparecem.
+List<String> bucketOrder(List<EnvelopeItem> items) {
+    var seen: List<String> = listOf()
+    for (var name in listOf("Necessidades", "Desejos", "Futuro")) {
+        if (items.any((e: EnvelopeItem) -> bucketOf(e) == name)) {
+            seen.add(name)
+        }
+    }
+    for (var e in items) {
+        if (!seen.contains(bucketOf(e))) {
+            seen.add(bucketOf(e))
+        }
+    }
+    return seen
+}
+
+List<String> categoryCodes() = listOf("HOUSING", "GROCERIES", "TRANSPORT", "FOOD", "SUBSCRIPTIONS", "LEISURE", "HEALTH", "PHARMA", "AUTO", "EDUCATION", "SHOPPING", "OTHER")
+
+Style envBadgeCss(String tone) {
+    if (tone == "danger") { return badgeDangerCss() }
+    if (tone == "warning") { return badgeWarningCss() }
+    return badgeSuccessCss()
+}
+
+Style envValueCss(String tone) {
+    if (tone == "danger") { return envValueDangerCss() }
+    if (tone == "warning") { return envValueWarningCss() }
+    return envValueSuccessCss()
+}
+
+Style envFillCss(String tone) {
+    if (tone == "danger") { return progressFillDangerCss() }
+    if (tone == "warning") { return progressFillWarningCss() }
+    return progressFillSuccessCss()
+}
+
+// Mesma técnica de bucketBar (form_widgets): fill + resto com flex-basis, teto 100%.
+View envBar(Int pct, String tone, String id) {
+    var p = pct
+    if (p > 100) { p = 100 }
+    if (p < 0) { p = 0 }
+    var fill = View(screenStyle())
+    fill.setStyle(envFillCss(tone))
+    fill.setFlexBasis(p * 100)
+    var rest = View(screenStyle())
+    rest.setStyle(fillRestCss())
+    rest.setFlexBasis((100 - p) * 100)
+    var parts = Row(listOf(fill, rest))
+    parts.setStyle(fillRowCss())
+    var track = View(screenStyle())
+    track.setId(id)
+    track.setStyle(progressTrackCss())
+    track.bind(parts)
+    return track
+}
+
+View envelopeCard(Window w, EnvelopeItem e) {
+    val tone = envelopeStatusTone(e.status())
+    var name = Label(categoryLabel(e.categoryName()))
+    name.setId("env-name-" + e.id())
+    name.setStyle(envNameCss())
+    var badge = Label(envelopeStatusLabel(e.status()))
+    badge.setId("env-badge-" + e.id())
+    badge.setStyle(envBadgeCss(tone))
+    var head = Row(listOf(name, badge))
+    head.setStyle(envHeadCss())
+    var value = Label(brl(e.spentThisMonth()))
+    value.setStyle(envValueCss(tone))
+    var legend = Label(String.valueOf(e.percent()) + "% · " + brl(e.spentThisMonth()) + "/" + brl(e.limitAmount()))
+    legend.setId("env-legend-" + e.id())
+    legend.setStyle(captionCss())
+    val id = e.id()
+    var del = Button("Excluir", () -> {
+        spawn {
+            removeEnvelope(w, id)
+        }
+    })
+    del.setId("env-delete-" + id)
+    del.setStyle(envDeleteCss())
+    var col = Column(listOf(head, value, envBar(e.percent(), tone, "env-bar-" + id), legend, del))
+    col.setId("env-card-" + id)
+    col.setStyle(cardCss())
+    return col
+}
+
+View envelopeGroup(Window w, String bucket, List<EnvelopeItem> items) {
+    var title = Label(bucket)
+    title.setStyle(envGroupTitleCss())
+    var cards: List<View> = listOf()
+    for (var e in items) {
+        if (bucketOf(e) == bucket) {
+            cards.add(envelopeCard(w, e))
+        }
+    }
+    var grid = Column(cards)
+    if (AppState.isDesktop) {
+        grid.setStyle(gridG3Css())
+    } else {
+        grid.setStyle(stackCss())
+    }
+    var group = Column(listOf(title, grid))
+    group.setId("env-group-" + bucket)
+    group.setStyle(stackCss())
+    return group
+}
+
+removeEnvelope(Window w, String id) {
+    if (EnvState.busy) {
+        return
+    }
+    EnvState.busy = true
+    try {
+        deleteEnvelope(id)
+        EnvState.formError = ""
+    } catch (String e) {
+        EnvState.formError = e
+    }
+    loadEnvelopes()
+    EnvState.busy = false
+    mountScreen(w)
+}
+
+submitNewEnvelope(Window w, Select category, Input limit, Input bucket) {
+    if (EnvState.busy) {
+        return
+    }
+    EnvState.newCategory = categoryCodes().get(category.selected())
+    EnvState.newLimit = limit.text()
+    EnvState.newBucket = bucket.text().trim()
+    var amount = 0.0
+    try {
+        amount = parseMoney(EnvState.newLimit)
+    } catch (String e) {
+        EnvState.formError = "Informe um limite válido, por exemplo 300 ou 1.200,50."
+        mountScreen(w)
+        return
+    }
+    if (EnvState.newBucket == "") {
+        EnvState.formError = "Informe o grupo da caixinha."
+        mountScreen(w)
+        return
+    }
+    EnvState.busy = true
+    try {
+        createEnvelope(EnvState.newCategory, amount, EnvState.newBucket)
+        EnvState.formError = ""
+        EnvState.showNew = false
+        EnvState.newLimit = ""
+        EnvState.newBucket = ""
+        loadEnvelopes()
+    } catch (String e) {
+        EnvState.formError = e
+    }
+    EnvState.busy = false
+    mountScreen(w)
+}
+
+// Formulário provisório (DECISÃO-9): widgets existentes, sem desenho no artefato.
+View newEnvelopeForm(Window w, List<String> groups) {
+    var title = Label("Nova caixinha")
+    title.setStyle(envNameCss())
+    var labels: List<String> = listOf()
+    for (var c in categoryCodes()) {
+        labels.add(categoryLabel(c))
+    }
+    var category = Select(labels)
+    category.setId("env-new-category")
+    category.setStyle(selectCss())
+    var limit = moneyFieldWith(EnvState.newLimit, "Limite por mês (R$)", "env-new-limit")
+    limit.setStyle(inputCss())
+    var hint = "Necessidades, Desejos ou Futuro"
+    if (groups.size() > 0) {
+        hint = ""
+        for (var g in groups) {
+            if (hint != "") {
+                hint = hint + ", "
+            }
+            hint = hint + g
+        }
+    }
+    var bucket = textField("Grupo (" + hint + ")", "text", "env-new-bucket")
+    bucket.setText(EnvState.newBucket)
+    var items: List<View> = listOf()
+    items.add(title)
+    items.add(category)
+    items.add(limit)
+    items.add(bucket)
+    if (EnvState.formError != "") {
+        items.add(errorBanner(EnvState.formError))
+    }
+    var save = primaryButton("Salvar caixinha", "env-new-save", false, () -> {
+        spawn {
+            submitNewEnvelope(w, category, limit, bucket)
+        }
+    })
+    var cancel = secondaryButton("Cancelar", "env-new-cancel", false, () -> {
+        EnvState.showNew = false
+        EnvState.formError = ""
+        mountScreen(w)
+    })
+    items.add(save)
+    items.add(cancel)
+    var form = Column(items)
+    form.setId("env-new-form")
+    form.setStyle(cardCss())
+    return form
+}
 
 View envelopesScreen(Window w) {
-    var col = Column(listOf(topbar("Caixinhas", "", null)))
+    var newBtn = Button("+ Nova caixinha", () -> {
+        EnvState.showNew = true
+        EnvState.formError = ""
+        mountScreen(w)
+    })
+    newBtn.setId("btn-new-envelope")
+    newBtn.setStyle(envNewButtonCss())
+    var items: List<View> = listOf(topbar("Caixinhas", "", newBtn))
+
+    if (!EnvState.loaded) {
+        if (!EnvState.loading) {
+            EnvState.loading = true
+            spawn {
+                loadEnvelopes()
+                mountScreen(w)
+            }
+        }
+        var l = Label("Carregando caixinhas...")
+        l.setId("env-loading")
+        l.setStyle(captionCss())
+        items.add(l)
+    } else if (EnvState.loadError != "") {
+        items.add(errorBanner(EnvState.loadError))
+        items.add(secondaryButton("Tentar de novo", "env-retry", false, () -> {
+            resetEnvelopes()
+            mountScreen(w)
+        }))
+    } else {
+        val list = envelopeItems()
+        val groups = bucketOrder(list)
+        if (EnvState.showNew) {
+            items.add(newEnvelopeForm(w, groups))
+        } else if (EnvState.formError != "") {
+            items.add(errorBanner(EnvState.formError))
+        }
+        if (list.size() == 0) {
+            var empty = Label("Você ainda não tem caixinhas. Toque em \"+ Nova caixinha\" para criar a primeira.")
+            empty.setId("env-empty")
+            empty.setStyle(captionCss())
+            items.add(empty)
+        }
+        for (var g in groups) {
+            items.add(envelopeGroup(w, g, list))
+        }
+    }
+
+    var col = Column(items)
     col.setId("screen-envelopes")
     col.setStyle(stackCss())
     return col
 }
+
+// Estilos locais (hex do design system).
+Style envNameCss()         = Style("color: #F0F0F0; font-size: 16; font-weight: 600; margin: 0")
+Style envHeadCss()         = Style("display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: space-between; align-items: center; gap: 8; width: 100%")
+Style envGroupTitleCss()   = Style("color: #7B8EAD; font-size: 13; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; margin: 0")
+Style envValueSuccessCss() = Style("color: #00E5A0; font-size: 24; font-weight: 600; margin: 0")
+Style envValueWarningCss() = Style("color: #FFB800; font-size: 24; font-weight: 600; margin: 0")
+Style envValueDangerCss()  = Style("color: #FF4A6E; font-size: 24; font-weight: 600; margin: 0")
+Style envDeleteCss()       = Style("align-self: flex-start; background: transparent; color: #4A5578; border: none; padding: 0; font-size: 12; cursor: pointer")
+Style envNewButtonCss()    = Style("background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 40; padding: 0 16px; border: none; border-radius: 12; font-size: 14; font-weight: 600; cursor: pointer; flex-shrink: 0")
