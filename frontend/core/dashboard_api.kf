@@ -1,0 +1,69 @@
+package core
+
+import kof.json
+import core.auth_api
+
+// =============================================================================
+// Tela 9 Dashboard (Batch 3, F1): estado e acesso a GET /api/dashboard
+// =============================================================================
+// O backend (backend/overview.kf, dashboardOf) já junta o pulso diário
+// (calculateDailyPulse), os baldes do modelo (calculateBalance), a reserva e
+// as últimas transações do período. Os records abaixo espelham o JSON com os
+// mesmos nomes de campo; json.decode ignora o que não for usado.
+// =============================================================================
+
+record BucketBalanceDTO(String name, Int percentage, Double plannedAmount, Double spentAmount, Double remainingAmount)
+record ReserveSummary(Double accumulated, Double goal, Bool hasGoal, Int percent)
+record CategoryTotal(String category, Double total, Int count, Double percentage)
+record TransactionOutput(String id, String description, String category, Double value, String currency, String? envelopeId, String? createdAt)
+record DashboardResponse(String period, String from, Double totalSpent, String currency, Double salary,
+    Double pulse, Int daysRemaining, String budgetModel, List<BucketBalanceDTO> buckets, ReserveSummary reserve,
+    List<CategoryTotal> categories, List<TransactionOutput> recentTransactions)
+
+// Estado da tela. period: "week" | "month" | "year". raw: JSON do último GET
+// ("" = nada carregado). loaded: o último GET terminou (com dado ou erro).
+// fresh: o GET acabou de chegar e o próximo render só mostra; qualquer outro
+// render (entrar na rota, trocar viewport, login de outro usuário) busca de novo.
+class DashState {
+    static String period = "month"
+    static String raw = ""
+    static Bool loaded = false
+    static Bool fresh = false
+}
+
+String dashboardPath(String period) = "/api/dashboard?period=" + period
+
+// JSON cru do período ou throw com a mensagem fixa (rede / sessão expirada).
+String fetchDashboard(String period) = getOrThrow(dashboardPath(period))
+
+DashboardResponse? dashboardData() {
+    if (DashState.raw == "") {
+        return null
+    }
+    return json.decode<DashboardResponse>(DashState.raw)
+}
+
+// "R$ 1.500,00" -> "R$ 1.500" (legenda do donut e meta da reserva, como no artefato).
+String brlShort(String full) {
+    if (full.endsWith(",00")) {
+        return full.substring(0, full.length - 3)
+    }
+    return full
+}
+
+String daysRemainingText(Int days) {
+    if (days == 1) {
+        return "1 dia restante"
+    }
+    return String.valueOf(days) + " dias restantes"
+}
+
+String spentLabel(String period) {
+    if (period == "week") {
+        return "Gastos da semana"
+    }
+    if (period == "year") {
+        return "Gastos do ano"
+    }
+    return "Gastos do mês"
+}

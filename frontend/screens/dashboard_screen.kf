@@ -3,18 +3,332 @@ package screens
 import kof.ui
 import core.theme
 import core.app_state
+import core.navigation
+import core.format
+import core.dashboard_api
 import components.topbar
 
 // =============================================================================
-// Tela 9 Dashboard (F1) — stub do shell (Batch 3, T0)
+// Tela 9 Dashboard (Batch 3, F1) — spec S9
 // =============================================================================
-// Contrato: dashboardScreen(Window w) devolve o corpo da rota "dashboard" (o shell já põe a
-// sidebar/barra inferior). Começa pela topbar com o título exato; a tarefa
-// dona da tela substitui o resto do corpo.
+// Abas Semana/Mês/Ano refazem GET /api/dashboard?period=. Três tiles, card da
+// distribuição (donut em Canvas 2D: setFill + fill) e últimas transações.
+// "Pode gastar hoje" é sempre o pulso diário do mês, em qualquer aba (o
+// artefato só mostra a aba Mês). Desktop: g3 + g2; Mobile: empilhado.
 // =============================================================================
 
+Style tileLabelCss()   = Style("color: #7B8EAD; font-size: 11; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; margin: 0")
+Style tileValueCss()   = Style("color: #F0F0F0; font-size: 26; font-weight: 700; margin: 0")
+Style tileAccentCss()  = Style("color: #00D4FF; font-size: 26; font-weight: 700; margin: 0")
+Style tileSuccessCss() = Style("color: #00E5A0; font-size: 26; font-weight: 700; margin: 0")
+Style cardTitleCss()   = Style("color: #F0F0F0; font-size: 16; font-weight: 600; margin: 0")
+Style rowBetweenCss()  = Style("display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 8; width: 100%")
+Style distBodyCss()    = Style("display: flex; flex-direction: row; align-items: center; gap: 20; width: 100%")
+Style legendCss()      = Style("display: flex; flex-direction: column; gap: 12; flex: 1 1 auto; min-width: 0")
+Style legendItemCss()  = Style("display: flex; flex-direction: column; gap: 6; width: 100%")
+Style txRowCss()       = Style("display: flex; flex-direction: row; align-items: center; gap: 12; width: 100%")
+Style txTextCss()      = Style("display: flex; flex-direction: column; gap: 2; flex: 1 1 auto; min-width: 0")
+Style txValueCss()     = Style("color: #F0F0F0; font-size: 14; font-weight: 600; margin: 0; white-space: nowrap")
+Style canvasHolderCss() = Style("padding: 0; background: transparent; line-height: 0")
+Style bodyTextCss()    = Style("color: #F0F0F0; font-size: 14; margin: 0")
+Style retryCss()       = Style("background: transparent; color: #00D4FF; border: 1px solid #00D4FF; border-radius: 8; padding: 8px 16px; align-self: flex-start")
+
+// Fatia i do donut e barra da legenda: Necessidades accent, Desejos #0066FF, Futuro success.
+Color sliceColor(Int i) {
+    if (i == 0) { return colorAccent() }
+    if (i == 1) { return colorChartDes() }
+    if (i == 2) { return colorSuccess() }
+    return colorWarning()
+}
+
+// Barra da legenda: mesmo trilho de bucketBar (setFlexBasis; Style não aceita width calculado, SEM077).
+Style sliceFillCss(Int i) {
+    if (i == 0) { return progressFillAccentCss() }
+    if (i == 1) { return progressFillDesCss() }
+    if (i == 2) { return progressFillSuccessCss() }
+    return progressFillWarningCss()
+}
+
+// ---------------------------------------------------------------- carga
+
+loadDashboard(Window w) {
+    try {
+        DashState.raw = fetchDashboard(DashState.period)
+        AppState.loadError = ""
+    } catch (String e) {
+        DashState.raw = ""
+        AppState.loadError = e
+    }
+    DashState.loaded = true
+    DashState.fresh = true
+    AppState.loading = false
+    if (SessionState.token == "") {
+        AppState.formError = AppState.loadError
+        navigateTo(w, "login")
+        return
+    }
+    if (AppState.currentScreen == "dashboard") {
+        mountScreen(w)
+    }
+}
+
+startLoad(Window w) {
+    if (AppState.loading) {
+        return
+    }
+    AppState.loading = true
+    DashState.loaded = false
+    spawn {
+        loadDashboard(w)
+    }
+}
+
+selectPeriod(Window w, String period) {
+    if (period == DashState.period) {
+        return
+    }
+    DashState.period = period
+    DashState.raw = ""
+    DashState.fresh = false
+    AppState.loadError = ""
+    mountScreen(w)
+}
+
+retryDashboard(Window w) {
+    DashState.fresh = false
+    AppState.loadError = ""
+    mountScreen(w)
+}
+
+// ---------------------------------------------------------------- partes
+
+// Desktop: grade (g3/g2). Mobile: Column empilhada (o Row do kof.ui encolhe os filhos).
+View responsiveGroup(List<View> parts, String id, Style grid) {
+    if (AppState.isDesktop) {
+        var row = Row(parts)
+        row.setId(id)
+        row.setStyle(grid)
+        return row
+    }
+    var col = Column(parts)
+    col.setId(id)
+    col.setStyle(stackCss())
+    return col
+}
+
+View tabButton(Window w, String text, String period) {
+    var b = Button(text, () -> selectPeriod(w, period))
+    b.setId("tab-" + period)
+    if (DashState.period == period) {
+        b.setStyle(tabActiveCss())
+    } else {
+        b.setStyle(tabCss())
+    }
+    return b
+}
+
+View periodTabs(Window w) {
+    var row = Row(listOf(tabButton(w, "Semana", "week"), tabButton(w, "Mês", "month"), tabButton(w, "Ano", "year")))
+    row.setId("dash-tabs")
+    row.setStyle(tabsCss())
+    return row
+}
+
+Label idLabel(String text, String id, Style style) {
+    var l = Label(text)
+    l.setId(id)
+    l.setStyle(style)
+    return l
+}
+
+View tile(String key, String label, String value, Style valueStyle, String sub) {
+    var col = Column(listOf(
+        idLabel(label, "tile-" + key + "-label", tileLabelCss()),
+        idLabel(value, "tile-" + key + "-value", valueStyle),
+        idLabel(sub, "tile-" + key + "-sub", captionCss())))
+    col.setId("tile-" + key)
+    // Card escuro: o pulse-card do tema (gradiente cyan) apagaria os valores accent/success da spec.
+    col.setStyle(cardCss())
+    return col
+}
+
+View tiles(DashboardResponse d) {
+    var reserveSub = "Sem meta definida"
+    if (d.reserve.hasGoal) {
+        reserveSub = "Meta: " + brlShort(brl(d.reserve.goal)) + " — " + String.valueOf(d.reserve.percent) + "%"
+    }
+    var parts = listOf(
+        tile("pulse", "Pode gastar hoje", brl(d.pulse), tileAccentCss(), daysRemainingText(d.daysRemaining)),
+        tile("spent", spentLabel(DashState.period), brl(d.totalSpent), tileValueCss(), "de " + brl(d.salary)),
+        tile("reserve", "Reserva acumulada", brl(d.reserve.accumulated), tileSuccessCss(), reserveSub))
+    return responsiveGroup(parts, "dash-tiles", gridG3Css())
+}
+
+// Donut: uma fatia por balde (percentage do modelo), começando no topo, e o
+// furo central pintado com a cor do card. Só setFill + fill (issue #32).
+Canvas donutCanvas(List<BucketBalanceDTO> buckets, Int size) {
+    var c = Canvas(size, size)
+    val pi = 3.14159265358979
+    val cx = size / 2
+    var total = 0
+    for (var b in buckets) {
+        total = total + b.percentage
+    }
+    if (total <= 0) {
+        total = 100
+    }
+    var start = 0.0 - pi / 2.0
+    var i = 0
+    for (var b in buckets) {
+        val end = start + 2.0 * pi * b.percentage / total
+        c.setFill(sliceColor(i))
+        c.beginPath()
+        c.moveTo(cx, cx)
+        c.arc(cx, cx, cx, start, end)
+        c.closePath()
+        c.fill()
+        start = end
+        i = i + 1
+    }
+    c.setFill(colorCard())
+    c.beginPath()
+    c.arc(cx, cx, cx * 62 / 100, 0.0, 2.0 * pi)
+    c.closePath()
+    c.fill()
+    return c
+}
+
+View legendItem(BucketBalanceDTO b, Int i) {
+    var top = Row(listOf(
+        idLabel(b.name, "legend-" + i + "-name", bodyTextCss()),
+        idLabel(brlShort(brl(b.plannedAmount)), "legend-" + i + "-value", captionCss())))
+    top.setStyle(rowBetweenCss())
+    var p = b.percentage
+    if (p > 100) {
+        p = 100
+    }
+    var fill = View(screenStyle())
+    fill.setStyle(sliceFillCss(i))
+    fill.setFlexBasis(p * 100)
+    var rest = View(screenStyle())
+    rest.setStyle(fillRestCss())
+    rest.setFlexBasis((100 - p) * 100)
+    var parts = Row(listOf(fill, rest))
+    parts.setStyle(fillRowCss())
+    var track = View(screenStyle())
+    track.setStyle(progressTrackCss())
+    track.bind(parts)
+    var col = Column(listOf(top, track))
+    col.setId("legend-" + i)
+    col.setStyle(legendItemCss())
+    return col
+}
+
+View distributionCard(DashboardResponse d) {
+    var items: List<View> = listOf()
+    var i = 0
+    for (var b in d.buckets) {
+        items.add(legendItem(b, i))
+        i = i + 1
+    }
+    var legend = Column(items)
+    legend.setStyle(legendCss())
+    var holder = View(screenStyle())
+    holder.setId("dash-donut")
+    holder.setStyle(canvasHolderCss())
+    holder.bind(donutCanvas(d.buckets, 140))
+    var body = Row(listOf(holder, legend))
+    body.setStyle(distBodyCss())
+    var card = Column(listOf(idLabel(distributionTitle(d.budgetModel), "dist-title", cardTitleCss()), body))
+    card.setId("card-distribution")
+    card.setStyle(cardCss())
+    return card
+}
+
+Canvas dotCanvas(Color color) {
+    var c = Canvas(10, 10)
+    c.setFill(color)
+    c.beginPath()
+    c.arc(5, 5, 5, 0.0, 6.2831853)
+    c.closePath()
+    c.fill()
+    return c
+}
+
+View txRow(TransactionOutput t, Int i) {
+    var dot = View(screenStyle())
+    dot.setStyle(canvasHolderCss())
+    dot.bind(dotCanvas(categoryColor(t.category)))
+    var text = Column(listOf(
+        idLabel(t.description, "tx-" + i + "-name", bodyTextCss()),
+        idLabel(categoryLabel(t.category), "tx-" + i + "-cat", captionCss())))
+    text.setStyle(txTextCss())
+    var row = Row(listOf(dot, text, idLabel(brl(0.0 - t.value), "tx-" + i + "-value", txValueCss())))
+    row.setId("tx-" + i)
+    row.setStyle(txRowCss())
+    return row
+}
+
+View transactionsCard(DashboardResponse d) {
+    var items: List<View> = listOf()
+    items.add(idLabel("Últimas transações", "tx-title", cardTitleCss()))
+    var i = 0
+    for (var t in d.recentTransactions) {
+        items.add(txRow(t, i))
+        i = i + 1
+    }
+    if (i == 0) {
+        // DECISÃO-7: o artefato não tem texto para o vazio.
+        items.add(idLabel("Nenhuma transação no período.", "tx-empty", captionCss()))
+    }
+    var card = Column(items)
+    card.setId("card-transactions")
+    card.setStyle(cardCss())
+    return card
+}
+
+// Mês: "Novembro 2026"; Semana: mês-ano do início da semana; Ano: "2026".
+String dashSubtitle(DashboardResponse? d) {
+    if (d == null) {
+        return ""
+    }
+    if (d.from.length < 7) {
+        return ""
+    }
+    if (DashState.period == "year") {
+        return d.from.substring(0, 4)
+    }
+    return monthYearFromIso(d.from)
+}
+
+// ---------------------------------------------------------------- tela
+
+// Todo render busca de novo, menos o que vem logo depois de um GET (fresh):
+// voltar à rota ou entrar com outro usuário nunca mostra dado velho de outra sessão
+// sem refazer o GET.
 View dashboardScreen(Window w) {
-    var col = Column(listOf(topbar("Dashboard", "", null)))
+    if (DashState.fresh) {
+        DashState.fresh = false
+    } else {
+        startLoad(w)
+    }
+    var d = dashboardData()
+    var items: List<View> = listOf()
+    items.add(topbar("Dashboard", dashSubtitle(d), null))
+    items.add(periodTabs(w))
+    if (AppState.loadError != "") {
+        items.add(idLabel(AppState.loadError, "dash-error", errorBannerCss()))
+        var retry = Button("Tentar de novo", () -> retryDashboard(w))
+        retry.setId("dash-retry")
+        retry.setStyle(retryCss())
+        items.add(retry)
+    } else if (d == null) {
+        items.add(idLabel("Carregando…", "dash-loading", captionCss()))
+    } else {
+        items.add(tiles(d))
+        items.add(responsiveGroup(listOf(distributionCard(d), transactionsCard(d)), "dash-cards", gridG2Css()))
+    }
+    var col = Column(items)
     col.setId("screen-dashboard")
     col.setStyle(stackCss())
     return col
