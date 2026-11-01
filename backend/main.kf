@@ -261,7 +261,7 @@ main() {
 
     app.get("/api/variable-income") {
         var list = findVariableIncomesByUserId(currentUserId())
-        return json.encode(list)
+        return json.encode(list.map((v: VariableIncomeEntity) -> variableIncomeEntityToOutput(v)))
     }
 
     // =========================================================
@@ -381,7 +381,7 @@ main() {
 
     app.get("/api/envelopes") {
         var envelopes = findEnvelopesByUserId(currentUserId())
-        return json.encode(envelopes)
+        return json.encode(envelopes.map((e: EnvelopeEntity) -> envelopeEntityToOutput(e)))
     }
 
     // Tela 11: caixinhas com o bucket do modelo, o gasto do mes e o status (Em dia/Alerta/Estourada).
@@ -413,7 +413,7 @@ main() {
         if (!onboardingCompleted(user)) {
             return status(409, json.encode(ApiError("Conclua o onboarding antes de criar as caixinhas.")))
         }
-        return json.encode(createEnvelopesFromChips(user, chips))
+        return json.encode(createEnvelopesFromChips(user, chips).map((e: EnvelopeEntity) -> envelopeEntityToOutput(e)))
     }
 
     // Legado: PUT /api/envelopes/{id}. limitType ausente = FIXED e movingAverageMonths ausente = 3, como no
@@ -442,7 +442,7 @@ main() {
         if (givenMonths != null) {
             months = givenMonths
         }
-        return json.encode(updateEnvelope(userId, current.id, EnvelopeEntity(current.id, userId, req.categoryName.trim(), req.limitAmount, current.currentSpent, limitType, months, current.createdAt, current.bucket)))
+        return json.encode(envelopeEntityToOutput(updateEnvelope(userId, current.id, EnvelopeEntity(current.id, userId, req.categoryName.trim(), req.limitAmount, current.currentSpent, limitType, months, current.createdAt, current.bucket))))
     }
 
     app.delete("/api/envelopes/:id") {
@@ -470,7 +470,7 @@ main() {
             // id "" = novo: o banco gera o id (PERS-06); o dono vem das claims (PERS-09)
             var newEnv = EnvelopeEntity("", currentUserId(), req.categoryName, req.limitAmount, 0.0, EnvelopeLimitType.FIXED, 0, nowIso(), req.bucket)
             var saved = createEnvelope(newEnv)
-            return json.encode(saved)
+            return json.encode(envelopeEntityToOutput(saved))
         }
         return status(400, invalidBody())
     }

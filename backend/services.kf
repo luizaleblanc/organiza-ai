@@ -146,6 +146,19 @@ TransactionOutput transactionEntityToOutput(TransactionEntity t) {
     return TransactionOutput(t.id, t.description, categoryName, centsToReais(t.amountCents), t.currency, t.envelopeId, t.createdAt)
 }
 
+// Enums saem como texto ("FIXED"), nao como {"kofName","kofOrdinal"}: json.encode serializa enum como objeto.
+record EnvelopeOutput(String id, String userId, String categoryName, Double limitAmount, Double currentSpent, String limitType, Int movingAverageMonths, String? createdAt, String? bucket)
+
+EnvelopeOutput envelopeEntityToOutput(EnvelopeEntity e) {
+    return EnvelopeOutput(e.id, e.userId, e.categoryName, e.limitAmount, e.currentSpent, e.limitType.name(), e.movingAverageMonths, e.createdAt, e.bucket)
+}
+
+record VariableIncomeOutput(String id, String userId, Double amount, String source, String destination, String? date)
+
+VariableIncomeOutput variableIncomeEntityToOutput(VariableIncomeEntity v) {
+    return VariableIncomeOutput(v.id, v.userId, v.amount, v.source, v.destination.name(), v.date)
+}
+
 // =========================================================
 // mod_budget/repository/EnvelopeEntityRepository.java
 // Persistido com kof.orm em backend/store.kf (T4): findEnvelopesByUserId,
