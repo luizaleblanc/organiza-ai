@@ -409,8 +409,8 @@ try {
     Test-Step "POST /api/chat/message responde com o pulso atual" {
         $body = (@{ message = "Quanto tenho disponível para gastar hoje?" } | ConvertTo-Json -Compress)
         $r = Invoke-Api "POST" "/api/chat/message" $script:token $body
-        $p = [string](Get-ExpectedPulse 2400).ToString([Globalization.CultureInfo]::InvariantCulture)
-        if (-not $p.Contains(".")) { $p = "$p.0" }
+        # Resposta fixa em BRL (formatBrl): "R$ 1.234,56"
+        $p = ([Math]::Round([double](Get-ExpectedPulse 2400), 2, [MidpointRounding]::AwayFromZero)).ToString("N2", [Globalization.CultureInfo]::GetCultureInfo("pt-BR"))
         $j = $r.Body | ConvertFrom-Json
         Expect ($r.Status -eq 200 -and $j.reply -like "*R$ $p.*" -and $j.messagesUsed -eq 1 -and $j.messagesLimit -eq 30) "$($r.Status) $($r.Body) (esperado reply com R$ $p, messagesUsed 1, messagesLimit 30)"
     }
