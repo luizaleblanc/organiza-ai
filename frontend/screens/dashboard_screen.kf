@@ -1,0 +1,21 @@
+package screens
+
+import kof.ui
+import core.theme
+import core.app_state
+import components.topbar
+
+// =============================================================================
+// Tela 9 Dashboard (F1) — stub do shell (Batch 3, T0)
+// =============================================================================
+// Contrato: dashboardScreen(Window w) devolve o corpo da rota "dashboard" (o shell já põe a
+// sidebar/barra inferior). Começa pela topbar com o título exato; a tarefa
+// dona da tela substitui o resto do corpo.
+// =============================================================================
+
+View dashboardScreen(Window w) {
+    var col = Column(listOf(topbar("Dashboard", "", null)))
+    col.setId("screen-dashboard")
+    col.setStyle(stackCss())
+    return col
+}

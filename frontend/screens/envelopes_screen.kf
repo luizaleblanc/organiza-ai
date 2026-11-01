@@ -1,0 +1,21 @@
+package screens
+
+import kof.ui
+import core.theme
+import core.app_state
+import components.topbar
+
+// =============================================================================
+// Tela 11 Caixinhas (F3) — stub do shell (Batch 3, T0)
+// =============================================================================
+// Contrato: envelopesScreen(Window w) devolve o corpo da rota "envelopes" (o shell já põe a
+// sidebar/barra inferior). Começa pela topbar com o título exato; a tarefa
+// dona da tela substitui o resto do corpo.
+// =============================================================================
+
+View envelopesScreen(Window w) {
+    var col = Column(listOf(topbar("Caixinhas", "", null)))
+    col.setId("screen-envelopes")
+    col.setStyle(stackCss())
+    return col
+}

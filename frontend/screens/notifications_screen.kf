@@ -1,0 +1,21 @@
+package screens
+
+import kof.ui
+import core.theme
+import core.app_state
+import components.topbar
+
+// =============================================================================
+// Tela 12 Notificações (F4) — stub do shell (Batch 3, T0)
+// =============================================================================
+// Contrato: notificationsScreen(Window w) devolve o corpo da rota "notifications" (o shell já põe a
+// sidebar/barra inferior). Começa pela topbar com o título exato; a tarefa
+// dona da tela substitui o resto do corpo.
+// =============================================================================
+
+View notificationsScreen(Window w) {
+    var col = Column(listOf(topbar("Notificações", "", null)))
+    col.setId("screen-notifications")
+    col.setStyle(stackCss())
+    return col
+}

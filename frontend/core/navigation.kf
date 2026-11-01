@@ -3,6 +3,7 @@ package core
 import kof.ui
 import core.theme
 import core.app_state
+import core.auth_api
 import components.brand_header
 import components.nav_bar
 import screens.welcome_screen
@@ -13,6 +14,11 @@ import screens.onb_debt_amount_screen
 import screens.onb_result_screen
 import screens.login_screen
 import screens.signup_screen
+import screens.dashboard_screen
+import screens.chat_screen
+import screens.envelopes_screen
+import screens.notifications_screen
+import screens.settings_screen
 
 // =============================================================================
 // T5 — Dispatcher raiz e navegação (Dual Viewport)
@@ -20,13 +26,16 @@ import screens.signup_screen
 // Navegação sem Router/Component: AppState.currentScreen + re-render explícito
 // `mountScreen(window)` = remove() do root anterior +
 // `window.bind(buildActiveScreen(window))`.
-// Mobile (360x640) empilha em Column; Desktop (1280x800) usa Row de 3 colunas
-// (sidebar | conteúdo | coach).
+// Shell autenticado (Batch 3, T0): Desktop (1280x800) = Row(sidebar 190,
+// Column(conteúdo da rota)); Mobile (360x640) = Column(conteúdo, barra
+// inferior de 5 abas). O conteúdo de cada rota começa pela topbar
+// (components/topbar.kf) e vem de <rota>Screen(w) em screens/.
 //
 // Vive fora de main.kf porque o ponto de entrada não é importável (PKG006) e
 // brand_header/nav_bar precisam chamar navigateTo/buildActiveScreen (import
 // cíclico entre módulos não-main é aceito pelo compilador).
-// As telas reais entram nos Batches 2–4; aqui cada rota tem um placeholder.
+// Rotas do shell: "dashboard", "chat", "envelopes", "notifications",
+// "settings"; rota desconhecida fora das de entrada cai no Dashboard.
 // Exceção: as telas de entrada (welcome, login, signup e onb_*) não têm nav bar
 // nem sidebar (design.md do Batch 2, §2.2); usam o layout de entrada com
 // Style("css") e só a barra de dev do toggle de viewport.
@@ -37,6 +46,8 @@ import screens.signup_screen
 // null antes da primeira escrita (contrato de campos anuláveis).
 class NavState {
     static View? mounted
+    // me() já disparado para preencher SessionState ao entrar no shell.
+    static Bool profileRequested = false
 }
 
 applyViewport(Window w) {
@@ -60,6 +71,8 @@ mountScreen(Window w) {
 
 // Troca a tela ativa e re-renderiza.
 navigateTo(Window w, String screen) {
+    AppState.loadError = ""
+    AppState.loading = false
     AppState.currentScreen = screen
     mountScreen(w)
 }
@@ -71,61 +84,14 @@ switchViewport(Window w) {
     mountScreen(w)
 }
 
-String screenTitle() {
-    if (AppState.currentScreen == "welcome") {
-        return "Organiza AI"
-    }
-    if (AppState.currentScreen == "login") {
-        return "Entrar"
-    }
-    if (AppState.currentScreen == "signup") {
-        return "Criar conta"
-    }
-    if (AppState.currentScreen == "onboarding" || AppState.currentScreen.startsWith("onb_")) {
-        return "Onboarding"
-    }
-    if (AppState.currentScreen == "dashboard") {
-        return "Dashboard"
-    }
-    if (AppState.currentScreen == "chat") {
-        return "AI Coach"
-    }
-    if (AppState.currentScreen == "envelopes") {
-        return "Caixinhas"
-    }
-    return "Organiza AI"
-}
-
-// Conteúdo da tela ativa (placeholder até os Batches 2–4).
+// Fallback das rotas de entrada sem tela própria ("onboarding").
 View buildScreenContent() {
-    var title = Label(screenTitle())
-    title.fontSize = sizeTitle()
-    title.bold = true
-    title.color = colorTextPrimary()
-
-    var hint = Label("Em construção")
-    hint.fontSize = sizeCaption()
-    hint.color = colorTextSecondary()
-
-    var card = View(cardStyle())
-    card.bind(Column(listOf(title, hint)))
+    var title = Label("Organiza AI")
+    title.setStyle(titleCss())
+    var card = View(screenStyle())
+    card.setStyle(cardCss())
+    card.bind(Column(listOf(title)))
     return card
-}
-
-// Painel direito do Desktop: AI Coach.
-View buildCoachPanel() {
-    var title = Label("AI Coach")
-    title.fontSize = sizeSubtitle()
-    title.bold = true
-    title.color = colorTextPrimary()
-
-    var pulse = Label("Pulso diário: R$ " + DashboardState.dailyPulse)
-    pulse.fontSize = sizeCaption()
-    pulse.color = colorAccent()
-
-    var panel = View(cardStyle())
-    panel.bind(Column(listOf(title, pulse)))
-    return panel
 }
 
 // Telas de entrada (design.md §2.2): sem nav bar e sem sidebar, em Mobile e
@@ -178,16 +144,68 @@ View buildEntryLayout(Window w) {
     return root
 }
 
+// Conteúdo da rota do shell.
+View buildShellContent(Window w) {
+    var s = AppState.currentScreen
+    if (s == "chat") {
+        return chatScreen(w)
+    }
+    if (s == "envelopes") {
+        return envelopesScreen(w)
+    }
+    if (s == "notifications") {
+        return notificationsScreen(w)
+    }
+    if (s == "settings") {
+        return settingsScreen(w)
+    }
+    return dashboardScreen(w)
+}
+
+// Ao entrar no shell, me() preenche nome/e-mail da sessão (uma vez). Sessão
+// inválida (401: apiErrorMessage já chamou resetSession) volta ao login.
+loadProfile(Window w) {
+    try {
+        me()
+        mountScreen(w)
+    } catch (String e) {
+        if (SessionState.token == "") {
+            AppState.formError = e
+            navigateTo(w, "login")
+        }
+    }
+}
+
+ensureProfile(Window w) {
+    if (SessionState.token == "" || NavState.profileRequested) {
+        return
+    }
+    if (SessionState.userEmail != "") {
+        return
+    }
+    NavState.profileRequested = true
+    spawn {
+        loadProfile(w)
+    }
+}
+
 View buildMobileLayout(Window w) {
-    var root = View(screenStyle())
-    root.bind(Column(listOf(buildBrandHeader(w), buildScreenContent(), buildNavBar(w))))
+    var main = Column(listOf(buildViewportToggle(w), buildShellContent(w)))
+    main.setId("shell-main")
+    main.setStyle(shellMobileMainCss())
+    var root = Column(listOf(main, buildNavBar(w)))
+    root.setId("shell")
+    root.setStyle(shellMobileCss())
     return root
 }
 
 View buildDesktopLayout(Window w) {
-    var center = Column(listOf(buildBrandHeader(w), buildScreenContent()))
-    var root = View(screenStyle())
-    root.bind(Row(listOf(buildSidebar(w), center, buildCoachPanel())))
+    var main = Column(listOf(buildViewportToggle(w), buildShellContent(w)))
+    main.setId("shell-main")
+    main.setStyle(shellMainCss())
+    var root = Row(listOf(buildSidebar(w), main))
+    root.setId("shell")
+    root.setStyle(shellRowCss())
     return root
 }
 
@@ -196,6 +214,7 @@ View buildActiveScreen(Window w) {
     if (isEntryScreen()) {
         return buildEntryLayout(w)
     }
+    ensureProfile(w)
     if (AppState.isDesktop) {
         return buildDesktopLayout(w)
     }

@@ -1,0 +1,33 @@
+package components
+
+import kof.ui
+import core.theme
+
+// =============================================================================
+// topbar — título + subtítulo à esquerda, ação opcional à direita (Batch 3, T0)
+// =============================================================================
+// Usada pelas Telas 9 a 13 (artefato Desktop: .ds-topbar). subtitle "" omite a
+// segunda linha; action null omite o lado direito. Ids: topbar-title e
+// topbar-subtitle.
+// =============================================================================
+
+View topbar(String title, String subtitle, View? action) {
+    var t = Label(title)
+    t.setId("topbar-title")
+    t.setStyle(topbarTitleCss())
+    var text = Column(listOf(t))
+    if (subtitle != "") {
+        var s = Label(subtitle)
+        s.setId("topbar-subtitle")
+        s.setStyle(topbarSubtitleCss())
+        text = Column(listOf(t, s))
+    }
+    text.setStyle(topbarTextCss())
+    var row = Row(listOf(text))
+    if (action != null) {
+        row = Row(listOf(text, action))
+    }
+    row.setId("topbar")
+    row.setStyle(topbarCss())
+    return row
+}

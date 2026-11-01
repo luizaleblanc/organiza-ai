@@ -4,46 +4,216 @@ import kof.ui
 import core.theme
 import core.app_state
 import core.navigation
+import components.brand_mark
 
 // =============================================================================
-// T4 — Navegação: NavBar inferior (Mobile) e Sidebar esquerda (Desktop)
+// Navegação do shell autenticado (Batch 3, T0)
 // =============================================================================
-// Abas: Dashboard, Chat, Caixinhas. A aba ativa usa o accent cyan.
-// Não existe BottomNavigationBar no kof.ui — é um Row manual de Buttons.
+// Desktop: sidebar de 190 px (artefato Desktop 64FYjX5UiveVxTtRGYurQP,
+// Sidebar): logo Canvas 90, Dashboard / Organiza AI / Caixinhas /
+// Notificações, rodapé com Configurações e o bloco do usuário.
+// Mobile: barra inferior de 5 abas (artefato Mobile 8b3jFV4BrGj4YkDQAwDvDF,
+// BottomTab): Dashboard / Organiza AI / Caixinhas / Alertas / Config.
+// Não existe BottomNavigationBar nem onClick em View no kof.ui: cada item é um
+// View/Column com o ícone Canvas + um Button transparente. O Button do item
+// tem id "nav-<rota>" (Desktop e Mobile).
 // =============================================================================
 
-Style navItemStyle(String screen) {
-    if (AppState.currentScreen == screen) {
-        return Style(colorAccent(), colorAccentContrast(), 8, 8)
-    }
-    return Style(colorCard(), colorTextSecondary(), 8, 8)
+// ---- Ícones (grade 24x24 do artefato, escalada para `s` px) ----------------
+
+Int sc(Int v, Int s) = v * s / 24
+
+strokeRect(Canvas c, Int x, Int y, Int w, Int h, Int s) {
+    c.beginPath()
+    c.moveTo(sc(x, s), sc(y, s))
+    c.lineTo(sc(x + w, s), sc(y, s))
+    c.lineTo(sc(x + w, s), sc(y + h, s))
+    c.lineTo(sc(x, s), sc(y + h, s))
+    c.closePath()
+    c.stroke()
 }
 
-View buildNavItem(Window w, String screen, String text) {
-    var button = Button(text, () -> navigateTo(w, screen))
-    var item = View(navItemStyle(screen))
-    item.bind(button)
+Canvas navIcon(String route, Int s, Color color) {
+    var c = Canvas(s, s)
+    c.setStroke(color)
+    c.setLineWidth(2)
+    if (route == "dashboard") {
+        strokeRect(c, 3, 3, 8, 8, s)
+        strokeRect(c, 13, 3, 8, 5, s)
+        strokeRect(c, 13, 11, 8, 10, s)
+        strokeRect(c, 3, 14, 8, 7, s)
+    } else if (route == "chat") {
+        c.beginPath()
+        c.moveTo(sc(4, s), sc(5, s))
+        c.lineTo(sc(20, s), sc(5, s))
+        c.lineTo(sc(20, s), sc(16, s))
+        c.lineTo(sc(9, s), sc(16, s))
+        c.lineTo(sc(4, s), sc(20, s))
+        c.closePath()
+        c.stroke()
+    } else if (route == "envelopes") {
+        c.beginPath()
+        c.moveTo(sc(3, s), sc(8, s))
+        c.lineTo(sc(12, s), sc(3, s))
+        c.lineTo(sc(21, s), sc(8, s))
+        c.lineTo(sc(12, s), sc(13, s))
+        c.closePath()
+        c.stroke()
+        c.beginPath()
+        c.moveTo(sc(3, s), sc(8, s))
+        c.lineTo(sc(3, s), sc(16, s))
+        c.lineTo(sc(12, s), sc(21, s))
+        c.lineTo(sc(21, s), sc(16, s))
+        c.lineTo(sc(21, s), sc(8, s))
+        c.stroke()
+    } else if (route == "notifications") {
+        c.beginPath()
+        c.arc(sc(12, s), sc(9, s), sc(6, s), 3.14159, 6.28318)
+        c.lineTo(sc(18, s), sc(15, s))
+        c.lineTo(sc(21, s), sc(17, s))
+        c.lineTo(sc(3, s), sc(17, s))
+        c.lineTo(sc(6, s), sc(15, s))
+        c.lineTo(sc(6, s), sc(9, s))
+        c.stroke()
+        c.beginPath()
+        c.moveTo(sc(10, s), sc(20, s))
+        c.lineTo(sc(14, s), sc(20, s))
+        c.stroke()
+    } else {
+        // settings: engrenagem simplificada (eixo + aro + 4 dentes).
+        c.beginPath()
+        c.arc(sc(12, s), sc(12, s), sc(3, s), 0.0, 6.28318)
+        c.stroke()
+        c.beginPath()
+        c.arc(sc(12, s), sc(12, s), sc(7, s), 0.0, 6.28318)
+        c.stroke()
+        c.beginPath()
+        c.moveTo(sc(12, s), sc(2, s))
+        c.lineTo(sc(12, s), sc(5, s))
+        c.stroke()
+        c.beginPath()
+        c.moveTo(sc(12, s), sc(19, s))
+        c.lineTo(sc(12, s), sc(22, s))
+        c.stroke()
+        c.beginPath()
+        c.moveTo(sc(2, s), sc(12, s))
+        c.lineTo(sc(5, s), sc(12, s))
+        c.stroke()
+        c.beginPath()
+        c.moveTo(sc(19, s), sc(12, s))
+        c.lineTo(sc(22, s), sc(12, s))
+        c.stroke()
+    }
+    return c
+}
+
+View iconHolder(Canvas icon) {
+    var holder = View(screenStyle())
+    holder.setStyle(navIconCss())
+    holder.bind(icon)
+    return holder
+}
+
+Bool isActiveRoute(String route) = AppState.currentScreen == route
+
+// ---- Desktop ---------------------------------------------------------------
+
+View sidebarItem(Window w, String route, String text) {
+    var active = isActiveRoute(route)
+    var color = colorTextSecondary()
+    if (active) {
+        color = colorAccent()
+    }
+    var label = Button(text, () -> navigateTo(w, route))
+    label.setId("nav-" + route)
+    if (active) {
+        label.setStyle(navLabelActiveCss())
+    } else {
+        label.setStyle(navLabelCss())
+    }
+    var item = View(screenStyle())
+    item.setId("nav-item-" + route)
+    if (active) {
+        item.setStyle(sidebarItemActiveCss())
+    } else {
+        item.setStyle(sidebarItemCss())
+    }
+    item.bind(Row(listOf(iconHolder(navIcon(route, 15, color)), label)))
     return item
 }
 
-// Barra inferior de 3 abas (Mobile 360x640).
-View buildNavBar(Window w) {
-    var row = Row(listOf(
-        buildNavItem(w, "dashboard", "Dashboard"),
-        buildNavItem(w, "chat", "Chat"),
-        buildNavItem(w, "envelopes", "Caixinhas")))
-    var bar = View(navBarStyle())
-    bar.bind(row)
-    return bar
+String userInitial() {
+    var name = SessionState.userName.trim()
+    if (name == "") {
+        return "?"
+    }
+    return name.substring(0, 1).toUpperCase()
 }
 
-// Sidebar vertical (Desktop 1280x800).
+View userBlock() {
+    var avatar = Label(userInitial())
+    avatar.setId("user-initial")
+    avatar.setStyle(avatarCss())
+    var name = Label(SessionState.userName)
+    name.setId("user-name")
+    name.setStyle(userNameCss())
+    var email = Label(SessionState.userEmail)
+    email.setId("user-email")
+    email.setStyle(userEmailCss())
+    var text = Column(listOf(name, email))
+    text.setStyle(userTextCss())
+    var row = Row(listOf(avatar, text))
+    row.setStyle(userBlockCss())
+    return row
+}
+
+// Sidebar vertical (Desktop 1280x800), 190 px.
 View buildSidebar(Window w) {
-    var col = Column(listOf(
-        buildNavItem(w, "dashboard", "Dashboard"),
-        buildNavItem(w, "chat", "Chat"),
-        buildNavItem(w, "envelopes", "Caixinhas")))
-    var side = View(sidebarStyle())
-    side.bind(col)
-    return side
+    var logo = brandMark(90, "sidebar-logo")
+    logo.setStyle(sidebarLogoCss())
+    var nav = Column(listOf(
+        sidebarItem(w, "dashboard", "Dashboard"),
+        sidebarItem(w, "chat", "Organiza AI"),
+        sidebarItem(w, "envelopes", "Caixinhas"),
+        sidebarItem(w, "notifications", "Notificações")))
+    nav.setStyle(sidebarNavCss())
+    var footer = Column(listOf(sidebarItem(w, "settings", "Configurações"), userBlock()))
+    footer.setStyle(sidebarFooterCss())
+    var col = Column(listOf(logo, nav, footer))
+    col.setId("sidebar")
+    col.setStyle(sidebarCss())
+    return col
+}
+
+// ---- Mobile ----------------------------------------------------------------
+
+View bottomTabItem(Window w, String route, String text) {
+    var active = isActiveRoute(route)
+    var color = colorTextMuted()
+    if (active) {
+        color = colorTextPrimary()
+    }
+    var label = Button(text, () -> navigateTo(w, route))
+    label.setId("nav-" + route)
+    if (active) {
+        label.setStyle(bottomTabLabelActiveCss())
+    } else {
+        label.setStyle(bottomTabLabelCss())
+    }
+    var col = Column(listOf(iconHolder(navIcon(route, 20, color)), label))
+    col.setStyle(bottomTabItemCss())
+    return col
+}
+
+// Barra inferior de 5 abas (Mobile 360x640).
+View buildNavBar(Window w) {
+    var row = Row(listOf(
+        bottomTabItem(w, "dashboard", "Dashboard"),
+        bottomTabItem(w, "chat", "Organiza AI"),
+        bottomTabItem(w, "envelopes", "Caixinhas"),
+        bottomTabItem(w, "notifications", "Alertas"),
+        bottomTabItem(w, "settings", "Config")))
+    row.setId("bottom-tab")
+    row.setStyle(bottomTabCss())
+    return row
 }

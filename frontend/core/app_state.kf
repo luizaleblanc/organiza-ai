@@ -19,6 +19,11 @@ class AppState {
     // Mensagem de erro da tela de entrada ativa ("" = sem erro). Quem navega
     // limpa antes de trocar de tela (design §2.4).
     static String formError = ""
+    // Shell autenticado (Batch 3, T0). Rotas fixas: "dashboard", "chat",
+    // "envelopes", "notifications", "settings". loadError/loading são da tela
+    // ativa; navigateTo limpa os dois ao trocar de rota.
+    static String loadError = ""
+    static Bool loading = false
 }
 
 class SessionState {
@@ -49,6 +54,8 @@ class OnboardingState {
     static Bool submitting = false
 }
 
+// Deprecado (Batch 3): F1 usa DashState em core/dashboard_api.kf. Remover num
+// batch posterior.
 class DashboardState {
     static String dailyPulse = "0,00"
     static Double monthlyBalance = 0.0

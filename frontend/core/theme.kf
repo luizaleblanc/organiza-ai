@@ -154,7 +154,7 @@ Style fillRestCss()           = Style("height: 8; background: transparent; paddi
 // Shell: sidebar Desktop 190 + topbar + conteúdo.
 Style shellRowCss()        = Style("display: flex; flex-direction: row; width: 100%; min-height: 800; background: #0A0D18; color: #F0F0F0; font-family: Manrope, ui-sans-serif, system-ui, sans-serif")
 Style shellMainCss()       = Style("display: flex; flex-direction: column; flex-grow: 1; min-width: 0; gap: 24; padding: 24; box-sizing: border-box")
-Style sidebarCss()         = Style("display: flex; flex-direction: column; width: 190; flex-shrink: 0; gap: 4; padding: 24px 12px; box-sizing: border-box; background: #05060B; border-right: 1px solid rgba(255,255,255,.1)")
+Style sidebarCss()         = Style("display: flex; flex-direction: column; align-self: stretch; width: 190; flex-shrink: 0; gap: 4; padding: 24px 12px; box-sizing: border-box; background: #05060B; border-right: 1px solid rgba(255,255,255,.1)")
 Style sidebarItemCss()     = Style("display: flex; flex-direction: row; align-items: center; gap: 12; width: 100%; height: 40; padding: 0 12px; border: none; border-radius: 8; background: transparent; color: #7B8EAD; font-size: 14; font-weight: 500; text-align: left; cursor: pointer")
 Style sidebarItemActiveCss() = Style("display: flex; flex-direction: row; align-items: center; gap: 12; width: 100%; height: 40; padding: 0 12px; border: none; border-radius: 8; background: rgba(0,212,255,.08); color: #00D4FF; font-size: 14; font-weight: 600; text-align: left; cursor: pointer")
 Style topbarCss()          = Style("display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 16; width: 100%")
@@ -195,3 +195,26 @@ Style progressFillWarningCss() = Style("height: 8; border-radius: 4; background:
 Style progressFillDangerCss()  = Style("height: 8; border-radius: 4; background: #FF4A6E; min-width: 0")
 Style progressFillAccentCss()  = Style("height: 8; border-radius: 4; background: #00D4FF; min-width: 0")
 Style progressFillDesCss()     = Style("height: 8; border-radius: 4; background: #0066FF; min-width: 0")
+
+// ---- Batch 3 (T0) — itens do shell (sidebar, barra inferior, usuário) ------
+// Item da nav = View(sidebarItemCss) + Row(ícone Canvas, Button): o View não
+// tem onClick, então o rótulo é um Button transparente que herda o tom do item.
+Style navLabelCss()        = Style("background: transparent; color: #7B8EAD; border: none; padding: 0; font-size: 13; font-weight: 600; text-align: left; cursor: pointer; flex-grow: 1")
+Style navLabelActiveCss()  = Style("background: transparent; color: #00D4FF; border: none; padding: 0; font-size: 13; font-weight: 600; text-align: left; cursor: pointer; flex-grow: 1")
+Style navIconCss()         = Style("display: flex; align-items: center; padding: 0; background: transparent; line-height: 0; flex-shrink: 0")
+Style sidebarLogoCss()     = Style("padding: 6px 4px 14px; background: transparent; line-height: 0")
+Style sidebarNavCss()      = Style("display: flex; flex-direction: column; gap: 2; flex-grow: 1; width: 100%")
+Style sidebarFooterCss()   = Style("display: flex; flex-direction: column; gap: 10; width: 100%; padding-top: 10; border-top: 1px solid rgba(255,255,255,.06)")
+Style userBlockCss()       = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 8; padding: 0 10px; min-width: 0")
+Style avatarCss()          = Style("display: flex; align-items: center; justify-content: center; width: 28; height: 28; flex-shrink: 0; border-radius: 14; background: linear-gradient(135deg, #00D4FF, #0066FF); color: #06121C; font-size: 11; font-weight: 700; margin: 0")
+Style userTextCss()        = Style("display: flex; flex-direction: column; gap: 0; min-width: 0; flex: 1 1 0; width: auto")
+Style userNameCss()        = Style("color: #F0F0F0; font-size: 12; font-weight: 600; margin: 0")
+Style userEmailCss()       = Style("color: #4A5578; font-size: 10; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 120")
+// Mobile 360 (artefato Mobile, BottomTab): 5 abas, ativa em #F0F0F0, demais #4A5578.
+Style shellMobileCss()     = Style("display: flex; flex-direction: column; width: 100%; min-height: 640; background: #0A0D18; color: #F0F0F0; font-family: Manrope, ui-sans-serif, system-ui, sans-serif")
+Style shellMobileMainCss() = Style("display: flex; flex-direction: column; flex-grow: 1; gap: 16; padding: 16; box-sizing: border-box; min-width: 0")
+Style bottomTabCss()       = Style("display: flex; flex-direction: row; justify-content: space-around; align-items: flex-start; width: 100%; height: 74; padding-top: 10; box-sizing: border-box; background: #12162A; border-top: 1px solid rgba(255,255,255,.06)")
+Style bottomTabItemCss()   = Style("display: flex; flex-direction: column; align-items: center; gap: 4; padding: 0; background: transparent")
+Style bottomTabLabelCss()  = Style("background: transparent; color: #4A5578; border: none; padding: 0; font-size: 10; font-weight: 600; cursor: pointer")
+Style bottomTabLabelActiveCss() = Style("background: transparent; color: #F0F0F0; border: none; padding: 0; font-size: 10; font-weight: 600; cursor: pointer")
+Style topbarTextCss()      = Style("display: flex; flex-direction: column; gap: 2; min-width: 0")
