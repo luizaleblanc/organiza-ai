@@ -741,3 +741,29 @@ Passos novos do E2E: 54 histórico cronológico · 55 sem token = 401 e limit=-1
 ## 13. Tela 11 Caixinhas no frontend (Batch 3, F3, 01/11/2026)
 
 `frontend/screens/envelopes_screen.kf` consome `GET /api/envelopes/overview` (agrupado por `bucket`), `POST /api/envelopes {categoryName, limitAmount, bucket}` e `DELETE /api/envelopes/:id`. O formulário "Nova caixinha" é provisório até a DECISÃO-9 (categoria, limite e grupo, com os widgets existentes). Bucket fora do modelo (400 `Bucket inválido...`) vira mensagem fixa em PT. Ainda sem UI: edição (`PUT`) e histórico por caixinha.
+
+## 14. Integração final do Batch 3 (Z, 01/11/2026)
+
+Commits pequenos sobre as entregas B1–B4, T0 e F0–F5:
+
+| Item | Mudança |
+|---|---|
+| Layout | `shellRowCss` com `flex-wrap: nowrap`: no Desktop, textos longos não jogam mais a tela para baixo da sidebar. Saiu o contorno `width: 0; min-width: 100%` de `settings_screen.kf`. |
+| `apiPatch` | `frontend/core/api_client.kf`, mesmo padrão de `apiPut`. Fonte da verdade: `http.patch` está na tabela de `KofHttp.staticCall` (`KOF_WEB_REFERENCE.md`) e `JsRuntimeOps` traz `kofHttpPatch`/`kofHttpPatchHeaders` no 0.6.6 e no 0.6.7. O bundle gerado tem `kofHttpPatchHeaders(url, body, headers) { return kofHttpRequest(url, "PATCH", headers, body); }`. No probe (Edge headless contra H2), o `fetch` sai com `PATCH` e o backend responde. |
+| Rever meu salário | O modal ganhou o campo "Novo salário (R$)" e o botão `Salvar`. `parseMoney` valida antes: um valor inválido mostra "Digite um valor entre R$ 1 e R$ 1.000.000." e não faz requisição. Um valor válido faz `PATCH /api/users/me/salary`: no sucesso aparece "Salário atualizado."; no erro, a mensagem do backend. "Refazer configuração" continua inativo (DECISÃO-12). |
+| Chat | Só o texto do 402 (`enforceCanSendMessage`: "…limite de 30 mensagens…") bloqueia o envio. Os outros `{"error"}` mostram a mensagem do backend e mantêm o rascunho com o envio liberado. |
+| Backend | A resposta fixa do coach sem `OPENAI_API_KEY` usa `formatBrl(toCents(pulse))` e sai como `R$ 80,00` (antes saía `R$ 80.0`). O teste 55 de `test_e2e_flow.ps1` agora espera o valor em pt-BR. |
+| Chat Mobile 360 | A barra de entrada usa `flex-wrap: wrap` e o campo tem `flex: 1 1 240px`. No Mobile, o campo ocupa a linha inteira e os botões ficam embaixo, à direita; no Desktop, tudo segue em uma linha. O placeholder precisa de 171 px e tem 260 px disponíveis (antes eram 68 px). |
+
+### 14.1 Gates (série `db4fe7b..HEAD`, Kof 0.6.6 e 0.6.7)
+
+| Gate | 0.6.6 | 0.6.7 |
+|---|---|---|
+| G-BUILD backend jvm / jvm `--fat` / frontend js | exit 0 (251 classes) | exit 0 (251 classes) |
+| G-BYTECODE (LinkAll `-Xverify:all`; o controle sintético acusa `VerifyError`) | 251 OK, 0 FAIL | 251 OK, 0 FAIL |
+| `test_e2e_flow.ps1` H2 | 91/91 | 91/91 |
+| `test_e2e_flow.ps1` MySQL 8.4 (`ANSI_QUOTES`, Docker local) | 91/91 | 91/91 |
+| `test_restart.ps1` (H2) | 28/28 | 28/28 |
+| G-UI Desktop 1280 e Mobile 360: boas-vindas → cadastro → onboarding → dashboard → chat → caixinhas → notificações → configurações → sair | sem UNCAUGHT, sem rolagem horizontal | sem UNCAUGHT, sem rolagem horizontal |
+
+Nenhum gate chamou a OpenAI ou o Resend reais. O servidor rodou sem `OPENAI_API_KEY` e sem chave de e-mail. O `test_restart.ps1` precisa de um console Windows para o Ctrl+C: rodado a partir do Git Bash, ele dá 26/28 (passos 6 e 17) nas duas versões, por limitação do ambiente; pelo PowerShell, dá 28/28.
