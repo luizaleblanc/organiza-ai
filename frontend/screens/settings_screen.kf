@@ -40,9 +40,7 @@ Style setModalOverlayCss() = Style("position: fixed; top: 0; left: 0; width: 100
 Style setExampleCss()      = Style("display: flex; flex-direction: column; gap: 4; padding: 12; background: rgba(0,212,255,.08); border: 1px solid rgba(0,212,255,.2); border-radius: 8")
 Style setModalActionsCss() = Style("display: flex; flex-direction: row; justify-content: flex-end; align-items: flex-start; gap: 12; flex-wrap: wrap")
 Style setHeadRowCss()      = Style("display: flex; flex-direction: row; align-items: center; gap: 8")
-// width 0 + min-width 100%: os textos longos não inflam a largura intrínseca do conteúdo,
-// então a Row do shell (sem flex-wrap: nowrap) não joga a tela para baixo da sidebar.
-Style setScreenCss()       = Style("display: flex; flex-direction: column; gap: 16; width: 0; min-width: 100%")
+Style setScreenCss()       = Style("display: flex; flex-direction: column; gap: 16; width: 100%")
 
 Label txt(String s, Style st) {
     var l = Label(s)

@@ -152,7 +152,7 @@ Style fillRestCss()           = Style("height: 8; background: transparent; paddi
 // Style("css") só aceita literal (o compilador valida o texto: SEM076/077/078),
 // então os hex do DS se repetem aqui em vez de virem de constantes.
 // Shell: sidebar Desktop 190 + topbar + conteúdo.
-Style shellRowCss()        = Style("display: flex; flex-direction: row; width: 100%; min-height: 800; background: #0A0D18; color: #F0F0F0; font-family: Manrope, ui-sans-serif, system-ui, sans-serif")
+Style shellRowCss()        = Style("display: flex; flex-direction: row; flex-wrap: nowrap; width: 100%; min-height: 800; background: #0A0D18; color: #F0F0F0; font-family: Manrope, ui-sans-serif, system-ui, sans-serif")
 Style shellMainCss()       = Style("display: flex; flex-direction: column; flex-grow: 1; min-width: 0; gap: 24; padding: 24; box-sizing: border-box")
 Style sidebarCss()         = Style("display: flex; flex-direction: column; align-self: stretch; width: 190; flex-shrink: 0; gap: 4; padding: 24px 12px; box-sizing: border-box; background: #05060B; border-right: 1px solid rgba(255,255,255,.1)")
 Style sidebarItemCss()     = Style("display: flex; flex-direction: row; align-items: center; gap: 12; width: 100%; height: 40; padding: 0 12px; border: none; border-radius: 8; background: transparent; color: #7B8EAD; font-size: 14; font-weight: 500; text-align: left; cursor: pointer")
