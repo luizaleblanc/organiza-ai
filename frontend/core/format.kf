@@ -1,5 +1,8 @@
 package core
 
+import kof.ui
+import core.theme
+
 // =============================================================================
 // Batch 2 (F5) — Dinheiro e e-mail (design §4.4)
 // =============================================================================
@@ -119,4 +122,124 @@ Double parseMoney(String raw) {
 Bool isEmailLike(String email) {
     val at = email.indexOf("@")
     return at > 0 && at < email.length - 1 && !email.contains(" ")
+}
+
+// =============================================================================
+// Batch 3 (F0) — rótulos e tons das telas do shell (spec b3, LACUNA-1/2)
+// =============================================================================
+// Os enums do backend chegam como String no JSON; o mapeamento para PT e cor
+// fica todo aqui. Valor desconhecido nunca lança: cai num rótulo neutro.
+
+// Nome amigável do modelo (design.md §4.1; movido da Tela 7).
+String modelFriendlyName(String model) {
+    if (model == "STANDARD_503020") {
+        return "50/30/20"
+    }
+    if (model == "SURVIVAL_702010") {
+        return "70/20/10"
+    }
+    if (model == "ANTI_DEBT_701020") {
+        return "Anti-Dívida"
+    }
+    if (model == "SIMPLE_8020") {
+        return "80/20"
+    }
+    if (model == "KAKEIBO") {
+        return "Kakeibo"
+    }
+    if (model == "FREELANCER_BASE_ZERO") {
+        return "Base Zero"
+    }
+    return model
+}
+
+// Título do card do Dashboard a partir do modelo do usuário (DECISÃO-2):
+// "Distribuição 50/30/20", "Distribuição 70/20/10", "Distribuição Kakeibo"...
+String distributionTitle(String model) = "Distribuição " + modelFriendlyName(model)
+
+// Category (backend/models.kf) -> rótulo PT.
+String categoryLabel(String category) {
+    if (category == "GROCERIES") { return "Mercado" }
+    if (category == "LEISURE") { return "Lazer" }
+    if (category == "FOOD") { return "Alimentação" }
+    if (category == "PHARMA") { return "Farmácia" }
+    if (category == "HEALTH") { return "Saúde" }
+    if (category == "AUTO") { return "Carro" }
+    if (category == "TRANSPORT") { return "Transporte" }
+    if (category == "HOUSING") { return "Moradia" }
+    if (category == "EDUCATION") { return "Educação" }
+    if (category == "SHOPPING") { return "Compras" }
+    if (category == "SUBSCRIPTIONS") { return "Assinaturas" }
+    return "Outros"
+}
+
+// Category -> cor do ponto (paleta de categorias do theme.kf).
+Color categoryColor(String category) {
+    if (category == "HOUSING") { return colorCatMoradia() }
+    if (category == "GROCERIES") { return colorCatMercado() }
+    if (category == "TRANSPORT" || category == "AUTO") { return colorCatTransporte() }
+    if (category == "FOOD" || category == "SUBSCRIPTIONS" || category == "SHOPPING") { return colorCatDelivery() }
+    if (category == "LEISURE") { return colorCatLazer() }
+    if (category == "HEALTH" || category == "PHARMA" || category == "EDUCATION") { return colorCatReserva() }
+    return colorTextSecondary()
+}
+
+// Status de caixinha (EnvelopeOverview.status) -> badge e tom.
+String envelopeStatusLabel(String status) {
+    if (status == "ESTOURADA") { return "Estourada" }
+    if (status == "ALERTA") { return "Alerta" }
+    return "Em dia"
+}
+
+String envelopeStatusTone(String status) {
+    if (status == "ESTOURADA") { return "danger" }
+    if (status == "ALERTA") { return "warning" }
+    return "success"
+}
+
+// NotificationOutput.kind -> badge ("" = sem badge) e tom.
+String notificationBadge(String kind) {
+    if (kind == "ENVELOPE_EXCEEDED") { return "Estourada" }
+    if (kind == "ENVELOPE_ALERT") { return "Alerta" }
+    if (kind == "DAILY_PULSE") { return "Dica" }
+    if (kind == "GOAL_REACHED") { return "Sucesso" }
+    return ""
+}
+
+String notificationTone(String kind) {
+    if (kind == "ENVELOPE_EXCEEDED") { return "danger" }
+    if (kind == "ENVELOPE_ALERT") { return "warning" }
+    if (kind == "GOAL_REACHED") { return "success" }
+    return "accent"
+}
+
+// Tom -> cor (success/warning/danger/accent).
+Color toneColor(String tone) {
+    if (tone == "success") { return colorSuccess() }
+    if (tone == "warning") { return colorWarning() }
+    if (tone == "danger") { return colorDanger() }
+    return colorAccent()
+}
+
+// Segundos decorridos -> "agora", "2 min", "1h", "3 d". Quem chama calcula a
+// diferença (createdAt é ISO UTC); negativo (relógio adiantado) vira "agora".
+String relativeTime(Int seconds) {
+    if (seconds < 60) { return "agora" }
+    if (seconds < 3600) { return String.valueOf(seconds / 60) + " min" }
+    if (seconds < 86400) { return String.valueOf(seconds / 3600) + "h" }
+    return String.valueOf(seconds / 86400) + " d"
+}
+
+String monthName(Int month) {
+    val names = "Janeiro,Fevereiro,Março,Abril,Maio,Junho,Julho,Agosto,Setembro,Outubro,Novembro,Dezembro".split(",")
+    if (month < 1 || month > 12) { return "" }
+    return names[month - 1]
+}
+
+// (9, 2026) -> "Setembro 2026"; aceita o prefixo de uma data ISO "2026-09-...".
+String monthYear(Int month, Int year) = monthName(month) + " " + String.valueOf(year)
+
+String monthYearFromIso(String iso) {
+    if (iso.length < 7) { return "" }
+    return monthYear(iso.substring(5, 7).toInt(), iso.substring(0, 4).toInt())
 }

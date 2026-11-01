@@ -49,29 +49,6 @@ sendOnboarding(Window w, Bool hasDebt, Double debtAmount) {
     }
 }
 
-// Nome amigável do modelo (design.md §4.1).
-String modelFriendlyName(String model) {
-    if (model == "STANDARD_503020") {
-        return "50/30/20"
-    }
-    if (model == "SURVIVAL_702010") {
-        return "70/20/10"
-    }
-    if (model == "ANTI_DEBT_701020") {
-        return "Anti-Dívida"
-    }
-    if (model == "SIMPLE_8020") {
-        return "80/20"
-    }
-    if (model == "KAKEIBO") {
-        return "Kakeibo"
-    }
-    if (model == "FREELANCER_BASE_ZERO") {
-        return "Base Zero"
-    }
-    return model
-}
-
 // Largura útil da coluna: Mobile 360 - 2x16 de padding; Desktop max-width 480.
 Int resultBarWidth() {
     if (AppState.isDesktop) {

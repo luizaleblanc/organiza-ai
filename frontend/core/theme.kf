@@ -32,6 +32,7 @@ Color colorWarning()       = Color(255, 184, 0)    // #FFB800
 Color colorDanger()        = Color(255, 74, 110)   // #FF4A6E
 
 // ---- Categorias (ícones das Caixinhas) -------------------------------------
+// fora do DS — pendente (decisão da usuária; auditoria de cores, Batch 3 F0)
 Color colorCatMoradia()    = Color(124, 140, 255)  // #7C8CFF
 Color colorCatMercado()    = Color(45, 212, 191)   // #2DD4BF
 Color colorCatTransporte() = Color(56, 189, 248)   // #38BDF8
@@ -39,11 +40,19 @@ Color colorCatDelivery()   = Color(167, 139, 250)  // #A78BFA
 Color colorCatLazer()      = Color(244, 114, 182)  // #F472B6
 Color colorCatReserva()    = Color(163, 230, 53)   // #A3E635
 
-// ---- Logomark: cyan a 70% / 45% já composto sobre colorBgPrimary -----------
+// ---- Logomark: cyan a 78% / 58% (opacidades do DS) já composto sobre
+// colorBgPrimary -------------------------------------------------------------
 // (Color.withAlpha usa canal 0-255 e toCss() emite rgba(..., a) sem escala —
 // composição opaca evita depender disso.)
-Color colorWave2()         = Color(3, 152, 186)
-Color colorWave3()         = Color(6, 103, 128)
+Color colorWave2()         = Color(2, 168, 204)     // #00D4FF a .78 sobre #0A0D18
+Color colorWave3()         = Color(4, 128, 158)     // #00D4FF a .58 sobre #0A0D18
+
+// ---- Tokens do DS que faltavam (Batch 3, F0) ---------------------------------
+Color colorCanvas()        = Color(5, 6, 11)       // #05060B
+Color colorChartDes()      = Color(0, 102, 255)    // #0066FF (fatia Desejos)
+// border-soft: rgba(255,255,255,.1) composto sobre colorCard (mesmo motivo do
+// logomark); dentro de Style("css") use o literal rgba(255,255,255,.1).
+Color borderSoft()         = Color(42, 45, 63)     // #2A2D3F
 
 // ---- Tipografia (Manrope 400/500/600 — px) ---------------------------------
 Int sizeTitle()    = 24
@@ -136,3 +145,53 @@ Style trackCss()              = Style("display: flex; height: 8; width: 100%; bo
 Style fillCss()               = Style("height: 8; border-radius: 4; background: #00D4FF; min-width: 0")
 Style fillRowCss()            = Style("display: flex; flex-direction: row; flex-wrap: nowrap; width: 100%; height: 8; gap: 0")
 Style fillRestCss()           = Style("height: 8; background: transparent; padding: 0; min-width: 0")
+
+// =============================================================================
+// Batch 3 (F0) — Styles do shell autenticado (spec b3, telas 9 a 13)
+// =============================================================================
+// Style("css") só aceita literal (o compilador valida o texto: SEM076/077/078),
+// então os hex do DS se repetem aqui em vez de virem de constantes.
+// Shell: sidebar Desktop 190 + topbar + conteúdo.
+Style shellRowCss()        = Style("display: flex; flex-direction: row; width: 100%; min-height: 800; background: #0A0D18; color: #F0F0F0; font-family: Manrope, ui-sans-serif, system-ui, sans-serif")
+Style shellMainCss()       = Style("display: flex; flex-direction: column; flex-grow: 1; min-width: 0; gap: 24; padding: 24; box-sizing: border-box")
+Style sidebarCss()         = Style("display: flex; flex-direction: column; width: 190; flex-shrink: 0; gap: 4; padding: 24px 12px; box-sizing: border-box; background: #05060B; border-right: 1px solid rgba(255,255,255,.1)")
+Style sidebarItemCss()     = Style("display: flex; flex-direction: row; align-items: center; gap: 12; width: 100%; height: 40; padding: 0 12px; border: none; border-radius: 8; background: transparent; color: #7B8EAD; font-size: 14; font-weight: 500; text-align: left; cursor: pointer")
+Style sidebarItemActiveCss() = Style("display: flex; flex-direction: row; align-items: center; gap: 12; width: 100%; height: 40; padding: 0 12px; border: none; border-radius: 8; background: rgba(0,212,255,.08); color: #00D4FF; font-size: 14; font-weight: 600; text-align: left; cursor: pointer")
+Style topbarCss()          = Style("display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 16; width: 100%")
+Style topbarTitleCss()     = Style("color: #F0F0F0; font-size: 24; font-weight: 600; margin: 0")
+Style topbarSubtitleCss()  = Style("color: #7B8EAD; font-size: 14; margin: 0")
+// Cards e grades.
+Style cardCss()            = Style("display: flex; flex-direction: column; gap: 12; padding: 20; box-sizing: border-box; background: #12162A; border: 1px solid rgba(255,255,255,.1); border-radius: 12; min-width: 0")
+Style pulseCardCss()       = Style("display: flex; flex-direction: column; gap: 8; padding: 20; box-sizing: border-box; background: linear-gradient(135deg, #00D4FF, #0066FF); color: #06121C; border: none; border-radius: 12; min-width: 0")
+Style gridG2Css()          = Style("display: grid; grid-template-columns: 1fr 1fr; gap: 16; width: 100%")
+Style gridG3Css()          = Style("display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16; width: 100%")
+Style stackCss()           = Style("display: flex; flex-direction: column; gap: 16; width: 100%")
+// Tabs (Semana/Mês/Ano).
+Style tabsCss()            = Style("display: flex; flex-direction: row; gap: 4; padding: 4; background: #12162A; border-radius: 8")
+Style tabCss()             = Style("background: transparent; color: #7B8EAD; border: none; border-radius: 6; padding: 6px 14px; font-size: 14; font-weight: 500; cursor: pointer")
+Style tabActiveCss()       = Style("background: #1A1F3A; color: #00D4FF; border: none; border-radius: 6; padding: 6px 14px; font-size: 14; font-weight: 600; cursor: pointer")
+// Badges por tom.
+Style badgeSuccessCss()    = Style("color: #00E5A0; background: rgba(0,229,160,.12); border-radius: 999; padding: 2px 10px; font-size: 12; font-weight: 600; margin: 0")
+Style badgeWarningCss()    = Style("color: #FFB800; background: rgba(255,184,0,.12); border-radius: 999; padding: 2px 10px; font-size: 12; font-weight: 600; margin: 0")
+Style badgeDangerCss()     = Style("color: #FF4A6E; background: rgba(255,74,110,.12); border-radius: 999; padding: 2px 10px; font-size: 12; font-weight: 600; margin: 0")
+Style badgeAccentCss()     = Style("color: #00D4FF; background: rgba(0,212,255,.12); border-radius: 999; padding: 2px 10px; font-size: 12; font-weight: 600; margin: 0")
+// Trilho de 56 px do card de notificação, por tom.
+Style railSuccessCss()     = Style("display: flex; align-items: center; justify-content: center; width: 56; flex-shrink: 0; background: rgba(0,229,160,.12); border-radius: 12")
+Style railWarningCss()     = Style("display: flex; align-items: center; justify-content: center; width: 56; flex-shrink: 0; background: rgba(255,184,0,.12); border-radius: 12")
+Style railDangerCss()      = Style("display: flex; align-items: center; justify-content: center; width: 56; flex-shrink: 0; background: rgba(255,74,110,.12); border-radius: 12")
+Style railAccentCss()      = Style("display: flex; align-items: center; justify-content: center; width: 56; flex-shrink: 0; background: rgba(0,212,255,.12); border-radius: 12")
+// Toggle, select e modal (Configurações).
+Style toggleOnCss()        = Style("width: 44; height: 24; border-radius: 12; border: none; background: #00D4FF; cursor: pointer")
+Style toggleOffCss()       = Style("width: 44; height: 24; border-radius: 12; border: 1px solid rgba(255,255,255,.1); background: #1A1F3A; cursor: pointer")
+Style selectCss()          = Style("background: #12162A; color: #F0F0F0; height: 40; box-sizing: border-box; border: 1px solid rgba(255,255,255,.1); border-radius: 8; padding: 0 12px; font-size: 14")
+Style modalOverlayCss()    = Style("position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: rgba(5,6,11,.8)")
+// Bolhas do chat.
+Style bubbleAiCss()        = Style("align-self: flex-start; max-width: 80%; background: #12162A; color: #F0F0F0; border: 1px solid rgba(255,255,255,.1); border-radius: 12; padding: 12px 16px; font-size: 14; white-space: pre-wrap; margin: 0")
+Style bubbleUserCss()      = Style("align-self: flex-end; max-width: 80%; background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; border-radius: 12; padding: 12px 16px; font-size: 14; white-space: pre-wrap; margin: 0")
+// Barra de progresso (track + fill por cor; o fill usa a mesma técnica de bucketBar).
+Style progressTrackCss()   = Style("display: flex; height: 8; width: 100%; border-radius: 4; background: #1A1F3A; overflow: hidden")
+Style progressFillSuccessCss() = Style("height: 8; border-radius: 4; background: #00E5A0; min-width: 0")
+Style progressFillWarningCss() = Style("height: 8; border-radius: 4; background: #FFB800; min-width: 0")
+Style progressFillDangerCss()  = Style("height: 8; border-radius: 4; background: #FF4A6E; min-width: 0")
+Style progressFillAccentCss()  = Style("height: 8; border-radius: 4; background: #00D4FF; min-width: 0")
+Style progressFillDesCss()     = Style("height: 8; border-radius: 4; background: #0066FF; min-width: 0")

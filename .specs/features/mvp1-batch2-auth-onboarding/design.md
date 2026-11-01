@@ -300,3 +300,10 @@ Padrões escolhidos sem confirmação explícita (a usuária pode trocar):
 1. Salário 0 → 400; dívida 0 com `hasDebt=true` → 400.
 2. Senha mínima de 8 caracteres também no backend.
 3. Pasta do harness: `scripts/ui/`.
+
+## Adendo Batch 3 (F0)
+
+- `modelFriendlyName` saiu de `screens/onb_result_screen.kf` para `core/format.kf` (o Dashboard também usa). `format.kf` agora importa `kof.ui` e `core.theme` por causa de `categoryColor`/`toneColor`.
+- Logomark: `colorWave2`/`colorWave3` = cyan a .78/.58 composto sobre #0A0D18 (opacidades do DS; antes .70/.45).
+- `http.put`/`http.delete` no alvo js: viram `kofHttpPutHeaders`/`kofHttpDeleteHeaders` no runtime (`fetch` com `method`), devolvem Promise e seguem a mesma regra de `apiGet`/`apiPost` (4xx devolve o corpo; 5xx e rede lançam). Medido no 0.6.6 e 0.6.7.
+- Hex dentro de `Style("css")`: não dá para montar o texto a partir de constantes (`Style("color: " + cyanHex())` dá `SEM077`, "the declaration string must be a literal", nas duas versões). Os literais de `login_screen.kf` e `onb_result_screen.kf` ficaram como estão.

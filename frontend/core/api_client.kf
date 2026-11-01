@@ -8,7 +8,7 @@ import core.app_state
 // =============================================================================
 // Same-origin: o backend serve o bundle (KOF_WEB_OUT), então os caminhos são
 // relativos, sem host nem configuração por ambiente.
-// No navegador, http.get/post devolvem Promise: toda chamada é spawn + await
+// No navegador, http.get/post/put/delete devolvem Promise: toda chamada é spawn + await
 // (spec B2-08 item 4). O corpo chega como String, sem status: 4xx devolve o
 // JSON de erro; rede, CORS e 5xx lançam String. Estas funções NÃO capturam a
 // exceção: quem chama trata catch (String e) como falha de rede ou servidor
@@ -30,6 +30,21 @@ String apiGet(String path) {
 
 String apiPost(String path, String payload) {
     val h = spawn http.post(path, payload, apiHeaders())
+    return await h
+}
+
+// PUT/DELETE (Batch 3, F0): mesmo transporte de apiGet/apiPost. No alvo js
+// http.put/http.delete viram kofHttpPutHeaders/kofHttpDeleteHeaders, que chamam
+// fetch com method "PUT"/"DELETE" e devolvem Promise (medido no kof 0.6.6 e
+// 0.6.7, Edge headless contra o backend H2: PUT /api/users/me/preferences e
+// DELETE /api/envelopes/:id).
+String apiPut(String path, String payload) {
+    val h = spawn http.put(path, payload, apiHeaders())
+    return await h
+}
+
+String apiDelete(String path) {
+    val h = spawn http.delete(path, apiHeaders())
     return await h
 }
 
