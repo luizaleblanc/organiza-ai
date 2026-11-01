@@ -3,8 +3,16 @@
 // Substitui a segregação artificial BFF <-> Spring Boot.
 // Todas as rotas chamam diretamente o domínio Kof sem proxy HTTP.
 
+import kof.web
+
 // Porta HTTP: variavel PORT (o Render injeta), padrao 3000. app.listen aceita so Int (SEM025);
 // um PORT que nao e numero derruba o boot com a excecao da conversao (nunca sobe na porta errada).
+// Resposta do chat em JSON (L3): texto + uso do plano ja contando a mensagem recem-gravada.
+String chatReplyJson(String userId, String reply, String monthStart) {
+    var tier = getTierStatus(userId, monthStart)
+    return json.encode(ChatReply(reply, tier.messagesUsed(), tier.messagesLimit()))
+}
+
 Int listenPort() {
     var raw = config.env("PORT")
     if (raw != null) {
@@ -341,7 +349,7 @@ main() {
                 }
                 saveChatMessage(ChatMessageEntity("", userId, ChatRole.USER, msgReq.message, nowIso()))
                 saveChatMessage(ChatMessageEntity("", userId, ChatRole.ASSISTANT, clipForHistory(answer), nowIso()))
-                return answer
+                return chatReplyJson(userId, answer, monthStart)
             }
 
             // ids gerados pelo banco (PERS-06/07); createdAt = instante real (issue #44)
@@ -351,9 +359,20 @@ main() {
             var reply = "Olá! Seu pulso diário disponível hoje é R$ " + String.valueOf(pulse.pulse) + ". O que deseja registrar hoje?"
             saveChatMessage(ChatMessageEntity("", userId, ChatRole.ASSISTANT, reply, nowIso()))
 
-            return reply
+            return chatReplyJson(userId, reply, monthStart)
         }
         return status(400, invalidBody())
+    }
+
+    // Historico do chat do usuario do token (L4): ?page=&limit= (ou ?offset=), padrao 50, teto 100.
+    // Pagina 1 = mensagens mais recentes, em ordem cronologica. Parametro invalido = 400.
+    app.get("/api/chat/messages") {
+        try {
+            val p = pageRequest(50, 100)
+            return json.encode(findChatHistoryPage(currentUserId(), p.page(), p.limit(), p.offset()))
+        } catch (String e) {
+            return status(400, json.encode(ApiError(e)))
+        }
     }
 
     // =========================================================

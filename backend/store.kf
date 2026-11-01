@@ -885,6 +885,32 @@ List<ChatMessageEntity> findRecentChatMessages(String userId, Int limit) {
     return out
 }
 
+// Historico do chat (GET /api/chat/messages): so do dono (where userId), do mais novo para o mais antigo
+// com LIMIT/OFFSET no banco; busca limit+1 para saber se ha pagina mais antiga e devolve a janela em
+// ordem cronologica.
+ChatHistoryPage findChatHistoryPage(String userId, Int page, Int limit, Int offset) {
+    var items: List<ChatHistoryItem> = listOf()
+    if (!strings.isNumeric(userId) || limit == 0) {
+        return ChatHistoryPage(items, page, limit, offset, false)
+    }
+    var uid = userId.toLong()
+    var take = limit + 1
+    // A Query DSL nao tem offset (PARSE090 no 0.6.6/0.6.7) e orm.window nao filtra por dono: SQL com binds.
+    var newest = db.query<ChatMessageRow>(DbConn.handle,
+        "SELECT * FROM \"chatmessagerow\" WHERE \"userId\" = ? ORDER BY \"id\" DESC LIMIT ? OFFSET ?", uid, take, offset)
+    var hasNext = newest.size > limit
+    var i = newest.size - 1
+    if (hasNext) {
+        i = limit - 1
+    }
+    while (i >= 0) {
+        var row = newest.get(i)
+        items.add(ChatHistoryItem(row.role(), row.content(), row.createdAt()))
+        i = i - 1
+    }
+    return ChatHistoryPage(items, page, limit, offset, hasNext)
+}
+
 // Mensagens sem data ("", gravadas antes da issue #44) ficam fora do corte do mes.
 Int countChatMessagesByUserIdAndRoleAndCreatedAtGreaterThanEqual(String userId, ChatRole role, String since) {
     if (!strings.isNumeric(userId)) {

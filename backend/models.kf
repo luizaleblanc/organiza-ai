@@ -237,6 +237,12 @@ record VariableIncomeInput(Double amount, String source)
 // bucket opcional (B4): se vier, tem de ser um dos buckets do modelo atual do usuario.
 record CreateEnvelopeInput(String categoryName, Double limitAmount, String? bucket)
 record ChatMessageRequest(String message)
+// Batch 3 (L3/L4): resposta do chat em JSON e historico paginado. role = USER | ASSISTANT;
+// messagesLimit = -1 no Premium (igual ao TierStatus). page e 1-based; a pagina 1 traz as mensagens
+// mais recentes e cada pagina vem em ordem cronologica (antiga -> nova); hasNext = ha mensagens mais antigas.
+record ChatReply(String reply, Int messagesUsed, Int messagesLimit)
+record ChatHistoryItem(String role, String content, String createdAt)
+record ChatHistoryPage(List<ChatHistoryItem> items, Int page, Int limit, Int offset, Bool hasNext)
 // Fase 3: PUT de caixinha (limitType/movingAverageMonths opcionais como no legado), salario, meta de
 // reserva e troca de modelo. limitType/model chegam como String (WORKAROUND do enum no json.decode).
 record UpdateEnvelopeInput(String categoryName, Double limitAmount, String? limitType, Int? movingAverageMonths)

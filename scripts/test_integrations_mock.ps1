@@ -229,7 +229,7 @@ try {
         $r = Invoke-Api "POST" "/api/chat/message" $tkN (@{ message = "oi" } | ConvertTo-Json -Compress)
         Stop-All
         $log = ($script:logs | ForEach-Object { $_.Err.Result + $_.Out.Result }) -join "`n"
-        Expect ($r.Status -eq 200 -and $r.Body -like "Olá! Seu pulso diário disponível hoje é R$ *" -and @(Get-MockChats).Count -eq $antes -and $log -match "defina KOF_EMAIL_API_KEY" -and $log -match "sem OPENAI_API_KEY" -and $log -notmatch "re-test-mock") "$($r.Status) $($r.Body) | log: $($log.Substring(0, [Math]::Min(300, $log.Length)))"
+        Expect ($r.Status -eq 200 -and ($r.Body | ConvertFrom-Json).reply -like "Olá! Seu pulso diário disponível hoje é R$ *" -and ($r.Body | ConvertFrom-Json).messagesUsed -eq 1 -and @(Get-MockChats).Count -eq $antes -and $log -match "defina KOF_EMAIL_API_KEY" -and $log -match "sem OPENAI_API_KEY" -and $log -notmatch "re-test-mock") "$($r.Status) $($r.Body) | log: $($log.Substring(0, [Math]::Min(300, $log.Length)))"
     }
 
     # ---------------- Coach com OpenAI (mock no formato Chat Completions) ----------------
@@ -240,7 +240,12 @@ try {
     $cm = "coach_$([Guid]::NewGuid().ToString('N'))@organiza.ai"
     $tkC = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Cora Coach"; email = $cm; password = "senhaDoCoach1" } | ConvertTo-Json -Compress)).Body
     Invoke-Api "POST" "/api/users/onboarding" $tkC (@{ salary = 3000.0; incomeType = "FIXED"; hasDebt = $false } | ConvertTo-Json -Compress) | Out-Null
-    function Chat([string]$Text) { return Invoke-Api "POST" "/api/chat/message" $tkC (@{ message = $Text } | ConvertTo-Json -Compress) }
+    # Batch 3 (L3): 200 = {"reply","messagesUsed","messagesLimit"}; Body passa a ser o reply e Used o contador.
+    function Chat([string]$Text) {
+        $r = Invoke-Api "POST" "/api/chat/message" $tkC (@{ message = $Text } | ConvertTo-Json -Compress)
+        if ($r.Status -eq 200) { $j = $r.Body | ConvertFrom-Json; $r.Raw = $r.Body; $r.Body = [string]$j.reply; $r.Used = $j.messagesUsed; $r.Limit = $j.messagesLimit }
+        return $r
+    }
     function Used { return ((Invoke-Api "GET" "/api/users/tier-status" $tkC).Body | ConvertFrom-Json).messagesUsed }
 
     Test-Step "Coach: resposta simples; pedido com gpt-4o-mini, 8 tools do legado e prompt de sistema com a data" {
@@ -248,7 +253,7 @@ try {
         $req = @(Get-MockChats)[-1]
         $names = @($req.tools | ForEach-Object { $_.function.name }) -join ","
         $sys = [string]$req.messages[0].content
-        Expect ($up3 -and $r.Status -eq 200 -and $r.Body -ceq "Olá do mock! mensagens=2" -and $req.model -ceq "gpt-4o-mini" -and $names -ceq "persistTransaction,listTransactionsByCategory,getTotalByCategory,registerIncome,getDailyPulse,getBalance,suggestModelChange,answerKakeiboReflection" -and $sys -like "Data atual: $((Get-Date).ToString('yyyy-MM-dd'))*" -and $sys -like "*coach financeiro do Organiza*") "$($r.Status) $($r.Body) | modelo=$($req.model) tools=$names | system=$($sys.Substring(0, [Math]::Min(80, $sys.Length)))"
+        Expect ($up3 -and $r.Status -eq 200 -and $r.Body -ceq "Olá do mock! mensagens=2" -and $r.Used -eq 1 -and $r.Limit -eq 30 -and $req.model -ceq "gpt-4o-mini" -and $names -ceq "persistTransaction,listTransactionsByCategory,getTotalByCategory,registerIncome,getDailyPulse,getBalance,suggestModelChange,answerKakeiboReflection" -and $sys -like "Data atual: $((Get-Date).ToString('yyyy-MM-dd'))*" -and $sys -like "*coach financeiro do Organiza*") "$($r.Status) $($r.Body) | modelo=$($req.model) tools=$names | system=$($sys.Substring(0, [Math]::Min(80, $sys.Length)))"
     }
 
     Test-Step "Coach: tool_call persistTransaction -> gasto gravado (R$ 35,50 FOOD) -> resposta final com o resultado" {

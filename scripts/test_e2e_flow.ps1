@@ -411,7 +411,21 @@ try {
         $r = Invoke-Api "POST" "/api/chat/message" $script:token $body
         $p = [string](Get-ExpectedPulse 2400).ToString([Globalization.CultureInfo]::InvariantCulture)
         if (-not $p.Contains(".")) { $p = "$p.0" }
-        Expect ($r.Status -eq 200 -and $r.Body -like "*R$ $p.*") "$($r.Status) $($r.Body) (esperado R$ $p)"
+        $j = $r.Body | ConvertFrom-Json
+        Expect ($r.Status -eq 200 -and $j.reply -like "*R$ $p.*" -and $j.messagesUsed -eq 1 -and $j.messagesLimit -eq 30) "$($r.Status) $($r.Body) (esperado reply com R$ $p, messagesUsed 1, messagesLimit 30)"
+    }
+
+    Test-Step "GET /api/chat/messages: histórico do usuário em JSON, cronológico (USER e depois ASSISTANT)" {
+        $r = Invoke-Api "GET" "/api/chat/messages" $script:token
+        $j = $r.Body | ConvertFrom-Json
+        $it = @($j.items)
+        Expect ($r.Status -eq 200 -and $it.Count -eq 2 -and $it[0].role -ceq "USER" -and $it[0].content -ceq "Quanto tenho disponível para gastar hoje?" -and $it[1].role -ceq "ASSISTANT" -and $it[1].content -like "Olá! Seu pulso*" -and $it[0].createdAt -match '^\d{4}-\d{2}-\d{2}T' -and $j.page -eq 1 -and $j.limit -eq 50 -and $j.offset -eq 0 -and $j.hasNext -eq $false) "$($r.Status) $($r.Body)"
+    }
+
+    Test-Step "GET /api/chat/messages sem token = 401; parâmetro inválido = 400" {
+        $a = Invoke-Api "GET" "/api/chat/messages"
+        $b = Invoke-Api "GET" "/api/chat/messages?limit=-1" $script:token
+        Expect ($a.Status -eq 401 -and $b.Status -eq 400) "sem token=$($a.Status) $($a.Body) | limit=-1: $($b.Status) $($b.Body)"
     }
 
     Test-Step "POST /api/variable-income define destino" {
@@ -466,11 +480,24 @@ try {
     Test-Step "Freemium: 30 mensagens no mês = 200; a 31ª = 402 com a mensagem do legado e não é gravada" {
         $tf = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Fê Freemium"; email = "free_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaDaF123" } | ConvertTo-Json -Compress)).Body
         $msg = (@{ message = "oi" } | ConvertTo-Json -Compress)
+        $script:tfToken = $tf
         $codes = @(); for ($k = 1; $k -le 30; $k++) { $codes += (Invoke-Api "POST" "/api/chat/message" $tf $msg).Status }
         $r31 = Invoke-Api "POST" "/api/chat/message" $tf $msg
         $e = $r31.Body | ConvertFrom-Json
         $st = (Invoke-Api "GET" "/api/users/tier-status" $tf).Body | ConvertFrom-Json
         Expect (@($codes | Where-Object { $_ -eq 200 }).Count -eq 30 -and $r31.Status -eq 402 -and $e.error -ceq "Você atingiu o limite de 30 mensagens gratuitas este mês." -and $st.messagesUsed -eq 30 -and $st.canSendMessage -eq $false) "200s=$(@($codes | Where-Object { $_ -eq 200 }).Count) 31ª=$($r31.Status) $($r31.Body) | tier=$($st | ConvertTo-Json -Compress)"
+    }
+
+    Test-Step "GET /api/chat/messages: paginação (page 1 = mais recentes, cronológica) e isolamento entre usuários" {
+        $p1 = (Invoke-Api "GET" "/api/chat/messages?limit=4" $script:tfToken).Body | ConvertFrom-Json
+        $p2 = (Invoke-Api "GET" "/api/chat/messages?limit=4&page=2" $script:tfToken).Body | ConvertFrom-Json
+        $last = (Invoke-Api "GET" "/api/chat/messages?limit=4&page=15" $script:tfToken).Body | ConvertFrom-Json
+        $over = (Invoke-Api "GET" "/api/chat/messages?limit=500" $script:tfToken).Body | ConvertFrom-Json
+        $mine = (Invoke-Api "GET" "/api/chat/messages?limit=100" $script:token).Body | ConvertFrom-Json
+        $vazmine = @($mine.items | Where-Object { $_.content -ceq "oi" }).Count
+        $vaztf = @($over.items | Where-Object { $_.content -like "Quanto tenho*" }).Count
+        $i1 = @($p1.items); $i2 = @($p2.items)
+        Expect (@($i1).Count -eq 4 -and $i1[0].role -ceq "USER" -and $i1[3].role -ceq "ASSISTANT" -and $p1.hasNext -eq $true -and $p2.offset -eq 4 -and @($i2).Count -eq 4 -and @($last.items).Count -eq 4 -and $last.hasNext -eq $false -and $over.limit -eq 100 -and @($over.items).Count -eq 60 -and $vazmine -eq 0 -and $vaztf -eq 0 -and @($mine.items).Count -eq 2) "p1=$($p1 | ConvertTo-Json -Compress -Depth 4) | p15=$(@($last.items).Count)/$($last.hasNext) | over=$($over.limit)/$(@($over.items).Count) | vazamento=$vazmine/$vaztf"
     }
 
     Test-Step "Rota inexistente = 404" {

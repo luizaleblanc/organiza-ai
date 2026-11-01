@@ -698,3 +698,42 @@ Integrações (mock HTTPS): 17/17 em H2 e MySQL · gate TLS do d0: 8/8 (também 
 
 No 0.6.7 o `kof.http` continua aceitando qualquer certificado (`JvmWebHttpRuntime`, `KOF_HTTP_CLIENT_INSECURE`, conferido no HEAD do Kof4j em 27/10), então o contorno da seção 9 continua necessário. Os gates de negativos, concorrência, DB-BOUNCE/DOWN e AUTH-STATIC rodaram no d0 e no d1 (0.6.6); no d2 não foram repetidos, porque as ferramentas locais desses gates foram apagadas do ambiente de teste.
 
+## 12. Chat em JSON e histórico paginado (Batch 3, B1/B2, 01/11/2026)
+
+Fecha as lacunas L3 e L4 do Batch 3. Quebra o contrato de `POST /api/chat/message`: o frontend (F2) passa a ler `reply` do JSON.
+
+**`POST /api/chat/message`** (com token), corpo `{"message": "..."}`:
+
+| Status | Corpo |
+|---|---|
+| 200 | `{"reply": "...", "messagesUsed": 1, "messagesLimit": 30}` (`messagesUsed` já conta a mensagem recém-gravada; `messagesLimit` = -1 no Premium, como no `tier-status`) |
+| 400 | `{"error": ...}` corpo inválido |
+| 402 | `{"error": "Você atingiu o limite de 30 mensagens gratuitas este mês."}` (nada gravado) |
+| 503 | `{"error": "O coach está indisponível no momento. Tente de novo em instantes."}` (falha do provedor, nada gravado) |
+| 401 | sem token |
+
+Sem `OPENAI_API_KEY`, `reply` é a resposta fixa com o pulso, como antes.
+
+**`GET /api/chat/messages?page=1&limit=50`** (com token; também aceita `?offset=`): `pageRequest(50, 100)` do `kof.web` (`page` 1-based, `limit` limitado a 100).
+
+```json
+{"items": [{"role": "USER", "content": "...", "createdAt": "2026-11-01T12:00:00.000Z"},
+           {"role": "ASSISTANT", "content": "...", "createdAt": "..."}],
+ "page": 1, "limit": 50, "offset": 0, "hasNext": false}
+```
+
+- Só as mensagens do usuário do token (`WHERE "userId" = ?`); não há parâmetro de usuário.
+- A página 1 traz as mensagens mais recentes; dentro da página, ordem cronológica (antiga → nova). `hasNext = true` quando há mensagens mais antigas (página seguinte).
+- Parâmetro inválido (ex.: `limit=-1`) = 400 `{"error": "PAGINATION: ..."}`; sem token = 401.
+- `createdAt` vazio nas mensagens antigas gravadas antes da issue #44.
+
+**Por que SQL e não `orm.window`:** `orm.window<T>(db, limit, offset)` pagina a tabela inteira, sem filtro por dono, e a Query DSL não aceita `offset` (PARSE090 no 0.6.6 e no 0.6.7). A consulta é `db.query<ChatMessageRow>` com binds e `LIMIT ? OFFSET ?`, busca `limit + 1` linhas para calcular `hasNext` e usa identificadores entre aspas (o MySQL roda com `ANSI_QUOTES`; o H2 cria as tabelas em minúsculas).
+
+Gates (kof 0.6.6 e 0.6.7, resultado idêntico):
+
+```
+G-BUILD backend --target jvm exit=0 · G-BYTECODE 233 classes carregadas com -Xverify:all, 0 falhas
+E2E H2 89/89 (0.6.6 e 0.6.7) · E2E MySQL 8.4 (ANSI_QUOTES) 89/89 (0.6.7)
+G-RESTART H2 28/28 e MySQL 28/28 (0.6.7) · integrações com mock 17/17 (H2, 0.6.7)
+Passos novos do E2E: 54 histórico cronológico · 55 sem token = 401 e limit=-1 = 400 · 64 paginação + isolamento entre usuários
+```
