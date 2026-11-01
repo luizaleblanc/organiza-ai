@@ -356,7 +356,7 @@ main() {
             saveChatMessage(ChatMessageEntity("", userId, ChatRole.USER, msgReq.message, nowIso()))
 
             var pulse = calculateDailyPulse(userId, daysRemainingInMonth(), monthStart)
-            var reply = "Olá! Seu pulso diário disponível hoje é R$ " + String.valueOf(pulse.pulse) + ". O que deseja registrar hoje?"
+            var reply = "Olá! Seu pulso diário disponível hoje é " + formatBrl(toCents(pulse.pulse)) + ". O que deseja registrar hoje?"
             saveChatMessage(ChatMessageEntity("", userId, ChatRole.ASSISTANT, reply, nowIso()))
 
             return chatReplyJson(userId, reply, monthStart)
