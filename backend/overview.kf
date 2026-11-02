@@ -254,9 +254,9 @@ void notifyCrossingOf(EnvelopeEntity env, Long amountCents) {
     var key = localTodayIso().substring(0, 7) + ":" + envelopeId + ":" + now
     var detail = "Você já gastou " + formatBrl(after) + " de " + formatBrl(limit) + " em " + env.categoryName + " (" + percentOf(after, limit) + "%)."
     if (now == "ESTOURADA") {
-        insertNotificationOnce(userId, "ENVELOPE_EXCEEDED", "Você estourou a caixinha " + env.categoryName, detail, key)
+        insertNotificationOnce(userId, "ENVELOPE_EXCEEDED", "Você estourou a caixinha " + env.categoryName, detail + " Dá uma olhada antes que aperte o resto do mês.", key)
     } else {
-        insertNotificationOnce(userId, "ENVELOPE_ALERT", env.categoryName + " quase no limite", detail, key)
+        insertNotificationOnce(userId, "ENVELOPE_ALERT", env.categoryName + " quase no limite", detail + " Ainda dá pra segurar.", key)
     }
 }
 
@@ -267,8 +267,8 @@ void notifyReserveGoal(UserEntity user) {
     }
     var accumulated = reserveCents(user.id)
     if (accumulated >= user.emergencyGoalCents) {
-        insertNotificationOnce(user.id, "GOAL_REACHED", "Meta batida! Reserva de emergência",
-            "Você juntou " + formatBrl(accumulated) + " na reserva. Continue assim.", "goal:" + user.emergencyGoalCents)
+        insertNotificationOnce(user.id, "GOAL_REACHED", "Meta batida! Reserva do mês",
+            "Você reservou " + formatBrl(accumulated) + " este mês. Continue assim.", "goal:" + user.emergencyGoalCents)
     }
 }
 
@@ -282,7 +282,7 @@ void ensureDailyNotifications(UserEntity user) {
     }
     if (findTransactionsByUserIdAndCreatedAtAfter(user.id, periodStartIso("day")).isEmpty()) {
         insertNotificationOnce(user.id, "REMINDER", "Já organizou seus gastos hoje?",
-            "Diz ao Organiza quanto você gastou que ele calcula seu pulso pra você terminar o mês no azul.", today)
+            "Diz ao Organiza quanto você gastou que ele diz seu pulso pra você terminar o mês de boooooa.", today)
     }
 }
 

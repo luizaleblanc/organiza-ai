@@ -586,7 +586,7 @@ try {
         $h = @($ov | Where-Object { $_.categoryName -eq "HOUSING" })[0]
         $n = (ConvertFrom-JsonList (Invoke-Api "GET" "/api/notifications" $script:tokenD).Body)
         $alert = @($n | Where-Object { $_.kind -eq "ENVELOPE_ALERT" }); $over = @($n | Where-Object { $_.kind -eq "ENVELOPE_EXCEEDED" })
-        Expect ($o1.status -eq "ALERTA" -and $o1.percent -eq 83 -and $o2.status -eq "ESTOURADA" -and $o2.spentThisMonth -eq 700.0 -and $o2.percent -eq 117 -and $o2.bucket -ceq "Folga" -and $h.status -eq "EM_DIA" -and $h.bucket -ceq "Necessidades" -and $alert.Count -eq 1 -and $over.Count -eq 1 -and $over[0].title -ceq "Você estourou a caixinha FOOD" -and $over[0].message -like "*R$ 700,00 de R$ 600,00*(117%)*") "o1=$($o1 | ConvertTo-Json -Compress) o2=$($o2 | ConvertTo-Json -Compress) notif=$($n | ConvertTo-Json -Compress)"
+        Expect ($o1.status -eq "ALERTA" -and $o1.percent -eq 83 -and $o2.status -eq "ESTOURADA" -and $o2.spentThisMonth -eq 700.0 -and $o2.percent -eq 117 -and $o2.bucket -ceq "Folga" -and $h.status -eq "EM_DIA" -and $h.bucket -ceq "Necessidades" -and $alert.Count -eq 1 -and $over.Count -eq 1 -and $over[0].title -ceq "Você estourou a caixinha FOOD" -and $over[0].message -like "*R$ 700,00 de R$ 600,00*(117%). Dá uma olhada antes que aperte o resto do mês." -and $alert[0].message -like "*. Ainda dá pra segurar.") "o1=$($o1 | ConvertTo-Json -Compress) o2=$($o2 | ConvertTo-Json -Compress) notif=$($n | ConvertTo-Json -Compress)"
     }
 
     Test-Step "Notificações: pulso do dia uma vez, sem lembrete (houve gasto hoje); marcar todas como lidas = 204" {
@@ -598,7 +598,7 @@ try {
 
     Test-Step "Notificações sem salário e sem gasto: só o lembrete; as de D não aparecem para E (IDOR)" {
         $n = (ConvertFrom-JsonList (Invoke-Api "GET" "/api/notifications" $script:tokenE).Body)
-        Expect ($n.Count -eq 1 -and $n[0].kind -eq "REMINDER") "$($n | ConvertTo-Json -Compress)"
+        Expect ($n.Count -eq 1 -and $n[0].kind -eq "REMINDER" -and $n[0].message -ceq "Diz ao Organiza quanto você gastou que ele diz seu pulso pra você terminar o mês de boooooa.") "$($n | ConvertTo-Json -Compress)"
     }
 
     Test-Step "PUT /api/envelopes/{id}: altera limite e tipo (padrão FIXED/3 meses) e mantém o gasto" {
@@ -668,7 +668,7 @@ try {
         $v2 = (Invoke-Api "POST" "/api/variable-income" $script:tokenD (@{ amount = 50.0; source = "bico" } | ConvertTo-Json -Compress)).Body | ConvertFrom-Json
         $dash = (Invoke-Api "GET" "/api/dashboard" $script:tokenD).Body | ConvertFrom-Json
         $n = (ConvertFrom-JsonList (Invoke-Api "GET" "/api/notifications" $script:tokenD).Body)
-        Expect ($g.Status -eq 200 -and ($g.Body | ConvertFrom-Json).hasGoal -eq $true -and $neg.Status -eq 400 -and $v1.destination -eq "EMERGENCY_FUND" -and $v2.destination -eq "BUDGET_5030020" -and $dash.reserve.accumulated -eq 150.0 -and $dash.reserve.goal -eq 100.0 -and $dash.reserve.percent -eq 150 -and @($n | Where-Object { $_.kind -eq "GOAL_REACHED" }).Count -eq 1) "meta=$($g.Status) neg=$($neg.Status) v1=$($v1.destination) v2=$($v2.destination) reserva=$($dash.reserve | ConvertTo-Json -Compress)"
+        Expect ($g.Status -eq 200 -and ($g.Body | ConvertFrom-Json).hasGoal -eq $true -and $neg.Status -eq 400 -and $v1.destination -eq "EMERGENCY_FUND" -and $v2.destination -eq "BUDGET_5030020" -and $dash.reserve.accumulated -eq 150.0 -and $dash.reserve.goal -eq 100.0 -and $dash.reserve.percent -eq 150 -and @($n | Where-Object { $_.kind -eq "GOAL_REACHED" -and $_.title -ceq "Meta batida! Reserva do mês" -and $_.message -ceq "Você reservou R$ 150,00 este mês. Continue assim." }).Count -eq 1) "meta=$($g.Status) neg=$($neg.Status) v1=$($v1.destination) v2=$($v2.destination) reserva=$($dash.reserve | ConvertTo-Json -Compress)"
     }
 
     Test-Step "Preferências (Tela 13): padrão DAILY/e-mail ligado; PUT grava; frequência inválida = 400; não vaza para E" {
