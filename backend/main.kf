@@ -144,7 +144,8 @@ main() {
             userId = claims.sub
         }
 
-        var pulse = calculateDailyPulse(userId, 30, "2026-09-01")
+        var monthStart = monthStartIso()
+        var pulse = calculateDailyPulse(userId, 30, monthStart)
         return json.encode(pulse)
     }
 
@@ -165,12 +166,15 @@ main() {
         }
 
         var msgReq = json.decode<ChatMessageRequest>(body())
-        var userMsg = ChatMessageEntity("msg_" + String.valueOf(BackendDb.chatMessages.size + 1), userId, ChatRole.USER, msgReq.message, null)
+        var monthStart = monthStartIso()
+        enforceCanSendMessage(userId, monthStart)
+
+        var userMsg = ChatMessageEntity("msg_" + String.valueOf(BackendDb.chatMessages.size + 1), userId, ChatRole.USER, msgReq.message, nowIso())
         saveChatMessage(userMsg)
 
-        var pulse = calculateDailyPulse(userId, 30, "2026-09-01")
+        var pulse = calculateDailyPulse(userId, 30, monthStart)
         var reply = "Olá! Seu pulso diário disponível hoje é R$ " + String.valueOf(pulse.pulse) + ". O que deseja registrar hoje?"
-        var botMsg = ChatMessageEntity("msg_" + String.valueOf(BackendDb.chatMessages.size + 2), userId, ChatRole.ASSISTANT, reply, null)
+        var botMsg = ChatMessageEntity("msg_" + String.valueOf(BackendDb.chatMessages.size + 2), userId, ChatRole.ASSISTANT, reply, nowIso())
         saveChatMessage(botMsg)
 
         return reply
@@ -279,7 +283,8 @@ main() {
         }
 
         var user = findUserById(userId)
-        var totalSpentLong = sumAmountByUserIdAndCreatedAtAfter(userId, "2026-09-01")
+        var monthStart = monthStartIso()
+        var totalSpentLong = sumAmountByUserIdAndCreatedAtAfter(userId, monthStart)
         var totalSpent = totalSpentLong * 1.0
 
         // Formato esperado pelo kof.ui: totalSpent|currency|categories|transactions
@@ -302,7 +307,8 @@ main() {
             userId = claims.sub
         }
 
-        var status = getTierStatus(userId, "2026-09-01")
+        var monthStart = monthStartIso()
+        var status = getTierStatus(userId, monthStart)
         return json.encode(status)
     }
 
