@@ -203,7 +203,7 @@ RegisterIncomeOutput registerUserIncome(String userId, Double amount, String sou
         return RegisterIncomeOutput("SALARY", "Beleza, essa é a sua renda fixa. Ela já está considerada no seu orçamento mensal.")
     }
 
-    var incomeItem = VariableIncomeEntity("inc_" + String.valueOf(BackendDb.variableIncomes.size + 1), userId, amount, source, VariableIncomeDestination.EMERGENCY_FUND, null)
+    var incomeItem = VariableIncomeEntity("inc_" + String.valueOf(BackendDb.variableIncomes.size + 1), userId, amount, source, VariableIncomeDestination.EMERGENCY_FUND, nowIso())
     var saved = saveVariableIncome(incomeItem)
 
     if (saved.destination == VariableIncomeDestination.EMERGENCY_FUND) {
@@ -265,7 +265,7 @@ KakeiboReflectionEntity recordKakeiboReflection(String userId, String weekStart,
             return existing
         }
 
-        var reflection = KakeiboReflectionEntity("ref_" + String.valueOf(BackendDb.kakeiboReflections.size + 1), userId, weekStart, answers, null)
+        var reflection = KakeiboReflectionEntity("ref_" + String.valueOf(BackendDb.kakeiboReflections.size + 1), userId, weekStart, answers, nowIso())
         return saveKakeiboReflection(reflection)
     }
     throw "Usuário não encontrado: " + userId

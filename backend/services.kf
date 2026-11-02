@@ -105,6 +105,22 @@ UserEntity saveUser(UserEntity user) {
     return user
 }
 
+String localTodayIso() {
+    return time.todayIso()
+}
+
+String periodStartIso(String unit) {
+    return time.periodStartIso(unit)
+}
+
+String monthStartIso() {
+    return periodStartIso("month")
+}
+
+String nowIso() {
+    return time.nowIso()
+}
+
 // =========================================================
 // mod_transaction/repository/TransactionEntityRepository.java
 // (inclui a logica de JpaTransactionRepository/TransactionRepository,
@@ -514,7 +530,7 @@ TransactionOutput persistTransaction(String id, PersistTransactionInput input, S
         }
     }
 
-    var transaction = TransactionEntity(id, input.description(), input.amount(), input.category(), input.currency(), userId, null, Source.MANUAL, "2026-09-18T12:00:00Z", envId)
+    var transaction = TransactionEntity(id, input.description(), input.amount(), input.category(), input.currency(), userId, null, Source.MANUAL, nowIso(), envId)
     saveTransaction(transaction)
 
     if (envId != null) {
