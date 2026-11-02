@@ -40,3 +40,14 @@
 **Severidade:** Resolvida
 **Descricao:** Necessidade de comprovar empiricamente a melhoria de DX do KOF frente ao Java.
 **Solucao:** Criado script scripts/AstStats.java que consome o parser/lexer do Kof4j, realiza parsing nativo de .kf e extrai contagem exata de tokens, linhas de codigo e nos estruturais AST via Reflection.
+
+## Pendente: anexo e voz (bloqueado upstream)
+**Severidade:** Bloqueada (upstream Kof4j)
+**Descricao:** A usuária aprovou o anexo de PDF (decisão 5) e a voz (decisão 6) na Tela 10. O probe no Edge headless, em 0.6.6 e 0.6.7, mostrou o seguinte:
+- `Input.setType("file")` renderiza o input, mas `Input.text()` só retorna `C:akepathatura.pdf`.
+- O bundle js não tem `FileReader`, `Blob`, `getUserMedia`, `MediaRecorder` nem `SpeechRecognition`.
+- O `kof.http` envia só String, e multipart está `PLANNED`.
+- Não há contorno, porque HTML/JS embutido em .kf é proibido.
+
+**Escopo quando destravar:** só PDF via `POST /api/invoices/parse {fileBase64}` (já existe), depois `POST /api/invoices/confirm`. DOCX e imagens ficam fora. A voz vai virar `POST /api/chat/voice` (transcrição OpenAI via backend/outbound.kf, 503 sem chave, freemium do coach). O áudio vai como base64 em JSON, que já funciona com o `kof.http` atual.
+**Acao:** abrir upstream as issues de file input no kof.ui, microfone no alvo js e http com bytes/multipart.
