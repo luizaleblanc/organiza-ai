@@ -15,9 +15,12 @@ import components.form_widgets
 // GET /api/envelopes/overview agrupado por `bucket` (Necessidades/Desejos/
 // Futuro no 50/30/20; outros modelos usam os nomes do próprio modelo). Bucket
 // nulo cai em "Outras" (DECISÃO-8 provisória). Badge e tom vêm de format.kf.
-// "+ Nova caixinha" abre um formulário PROVISÓRIO (DECISÃO-9: o artefato não
-// desenha o formulário): categoria, limite e grupo -> POST /api/envelopes.
-// Cada card tem "Excluir" -> DELETE /api/envelopes/:id.
+// "+ Nova caixinha" abre o formulário definitivo (DECISÃO-9): modal centrado
+// no Desktop e sheet de baixo no Mobile (mesmo padrão do "Rever meu salário").
+// Categoria = Select com rótulos em PT (setSelected guarda a escolha no
+// re-render), limite = parseMoney, grupo = cards de escolha com os buckets
+// reais do modelo (GET /api/budgets/balance) -> POST /api/envelopes.
+// "Excluir" pede confirmação no próprio card -> DELETE /api/envelopes/:id.
 // =============================================================================
 
 String bucketOf(EnvelopeItem e) {
@@ -102,13 +105,36 @@ View envelopeCard(Window w, EnvelopeItem e) {
     legend.setId("env-legend-" + e.id())
     legend.setStyle(captionCss())
     val id = e.id()
-    var del = Button("Excluir", () -> {
-        spawn {
-            removeEnvelope(w, id)
-        }
-    })
-    del.setId("env-delete-" + id)
-    del.setStyle(envDeleteCss())
+    var del: View = View(screenStyle())
+    if (EnvState.confirmDelete == id) {
+        var ask = Label("Excluir esta caixinha?")
+        ask.setStyle(envConfirmTextCss())
+        var yes = Button("Sim, excluir", () -> {
+            spawn {
+                removeEnvelope(w, id)
+            }
+        })
+        yes.setId("env-delete-yes-" + id)
+        yes.setStyle(envDangerButtonCss())
+        var keep = Button("Manter", () -> {
+            EnvState.confirmDelete = ""
+            mountScreen(w)
+        })
+        keep.setId("env-delete-no-" + id)
+        keep.setStyle(envGhostButtonCss())
+        var confirm = Row(listOf(ask, keep, yes))
+        confirm.setId("env-confirm-" + id)
+        confirm.setStyle(envConfirmRowCss())
+        del = confirm
+    } else {
+        var ask = Button("Excluir", () -> {
+            EnvState.confirmDelete = id
+            mountScreen(w)
+        })
+        ask.setId("env-delete-" + id)
+        ask.setStyle(envDeleteCss())
+        del = ask
+    }
     var col = Column(listOf(head, value, envBar(e.percent(), tone, "env-bar-" + id), legend, del))
     col.setId("env-card-" + id)
     col.setStyle(cardCss())
@@ -147,18 +173,24 @@ removeEnvelope(Window w, String id) {
     } catch (String e) {
         EnvState.formError = e
     }
+    EnvState.confirmDelete = ""
     loadEnvelopes()
     EnvState.busy = false
     mountScreen(w)
 }
 
-submitNewEnvelope(Window w, Select category, Input limit, Input bucket) {
+// Guarda o que está nos campos antes de qualquer re-render do modal.
+keepNewEnvelopeInput(Select category, Input limit) {
+    EnvState.newCategoryIdx = category.selected()
+    EnvState.newLimit = limit.text()
+}
+
+// Validação local primeiro; só chama o backend com limite > 0 e grupo escolhido.
+submitNewEnvelope(Window w, Select category, Input limit) {
     if (EnvState.busy) {
         return
     }
-    EnvState.newCategory = categoryCodes().get(category.selected())
-    EnvState.newLimit = limit.text()
-    EnvState.newBucket = bucket.text().trim()
+    keepNewEnvelopeInput(category, limit)
     var amount = 0.0
     try {
         amount = parseMoney(EnvState.newLimit)
@@ -167,18 +199,21 @@ submitNewEnvelope(Window w, Select category, Input limit, Input bucket) {
         mountScreen(w)
         return
     }
+    if (amount <= 0.0) {
+        EnvState.formError = "O limite precisa ser maior que zero."
+        mountScreen(w)
+        return
+    }
     if (EnvState.newBucket == "") {
-        EnvState.formError = "Informe o grupo da caixinha."
+        EnvState.formError = "Escolha o grupo da caixinha."
         mountScreen(w)
         return
     }
     EnvState.busy = true
     try {
-        createEnvelope(EnvState.newCategory, amount, EnvState.newBucket)
-        EnvState.formError = ""
+        createEnvelope(categoryCodes().get(EnvState.newCategoryIdx), amount, EnvState.newBucket)
         EnvState.showNew = false
-        EnvState.newLimit = ""
-        EnvState.newBucket = ""
+        resetNewEnvelopeForm()
         loadEnvelopes()
     } catch (String e) {
         EnvState.formError = e
@@ -187,61 +222,125 @@ submitNewEnvelope(Window w, Select category, Input limit, Input bucket) {
     mountScreen(w)
 }
 
-// Formulário provisório (DECISÃO-9): widgets existentes, sem desenho no artefato.
-View newEnvelopeForm(Window w, List<String> groups) {
+// Grupos do modal: buckets do modelo; sem eles, os grupos que já aparecem na tela.
+List<String> bucketChoices(List<String> groups) {
+    if (EnvState.buckets.size() > 0) {
+        return EnvState.buckets
+    }
+    var out: List<String> = listOf()
+    for (var g in groups) {
+        if (g != "Outras") {
+            out.add(g)
+        }
+    }
+    return out
+}
+
+Label envFieldLabel(String text) {
+    var l = Label(text)
+    l.setStyle(envFieldLabelCss())
+    return l
+}
+
+// Modal "Nova caixinha" (DECISÃO-9): centrado no Desktop, sheet no Mobile.
+View newEnvelopeModal(Window w, List<String> groups) {
     var title = Label("Nova caixinha")
-    title.setStyle(envNameCss())
+    title.setStyle(envModalTitleCss())
+    var sub = Label("Defina quanto pode sair por mês e em qual grupo do seu modelo ela entra.")
+    sub.setStyle(envModalSubCss())
     var labels: List<String> = listOf()
     for (var c in categoryCodes()) {
         labels.add(categoryLabel(c))
     }
     var category = Select(labels)
     category.setId("env-new-category")
-    category.setStyle(selectCss())
-    var limit = moneyFieldWith(EnvState.newLimit, "Limite por mês (R$)", "env-new-limit")
-    limit.setStyle(inputCss())
-    var hint = "Necessidades, Desejos ou Futuro"
-    if (groups.size() > 0) {
-        hint = ""
-        for (var g in groups) {
-            if (hint != "") {
-                hint = hint + ", "
-            }
-            hint = hint + g
+    category.setStyle(envSelectCss())
+    category.setSelected(EnvState.newCategoryIdx)
+    var limit = moneyFieldWith(EnvState.newLimit, "0,00", "env-new-limit")
+    limit.setStyle(envInputCss())
+    var choices: List<View> = listOf()
+    for (var g in bucketChoices(groups)) {
+        val name = g
+        var card = choiceCard(name, "env-new-bucket-" + name, EnvState.newBucket == name, () -> {
+            keepNewEnvelopeInput(category, limit)
+            EnvState.newBucket = name
+            mountScreen(w)
+        })
+        if (EnvState.newBucket == name) {
+            card.setStyle(envChoiceSelectedCss())
+        } else {
+            card.setStyle(envChoiceCss())
         }
+        choices.add(card)
     }
-    var bucket = textField("Grupo (" + hint + ")", "text", "env-new-bucket")
-    bucket.setText(EnvState.newBucket)
+    var bucketList = Column(choices)
+    bucketList.setId("env-new-buckets")
+    if (AppState.isDesktop) {
+        bucketList.setStyle(envChoiceRowCss())
+    } else {
+        bucketList.setStyle(envChoiceColCss())
+    }
     var items: List<View> = listOf()
     items.add(title)
+    items.add(sub)
+    items.add(envFieldLabel("Categoria"))
     items.add(category)
+    items.add(envFieldLabel("Limite por mês (R$)"))
     items.add(limit)
-    items.add(bucket)
+    items.add(envFieldLabel("Grupo"))
+    items.add(bucketList)
     if (EnvState.formError != "") {
-        items.add(errorBanner(EnvState.formError))
+        var err = errorBanner(EnvState.formError)
+        err.setId("env-new-error")
+        items.add(err)
     }
-    var save = primaryButton("Salvar caixinha", "env-new-save", false, () -> {
-        spawn {
-            submitNewEnvelope(w, category, limit, bucket)
-        }
-    })
-    var cancel = secondaryButton("Cancelar", "env-new-cancel", false, () -> {
+    var cancel = Button("Cancelar", () -> {
         EnvState.showNew = false
-        EnvState.formError = ""
+        resetNewEnvelopeForm()
         mountScreen(w)
     })
-    items.add(save)
-    items.add(cancel)
-    var form = Column(items)
-    form.setId("env-new-form")
-    form.setStyle(cardCss())
-    return form
+    cancel.setId("env-new-cancel")
+    var save = Button("Salvar caixinha", () -> {
+        spawn {
+            submitNewEnvelope(w, category, limit)
+        }
+    })
+    save.setId("env-new-save")
+    var actions: View = View(screenStyle())
+    if (AppState.isDesktop) {
+        cancel.setStyle(envGhostButtonCss())
+        save.setStyle(envPrimaryButtonCss())
+        var row = Row(listOf(cancel, save))
+        row.setStyle(envModalActionsCss())
+        actions = row
+    } else {
+        cancel.setStyle(envGhostWideCss())
+        save.setStyle(envPrimaryWideCss())
+        var col = Column(listOf(save, cancel))
+        col.setStyle(envChoiceColCss())
+        actions = col
+    }
+    items.add(actions)
+    var box = Column(items)
+    box.setId("env-new-form")
+    var overlay = View(screenStyle())
+    overlay.setId("env-new-modal")
+    if (AppState.isDesktop) {
+        box.setStyle(envModalBoxCss())
+        overlay.setStyle(envModalOverlayCss())
+    } else {
+        box.setStyle(envSheetBoxCss())
+        overlay.setStyle(envSheetOverlayCss())
+    }
+    overlay.bind(box)
+    return overlay
 }
 
 View envelopesScreen(Window w) {
     var newBtn = Button("+ Nova caixinha", () -> {
+        resetNewEnvelopeForm()
         EnvState.showNew = true
-        EnvState.formError = ""
+        EnvState.confirmDelete = ""
         mountScreen(w)
     })
     newBtn.setId("btn-new-envelope")
@@ -269,9 +368,7 @@ View envelopesScreen(Window w) {
     } else {
         val list = envelopeItems()
         val groups = bucketOrder(list)
-        if (EnvState.showNew) {
-            items.add(newEnvelopeForm(w, groups))
-        } else if (EnvState.formError != "") {
+        if (!EnvState.showNew && EnvState.formError != "") {
             items.add(errorBanner(EnvState.formError))
         }
         if (list.size() == 0) {
@@ -283,6 +380,9 @@ View envelopesScreen(Window w) {
         for (var g in groups) {
             items.add(envelopeGroup(w, g, list))
         }
+        if (EnvState.showNew) {
+            items.add(newEnvelopeModal(w, groups))
+        }
     }
 
     var col = Column(items)
@@ -291,7 +391,7 @@ View envelopesScreen(Window w) {
     return col
 }
 
-// Estilos locais (hex do design system).
+// Estilos locais (hex do design system: core/theme.kf e DESIGN_SYSTEM.md).
 Style envNameCss()         = Style("color: #F0F0F0; font-size: 16; font-weight: 600; margin: 0")
 Style envHeadCss()         = Style("display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: space-between; align-items: center; gap: 8; width: 100%")
 Style envGroupTitleCss()   = Style("color: #7B8EAD; font-size: 13; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; margin: 0")
@@ -300,3 +400,24 @@ Style envValueWarningCss() = Style("color: #FFB800; font-size: 24; font-weight: 
 Style envValueDangerCss()  = Style("color: #FF4A6E; font-size: 24; font-weight: 600; margin: 0")
 Style envDeleteCss()       = Style("align-self: flex-start; background: transparent; color: #4A5578; border: none; padding: 0; font-size: 12; cursor: pointer")
 Style envNewButtonCss()    = Style("background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 40; padding: 0 16px; border: none; border-radius: 12; font-size: 14; font-weight: 600; cursor: pointer; flex-shrink: 0")
+Style envConfirmRowCss()    = Style("display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8; width: 100%")
+Style envConfirmTextCss()   = Style("color: #F0F0F0; font-size: 13; font-weight: 600; margin: 0; flex-grow: 1")
+Style envDangerButtonCss()  = Style("background: rgba(255,74,110,.12); color: #FF4A6E; border: 1px solid #FF4A6E; border-radius: 8; padding: 6px 12px; font-size: 13; font-weight: 600; cursor: pointer")
+Style envGhostButtonCss()   = Style("background: transparent; color: #7B8EAD; border: 1px solid rgba(255,255,255,.1); border-radius: 8; padding: 8px 16px; font-size: 14; cursor: pointer")
+Style envPrimaryButtonCss() = Style("background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; border: none; border-radius: 8; padding: 8px 20px; font-size: 14; font-weight: 600; cursor: pointer")
+Style envGhostWideCss()     = Style("background: transparent; color: #7B8EAD; height: 44; width: 100%; border: 1.5px solid rgba(255,255,255,.1); border-radius: 14; font-size: 14; font-weight: 600; cursor: pointer")
+Style envPrimaryWideCss()   = Style("background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 50; width: 100%; border: none; border-radius: 14; font-size: 15; font-weight: 700; cursor: pointer")
+Style envModalOverlayCss()  = Style("position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.65); z-index: 50")
+Style envSheetOverlayCss()  = Style("position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: flex-end; justify-content: center; background: rgba(0,0,0,.72); z-index: 50")
+Style envModalBoxCss()      = Style("display: flex; flex-direction: column; gap: 10; width: 90%; max-width: 480; max-height: 90%; overflow-y: auto; padding: 24; box-sizing: border-box; background: #12162A; border: 1px solid rgba(255,255,255,.1); border-radius: 12")
+Style envSheetBoxCss()      = Style("display: flex; flex-direction: column; gap: 10; width: 100%; max-height: 92%; overflow-y: auto; padding: 24px 20px 32px; box-sizing: border-box; background: #12162A; border-radius: 20px 20px 0 0")
+Style envModalTitleCss()    = Style("color: #F0F0F0; font-size: 17; font-weight: 700; margin: 0")
+Style envModalSubCss()      = Style("color: #7B8EAD; font-size: 13; margin: 0 0 6px 0")
+Style envFieldLabelCss()    = Style("color: #7B8EAD; font-size: 12; font-weight: 600; letter-spacing: 0.04em; margin: 6px 0 0 0")
+Style envSelectCss()        = Style("background: rgba(255,255,255,.04); color: #F0F0F0; height: 44; width: 100%; box-sizing: border-box; border: 1px solid rgba(255,255,255,.1); border-radius: 8; padding: 0 12px; font-size: 14")
+Style envInputCss()         = Style("background: rgba(255,255,255,.04); color: #F0F0F0; height: 44; width: 100%; box-sizing: border-box; border: 1px solid rgba(255,255,255,.1); border-radius: 8; padding: 0 14px; font-size: 14")
+Style envChoiceRowCss()     = Style("display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8; width: 100%")
+Style envChoiceColCss()     = Style("display: flex; flex-direction: column; gap: 10; width: 100%")
+Style envChoiceCss()        = Style("color: #F0F0F0; height: 48; width: 100%; box-sizing: border-box; border-radius: 12; padding: 0 12px; background: #12162A; border: 1px solid rgba(255,255,255,.1); font-size: 14; font-weight: 500; text-align: left; cursor: pointer")
+Style envChoiceSelectedCss() = Style("color: #00D4FF; height: 48; width: 100%; box-sizing: border-box; border-radius: 12; padding: 0 12px; background: rgba(0,212,255,.08); border: 1px solid #00D4FF; font-size: 14; font-weight: 600; text-align: left; cursor: pointer")
+Style envModalActionsCss()  = Style("display: flex; flex-direction: row; justify-content: flex-end; align-items: center; gap: 12; margin-top: 8")

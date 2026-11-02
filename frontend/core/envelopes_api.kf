@@ -15,6 +15,9 @@ import core.auth_api
 
 record EnvelopeItem(String id, String categoryName, String? bucket, Double limitAmount, Double spentThisMonth, Int percent, String status)
 record CreateEnvelopeRequest(String categoryName, Double limitAmount, String bucket)
+// GET /api/budgets/balance: só o nome de cada bucket do modelo é lido (json.decode ignora o resto).
+record EnvBucketName(String name)
+record EnvBalance(String model, List<EnvBucketName> buckets)
 
 class EnvState {
     static String raw = ""
@@ -24,10 +27,21 @@ class EnvState {
     static Bool busy = false
     static String loadError = ""
     static String formError = ""
-    // Formulário provisório "Nova caixinha" (DECISÃO-9 ainda aberta).
-    static String newCategory = ""
+    // Modal "Nova caixinha": a escolha sobrevive ao re-render (erro, troca de grupo).
+    static Int newCategoryIdx = 0
     static String newLimit = ""
     static String newBucket = ""
+    // Buckets reais do modelo do usuário (GET /api/budgets/balance).
+    static List<String> buckets = listOf()
+    // Id da caixinha com confirmação de exclusão aberta ("" = nenhuma).
+    static String confirmDelete = ""
+}
+
+resetNewEnvelopeForm() {
+    EnvState.newCategoryIdx = 0
+    EnvState.newLimit = ""
+    EnvState.newBucket = ""
+    EnvState.formError = ""
 }
 
 String msgEnvelopeBucket() = "Esse grupo não existe no seu modelo de orçamento. Escolha um dos grupos sugeridos."
@@ -47,8 +61,23 @@ loadEnvelopes() {
     } catch (String e) {
         EnvState.loadError = e
     }
+    loadBuckets()
     EnvState.loaded = true
     EnvState.loading = false
+}
+
+// Buckets do modelo atual; falha deixa a lista vazia e a tela usa os grupos do overview.
+loadBuckets() {
+    try {
+        val raw = getOrThrow("/api/budgets/balance")
+        var names: List<String> = listOf()
+        for (var b in json.decode<EnvBalance>(raw).buckets()) {
+            names.add(b.name())
+        }
+        EnvState.buckets = names
+    } catch (String e) {
+        EnvState.buckets = listOf()
+    }
 }
 
 List<EnvelopeItem> envelopeItems() {

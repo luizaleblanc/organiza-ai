@@ -740,7 +740,7 @@ Passos novos do E2E: 54 histórico cronológico · 55 sem token = 401 e limit=-1
 
 ## 13. Tela 11 Caixinhas no frontend (Batch 3, F3, 01/11/2026)
 
-`frontend/screens/envelopes_screen.kf` consome `GET /api/envelopes/overview` (agrupado por `bucket`), `POST /api/envelopes {categoryName, limitAmount, bucket}` e `DELETE /api/envelopes/:id`. O formulário "Nova caixinha" é provisório até a DECISÃO-9 (categoria, limite e grupo, com os widgets existentes). Bucket fora do modelo (400 `Bucket inválido...`) vira mensagem fixa em PT. Ainda sem UI: edição (`PUT`) e histórico por caixinha.
+`frontend/screens/envelopes_screen.kf` consome `GET /api/envelopes/overview` (agrupado por `bucket`), `POST /api/envelopes {categoryName, limitAmount, bucket}` e `DELETE /api/envelopes/:id`. O formulário "Nova caixinha" é definitivo (DECISÃO-9): modal no Desktop, sheet no Mobile; categoria em `Select` com rótulos em PT e índice restaurado por `setSelected`; limite por `parseMoney`; grupo em cards de escolha com os buckets de `GET /api/budgets/balance` (sem resposta, cai nos grupos do overview). Validação local: limite inválido ("Informe um limite válido...") e grupo não escolhido ("Escolha o grupo da caixinha."). Bucket fora do modelo (400 `Bucket inválido...`) vira mensagem fixa em PT dentro do modal, mantendo categoria, limite e grupo. Salvar fecha o modal e recarrega a lista. "Excluir" abre confirmação no card (sem diálogo nativo). G-UI em Desktop 1280 e Mobile 360 (0.6.6 e 0.6.7): criar nos 3 grupos, cancelar, validação, erro real do backend (modelo trocado com o modal aberto), escolha mantida, excluir com confirmação, sem UNCAUGHT. Ainda sem UI: edição (`PUT`) e histórico por caixinha.
 
 ## 14. Integração final do Batch 3 (Z, 01/11/2026)
 
