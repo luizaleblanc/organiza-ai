@@ -5,36 +5,53 @@ import core.theme
 import core.app_state
 import core.navigation
 import components.brand_mark
-import components.form_widgets
 
 // =============================================================================
-// Tela 1 — Boas-vindas (spec B2-01; design.md §5)
+// Tela 1 — Boas-vindas (artefatos Desktop WelcomeWin e Mobile WelcomeScreen)
 // =============================================================================
 // Logomarca de 3 ondas, slogan em caixa alta e duas ações:
-// "Criar conta" → signup (Tela 3) e "Já tenho conta" → login (Tela 2).
-// Mobile: marca 230px e botões empilhados em largura total.
-// Desktop: marca 200px e botões lado a lado com 200px (artefato Desktop).
+// "Criar conta grátis" → signup (Tela 3) e "Já tenho conta" → login (Tela 2).
+// Mobile: marca 180px, gap 28, padding lateral extra, botões empilhados 50px / r14.
+// Desktop: marca 200px, gap 32, botões lado a lado 200x48px / r10 (gap 16).
 // =============================================================================
+
+Style welcomeColDesktopCss() = Style("display: flex; flex-direction: column; align-items: center; gap: 32; width: 100%; max-width: 480")
+Style welcomeColMobileCss()  = Style("display: flex; flex-direction: column; align-items: center; gap: 28; width: 100%; padding: 0 16px; box-sizing: border-box")
+Style welcomeSloganDesktopCss() = Style("color: #7B8EAD; font-size: 16; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; text-align: center; max-width: 320; align-self: center; margin: 8px 0 0 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style welcomeSloganMobileCss()  = Style("color: #7B8EAD; font-size: 18; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; text-align: center; align-self: center; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style welcomeBtnPrimaryDesktopCss()   = Style("background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 48; width: 200; border: none; border-radius: 10; font-size: 15; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style welcomeBtnSecondaryDesktopCss() = Style("background: transparent; color: #00D4FF; height: 48; width: 200; border: 1.5px solid #00D4FF; border-radius: 10; font-size: 15; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style welcomeBtnPrimaryMobileCss()    = Style("background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 50; width: 100%; border: none; border-radius: 14; font-size: 15; font-weight: 700; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style welcomeBtnSecondaryMobileCss()  = Style("background: transparent; color: #00D4FF; height: 50; width: 100%; border: 1.5px solid #00D4FF; border-radius: 14; font-size: 15; font-weight: 700; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 
 View welcomeScreen(Window w) {
     var desktop = AppState.isDesktop
 
-    var markWidth = 230
+    var markWidth = 180
     if (desktop) {
         markWidth = 200
     }
     var mark = brandMark(markWidth, "brand-mark")
 
-    var slogan = Label("SUA GRANA ORGANIZADA E SEM ESTRESSE.")
+    var slogan = Label("Sua grana organizada e sem estresse.")
     slogan.setId("welcome-slogan")
     if (desktop) {
-        slogan.setStyle(sloganDesktopCss())
+        slogan.setStyle(welcomeSloganDesktopCss())
     } else {
-        slogan.setStyle(sloganMobileCss())
+        slogan.setStyle(welcomeSloganMobileCss())
     }
 
-    var signup = primaryButton("Criar conta", "btn-signup", desktop, () -> navigateTo(w, "signup"))
-    var login = secondaryButton("Já tenho conta", "btn-login", desktop, () -> navigateTo(w, "login"))
+    var signup = Button("Criar conta grátis", () -> navigateTo(w, "signup"))
+    signup.setId("btn-signup")
+    var login = Button("Já tenho conta", () -> navigateTo(w, "login"))
+    login.setId("btn-login")
+    if (desktop) {
+        signup.setStyle(welcomeBtnPrimaryDesktopCss())
+        login.setStyle(welcomeBtnSecondaryDesktopCss())
+    } else {
+        signup.setStyle(welcomeBtnPrimaryMobileCss())
+        login.setStyle(welcomeBtnSecondaryMobileCss())
+    }
 
     var body = View(screenStyle())
     body.setStyle(entryBodyCss())
@@ -48,12 +65,12 @@ Column welcomeColumn(View mark, Label slogan, Button signup, Button login, Bool 
         var row = Row(listOf(signup, login))
         row.setStyle(actionsDesktopCss())
         var wide = Column(listOf(mark, slogan, row))
-        wide.setStyle(entryColumnDesktopCss())
+        wide.setStyle(welcomeColDesktopCss())
         return wide
     }
     var stacked = Column(listOf(signup, login))
     stacked.setStyle(actionsMobileCss())
     var narrow = Column(listOf(mark, slogan, stacked))
-    narrow.setStyle(entryColumnMobileCss())
+    narrow.setStyle(welcomeColMobileCss())
     return narrow
 }

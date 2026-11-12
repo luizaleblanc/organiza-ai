@@ -902,3 +902,13 @@ Empilhado sobre o commit da A3 (`e8fc33c`), mantendo os widgets de `components/f
 | Mobile 360×640 (Variável, com dívida, 4 chips) | 42/42 | 42/42 |
 | **Total G-UI** | **84/84** | **84/84** |
 
+## 19. Fidelidade de Boas-vindas e Dashboard (B2, 12/11/2026)
+
+### 19.1 Tela 1 — Boas-vindas (`frontend/screens/welcome_screen.kf`)
+
+Alinhada aos artefatos `WelcomeWin` (Desktop) e `WelcomeScreen` (Mobile), mantendo o fundo oficial de ondas vindo de `core/navigation.kf`:
+
+- **Desktop:** `brandMark` 200 px, slogan `"Sua grana organizada e sem estresse."` em caixa alta (`16 px`, `max-width: 320`, `margin-top: 8`), botões `"Criar conta grátis"` e `"Já tenho conta"` lado a lado (`200 × 48 px`, `border-radius: 10`, `gap: 16`, `font-size: 15`).
+- **Mobile:** `brandMark` 180 px, slogan em `18 px`, botões empilhados em largura total (`height: 50 px`, `border-radius: 14`, `gap: 12`, `font-weight: 700`).
+- Todos os `Style` de botão declaram `font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`.
+- Validado em `kof 0.6.6` e `kof 0.7.2-a3` (`kof build frontend --target js` e Edge headless 1280×800 e 360×640, 0 `UNCAUGHT`).
