@@ -105,7 +105,7 @@ Resumo das entidades principais: **User** (dados do usuário, salário mensal, i
 
 ## Design System
 
-Identidade visual completa (paleta `#0A0D18` / `#00D4FF`, tipografia Manrope, marca, componentes, ícones, badges, estados de erro/perigo, modelos de notificação e especificação das 11 telas) documentada em [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md).
+Identidade visual completa (paleta `#0A0D18` / `#00D4FF`, tipografia system-ui, marca e fundo oficiais em SVG, componentes, ícones, badges e tokens) documentada em [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md), com as inconsistências entre os artefatos e o valor adotado; os widgets de formulário em [docs/FORM_WIDGETS.md](docs/FORM_WIDGETS.md). O `DESIGN_SYSTEM.md` da raiz é histórico.
 
 **Artefatos Oficiais do MVP 1 (Claude Artifacts):**
 - **Design System (Tokens & Componentes):** [https://claude.ai/artifact/JVjueTmHeJsnHLsow3LDVb](https://claude.ai/artifact/JVjueTmHeJsnHLsow3LDVb)
