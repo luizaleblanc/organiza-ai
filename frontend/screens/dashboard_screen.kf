@@ -9,31 +9,96 @@ import core.dashboard_api
 import components.topbar
 
 // =============================================================================
-// Tela 9 Dashboard (Batch 3, F1) — spec S9
+// Tela 9 Dashboard (B2 — fidelidade Desktop + Mobile e donut interativo)
 // =============================================================================
-// Abas Semana/Mês/Ano refazem GET /api/dashboard?period=. Três tiles, card da
-// distribuição (donut em Canvas 2D: setFill + fill) e últimas transações.
-// "Pode gastar hoje" é sempre o pulso diário do mês, em qualquer aba (o
-// artefato só mostra a aba Mês). Desktop: g3 + g2; Mobile: empilhado.
+// Abas Semana/Mês/Ano à direita da topbar via slot `action` de topbar().
+// Desktop: 3 pulse-cards em g3 + g2 (distribuição e transações).
+// Mobile: hero card "Pode gastar hoje" + 2 cards em g2 + cards empilhados.
+// Donut em Canvas 2D 4x (zoom 0.25, só setFill + fill): seleção sincronizada
+// via legenda clicável e centro dinâmico (% / nome / valor), fatia destacada
+// para fora e demais esmaecidas.
 // =============================================================================
 
-Style tileLabelCss()   = Style("color: #7B8EAD; font-size: 11; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style tileValueCss()   = Style("color: #F0F0F0; font-size: 26; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style tileAccentCss()  = Style("color: #00D4FF; font-size: 26; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style tileSuccessCss() = Style("color: #00E5A0; font-size: 26; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style cardTitleCss()   = Style("color: #F0F0F0; font-size: 16; font-weight: 600; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style rowBetweenCss()  = Style("display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 8; width: 100%")
-Style distBodyCss()    = Style("display: flex; flex-direction: row; align-items: center; gap: 20; width: 100%")
-Style legendCss()      = Style("display: flex; flex-direction: column; gap: 12; flex: 1 1 auto; min-width: 0")
-Style legendItemCss()  = Style("display: flex; flex-direction: column; gap: 6; width: 100%")
-Style txRowCss()       = Style("display: flex; flex-direction: row; align-items: center; gap: 12; width: 100%")
-Style txTextCss()      = Style("display: flex; flex-direction: column; gap: 2; flex: 1 1 auto; min-width: 0")
-Style txValueCss()     = Style("color: #F0F0F0; font-size: 14; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style canvasHolderCss() = Style("padding: 0; background: transparent; line-height: 0")
-Style bodyTextCss()    = Style("color: #F0F0F0; font-size: 14; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style retryCss()       = Style("background: transparent; color: #00D4FF; border: 1px solid #00D4FF; border-radius: 8; padding: 8px 16px; align-self: flex-start")
+// ---- Topbar tabs ------------------------------------------------------------
+Style dashTabsCss()           = Style("display: inline-flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 2; padding: 3; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); border-radius: 9")
+Style dashTabCss()            = Style("background: transparent; color: #7B8EAD; border: none; border-radius: 7; padding: 5px 12px; font-size: 12; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style dashTabActiveCss()      = Style("background: #00D4FF; color: #06121C; border: none; border-radius: 7; padding: 5px 12px; font-size: 12; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style dashTabMobileCss()      = Style("background: transparent; color: #7B8EAD; border: none; border-radius: 7; padding: 4px 8px; font-size: 11; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style dashTabActiveMobileCss() = Style("background: #00D4FF; color: #06121C; border: none; border-radius: 7; padding: 4px 8px; font-size: 11; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 
-// Fatia i do donut e barra da legenda: Necessidades accent, Desejos #0066FF, Futuro success.
+// ---- Grids & cards ----------------------------------------------------------
+Style dashGridG3Css()         = Style("display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: stretch; gap: 12; width: 100%")
+Style dashGridG2Css()         = Style("display: grid; grid-template-columns: 1fr 1fr; align-items: stretch; gap: 14; width: 100%")
+Style dashMobileG2Css()       = Style("display: grid; grid-template-columns: 1fr 1fr; align-items: stretch; gap: 10; width: 100%")
+Style dashMobileStackCss()    = Style("display: flex; flex-direction: column; gap: 12; width: 100%")
+Style dashPulseCardCss()      = Style("display: flex; flex-direction: column; gap: 4; padding: 20; box-sizing: border-box; background: linear-gradient(135deg, #12162A, #1A1F3A); border: 1px solid rgba(0,212,255,.15); border-radius: 14; min-width: 0")
+Style dashPulseHeroCss()      = Style("display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4; padding: 18; box-sizing: border-box; background: linear-gradient(135deg, #12162A, #1A1F3A); border: 1px solid rgba(0,212,255,.12); border-radius: 16; width: 100%")
+Style dashCardCss()           = Style("display: flex; flex-direction: column; gap: 12; padding: 18; box-sizing: border-box; background: #12162A; border: 1px solid rgba(255,255,255,.06); border-radius: 14; min-width: 0")
+Style dashCardMobileCss()     = Style("display: flex; flex-direction: column; gap: 10; padding: 16; box-sizing: border-box; background: #12162A; border: 1px solid rgba(255,255,255,.06); border-radius: 16; min-width: 0")
+
+// ---- Tipografia dos tiles & cards -------------------------------------------
+Style tileLabelCss()          = Style("color: #4A5578; font-size: 10; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style tileValueCss()          = Style("color: #F0F0F0; font-size: 24; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style tileAccentCss()         = Style("color: #00D4FF; font-size: 24; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style tileSuccessCss()        = Style("color: #00E5A0; font-size: 24; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style tileSubCss()            = Style("color: #7B8EAD; font-size: 11; margin: 2px 0 0 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+
+Style tileHeroLabelCss()      = Style("color: #4A5578; font-size: 11; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style tileHeroValueCss()      = Style("color: #00D4FF; font-size: 36; font-weight: 700; margin: 2px 0 0 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style tileHeroSubCss()        = Style("color: #7B8EAD; font-size: 12; margin: 2px 0 0 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style tileMobileLabelCss()    = Style("color: #4A5578; font-size: 10; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style tileMobileValueCss()    = Style("color: #F0F0F0; font-size: 20; font-weight: 700; margin: 2px 0 0 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style tileMobileSuccessCss()  = Style("color: #00E5A0; font-size: 20; font-weight: 700; margin: 2px 0 0 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+
+Style cardTitleCss()          = Style("color: #F0F0F0; font-size: 13; font-weight: 600; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style cardTitleMobileCss()    = Style("color: #F0F0F0; font-size: 14; font-weight: 600; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+
+// ---- Donut & legenda --------------------------------------------------------
+Style distBodyDesktopCss()    = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 16; width: 100%; flex-grow: 1")
+Style distBodyMobileCss()     = Style("display: flex; flex-direction: column; align-items: center; gap: 14; width: 100%")
+Style donutOuterCss()         = Style("position: relative; width: 144; height: 144; flex-shrink: 0; padding: 0; background: transparent; cursor: pointer")
+Style canvasZoomCss()         = Style("padding: 0; background: transparent; line-height: 0; zoom: 0.25")
+Style donutCenterCss()        = Style("position: absolute; top: 0; left: 0; width: 144; height: 144; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 1; padding: 0; background: transparent; pointer-events: none")
+Style donutPctAccentCss()     = Style("color: #00D4FF; font-size: 20; font-weight: 700; line-height: 1.1; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style donutPctDesCss()        = Style("color: #0066FF; font-size: 20; font-weight: 700; line-height: 1.1; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style donutPctSuccessCss()    = Style("color: #00E5A0; font-size: 20; font-weight: 700; line-height: 1.1; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style donutPctWarningCss()    = Style("color: #FFB800; font-size: 20; font-weight: 700; line-height: 1.1; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style donutCenterTitleCss()   = Style("color: #F0F0F0; font-size: 11; font-weight: 600; max-width: 76; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style donutCenterModelCss()   = Style("color: #F0F0F0; font-size: 13; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style donutCenterSubCss()     = Style("color: #7B8EAD; font-size: 10; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+
+Style legendCss()             = Style("display: flex; flex-direction: column; gap: 6; flex: 1 1 auto; min-width: 0; width: 100%")
+Style legendItemCss()         = Style("display: flex; flex-direction: column; gap: 4; width: 100%; box-sizing: border-box; padding: 6px 8px; border-radius: 8; background: transparent; border: 1px solid transparent; cursor: pointer")
+Style legendItemSelCss()      = Style("display: flex; flex-direction: column; gap: 4; width: 100%; box-sizing: border-box; padding: 6px 8px; border-radius: 8; background: rgba(0,212,255,.08); border: 1px solid #00D4FF; cursor: pointer")
+Style legendItemDimCss()      = Style("display: flex; flex-direction: column; gap: 4; width: 100%; box-sizing: border-box; padding: 6px 8px; border-radius: 8; background: transparent; border: 1px solid transparent; cursor: pointer; opacity: 0.45")
+Style rowBetweenCss()         = Style("display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: space-between; align-items: center; gap: 8; width: 100%")
+Style legendLeftCss()         = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 6; min-width: 0")
+Style legendDotAccentCss()    = Style("width: 7; height: 7; min-width: 7; border-radius: 4; background: #00D4FF; padding: 0; flex-shrink: 0")
+Style legendDotDesCss()       = Style("width: 7; height: 7; min-width: 7; border-radius: 4; background: #0066FF; padding: 0; flex-shrink: 0")
+Style legendDotSuccessCss()   = Style("width: 7; height: 7; min-width: 7; border-radius: 4; background: #00E5A0; padding: 0; flex-shrink: 0")
+Style legendDotWarningCss()   = Style("width: 7; height: 7; min-width: 7; border-radius: 4; background: #FFB800; padding: 0; flex-shrink: 0")
+Style legendNameCss()         = Style("color: #F0F0F0; font-size: 11; font-weight: 500; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style legendNameSelCss()      = Style("color: #F0F0F0; font-size: 11; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style legendValCss()          = Style("color: #7B8EAD; font-size: 11; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style sliceTrackCss()         = Style("display: flex; height: 5; width: 100%; border-radius: 3; background: rgba(255,255,255,.08); overflow: hidden")
+Style sliceRowCss()           = Style("display: flex; flex-direction: row; flex-wrap: nowrap; width: 100%; height: 5; gap: 0")
+Style sliceRestCss()          = Style("height: 5; background: transparent; padding: 0; min-width: 0")
+Style sliceBarAccentCss()     = Style("height: 5; border-radius: 3; background: #00D4FF; min-width: 0")
+Style sliceBarDesCss()        = Style("height: 5; border-radius: 3; background: #0066FF; min-width: 0")
+Style sliceBarSuccessCss()    = Style("height: 5; border-radius: 3; background: #00E5A0; min-width: 0")
+Style sliceBarWarningCss()    = Style("height: 5; border-radius: 3; background: #FFB800; min-width: 0")
+
+// ---- Transações -------------------------------------------------------------
+Style txListCss()             = Style("display: flex; flex-direction: column; gap: 0; width: 100%")
+Style txRowCss()              = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 10; padding: 10px 0; width: 100%; border-bottom: 1px solid rgba(255,255,255,.06)")
+Style txRowLastCss()          = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 10; padding: 10px 0 0 0; width: 100%")
+Style txTextCss()             = Style("display: flex; flex-direction: column; gap: 2; flex: 1 1 auto; min-width: 0")
+Style txNameCss()             = Style("color: #F0F0F0; font-size: 13; font-weight: 600; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style txCatCss()              = Style("color: #4A5578; font-size: 11; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style txValueCss()            = Style("color: #F0F0F0; font-size: 12; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style retryCss()              = Style("background: transparent; color: #00D4FF; border: 1px solid #00D4FF; border-radius: 8; padding: 8px 16px; align-self: flex-start; font-size: 13; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+
+// Fatia i do donut: Necessidades accent, Desejos #0066FF, Futuro success.
 Color sliceColor(Int i) {
     if (i == 0) { return colorAccent() }
     if (i == 1) { return colorChartDes() }
@@ -41,12 +106,34 @@ Color sliceColor(Int i) {
     return colorWarning()
 }
 
-// Barra da legenda: mesmo trilho de bucketBar (setFlexBasis; Style não aceita width calculado, SEM077).
-Style sliceFillCss(Int i) {
-    if (i == 0) { return progressFillAccentCss() }
-    if (i == 1) { return progressFillDesCss() }
-    if (i == 2) { return progressFillSuccessCss() }
-    return progressFillWarningCss()
+// Esmaecimento das fatias não selecionadas: 30% da cor sobre colorCard (#12162A).
+Color dimSliceColor(Color c) {
+    val bg = colorCard()
+    val r = (c.red() * 30 + bg.red() * 70) / 100
+    val g = (c.green() * 30 + bg.green() * 70) / 100
+    val b = (c.blue() * 30 + bg.blue() * 70) / 100
+    return Color(r, g, b)
+}
+
+Style sliceBarCss(Int i) {
+    if (i == 0) { return sliceBarAccentCss() }
+    if (i == 1) { return sliceBarDesCss() }
+    if (i == 2) { return sliceBarSuccessCss() }
+    return sliceBarWarningCss()
+}
+
+Style sliceDotCss(Int i) {
+    if (i == 0) { return legendDotAccentCss() }
+    if (i == 1) { return legendDotDesCss() }
+    if (i == 2) { return legendDotSuccessCss() }
+    return legendDotWarningCss()
+}
+
+Style donutPctCss(Int i) {
+    if (i == 0) { return donutPctAccentCss() }
+    if (i == 1) { return donutPctDesCss() }
+    if (i == 2) { return donutPctSuccessCss() }
+    return donutPctWarningCss()
 }
 
 // ---------------------------------------------------------------- carga
@@ -78,6 +165,7 @@ startLoad(Window w) {
     }
     AppState.loading = true
     DashState.loaded = false
+    DashState.selectedSlice = -1
     spawn {
         loadDashboard(w)
     }
@@ -90,6 +178,7 @@ selectPeriod(Window w, String period) {
     DashState.period = period
     DashState.raw = ""
     DashState.fresh = false
+    DashState.selectedSlice = -1
     AppState.loadError = ""
     mountScreen(w)
 }
@@ -100,29 +189,47 @@ retryDashboard(Window w) {
     mountScreen(w)
 }
 
-// ---------------------------------------------------------------- partes
-
-// Desktop: grade (g3/g2). Mobile: Column empilhada (o Row do kof.ui encolhe os filhos).
-View responsiveGroup(List<View> parts, String id, Style grid) {
-    if (AppState.isDesktop) {
-        var row = Row(parts)
-        row.setId(id)
-        row.setStyle(grid)
-        return row
+toggleSlice(Window w, Int index) {
+    if (DashState.selectedSlice == index) {
+        DashState.selectedSlice = -1
+    } else {
+        DashState.selectedSlice = index
     }
-    var col = Column(parts)
-    col.setId(id)
-    col.setStyle(stackCss())
-    return col
+    DashState.fresh = true
+    mountScreen(w)
 }
+
+cycleSlice(Window w, Int count) {
+    if (count <= 0) {
+        return
+    }
+    var next = DashState.selectedSlice + 1
+    if (next >= count) {
+        next = -1
+    }
+    DashState.selectedSlice = next
+    DashState.fresh = true
+    mountScreen(w)
+}
+
+// ---------------------------------------------------------------- partes
 
 View tabButton(Window w, String text, String period) {
     var b = Button(text, () -> selectPeriod(w, period))
     b.setId("tab-" + period)
-    if (DashState.period == period) {
-        b.setStyle(tabActiveCss())
+    val active = DashState.period == period
+    if (AppState.isDesktop) {
+        if (active) {
+            b.setStyle(dashTabActiveCss())
+        } else {
+            b.setStyle(dashTabCss())
+        }
     } else {
-        b.setStyle(tabCss())
+        if (active) {
+            b.setStyle(dashTabActiveMobileCss())
+        } else {
+            b.setStyle(dashTabMobileCss())
+        }
     }
     return b
 }
@@ -130,7 +237,7 @@ View tabButton(Window w, String text, String period) {
 View periodTabs(Window w) {
     var row = Row(listOf(tabButton(w, "Semana", "week"), tabButton(w, "Mês", "month"), tabButton(w, "Ano", "year")))
     row.setId("dash-tabs")
-    row.setStyle(tabsCss())
+    row.setStyle(dashTabsCss())
     return row
 }
 
@@ -141,14 +248,13 @@ Label idLabel(String text, String id, Style style) {
     return l
 }
 
-View tile(String key, String label, String value, Style valueStyle, String sub) {
+View tile(String key, String label, String value, Style valueStyle, String sub, Style cardStyle, Style labelStyle, Style subStyle) {
     var col = Column(listOf(
-        idLabel(label, "tile-" + key + "-label", tileLabelCss()),
+        idLabel(label, "tile-" + key + "-label", labelStyle),
         idLabel(value, "tile-" + key + "-value", valueStyle),
-        idLabel(sub, "tile-" + key + "-sub", captionCss())))
+        idLabel(sub, "tile-" + key + "-sub", subStyle)))
     col.setId("tile-" + key)
-    // Card escuro: o pulse-card do tema (gradiente cyan) apagaria os valores accent/success da spec.
-    col.setStyle(cardCss())
+    col.setStyle(cardStyle)
     return col
 }
 
@@ -157,133 +263,254 @@ View tiles(DashboardResponse d) {
     if (d.reserve.hasGoal) {
         reserveSub = "Meta: " + brlShort(brl(d.reserve.goal)) + " — " + String.valueOf(d.reserve.percent) + "%"
     }
-    var parts = listOf(
-        tile("pulse", "Pode gastar hoje", brl(d.pulse), tileAccentCss(), daysRemainingText(d.daysRemaining)),
-        tile("spent", spentLabel(DashState.period), brl(d.totalSpent), tileValueCss(), "de " + brl(d.salary)),
-        tile("reserve", "Reserva acumulada", brl(d.reserve.accumulated), tileSuccessCss(), reserveSub))
-    return responsiveGroup(parts, "dash-tiles", gridG3Css())
+    if (AppState.isDesktop) {
+        var row = Row(listOf(
+            tile("pulse", "Pode gastar hoje", brl(d.pulse), tileAccentCss(), daysRemainingText(d.daysRemaining), dashPulseCardCss(), tileLabelCss(), tileSubCss()),
+            tile("spent", spentLabel(DashState.period), brl(d.totalSpent), tileValueCss(), "de " + brl(d.salary), dashPulseCardCss(), tileLabelCss(), tileSubCss()),
+            tile("reserve", "Reserva acumulada", brl(d.reserve.accumulated), tileSuccessCss(), reserveSub, dashPulseCardCss(), tileLabelCss(), tileSubCss())))
+        row.setId("dash-tiles")
+        row.setStyle(dashGridG3Css())
+        return row
+    }
+    var hero = tile("pulse", "Pode gastar hoje", brl(d.pulse), tileHeroValueCss(), daysRemainingText(d.daysRemaining), dashPulseHeroCss(), tileHeroLabelCss(), tileHeroSubCss())
+    var pair = Row(listOf(
+        tile("spent", spentLabel(DashState.period), brl(d.totalSpent), tileMobileValueCss(), "de " + brl(d.salary), dashCardMobileCss(), tileMobileLabelCss(), tileSubCss()),
+        tile("reserve", "Reserva acumulada", brl(d.reserve.accumulated), tileMobileSuccessCss(), reserveSub, dashCardMobileCss(), tileMobileLabelCss(), tileSubCss())))
+    pair.setStyle(dashMobileG2Css())
+    var col = Column(listOf(hero, pair))
+    col.setId("dash-tiles")
+    col.setStyle(dashMobileStackCss())
+    return col
 }
 
-// Donut: uma fatia por balde (percentage do modelo), começando no topo, e o
-// furo central pintado com a cor do card. Só setFill + fill (issue #32).
-Canvas donutCanvas(List<BucketBalanceDTO> buckets, Int size) {
+// Donut em Canvas 4x (576px com zoom 0.25 -> 144px): setFill + fill apenas.
+// Fatia selecionada desloca radialmente para fora e cresce; demais esmaecem.
+Canvas donutCanvas(List<BucketBalanceDTO> buckets, Int selectedSlice) {
+    val size = 576
     var c = Canvas(size, size)
     val pi = 3.14159265358979
-    val cx = size / 2
+    val cx = 288
+    val cy = 288
+    val r = 240
+    val rSel = 252
+    val pop = 24.0
     var total = 0
+    var nonZero = 0
     for (var b in buckets) {
-        total = total + b.percentage
+        if (b.percentage > 0) {
+            total = total + b.percentage
+            nonZero = nonZero + 1
+        }
     }
     if (total <= 0) {
-        total = 100
+        c.setFill(colorCardSecondary())
+        c.beginPath()
+        c.arc(cx, cy, r, 0.0, 2.0 * pi)
+        c.closePath()
+        c.fill()
+        c.setFill(colorCard())
+        c.beginPath()
+        c.arc(cx, cy, r * 62 / 100, 0.0, 2.0 * pi)
+        c.closePath()
+        c.fill()
+        return c
+    }
+    var halfGap = 0.0
+    if (nonZero > 1) {
+        halfGap = 0.015
     }
     var start = 0.0 - pi / 2.0
     var i = 0
     for (var b in buckets) {
-        val end = start + 2.0 * pi * b.percentage / total
-        c.setFill(sliceColor(i))
-        c.beginPath()
-        c.moveTo(cx, cx)
-        c.arc(cx, cx, cx, start, end)
-        c.closePath()
-        c.fill()
+        val span = 2.0 * pi * b.percentage / total
+        val end = start + span
+        if (b.percentage > 0) {
+            var col = sliceColor(i)
+            if (selectedSlice >= 0 && selectedSlice != i) {
+                col = dimSliceColor(col)
+            }
+            var sx = cx
+            var sy = cy
+            var sr = r
+            if (selectedSlice == i) {
+                val mid = (start + end) / 2.0
+                sx = cx + (math.roundTo(pop * math.cos(mid), 0) as Int)
+                sy = cy + (math.roundTo(pop * math.sin(mid), 0) as Int)
+                sr = rSel
+            }
+            c.setFill(col)
+            c.beginPath()
+            c.moveTo(sx, sy)
+            c.arc(sx, sy, sr, start + halfGap, end - halfGap)
+            c.closePath()
+            c.fill()
+        }
         start = end
         i = i + 1
     }
     c.setFill(colorCard())
     c.beginPath()
-    c.arc(cx, cx, cx * 62 / 100, 0.0, 2.0 * pi)
+    c.arc(cx, cy, r * 62 / 100, 0.0, 2.0 * pi)
     c.closePath()
     c.fill()
     return c
 }
 
-View legendItem(BucketBalanceDTO b, Int i) {
-    var top = Row(listOf(
-        idLabel(b.name, "legend-" + i + "-name", bodyTextCss()),
-        idLabel(brlShort(brl(b.plannedAmount)), "legend-" + i + "-value", captionCss())))
-    top.setStyle(rowBetweenCss())
-    var p = b.percentage
-    if (p > 100) {
-        p = 100
+View donutCenterOverlay(DashboardResponse d, Int selectedSlice) {
+    var items: List<View> = listOf()
+    if (selectedSlice >= 0 && selectedSlice < d.buckets.size) {
+        val sb = d.buckets.get(selectedSlice)
+        items.add(idLabel(String.valueOf(sb.percentage) + "%", "donut-center-pct", donutPctCss(selectedSlice)))
+        items.add(idLabel(sb.name, "donut-center-name", donutCenterTitleCss()))
+        items.add(idLabel(brlShort(brl(sb.plannedAmount)), "donut-center-value", donutCenterSubCss()))
+    } else {
+        items.add(idLabel(modelFriendlyName(d.budgetModel), "donut-center-name", donutCenterModelCss()))
+        items.add(idLabel(brlShort(brl(d.salary)), "donut-center-value", donutCenterSubCss()))
     }
-    var fill = View(screenStyle())
-    fill.setStyle(sliceFillCss(i))
-    fill.setFlexBasis(p * 100)
-    var rest = View(screenStyle())
-    rest.setStyle(fillRestCss())
-    rest.setFlexBasis((100 - p) * 100)
-    var parts = Row(listOf(fill, rest))
-    parts.setStyle(fillRowCss())
-    var track = View(screenStyle())
-    track.setStyle(progressTrackCss())
-    track.bind(parts)
-    var col = Column(listOf(top, track))
-    col.setId("legend-" + i)
-    col.setStyle(legendItemCss())
-    return col
+    var overlay = Column(items)
+    overlay.setId("donut-center")
+    overlay.setStyle(donutCenterCss())
+    return overlay
 }
 
-View distributionCard(DashboardResponse d) {
+View legendItem(Window w, BucketBalanceDTO b, Int i, Int selectedSlice) {
+    var dot = View(screenStyle())
+    dot.setStyle(sliceDotCss(i))
+    var nameStyle = legendNameCss()
+    if (selectedSlice == i) {
+        nameStyle = legendNameSelCss()
+    }
+    var left = Row(listOf(dot, idLabel(b.name, "legend-" + i + "-name", nameStyle)))
+    left.setStyle(legendLeftCss())
+    var top = Row(listOf(left, idLabel(brlShort(brl(b.plannedAmount)), "legend-" + i + "-value", legendValCss())))
+    top.setStyle(rowBetweenCss())
+
+    var p = b.percentage
+    if (p > 100) { p = 100 }
+    if (p < 0) { p = 0 }
+    var fill = View(screenStyle())
+    fill.setStyle(sliceBarCss(i))
+    fill.setFlexBasis(p * 100)
+    var rest = View(screenStyle())
+    rest.setStyle(sliceRestCss())
+    rest.setFlexBasis((100 - p) * 100)
+    var parts = Row(listOf(fill, rest))
+    parts.setStyle(sliceRowCss())
+    var track = View(screenStyle())
+    track.setStyle(sliceTrackCss())
+    track.bind(parts)
+
+    var item = View(screenStyle())
+    item.setId("legend-" + i)
+    if (selectedSlice == i) {
+        item.setStyle(legendItemSelCss())
+    } else if (selectedSlice >= 0) {
+        item.setStyle(legendItemDimCss())
+    } else {
+        item.setStyle(legendItemCss())
+    }
+    item.bind(Column(listOf(top, track)))
+    item.on("click", () -> toggleSlice(w, i))
+    return item
+}
+
+View distributionCard(Window w, DashboardResponse d) {
+    var sel = DashState.selectedSlice
+    if (sel >= d.buckets.size) {
+        sel = -1
+    }
+    var canvasWrap = View(screenStyle())
+    canvasWrap.setStyle(canvasZoomCss())
+    canvasWrap.bind(donutCanvas(d.buckets, sel))
+
+    var holder = View(screenStyle())
+    holder.setId("dash-donut")
+    holder.setStyle(donutOuterCss())
+    holder.bind(Column(listOf(canvasWrap, donutCenterOverlay(d, sel))))
+    val bucketCount = d.buckets.size
+    holder.on("click", () -> cycleSlice(w, bucketCount))
+
     var items: List<View> = listOf()
     var i = 0
     for (var b in d.buckets) {
-        items.add(legendItem(b, i))
+        items.add(legendItem(w, b, i, sel))
         i = i + 1
+    }
+    if (i == 0) {
+        items.add(idLabel("Sem divisões fixas neste modelo.", "legend-empty", tileSubCss()))
     }
     var legend = Column(items)
     legend.setStyle(legendCss())
-    var holder = View(screenStyle())
-    holder.setId("dash-donut")
-    holder.setStyle(canvasHolderCss())
-    holder.bind(donutCanvas(d.buckets, 140))
+
     var body = Row(listOf(holder, legend))
-    body.setStyle(distBodyCss())
-    var card = Column(listOf(idLabel(distributionTitle(d.budgetModel), "dist-title", cardTitleCss()), body))
+    if (AppState.isDesktop) {
+        body.setStyle(distBodyDesktopCss())
+    } else {
+        body = Column(listOf(holder, legend))
+        body.setStyle(distBodyMobileCss())
+    }
+    var titleCss = cardTitleMobileCss()
+    var cardCss = dashCardMobileCss()
+    if (AppState.isDesktop) {
+        titleCss = cardTitleCss()
+        cardCss = dashCardCss()
+    }
+    var card = Column(listOf(idLabel(distributionTitle(d.budgetModel), "dist-title", titleCss), body))
     card.setId("card-distribution")
-    card.setStyle(cardCss())
+    card.setStyle(cardCss)
     return card
 }
 
 Canvas dotCanvas(Color color) {
-    var c = Canvas(10, 10)
+    var c = Canvas(32, 32)
     c.setFill(color)
     c.beginPath()
-    c.arc(5, 5, 5, 0.0, 6.2831853)
+    c.arc(16, 16, 16, 0.0, 6.2831853)
     c.closePath()
     c.fill()
     return c
 }
 
-View txRow(TransactionOutput t, Int i) {
+View txRow(TransactionOutput t, Int i, Bool isLast) {
     var dot = View(screenStyle())
-    dot.setStyle(canvasHolderCss())
+    dot.setStyle(canvasZoomCss())
     dot.bind(dotCanvas(categoryColor(t.category)))
     var text = Column(listOf(
-        idLabel(t.description, "tx-" + i + "-name", bodyTextCss()),
-        idLabel(categoryLabel(t.category), "tx-" + i + "-cat", captionCss())))
+        idLabel(t.description, "tx-" + i + "-name", txNameCss()),
+        idLabel(categoryLabel(t.category), "tx-" + i + "-cat", txCatCss())))
     text.setStyle(txTextCss())
     var row = Row(listOf(dot, text, idLabel(brl(0.0 - t.value), "tx-" + i + "-value", txValueCss())))
     row.setId("tx-" + i)
-    row.setStyle(txRowCss())
+    if (isLast) {
+        row.setStyle(txRowLastCss())
+    } else {
+        row.setStyle(txRowCss())
+    }
     return row
 }
 
 View transactionsCard(DashboardResponse d) {
-    var items: List<View> = listOf()
-    items.add(idLabel("Últimas transações", "tx-title", cardTitleCss()))
+    var titleCss = cardTitleMobileCss()
+    var cardCss = dashCardMobileCss()
+    if (AppState.isDesktop) {
+        titleCss = cardTitleCss()
+        cardCss = dashCardCss()
+    }
+    var rows: List<View> = listOf()
+    val total = d.recentTransactions.size
     var i = 0
     for (var t in d.recentTransactions) {
-        items.add(txRow(t, i))
+        rows.add(txRow(t, i, i == total - 1))
         i = i + 1
     }
     if (i == 0) {
-        // DECISÃO-7: o artefato não tem texto para o vazio.
-        items.add(idLabel("Nenhuma transação no período.", "tx-empty", captionCss()))
+        rows.add(idLabel("Nenhuma transação no período.", "tx-empty", tileSubCss()))
     }
-    var card = Column(items)
+    var list = Column(rows)
+    list.setStyle(txListCss())
+    var card = Column(listOf(idLabel("Últimas transações", "tx-title", titleCss), list))
     card.setId("card-transactions")
-    card.setStyle(cardCss())
+    card.setStyle(cardCss)
     return card
 }
 
@@ -303,9 +530,6 @@ String dashSubtitle(DashboardResponse? d) {
 
 // ---------------------------------------------------------------- tela
 
-// Todo render busca de novo, menos o que vem logo depois de um GET (fresh):
-// voltar à rota ou entrar com outro usuário nunca mostra dado velho de outra sessão
-// sem refazer o GET.
 View dashboardScreen(Window w) {
     if (DashState.fresh) {
         DashState.fresh = false
@@ -314,8 +538,7 @@ View dashboardScreen(Window w) {
     }
     var d = dashboardData()
     var items: List<View> = listOf()
-    items.add(topbar("Dashboard", dashSubtitle(d), null))
-    items.add(periodTabs(w))
+    items.add(topbar("Dashboard", dashSubtitle(d), periodTabs(w)))
     if (AppState.loadError != "") {
         items.add(idLabel(AppState.loadError, "dash-error", errorBannerCss()))
         var retry = Button("Tentar de novo", () -> retryDashboard(w))
@@ -326,7 +549,17 @@ View dashboardScreen(Window w) {
         items.add(idLabel("Carregando…", "dash-loading", captionCss()))
     } else {
         items.add(tiles(d))
-        items.add(responsiveGroup(listOf(distributionCard(d), transactionsCard(d)), "dash-cards", gridG2Css()))
+        if (AppState.isDesktop) {
+            var cards = Row(listOf(distributionCard(w, d), transactionsCard(d)))
+            cards.setId("dash-cards")
+            cards.setStyle(dashGridG2Css())
+            items.add(cards)
+        } else {
+            var cards = Column(listOf(distributionCard(w, d), transactionsCard(d)))
+            cards.setId("dash-cards")
+            cards.setStyle(dashMobileStackCss())
+            items.add(cards)
+        }
     }
     var col = Column(items)
     col.setId("screen-dashboard")

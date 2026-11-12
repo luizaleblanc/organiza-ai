@@ -29,6 +29,7 @@ class DashState {
     static String raw = ""
     static Bool loaded = false
     static Bool fresh = false
+    static Int selectedSlice = -1
 }
 
 String dashboardPath(String period) = "/api/dashboard?period=" + period

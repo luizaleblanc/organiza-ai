@@ -912,3 +912,22 @@ Alinhada aos artefatos `WelcomeWin` (Desktop) e `WelcomeScreen` (Mobile), manten
 - **Mobile:** `brandMark` 180 px, slogan em `18 px`, botões empilhados em largura total (`height: 50 px`, `border-radius: 14`, `gap: 12`, `font-weight: 700`).
 - Todos os `Style` de botão declaram `font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`.
 - Validado em `kof 0.6.6` e `kof 0.7.2-a3` (`kof build frontend --target js` e Edge headless 1280×800 e 360×640, 0 `UNCAUGHT`).
+
+### 19.2 Dashboard (`frontend/screens/dashboard_screen.kf` e `frontend/core/dashboard_api.kf`)
+
+- **Abas na topbar:** `Semana` / `Mês` / `Ano` montadas no slot `action` de `topbar("Dashboard", dashSubtitle(d), periodTabs(w))`, com estilos de botão declarando `font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif` (ativa em `#00D4FF` sobre `#06121C`, container raio 9 e botão raio 7).
+- **Tiles e cards fiéis aos artefatos:**
+  - Desktop (`1280×800`): 3 `pulse-card` (`linear-gradient(135deg, #12162A, #1A1F3A)`, borda `rgba(0,212,255,.15)`, raio 14) em `g3` + `g2` (`align-items: stretch`) com `Distribuição <modelo>` e `Últimas transações` (divisores `border` entre linhas e pontos 4× em `Canvas`).
+  - Mobile (`360×640`): hero card centralizado `Pode gastar hoje` (`36 px`, raio 16) + 2 cards em `g2` (`20 px`) + cards de distribuição e transações empilhados sem rolagem horizontal.
+- **Gráfico Donut Interativo 4×:**
+  - Conferido no fonte do `kof4j` (`0.7.2`, `KofUi.java:113-120`, `548-571` e `JsRuntimeUiEvents.java:29-30`): `Canvas` continua fora de `isDomWidget` (sem `.on()`, `setId()` ou `setStyle()`), e `Event.x()/y()` expõem apenas `clientX`/`clientY` sem retângulo do elemento. Rascunho de issue salvo localmente em `issue-canvas-events.md` (não publicado).
+  - Contorno fiel: `Canvas(576, 576)` com `zoom: 0.25` (144 px visuais), desenhado apenas com `setFill` + `fill` (`dotCanvas` também em 4× `32×32`), seleção em `DashState.selectedSlice` via itens clicáveis da legenda (`#legend-0..N`) e clique cíclico em `#dash-donut`. A fatia selecionada desloca radialmente para fora (`pop = 24`) com raio ampliado (`252`), as demais esmaecem (`dimSliceColor` 30% sobre `#12162A`) e `#donut-center` exibe `%`, nome e valor (`R$`); sem seleção, exibe modelo e salário.
+
+### 19.3 Gates da B2 (`kof 0.6.6` e `kof 0.7.2-a3`, Windows; H2 na porta `3086`)
+
+| Gate | `kof 0.6.6` | `kof 0.7.2-a3` |
+|---|---|---|
+| `kof build frontend --target js` | exit 0 | exit 0 |
+| G-UI headless (`out/gate_b2.mjs`, Edge CDP, Desktop `1280×800` e Mobile `360×640`, H2 semeado em reais via `/api/*`) | 45/45 checks, 0 `UNCAUGHT`, 0 `console.error` | 45/45 checks, 0 `UNCAUGHT`, 0 `console.error` |
+
+Cobertura do G-UI: textos, alturas/raios e `system-ui` na Boas-vindas; abas no `#topbar-action` sem overflow; valores dos 3 tiles batendo com `/api/dashboard?period=month|week|year`; pixels do donut 4× nas cores `#00D4FF`/`#0066FF`/`#00E5A0` e `#12162A`; clique em `#legend-0`/`1`/`2` e `#dash-donut` atualizando `#donut-center` e esmaecendo os itens não selecionados.
