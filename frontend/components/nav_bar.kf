@@ -177,7 +177,14 @@ View userBlock() {
     return row
 }
 
-// Sidebar vertical (Desktop 1280x800), 190 px.
+// Sidebar vertical (Desktop), 190 px.
+// Sidebar presa à altura do shell: só a lista do meio rola; o rodapé
+// (Configurações, avatar e nome) fica sempre visível.
+Style sidebarFixedCss()       = Style("display: flex; flex-direction: column; flex-wrap: nowrap; align-self: stretch; width: 190; flex-shrink: 0; min-height: 0; gap: 4; padding: 24px 12px; box-sizing: border-box; overflow: hidden; background: #05060B; border-right: 1px solid rgba(255,255,255,.1)")
+Style sidebarNavScrollCss()   = Style("display: flex; flex-direction: column; gap: 2; flex: 1 1 0; min-height: 0; width: 100%; overflow-y: auto; overflow-x: hidden")
+Style sidebarFooterFixedCss() = Style("display: flex; flex-direction: column; gap: 10; width: 100%; flex-shrink: 0; margin-top: auto; padding-top: 10; border-top: 1px solid rgba(255,255,255,.1)")
+Style bottomTabFixedCss()     = Style("display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: space-around; align-items: flex-start; width: 100%; height: 74; flex-shrink: 0; padding-top: 10; box-sizing: border-box; background: #12162A; border-top: 1px solid rgba(255,255,255,.1)")
+
 View buildSidebar(Window w) {
     var logo = brandMark(90, "sidebar-logo")
     logo.setStyle(sidebarLogoCss())
@@ -186,12 +193,12 @@ View buildSidebar(Window w) {
         sidebarItem(w, "chat", "Organiza AI"),
         sidebarItem(w, "envelopes", "Caixinhas"),
         sidebarItem(w, "notifications", "Notificações")))
-    nav.setStyle(sidebarNavCss())
+    nav.setStyle(sidebarNavScrollCss())
     var footer = Column(listOf(sidebarItem(w, "settings", "Configurações"), userBlock()))
-    footer.setStyle(sidebarFooterCss())
+    footer.setStyle(sidebarFooterFixedCss())
     var col = Column(listOf(logo, nav, footer))
     col.setId("sidebar")
-    col.setStyle(sidebarCss())
+    col.setStyle(sidebarFixedCss())
     return col
 }
 
@@ -215,7 +222,7 @@ View bottomTabItem(Window w, String route, String text) {
     return col
 }
 
-// Barra inferior de 5 abas (Mobile 360x640).
+// Barra inferior de 5 abas (Mobile).
 View buildNavBar(Window w) {
     var row = Row(listOf(
         bottomTabItem(w, "dashboard", "Dashboard"),
@@ -224,6 +231,6 @@ View buildNavBar(Window w) {
         bottomTabItem(w, "notifications", "Alertas"),
         bottomTabItem(w, "settings", "Config")))
     row.setId("bottom-tab")
-    row.setStyle(bottomTabCss())
+    row.setStyle(bottomTabFixedCss())
     return row
 }

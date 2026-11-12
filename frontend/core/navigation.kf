@@ -27,9 +27,9 @@ import screens.settings_screen
 // Navegação sem Router/Component: AppState.currentScreen + re-render explícito
 // `mountScreen(window)` = remove() do root anterior +
 // `window.bind(buildActiveScreen(window))`.
-// Shell autenticado (Batch 3, T0): Desktop (1280x800) = Row(sidebar 190,
-// Column(conteúdo da rota)); Mobile (360x640) = Column(conteúdo, barra
-// inferior de 5 abas). O conteúdo de cada rota começa pela topbar
+// Shell autenticado (Batch 3, T0): Desktop = Row(sidebar 190,
+// Column(conteúdo da rota)); Mobile = Column(conteúdo, barra inferior de 5
+// abas). Os dois ocupam a janela toda (position: fixed). O conteúdo de cada rota começa pela topbar
 // (components/topbar.kf) e vem de <rota>Screen(w) em screens/.
 //
 // Vive fora de main.kf porque o ponto de entrada não é importável (PKG006) e
@@ -51,13 +51,25 @@ class NavState {
     static Bool profileRequested = false
 }
 
+// O kof.ui não expõe a largura da janela nem um evento de resize (rascunhos de
+// issue upstream em work/a3-rebased), então o layout é escolhido à mão pelo controle
+// "Ver como Mobile / Ver como Desktop". A janela não é mais fixada em
+// 360x640/1280x800: o root usa position: fixed com os offsets da moldura do
+// index.html do Kof (abaixo) e ocupa toda a área útil nas duas viewports.
 applyViewport(Window w) {
-    if (AppState.isDesktop) {
-        w.size(desktopWidth(), desktopHeight())
-    } else {
-        w.size(mobileWidth(), mobileHeight())
-    }
 }
+
+// Moldura fixa do index.html do Kof ("Default / Kof output / terminated", no
+// JsArtifactWriter): medida no Edge headless (0.6.6 e 0.7.2) com
+// getBoundingClientRect do #kof-root. Style("css") recusa calc() (SEM078) e
+// o kof.ui não dá a altura da janela, por isso os offsets são literais.
+Style shellFrameDesktopCss()    = Style("position: fixed; top: 61; bottom: 53; left: 33; right: 33; display: flex; flex-direction: row; flex-wrap: nowrap; align-items: stretch; overflow: hidden; background: #0A0D18; color: #F0F0F0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style shellFrameMobileCss()     = Style("position: fixed; top: 61; bottom: 53; left: 33; right: 33; display: flex; flex-direction: column; flex-wrap: nowrap; overflow: hidden; background: #0A0D18; color: #F0F0F0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+// Só o conteúdo rola; a sidebar e a barra inferior ficam presas.
+Style shellMainFixedCss()       = Style("display: flex; flex-direction: column; flex-grow: 1; align-self: stretch; min-width: 0; min-height: 0; gap: 24; padding: 24; box-sizing: border-box; overflow-y: auto; overflow-x: hidden")
+Style shellMobileMainFixedCss() = Style("display: flex; flex-direction: column; flex-grow: 1; min-width: 0; min-height: 0; gap: 16; padding: 16; box-sizing: border-box; overflow-y: auto; overflow-x: hidden")
+// Telas de entrada: tela cheia nas duas viewports, conteúdo na largura total.
+Style entryFrameCss()           = Style("position: fixed; top: 61; bottom: 53; left: 33; right: 33; display: flex; flex-direction: column; box-sizing: border-box; padding: 16; overflow-y: auto; overflow-x: hidden; background: #0A0D18; color: #F0F0F0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 
 // Re-renderiza: remove o root anterior e monta o layout da viewport ativa.
 mountScreen(Window w) {
@@ -78,7 +90,7 @@ navigateTo(Window w, String screen) {
     mountScreen(w)
 }
 
-// Alterna entre Mobile (360x640) e Desktop (1280x800) e re-renderiza.
+// Alterna entre o layout Mobile e o Desktop (o app abre em Desktop).
 switchViewport(Window w) {
     AppState.isDesktop = !AppState.isDesktop
     applyViewport(w)
@@ -134,11 +146,8 @@ View buildEntryContent(Window w) {
 
 View buildEntryLayout(Window w) {
     var root = View(screenStyle())
-    if (AppState.isDesktop) {
-        root.setStyle(entryScreenDesktopCss())
-    } else {
-        root.setStyle(entryScreenMobileCss())
-    }
+    root.setId("shell")
+    root.setStyle(entryFrameCss())
     var stack = Column(listOf(buildViewportToggle(w), buildEntryContent(w)))
     stack.setStyle(entryStackCss())
     // Ondas de fundo (components/background_waves.kf) só nas telas de entrada
@@ -201,20 +210,20 @@ ensureProfile(Window w) {
 View buildMobileLayout(Window w) {
     var main = Column(listOf(buildViewportToggle(w), buildShellContent(w)))
     main.setId("shell-main")
-    main.setStyle(shellMobileMainCss())
+    main.setStyle(shellMobileMainFixedCss())
     var root = Column(listOf(main, buildNavBar(w)))
     root.setId("shell")
-    root.setStyle(shellMobileCss())
+    root.setStyle(shellFrameMobileCss())
     return root
 }
 
 View buildDesktopLayout(Window w) {
     var main = Column(listOf(buildViewportToggle(w), buildShellContent(w)))
     main.setId("shell-main")
-    main.setStyle(shellMainCss())
+    main.setStyle(shellMainFixedCss())
     var root = Row(listOf(buildSidebar(w), main))
     root.setId("shell")
-    root.setStyle(shellRowCss())
+    root.setStyle(shellFrameDesktopCss())
     return root
 }
 

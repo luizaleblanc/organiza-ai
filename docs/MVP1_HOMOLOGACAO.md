@@ -849,3 +849,30 @@ As senhas de teste de `scripts/test_e2e_flow.ps1`, `test_integrations_mock.ps1` 
 | Migração: H2 criado pelo build de `origin/main`, conta legado `{"name":"Lia Antiga Legado"}` com senha `12345678`; o build do A2 sobe no mesmo banco | 3 `ALTER` no log (`firstName`, `lastName`, `age`), login 200 com a senha fraca antiga, `/me` = `firstName "Lia", lastName "Antiga Legado", age null`, cadastro novo 200 | 3 `ALTER` no log (`firstName`, `lastName`, `age`), login 200 com a senha fraca antiga, `/me` = `firstName "Lia", lastName "Antiga Legado", age null`, cadastro novo 200 |
 
 Medido no 0.6.6: `json.decode<Int?>` aceita `"18"` (texto) e converte para 18; por isso `decodeRegisterRequest` olha o JSON bruto (`"age"\s*:\s*"`) e responde `Dados inválidos.`. Nenhum gate chamou OpenAI ou Resend reais. O `kof build` do frontend não copia `frontend/assets` (ver briefing), e a suíte E2E só precisa do `index.html`.
+
+## 17. App em Desktop, tela cheia e shell preso à janela (A3, 12/11/2026)
+
+Rebased sobre `cc8e042` (preservando `backgroundWaves()` / `overWaves()`, os ícones SVG da `nav_bar.kf` e a pilha de fonte `system-ui` do A1; `screens/chat_screen.kf` não foi alterado nesta entrega).
+
+| Item | Mudança |
+|---|---|
+| Viewport inicial | `AppState.isDesktop = true`: o app abre em Desktop. `applyViewport` não chama mais `w.size(360, 640)` nem `w.size(1280, 800)`. O `kof.ui` não expõe a largura da janela nem evento de `resize`, então o layout continua escolhido à mão. |
+| Controle | O selo "Mobile 360x640" (`#dev-viewport`) virou o botão "Ver como Mobile" / "Ver como Desktop": fundo transparente, texto `muted` `#4A5578`, borda `border-soft`, `font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif` (o `.kof-button` não herda a fonte). |
+| Shell e entrada | O root (`#shell`) usa `position: fixed; top: 61; bottom: 53; left: 33; right: 33`, a área interna do `.kof-window` do `index.html` do Kof (titlebar + padding + borda). Vale para o Desktop, o Mobile e as telas de entrada (mantendo as camadas `backgroundWaves()` / `overWaves()` do A1): em Mobile o app ocupa a largura e a altura toda da área útil, sem coluna de 360 nem `min-height` de 640. `#shell-main` tem `align-self: stretch`, `min-height: 0` e é o único que rola. |
+| Sidebar e barra inferior | Na sidebar (`nav_bar.kf`), a lista do meio rola (`flex: 1 1 0; min-height: 0; overflow-y: auto`) e o rodapé (Configurações, avatar e nome) tem `flex-shrink: 0; margin-top: auto`, ficando sempre visível. A barra inferior do Mobile tem `flex-shrink: 0` e fica presa no fim do `#shell`. |
+
+Limites medidos: `Style("css")` aceita `position: fixed`, mas recusa `calc()` (SEM078) e `@media`, e `100%` não tem altura útil no `#kof-root` sem o template do `index.html` (rascunhos de issue upstream: `issue-window-size-resize.md` e `issue-index-html-template.md`).
+
+### 17.1 Gates (Kof 0.6.6 e 0.7.2, backend local H2, Edge headless via CDP)
+
+- **G-BUILD:** `kof check backend` (`exit=0`, 11 arquivos; 1 warning `MEM014` no 0.6.6 e 0 no 0.7.2), `kof build backend --target jvm --fat` (`exit=0`) e `kof build frontend --target js` (`exit=0`, com cópia de `frontend/assets`) nas duas versões.
+- **G-UI (`build/gui-gate.mjs`, portas locais `3083` e `3084`, H2, `PORT` + `KOF_WEB_OUT`):** abre em Desktop (`"Ver como Mobile"`), ondas A1 carregadas, `#dev-viewport` alterna nos dois sentidos (entrada e shell), login → dashboard, topbar de 56 px, 5 ícones SVG da nav sem imagem quebrada, avatar `#user-initial` visível (`bottom < innerHeight`), barra inferior presa ao fim do shell (`tab.bottom == shell.bottom`), navegação pelas 5 rotas sem rolagem horizontal/vertical da página (`scrollWidth <= innerWidth`, `scrollHeight <= innerHeight`) e sem `UNCAUGHT` / erro de console.
+
+| Cenário | 0.6.6 | 0.7.2 |
+|---|---|---|
+| Desktop 1920×1080 | 27/27 | 27/27 |
+| Desktop 1280×800 | 27/27 | 27/27 |
+| Mobile 360×640 (CDP) | 27/27 | 27/27 |
+| Mobile 412×915 (CDP) | 27/27 | 27/27 |
+| Mobile pelo controle em 1280×800 (entrada e shell em tela cheia) | 9/9 | 9/9 |
+| **Total G-UI** | **117/117** | **117/117** |

@@ -37,9 +37,9 @@ Canvas buildLogomark() {
 
 String viewportLabel() {
     if (AppState.isDesktop) {
-        return "Desktop 1280x800"
+        return "Ver como Mobile"
     }
-    return "Mobile 360x640"
+    return "Ver como Desktop"
 }
 
 View buildBrandHeader(Window w) {
@@ -58,14 +58,19 @@ View buildBrandHeader(Window w) {
     return header
 }
 
-// Barra de dev das telas de entrada: só o toggle Mobile/Desktop, sem marca
-// (a Tela 1 já mostra a logomarca grande). Chrome de dev aceito no MVP.
+// Controle discreto de viewport (tokens do DS: texto muted, borda border-soft).
+// O .kof-button não herda a fonte do body, então o font-family é declarado.
+Style viewportToggleCss() = Style("background: transparent; color: #4A5578; border: 1px solid rgba(255,255,255,.1); border-radius: 8; padding: 4px 10px; font-size: 12; font-weight: 500; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style viewportBarCss()    = Style("display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: flex-end; width: 100%; flex-shrink: 0; padding: 0; background: transparent")
+
+// Barra das telas: só o toggle Mobile/Desktop, sem marca
+// (a Tela 1 já mostra a logomarca grande): "Ver como Mobile / Ver como Desktop".
 View buildViewportToggle(Window w) {
     var toggle = Button(viewportLabel(), () -> switchViewport(w))
     toggle.setId("dev-viewport")
-    toggle.setStyle(devToggleCss())
+    toggle.setStyle(viewportToggleCss())
     var bar = View(screenStyle())
-    bar.setStyle(devBarCss())
+    bar.setStyle(viewportBarCss())
     bar.bind(toggle)
     return bar
 }

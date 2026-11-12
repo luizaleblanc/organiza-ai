@@ -12,7 +12,7 @@ package core
 
 class AppState {
     static String currentScreen = "welcome"
-    static Bool isDesktop = false
+    static Bool isDesktop = true
     static String activeToast = ""
     static String activeNotificationModel = ""
     static Bool showNotificationOverlay = false
