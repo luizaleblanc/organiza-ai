@@ -982,8 +982,32 @@ Entrega de frontend sobre `cc8e042` (`frontend/screens/login_screen.kf`, `fronte
 | `kof build frontend --target js` | exit 0 | exit 0 |
 | G-UI headless Desktop 1280×800 e Mobile 360×640 (`gate_b3.mjs`, porta 3087): 2 colunas Desktop / 1 coluna Mobile, 0 rolagem horizontal, 0 imagens quebradas, `font-family: system-ui` nos botões, medidor 0→4 + Unicode, olho da senha, todas as validações locais, cadastro → `onb_salary`, login senha errada, esqueci a senha (202 + token do mock) → reset → login com nova senha, 0 `UNCAUGHT`/`console.error` | 77/77 PASS | 77/77 PASS |
 
-## Caixinhas: correção de estado, sessão e decode (A4, 12/11/2026)
+## 22. Caixinhas: correção de estado, sessão, decode e fidelidade visual (A4, 12/11/2026)
 
 - **Causa raiz investigada:** `EnvState.loaded` nunca era reiniciado em `navigateTo` nem ao sair/expirar sessão. Com isso, uma falha transitória (`500`/timeout -> `"Não consegui falar com o servidor..."`), uma troca de conta ou um `401` ficavam presos entre navegações; respostas não-JSON quebravam `json.decode` fora do `try/catch` de `loadEnvelopes`; e o modelo `FREELANCER_BASE_ZERO` bloqueava a criação de caixinhas por exigir seleção de grupo mesmo sem buckets.
 - **Correções (`core/envelopes_api.kf`, `core/navigation.kf`, `screens/envelopes_screen.kf`):** `resetEnvelopes()` passou a rodar ao navegar para `envelopes`, `welcome` e `login` e a limpar `raw`/`buckets`/`loadError`/`formError`/`confirmDelete`/`loadedFor`; `loadEnvelopes()` valida o JSON antes de marcar `loaded = true` e só consulta `/api/budgets/balance` se houver token e o overview não tiver falhado; `401` redireciona para `login` com `"Sua sessão expirou. Entre de novo."`; Base Zero envia `CreateEnvelopeNoBucketRequest` (sem `bucket`).
-- **Gates (Kof 0.6.6 e 0.7.2, Edge headless + H2 local):** G-BUILD `frontend --target js` exit 0 nas duas versões; fluxo completo (cadastro → onboarding → Caixinhas vazia → criar → excluir → troca de usuário sem reload → Base Zero sem bucket) verde em 0.6.6 e 0.7.2; simulação de `500` transitório, `401` e resposta HTML via proxy verificada em 0.6.6 sem `UNCAUGHT`.
+- **Fidelidade visual (`screens/envelopes_screen.kf`):** botão da topbar com ícone `plus` (`+ Nova caixinha` em gradiente no Desktop e `+ Nova` em `#00D4FF` no Mobile), grupos com títulos diferenciados por viewport, grade Desktop (`grid-template-columns: 1fr 1fr 1fr`, `gap: 12`) e pilha Mobile (`gap: 10`), cards com os 3 estados (`Em dia` badge `#00E5A0` e valor/barra `#00D4FF`, `Alerta` `#FFB800`, `Estourada` `#FF4A6E`), barra limitada a `100%` mesmo em `120%`, rodapé com legenda `p% · R$ gasto/R$ limite` + botão `Excluir` (confirmação inline `Manter` / `Sim, excluir`) e modal/sheet de criação com `font-family` explícito em todos os `Style`.
+
+### 22.1 Gates G-UI A4 (Kof 0.6.6 e Kof 0.7.2, Edge headless + H2 local)
+
+| Gate / Verificação (`out/gate_a4.mjs`) | Kof 0.6.6 | Kof 0.7.2 |
+|---|---|---|
+| G-BUILD `kof build frontend --target js` | PASS (exit 0) | PASS (exit 0) |
+| 1. Desktop (1280×800): estado vazio após cadastro + onboarding | PASS | PASS |
+| 2. Desktop: criar caixinha (`+ Nova caixinha` → modal → salvar) | PASS | PASS |
+| 3. Desktop: cancelar exclusão (`Manter`) preserva o card | PASS | PASS |
+| 4. Desktop: confirmar exclusão (`Sim, excluir`) remove o card | PASS | PASS |
+| 5. Desktop: troca de sessão sem reload + 3 estados (`Em dia`, `Alerta`, `Estourada`) em BRL | PASS | PASS |
+| 6. Desktop: 0 imagens quebradas (`naturalWidth > 0`) | PASS | PASS |
+| 7. Desktop: `font-family: system-ui` em todos os botões | PASS | PASS |
+| 8. Desktop: sem overflow horizontal (`scrollWidth <= clientWidth`) | PASS | PASS |
+| 9. Desktop: barra de 120% limitada a 100% do trilho | PASS | PASS |
+| 10. Mobile (360×640 via CDP): valores em BRL e sem erro de rede | PASS | PASS |
+| 11. Mobile: 0 imagens quebradas (`naturalWidth > 0`) | PASS | PASS |
+| 12. Mobile: `font-family: system-ui` em todos os botões | PASS | PASS |
+| 13. Mobile: sem overflow horizontal (`scrollWidth <= clientWidth`) | PASS | PASS |
+| 14. Mobile: criar caixinha (`+ Nova` → sheet → salvar) | PASS | PASS |
+| 15. Mobile: excluir caixinha com confirmação inline | PASS | PASS |
+| 16. Zero `UNCAUGHT` exceptions | PASS (0) | PASS (0) |
+| 17. Zero `console.error` | PASS (0) | PASS (0) |
+| **Total G-UI (`gate_a4.mjs`)** | **17/17 PASS** | **17/17 PASS** |
