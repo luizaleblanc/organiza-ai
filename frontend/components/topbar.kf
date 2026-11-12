@@ -4,12 +4,17 @@ import kof.ui
 import core.theme
 
 // =============================================================================
-// topbar — título + subtítulo à esquerda, ação opcional à direita (Batch 3, T0)
+// topbar — título + subtítulo à esquerda, ação opcional à direita
 // =============================================================================
-// Usada pelas Telas 9 a 13 (artefato Desktop: .ds-topbar). subtitle "" omite a
-// segunda linha; action null omite o lado direito. Ids: topbar-title e
-// topbar-subtitle.
+// Artefato Desktop (.ds-topbar): altura 56, borda inferior border-soft,
+// título 16/600, subtítulo 11px em #7B8EAD. Com o subtítulo
+// "Assistente online" (Organiza AI), um ponto verde de 6 px (#00E5A0) vem
+// antes do texto. subtitle "" omite a segunda linha; action null omite o lado
+// direito, que fica alinhado à direita. Ids: topbar, topbar-title,
+// topbar-subtitle, topbar-online-dot e topbar-action.
 // =============================================================================
+
+String onlineSubtitle() = "Assistente online"
 
 View topbar(String title, String subtitle, View? action) {
     var t = Label(title)
@@ -20,12 +25,25 @@ View topbar(String title, String subtitle, View? action) {
         var s = Label(subtitle)
         s.setId("topbar-subtitle")
         s.setStyle(topbarSubtitleCss())
-        text = Column(listOf(t, s))
+        if (subtitle == onlineSubtitle()) {
+            var dot = View(screenStyle())
+            dot.setId("topbar-online-dot")
+            dot.setStyle(onlineDotCss())
+            var sub = Row(listOf(dot, s))
+            sub.setStyle(topbarSubRowCss())
+            text = Column(listOf(t, sub))
+        } else {
+            text = Column(listOf(t, s))
+        }
     }
     text.setStyle(topbarTextCss())
     var row = Row(listOf(text))
     if (action != null) {
-        row = Row(listOf(text, action))
+        var slot = View(screenStyle())
+        slot.setId("topbar-action")
+        slot.setStyle(topbarActionCss())
+        slot.bind(action)
+        row = Row(listOf(text, slot))
     }
     row.setId("topbar")
     row.setStyle(topbarCss())
