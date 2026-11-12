@@ -1,0 +1,37 @@
+package components
+
+import kof.ui
+import core.theme
+
+// =============================================================================
+// Ícones do design system (artefato JVjueTmHeJsnHLsow3LDVb, objeto I)
+// =============================================================================
+// Cada ícone é um .svg estático em frontend/assets/icons/<nome>-<tom>.svg,
+// gerado por scripts/gen-icons.sh com os paths, o viewBox (24x24), o stroke e
+// o linecap do artefato. Image com arquivo separado não é markup embutido e é
+// vetor: fica nítido em qualquer dpr.
+// Nomes: dash, chat, box, bell, gear, warn, check, mic, send, plus, pulse.
+// Tons: accent, secondary, muted, primary, onaccent, danger, warning, success.
+// =============================================================================
+
+String iconPath(String name, String tone) = "assets/icons/" + name + "-" + tone + ".svg"
+
+// Image de `size` x `size` px.
+Image icon(String name, Int size, String tone) {
+    var img = Image(iconPath(name, tone))
+    img.setAlt("")
+    img.setWidth(size)
+    img.setHeight(size)
+    return img
+}
+
+// O mesmo ícone dentro de um View (aceita setStyle e entra em Row/Column).
+View iconView(String name, Int size, String tone, String id) {
+    var holder = View(screenStyle())
+    if (id != "") {
+        holder.setId(id)
+    }
+    holder.setStyle(iconHolderCss())
+    holder.bind(icon(name, size, tone))
+    return holder
+}

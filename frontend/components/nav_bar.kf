@@ -5,6 +5,7 @@ import core.theme
 import core.app_state
 import core.navigation
 import components.brand_mark
+import components.icons
 
 // =============================================================================
 // Navegação do shell autenticado (Batch 3, T0)
@@ -107,6 +108,15 @@ Canvas navIcon(String route, Int s, Color color) {
     return c
 }
 
+// Nome do ícone do design system (components/icons.kf) para cada rota.
+String routeIcon(String route) {
+    if (route == "dashboard") { return "dash" }
+    if (route == "chat") { return "chat" }
+    if (route == "envelopes") { return "box" }
+    if (route == "notifications") { return "bell" }
+    return "gear"
+}
+
 View iconHolder(Canvas icon) {
     var holder = View(screenStyle())
     holder.setStyle(navIconCss())
@@ -120,9 +130,9 @@ Bool isActiveRoute(String route) = AppState.currentScreen == route
 
 View sidebarItem(Window w, String route, String text) {
     var active = isActiveRoute(route)
-    var color = colorTextSecondary()
+    var tone = "secondary"
     if (active) {
-        color = colorAccent()
+        tone = "accent"
     }
     var label = Button(text, () -> navigateTo(w, route))
     label.setId("nav-" + route)
@@ -138,7 +148,7 @@ View sidebarItem(Window w, String route, String text) {
     } else {
         item.setStyle(sidebarItemCss())
     }
-    item.bind(Row(listOf(iconHolder(navIcon(route, 15, color)), label)))
+    item.bind(Row(listOf(iconView(routeIcon(route), 15, tone, "nav-icon-" + route), label)))
     return item
 }
 
@@ -189,9 +199,9 @@ View buildSidebar(Window w) {
 
 View bottomTabItem(Window w, String route, String text) {
     var active = isActiveRoute(route)
-    var color = colorTextMuted()
+    var tone = "muted"
     if (active) {
-        color = colorTextPrimary()
+        tone = "primary"
     }
     var label = Button(text, () -> navigateTo(w, route))
     label.setId("nav-" + route)
@@ -200,7 +210,7 @@ View bottomTabItem(Window w, String route, String text) {
     } else {
         label.setStyle(bottomTabLabelCss())
     }
-    var col = Column(listOf(iconHolder(navIcon(route, 20, color)), label))
+    var col = Column(listOf(iconView(routeIcon(route), 20, tone, "nav-icon-" + route), label))
     col.setStyle(bottomTabItemCss())
     return col
 }

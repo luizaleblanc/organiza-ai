@@ -8,12 +8,13 @@ import core.navigation
 import core.notifications_api
 import components.topbar
 import components.nav_bar
+import components.icons
 
 // =============================================================================
 // Tela 12 Notificações (Batch 3, F4)
 // =============================================================================
 // Lista de GET /api/notifications (max 560). Item = trilho de 56 px no tom do
-// `kind` com ícone Canvas + corpo (badge, tempo, título, texto). REMINDER não
+// `kind` com ícone do design system (Image .svg) + corpo (badge, tempo, título, texto). REMINDER não
 // tem badge: o tempo fica ao lado do título. Título e texto vêm do backend sem
 // reescrita (DECISÃO-11 em aberto). Lida/não lida não aparece (DECISÃO-10:
 // o artefato não diferencia).
@@ -26,63 +27,18 @@ Style notifListCss()   = Style("display: flex; flex-direction: column; gap: 12; 
 Style notifItemCss()   = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: stretch; gap: 0; background: #12162A; border: 1px solid rgba(255,255,255,.1); border-radius: 12; overflow: hidden; min-width: 0")
 Style notifBodyCss()   = Style("display: flex; flex-direction: column; gap: 6; padding: 14px 16px; min-width: 0; flex: 1 1 0")
 Style notifMetaCss()   = Style("display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8")
-Style notifTimeCss()   = Style("color: #4A5578; font-size: 12; margin: 0")
-Style notifTitleCss()  = Style("color: #F0F0F0; font-size: 15; font-weight: 600; margin: 0")
-Style notifTextCss()   = Style("color: #7B8EAD; font-size: 13; line-height: 1.5; margin: 0")
-Style notifRailIconCss() = Style("display: flex; align-items: center; padding: 0; background: transparent; line-height: 0")
-Style notifEmptyCss()  = Style("color: #7B8EAD; font-size: 14; text-align: center; padding: 32; margin: 0")
+Style notifTimeCss()   = Style("color: #4A5578; font-size: 12; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style notifTitleCss()  = Style("color: #F0F0F0; font-size: 15; font-weight: 600; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style notifTextCss()   = Style("color: #7B8EAD; font-size: 13; line-height: 1.5; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style notifEmptyCss()  = Style("color: #7B8EAD; font-size: 14; text-align: center; padding: 32; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 
-Int notifScale(Int v, Int s) = v * s / 24
-
-// Ícone do trilho: aviso (triângulo), raio, troféu ou sino (reusa o da nav).
-Canvas notifIcon(String kind, Int s, Color color) {
-    if (kind == "REMINDER") {
-        return navIcon("notifications", s, color)
-    }
-    var c = Canvas(s, s)
-    c.setStroke(color)
-    c.setLineWidth(2)
-    if (kind == "ENVELOPE_EXCEEDED" || kind == "ENVELOPE_ALERT") {
-        c.beginPath()
-        c.moveTo(notifScale(12, s), notifScale(3, s))
-        c.lineTo(notifScale(22, s), notifScale(20, s))
-        c.lineTo(notifScale(2, s), notifScale(20, s))
-        c.closePath()
-        c.stroke()
-        c.beginPath()
-        c.moveTo(notifScale(12, s), notifScale(9, s))
-        c.lineTo(notifScale(12, s), notifScale(14, s))
-        c.moveTo(notifScale(12, s), notifScale(16, s))
-        c.lineTo(notifScale(12, s), notifScale(17, s))
-        c.stroke()
-    } else if (kind == "GOAL_REACHED") {
-        c.beginPath()
-        c.moveTo(notifScale(7, s), notifScale(4, s))
-        c.lineTo(notifScale(17, s), notifScale(4, s))
-        c.lineTo(notifScale(17, s), notifScale(10, s))
-        c.lineTo(notifScale(12, s), notifScale(14, s))
-        c.lineTo(notifScale(7, s), notifScale(10, s))
-        c.closePath()
-        c.stroke()
-        c.beginPath()
-        c.moveTo(notifScale(12, s), notifScale(14, s))
-        c.lineTo(notifScale(12, s), notifScale(19, s))
-        c.moveTo(notifScale(8, s), notifScale(20, s))
-        c.lineTo(notifScale(16, s), notifScale(20, s))
-        c.stroke()
-    } else {
-        // DAILY_PULSE: raio.
-        c.beginPath()
-        c.moveTo(notifScale(13, s), notifScale(2, s))
-        c.lineTo(notifScale(4, s), notifScale(14, s))
-        c.lineTo(notifScale(12, s), notifScale(14, s))
-        c.lineTo(notifScale(11, s), notifScale(22, s))
-        c.lineTo(notifScale(20, s), notifScale(10, s))
-        c.lineTo(notifScale(12, s), notifScale(10, s))
-        c.closePath()
-        c.stroke()
-    }
-    return c
+// Ícone do trilho (design system, components/icons.kf): aviso, pulso, check
+// ou sino, no tom do `kind`.
+String notifIconName(String kind) {
+    if (kind == "REMINDER") { return "bell" }
+    if (kind == "ENVELOPE_EXCEEDED" || kind == "ENVELOPE_ALERT") { return "warn" }
+    if (kind == "GOAL_REACHED") { return "check" }
+    return "pulse"
 }
 
 Style railCssFor(String tone) {
@@ -102,9 +58,7 @@ Style badgeCssFor(String tone) {
 View notifItem(NotificationItem n) {
     val tone = notificationTone(n.kind())
     val badge = notificationBadge(n.kind())
-    var holder = View(screenStyle())
-    holder.setStyle(notifRailIconCss())
-    holder.bind(notifIcon(n.kind(), 22, toneColor(tone)))
+    var holder = iconView(notifIconName(n.kind()), 22, tone, "notif-icon-" + n.kind())
     var rail = Column(listOf(holder))
     rail.setStyle(railCssFor(tone))
 

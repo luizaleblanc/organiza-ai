@@ -66,8 +66,13 @@ RUN /opt/kof/bin/kof check backend \
  && unzip -p /out/app/kof-app.jar META-INF/services/java.sql.Driver | grep -qx 'org.h2.Driver'
 # Frontend (Batch 2, design 2.7): o mesmo Kof compila frontend/ para JS; o backend serve a pasta em / (app.serveDir).
 # O gate e o build: `kof check frontend` da PKG006 nos imports core.* (medido).
+# O `kof build` nao copia os assets (icones e marca em frontend/assets): copiados a mao e conferidos.
 RUN /opt/kof/bin/kof build frontend --target js --output /out/web \
- && test -f /out/web/index.html && test -f /out/web/Default.mjs
+ && test -f /out/web/index.html && test -f /out/web/Default.mjs \
+ && cp -r /src/frontend/assets /out/web/assets \
+ && test -f /out/web/assets/brand/organiza-simbolo.svg \
+ && test -f /out/web/assets/brand/organiza-fundo-ondas.svg \
+ && test -f /out/web/assets/icons/dash-accent.svg
 
 # ---------------------------------------------------------------------------
 # Run stage: JRE 25. As classes geradas do projeto sao V21 (major 65), mas o runtime do Kof
