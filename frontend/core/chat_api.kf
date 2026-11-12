@@ -58,8 +58,21 @@ String chatDecode(String text) = text.replace('¶', '\n')
 loadChat() {
     ChatUi.loading = true
     ChatUi.error = ""
+    ChatUi.draft = ""
+    ChatUi.pending = ""
+    ChatUi.sending = false
+    ChatUi.blocked = false
+    ChatUi.usageKnown = false
+    ChatUi.used = 0
+    ChatUi.limit = 0
     try {
-        val tier = json.decode<ChatTierStatus>(apiGet("/api/users/tier-status"))
+        val tierBody = apiGet("/api/users/tier-status")
+        if (isApiError(tierBody)) {
+            ChatUi.error = chatHistoryErrorText()
+            ChatUi.loading = false
+            return
+        }
+        val tier = json.decode<ChatTierStatus>(tierBody)
         ChatUi.used = tier.messagesUsed()
         ChatUi.limit = tier.messagesLimit()
         ChatUi.usageKnown = true
@@ -94,9 +107,11 @@ sendChatMessage(String text) {
             val message = json.decode<ChatApiError>(body).error()
             if (isChatLimitError(message)) {
                 ChatUi.blocked = true
-                if (ChatUi.limit > 0) {
-                    ChatUi.used = ChatUi.limit
+                if (ChatUi.limit <= 0) {
+                    ChatUi.limit = 30
                 }
+                ChatUi.used = ChatUi.limit
+                ChatUi.usageKnown = true
                 ChatUi.error = chatLimitText()
             } else {
                 ChatUi.error = message

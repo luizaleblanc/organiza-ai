@@ -7,28 +7,35 @@ import core.chat_api
 import core.navigation
 import components.topbar
 import components.form_widgets
+import components.icons
 
 // =============================================================================
-// Tela 10 Organiza AI (Batch 3, F2) — spec S10
+// Tela 10 Organiza AI (Batch 3, F2; B1 fidelidade Desktop + Mobile)
 // =============================================================================
-// Topbar "Organiza AI" + "Assistente online"; bolhas IA (esquerda) e usuário
-// (direita); saudação fixa quando o histórico está vazio; "digitando…" durante
-// o envio; contador "N de M mensagens"; erros 402 (limite, bloqueia), outros 4xx (mensagem do backend) e 503/rede.
-// Anexo (+) e voz ficam DESATIVADOS com "Em breve" (decisões 5 e 6 pendentes).
-// A lista usa column-reverse: o navegador mantém o scroll no fim sem JS.
+// Topbar "Organiza AI" + "Assistente online" (ponto verde em topbar.kf);
+// bolhas fiéis ao artefato (max-width 75%, 13px, canto de 3px, IA #1A1F3A sem
+// borda, usuária #00D4FF peso 600); saudação fixa sem prometer voz nem PDF;
+// lista flex (flex: 1 1 0; min-height: 0) com column-reverse entre topbar e
+// composer preso embaixo; composer em caixa única (raio 14) com plus e mic
+// 26px desativados + enviar 30px gradiente com icon("send", ..., "onaccent");
+// contador "N de 30" visível só quando faltam <= 5 ou no limite; 402/503
+// mantêm o rascunho.
 // =============================================================================
 
-Style chatBodyCss()      = Style("display: flex; flex-direction: column; gap: 12; width: 100%; flex-grow: 1; min-height: 0")
-Style chatListCss()      = Style("display: flex; flex-direction: column-reverse; gap: 12; width: 100%; flex-grow: 1; min-height: 240; max-height: 60vh; overflow-y: auto; padding: 4px 0")
-Style chatTypingCss()    = Style("align-self: flex-start; background: #12162A; color: #7B8EAD; border: 1px solid rgba(255,255,255,.1); border-radius: 12; padding: 12px 16px; font-size: 14; font-style: italic; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style chatBarCss()       = Style("display: flex; flex-direction: row; align-items: center; gap: 8; width: 100%; flex-wrap: wrap; justify-content: flex-end")
-Style chatInputCss()     = Style("background: #12162A; color: #F0F0F0; height: 48; flex: 1 1 240px; min-width: 0; box-sizing: border-box; border: 1px solid rgba(255,255,255,.06); border-radius: 8; padding: 0 16px; font-size: 16; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style chatIconOffCss()   = Style("width: 48; height: 48; flex-shrink: 0; background: #12162A; color: #4A5578; border: 1px solid rgba(255,255,255,.1); border-radius: 12; font-size: 14; font-weight: 600; cursor: not-allowed; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style chatSendCss()      = Style("width: 72; height: 48; flex-shrink: 0; background: #00D4FF; color: #06121C; border: none; border-radius: 12; font-size: 14; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style chatSendOffCss()   = Style("width: 72; height: 48; flex-shrink: 0; background: #1A1F3A; color: #4A5578; border: none; border-radius: 12; font-size: 14; font-weight: 600; cursor: not-allowed; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style chatFootCss()      = Style("display: flex; flex-direction: row; justify-content: space-between; gap: 8; width: 100%")
-Style chatHintCss()      = Style("color: #4A5578; font-size: 12; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style chatCounterCss()   = Style("color: #7B8EAD; font-size: 12; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style chatScreenDesktopCss() = Style("display: flex; flex-direction: column; gap: 16; width: 100%; height: 690; min-height: 0")
+Style chatScreenMobileCss()  = Style("display: flex; flex-direction: column; gap: 16; width: 100%; flex: 1 1 0; min-height: 0")
+Style chatBodyCss()       = Style("display: flex; flex-direction: column; gap: 12; width: 100%; flex: 1 1 0; min-height: 0")
+Style chatListCss()       = Style("display: flex; flex-direction: column-reverse; gap: 10; width: 100%; flex: 1 1 0; min-height: 0; overflow-y: auto; padding: 4px 0")
+Style chatBubbleAiCss()   = Style("align-self: flex-start; max-width: 75%; background: #1A1F3A; color: #F0F0F0; border: none; border-radius: 12px 12px 12px 3px; padding: 10px 14px; font-size: 13; line-height: 1.45em; white-space: pre-wrap; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style chatBubbleUserCss() = Style("align-self: flex-end; max-width: 75%; background: #00D4FF; color: #06121C; font-weight: 600; border: none; border-radius: 12px 12px 3px 12px; padding: 10px 14px; font-size: 13; line-height: 1.45em; white-space: pre-wrap; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style chatTypingCss()     = Style("align-self: flex-start; max-width: 75%; background: #1A1F3A; color: #7B8EAD; border: none; border-radius: 12px 12px 12px 3px; padding: 10px 14px; font-size: 13; line-height: 1.45em; font-style: italic; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style chatBarCss()        = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 8; width: 100%; flex-shrink: 0; box-sizing: border-box; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); border-radius: 14; padding: 6px 8px 6px 10px")
+Style chatInputCss()      = Style("background: transparent; color: #F0F0F0; border: none; outline: none; height: 34; width: auto; flex: 1 1 0; min-width: 0; box-sizing: border-box; padding: 0 4px; font-size: 13; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style chatAttachOffCss()  = Style("width: 30; height: 30; min-width: 30; flex-shrink: 0; border-radius: 15; background: transparent; border: 1px solid rgba(255,255,255,.1); display: flex; align-items: center; justify-content: center; padding: 0; opacity: 0.5; cursor: not-allowed; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style chatMicOffCss()     = Style("width: 26; height: 26; min-width: 26; flex-shrink: 0; border-radius: 13; background: transparent; border: none; display: flex; align-items: center; justify-content: center; padding: 0; opacity: 0.5; cursor: not-allowed; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style chatSendCss()       = Style("width: 30; height: 30; min-width: 30; flex-shrink: 0; border-radius: 15; background: linear-gradient(135deg, #00D4FF, #0066FF); border: none; display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style chatSendOffCss()    = Style("width: 30; height: 30; min-width: 30; flex-shrink: 0; border-radius: 15; background: #1A1F3A; border: none; display: flex; align-items: center; justify-content: center; padding: 0; opacity: 0.5; cursor: not-allowed; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style chatCounterCss()    = Style("color: #7B8EAD; font-size: 12; align-self: flex-end; flex-shrink: 0; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 
 String chatGreeting() {
     var name = SessionState.userName.trim()
@@ -40,16 +47,16 @@ String chatGreeting() {
     if (name != "") {
         hi = "Oi, " + name + "!"
     }
-    return hi + " Me fala seus gastos aí. Você pode digitar, falar por voz ou enviar sua fatura por aqui que eu leio e organizo tudo pra você."
+    return hi + " Me fala seus gastos aí que eu organizo tudo pra você."
 }
 
 Label chatBubble(String role, String text, String id) {
     var b = Label(text)
     b.setId(id)
     if (role == "USER") {
-        b.setStyle(bubbleUserCss())
+        b.setStyle(chatBubbleUserCss())
     } else {
-        b.setStyle(bubbleAiCss())
+        b.setStyle(chatBubbleAiCss())
     }
     return b
 }
@@ -64,8 +71,7 @@ List<View> chatBubblesNewestFirst() {
         out.add(t)
         out.add(chatBubble("USER", ChatUi.pending, "chat-pending"))
     }
-    var lines = ChatState.messages.split("
-")
+    var lines = ChatState.messages.split("\n")
     var n = 0
     for (var i = lines.size - 1; i >= 0; i--) {
         var line = lines[i]
@@ -81,21 +87,27 @@ List<View> chatBubblesNewestFirst() {
     return out
 }
 
-String chatCounterText() {
-    if (!ChatUi.usageKnown) {
-        return ""
+Bool showChatCounter() {
+    if (!ChatUi.usageKnown || ChatUi.limit < 0) {
+        return false
     }
-    if (ChatUi.limit < 0) {
-        return String.valueOf(ChatUi.used) + " mensagens neste mês (Pro: ilimitado)"
+    return ChatUi.blocked || (ChatUi.limit - ChatUi.used <= 5)
+}
+
+String chatCounterText() {
+    if (!showChatCounter()) {
+        return ""
     }
     return String.valueOf(ChatUi.used) + " de " + String.valueOf(ChatUi.limit) + " mensagens neste mês"
 }
 
-Button soonButton(String label, String id) {
-    var b = Button(label, () -> {})
+View soonIconButton(String iconName, Int size, String tone, String id, Style css, String label) {
+    var b = View(screenStyle())
     b.setId(id)
     b.setDisabled(true)
-    b.setStyle(chatIconOffCss())
+    b.setAccessibleName(label)
+    b.setStyle(css)
+    b.bind(icon(iconName, size, tone))
     return b
 }
 
@@ -121,16 +133,28 @@ View chatScreen(Window w) {
     var field = textField("Pergunte qualquer coisa", "text", "chat-input")
     field.setText(ChatUi.draft)
     field.setStyle(chatInputCss())
+    field.on("input", () -> {
+        ChatUi.draft = field.text()
+    })
+
     var off = ChatUi.sending || ChatUi.blocked
-    var send = Button("Enviar", () -> {})
+    var attach = soonIconButton("plus", 16, "secondary", "chat-attach", chatAttachOffCss(), "Anexar fatura (em breve)")
+    var mic = soonIconButton("mic", 16, "muted", "chat-mic", chatMicOffCss(), "Voz (em breve)")
+
+    var send = View(screenStyle())
     send.setId("chat-send")
-    send.setStyle(chatSendCss())
+    send.setAccessibleName("Enviar")
     if (off) {
         field.setDisabled(true)
         send.setDisabled(true)
         send.setStyle(chatSendOffCss())
+        send.bind(icon("send", 14, "muted"))
+    } else {
+        send.setStyle(chatSendCss())
+        send.bind(icon("send", 14, "onaccent"))
     }
-    var bar = Form(listOf(soonButton("+", "chat-attach"), field, soonButton("Voz", "chat-mic"), send))
+
+    var bar = Form(listOf(attach, field, mic, send))
     bar.setId("chat-form")
     bar.setStyle(chatBarCss())
     bar.onSubmit(() -> {
@@ -147,15 +171,9 @@ View chatScreen(Window w) {
             }
         }
     })
-
-    var hint = Label("Anexar fatura e voz: Em breve")
-    hint.setId("chat-soon")
-    hint.setStyle(chatHintCss())
-    var counter = Label(chatCounterText())
-    counter.setId("chat-counter")
-    counter.setStyle(chatCounterCss())
-    var foot = Row(listOf(hint, counter))
-    foot.setStyle(chatFootCss())
+    if (!off) {
+        send.on("click", () -> bar.submit())
+    }
 
     var parts: List<View> = listOf()
     parts.add(list)
@@ -165,12 +183,22 @@ View chatScreen(Window w) {
         parts.add(err)
     }
     parts.add(bar)
-    parts.add(foot)
+    if (showChatCounter()) {
+        var counter = Label(chatCounterText())
+        counter.setId("chat-counter")
+        counter.setStyle(chatCounterCss())
+        parts.add(counter)
+    }
+
     var body = Column(parts)
     body.setStyle(chatBodyCss())
 
     var col = Column(listOf(topbar("Organiza AI", "Assistente online", null), body))
     col.setId("screen-chat")
-    col.setStyle(stackCss())
+    if (AppState.isDesktop) {
+        col.setStyle(chatScreenDesktopCss())
+    } else {
+        col.setStyle(chatScreenMobileCss())
+    }
     return col
 }

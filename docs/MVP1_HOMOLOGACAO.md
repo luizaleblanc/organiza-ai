@@ -788,7 +788,7 @@ Refaz, sobre `ed7e691`, o trabalho de 02 e 03/11 perdido na limpeza do Windows. 
   - Fonte computada `system-ui` em texto e em botão.
   - Nitidez da logo: amostrada em zoom 1 e 4, a razão pixels-de-borda/pixels-acesos cai ~4× (0.096 → 0.024 na boas-vindas; 0.18 → 0.057 na sidebar) nos dois dpr, isto é, as bordas continuam de 1 px ao ampliar: vetor, sem pixelado.
   - 0 `UNCAUGHT` e 0 `console.error`.
-- **Pendente:** repetir o G-BUILD no Kof 0.7.2 (release estável mais recente); o download pela OneDrive não terminou dentro desta sessão.
+- **Pendente:** repetir o G-BUILD da A1 no Kof 0.7.2 (release estável mais recente); o download pela OneDrive não terminou dentro daquela sessão.
 
 ## 16. Cadastro com nome, sobrenome, idade e política de senha (A2, backend, 12/11/2026)
 
@@ -931,3 +931,30 @@ Alinhada aos artefatos `WelcomeWin` (Desktop) e `WelcomeScreen` (Mobile), manten
 | G-UI headless (`out/gate_b2.mjs`, Edge CDP, Desktop `1280×800` e Mobile `360×640`, H2 semeado em reais via `/api/*`) | 45/45 checks, 0 `UNCAUGHT`, 0 `console.error` | 45/45 checks, 0 `UNCAUGHT`, 0 `console.error` |
 
 Cobertura do G-UI: textos, alturas/raios e `system-ui` na Boas-vindas; abas no `#topbar-action` sem overflow; valores dos 3 tiles batendo com `/api/dashboard?period=month|week|year`; pixels do donut 4× nas cores `#00D4FF`/`#0066FF`/`#00E5A0` e `#12162A`; clique em `#legend-0`/`1`/`2` e `#dash-donut` atualizando `#donut-center` e esmaecendo os itens não selecionados.
+
+## 20. Fidelidade da Tela 10 Organiza AI (B1, 12/11/2026)
+
+Alinha `frontend/screens/chat_screen.kf` e `frontend/core/chat_api.kf` aos artefatos Desktop e Mobile e às decisões da usuária (`docs/DESIGN_SYSTEM.md`):
+
+- **Topbar e saudação:** `topbar("Organiza AI", "Assistente online", null)` com o ponto verde `#00E5A0` de 6 px (`#topbar-online-dot`). Quando não há mensagens, exibe `"Oi, <PrimeiroNome>! Me fala seus gastos aí que eu organizo tudo pra você."` sem prometer voz nem leitura de fatura PDF.
+- **Bolhas de conversa:** largura máxima `75%`, fonte `13px`, `line-height: 1.45em`, `padding: 10px 14px`. IA à esquerda em `#1A1F3A`, texto `#F0F0F0`, sem borda e raio `12px 12px 12px 3px`; usuária à direita em `#00D4FF`, texto `#06121C`, peso `600` e raio `12px 12px 3px 12px`; indicador `"Organiza AI está digitando…"` em `#1A1F3A` com texto `#7B8EAD` em itálico.
+- **Escape seguro no histórico local:** `chatEncode`/`chatDecode` escapam `\n` ↔ `¶` e `|` ↔ `¦`, evitando que uma mensagem com `|` quebre o formato `ROLE|texto` de `ChatState.messages`.
+- **Lista flexível e composer preso embaixo:** removidos `max-height: 60vh` e `min-height: 240`. A lista usa `flex: 1 1 0; min-height: 0; overflow-y: auto; flex-direction: column-reverse` dentro de `#screen-chat` (`height: 690` no Desktop `1280×800`, `flex: 1 1 0` no Mobile `360×640`), mantendo o composer colado ao rodapé (`formBottom <= 790` no Desktop `1280×800` mesmo com o contador visível).
+- **Composer em caixa única (1 linha nos dois viewports):** `Form` com `flex-wrap: nowrap`, fundo `rgba(255,255,255,.04)`, borda `1px solid rgba(255,255,255,.1)`, raio `14px` e `padding: 6px 8px 6px 10px`:
+  - Anexo (`#chat-attach`): `30×30`, borda circular `border-soft`, ícone `plus` (`secondary`, 16 px), `disabled` com `opacity: 0.5`.
+  - Campo (`#chat-input`): transparente, sem borda, `flex: 1 1 0; min-width: 0`, placeholder `"Pergunte qualquer coisa"`.
+  - Voz (`#chat-mic`): `26×26`, transparente, ícone `mic` (`muted`, 16 px), `disabled` com `opacity: 0.5`.
+  - Enviar (`#chat-send`): `30×30`, circular (`border-radius: 15`), gradiente `linear-gradient(135deg, #00D4FF, #0066FF)` com `icon("send", 14, "onaccent")` quando ativo, ou `#1A1F3A` com `icon("send", 14, "muted")` e `opacity: 0.5` quando bloqueado/enviando.
+  - Removida a legenda `#chat-soon` (`"+ e Voz: em breve"`).
+- **Contador discreto e preservação de rascunho:** `#chat-counter` (`"N de 30 mensagens neste mês"`) só aparece quando `limit - used <= 5` (a partir de `25 de 30`) ou quando bloqueado (`30 de 30`). Ao enviar, o campo limpa na hora; se ocorrer erro `503`/rede ou `402` (limite atingido), o texto digitado volta para `ChatUi.draft` / `#chat-input`.
+
+### 20.1 Gates (Kof 0.6.6 e Kof 0.7.2, Windows; backend H2 local)
+
+- **G-BUILD js:** `kof build frontend --target js` com `0` erros em `0.6.6` e `0.7.2` (+ cópia de `frontend/assets`).
+- **G-UI headless (`out/gate_chat.mjs`, Edge `--headless=new` + CDP puro):** Desktop `1280×800` e Mobile `360×640` em `0.6.6` e `0.7.2`:
+  - Topbar 56 px com `"Assistente online"` e ponto verde; saudação fiel sem voz/PDF.
+  - Estilos computados das bolhas da IA e da usuária, raio `14px` do composer, ícones `plus-secondary.svg`, `mic-muted.svg` e `send-onaccent.svg` carregados (`naturalWidth > 0`), composer em linha única nos dois viewports, sem `#chat-soon` e sem overflow horizontal.
+  - Envio por clique em `#chat-send` e por submit do formulário (`Enter`), bolhas separadas por mensagem e preservadas após recarregar a página e fazer login novamente.
+  - Erro `503` simulado via CDP `Fetch.fulfillRequest` preserva o rascunho (`"jantar R$ 80"`) com o campo habilitado.
+  - Contador oculto em `0/30`, `1/30` e `24/30`, visível em `25/30` (`"25 de 30 mensagens neste mês"`) com a lista rolando e `formBottom = 790 <= 800` no Desktop e `formBottom = 562 <= 640` no Mobile; na 31ª mensagem (`402`), mostra o erro de limite, atualiza para `"30 de 30 mensagens neste mês"`, preserva o rascunho (`"café R$ 12"`) e desabilita o envio.
+  - **Resultado:** `36/36` asserções verdes em `0.6.6` e `36/36` em `0.7.2`, `0 FAILURES`, `0 UNCAUGHT`, `0 console.error`.
