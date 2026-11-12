@@ -21,7 +21,7 @@ Confirmado em `training/idioms/architecture.md` (seção "4. Módulos"):
 
 Para programas pequenos, um único arquivo `.kf` com `main()` no topo é
 suficiente -- só use módulos quando o arquivo cresce (como o middleware de
-auth deste projeto, separado por convenção de `CONTRIBUTING.md`).
+auth deste projeto, separado por convenção de [`docs/CONTRIBUTING.md`](../CONTRIBUTING.md)).
 
 **Neste projeto:** `bff/middleware/auth.kf` declara `package middleware`;
 `bff/main.kf` importa com `import middleware.auth`.

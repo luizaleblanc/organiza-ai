@@ -105,7 +105,7 @@ Resumo das entidades principais: **User** (dados do usuário, salário mensal, i
 
 ## Design System
 
-Identidade visual completa (paleta `#0A0D18` / `#00D4FF`, tipografia system-ui, marca e fundo oficiais em SVG, componentes, ícones, badges e tokens) documentada em [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md), com as inconsistências entre os artefatos e o valor adotado; os widgets de formulário em [docs/FORM_WIDGETS.md](docs/FORM_WIDGETS.md). O `DESIGN_SYSTEM.md` da raiz é histórico.
+Identidade visual completa (paleta `#0A0D18` / `#00D4FF`, tipografia system-ui, marca e fundo oficiais em SVG, componentes, ícones, badges e tokens) documentada em [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md), com as inconsistências entre os artefatos e o valor adotado; os widgets de formulário em [docs/FORM_WIDGETS.md](docs/FORM_WIDGETS.md). O [`docs/DESIGN_SYSTEM_LEGACY.md`](docs/DESIGN_SYSTEM_LEGACY.md) é histórico.
 
 **Artefatos Oficiais do MVP 1 (Claude Artifacts):**
 - **Design System (Tokens & Componentes):** [https://claude.ai/artifact/JVjueTmHeJsnHLsow3LDVb](https://claude.ai/artifact/JVjueTmHeJsnHLsow3LDVb)
@@ -236,9 +236,46 @@ Na visão KOF, segregar o frontend e o backend em dois mundos artificiais com pr
 - **Pendência conhecida de validação de bytecode:** `scripts/validate_architecture.ps1` está atualmente bloqueado por um bug do compilador Kof4j na geração de bytecode JVM (`ASM COMPUTE_FRAMES`) ao construir `record`s com campos `Double` seguidos de um campo `String?` nulo -- ver Issue #41. O `kof check` (typecheck) passa normalmente; o bloqueio é só na fase de emissão de bytecode.
 
 
+## Documentação (`docs/`)
+
+Todos os documentos de governança, arquitetura, design system, especificações e referências técnicas do KOF ficam centralizados na pasta [`docs/`](docs/):
+
+| Categoria | Documento | Descrição |
+|---|---|---|
+| **Governança & Comunidade** | [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) | Guia de contribuição, setup do ambiente, padrões de código e fluxo de PR |
+| | [`docs/CODE_OF_CONDUCT.md`](docs/CODE_OF_CONDUCT.md) | Código de conduta da comunidade (Contributor Covenant 2.1) |
+| **Status & Decisões** | [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) | Estado atual dos módulos, roadmap e issues ativas |
+| | [`docs/DECISIONS.md`](docs/DECISIONS.md) | Log histórico de decisões arquiteturais e de produto (ADRs) |
+| | [`docs/ARCHITECTURE_DECISIONS.md`](docs/ARCHITECTURE_DECISIONS.md) | Decisões de arquitetura da transição KofLith |
+| | [`docs/MVP1_HOMOLOGACAO.md`](docs/MVP1_HOMOLOGACAO.md) | Homologação Java → Kof, contratos de API, testes E2E e gates |
+| | [`docs/MVP1_EXECUTION_PLAN.md`](docs/MVP1_EXECUTION_PLAN.md) | Plano executivo de ataque do MVP 1 (Spec-Driven Development) |
+| **Design System & UI** | [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md) | Design System oficial do MVP 1 (paleta, tipografia, ícones, ondas e tokens) |
+| | [`docs/FORM_WIDGETS.md`](docs/FORM_WIDGETS.md) | Catálogo de widgets de formulário em `kof.ui` |
+| | [`docs/FRONTEND_PATTERNS.md`](docs/FRONTEND_PATTERNS.md) | Padrões de interface e arquitetura em `kof.ui` |
+| | [`docs/DESIGN_SYSTEM_LEGACY.md`](docs/DESIGN_SYSTEM_LEGACY.md) | Especificação anterior do Design System (registro histórico) |
+| **Dados, Deploy & Pesquisa** | [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) | Modelagem relacional completa e entidades |
+| | [`docs/DEPLOY.md`](docs/DEPLOY.md) | Configuração de produção (Render + MySQL Aiven) e variáveis de ambiente |
+| | [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) | Metodologia e resultados empíricos de compilação e runtime KOF |
+| | [`docs/EDUCATION_VISION.md`](docs/EDUCATION_VISION.md) | Visão pedagógica e de educação financeira do produto |
+| | [`docs/pesquisa/GUIA-ARTIGO-CIENTIFICO.md`](docs/pesquisa/GUIA-ARTIGO-CIENTIFICO.md) | Guia de pesquisa científica e validação empírica |
+| **Referências KOF & IA** | [`docs/KOF_REFERENCE.md`](docs/KOF_REFERENCE.md) | Referência geral da linguagem KOF e `kof.ui` |
+| | [`docs/KOF_WEB_REFERENCE.md`](docs/KOF_WEB_REFERENCE.md) | Referência de `kof.web` e cliente HTTP `kof.http` |
+| | [`docs/LLM_KOF_UI_GUIDELINES.md`](docs/LLM_KOF_UI_GUIDELINES.md) | Firewall anti-alucinação para geração de `kof.ui` |
+| | [`docs/AGENT_GUIDELINES.md`](docs/AGENT_GUIDELINES.md) | Diretrizes para agentes de IA no frontend |
+| | [`docs/kof4j/`](docs/kof4j/README.md) | Espelho local da documentação de segurança, módulos e web do Kof4j |
+| | [`docs/handoff/ANTIGRAVITY_HANDOFF.md`](docs/handoff/ANTIGRAVITY_HANDOFF.md) | Handoff operacional para agentes |
+| **Issues & Specs de Fase** | [`docs/ISSUES_GUIDE.md`](docs/ISSUES_GUIDE.md) | Guia de implementação passo a passo por issue ativa |
+| | [`docs/ISSUES.md`](docs/ISSUES.md) | Registro de issues de arquitetura e bloqueios upstream |
+| | [`docs/specs/`](docs/specs/) | Especificações de fases (`PHASE_0_FOUNDATION.md`, `PHASE_1_CORE_MVP.md`, `PHASE_2_DASHBOARD.md`) |
+| **Histórico & Auditorias** | [`docs/ARCHITECTURE_AUDIT_2026-09-08.md`](docs/ARCHITECTURE_AUDIT_2026-09-08.md) | Auditoria histórica da arquitetura |
+| | [`docs/ISSUES_BACKLOG_2026-09-08.md`](docs/ISSUES_BACKLOG_2026-09-08.md) | Backlog histórico de issues |
+| | [`docs/RELATORIO-TECNICO.md`](docs/RELATORIO-TECNICO.md) | Relatório técnico da fase inicial (Spring Boot / Next.js) |
+| | [`docs/KOF_VS_FLUTTER.md`](docs/KOF_VS_FLUTTER.md) | Comparativo histórico KOF vs Flutter |
+| | [`docs/PR_MELISSA.md`](docs/PR_MELISSA.md) | Proposta histórica de melhorias de UI para o Kof4j |
+
 ## Como Contribuir
 
-Veja [CONTRIBUTING.md](CONTRIBUTING.md) para o guia completo de setup, padrões de código e fluxo de PR. Todo participante deve seguir o [Código de Conduta](CODE_OF_CONDUCT.md).
+Veja [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) para o guia completo de setup, padrões de código e fluxo de PR. Todo participante deve seguir o [Código de Conduta](docs/CODE_OF_CONDUCT.md).
 
 ## Guideline de Uso de IA
 
@@ -352,7 +389,7 @@ Você é um agente de código no projeto organiza-ai (Arquitetura Monolítica Ko
 Stack: KOF 100% Nativo (backend/*.kf em kof.web na porta 3000 + frontend/*.kf em kof.ui), MySQL (Aiven) em produção.
 REGRAS ABSOLUTAS:
 1. NUNCA faça git commit ou git push (apenas a maintainer executa commits e push)
-2. Leia obrigatoriamente docs/kof4j/ (README + training/), KOF_REFERENCE.md e docs/LLM_KOF_UI_GUIDELINES.md antes de tocar em qualquer arquivo .kf
+2. Leia obrigatoriamente docs/kof4j/ (README + training/), docs/KOF_REFERENCE.md e docs/LLM_KOF_UI_GUIDELINES.md antes de tocar em qualquer arquivo .kf
 3. Rode kof check backend e kof check frontend antes de entregar qualquer lote
 4. Use estritamente primitivas reais do compilador Kof4j (Window, View, Column, Row, Label, Button, Input, Canvas, Style, Color, Theme)
 5. Não crie arquivos fora de .specs/, docs/, scripts/, backend/ ou frontend/
@@ -379,7 +416,7 @@ MIT License. Veja [LICENSE](LICENSE).
 
 Sendo o Organiza AI um dos projetos pioneiros a implementar a arquitetura **Full-Stack KofLith (`backend/*.kf` + `frontend/*.kf`)** em escala real, somos os principais *beta testers* empíricos da linguagem criada pela Melissa. 
 
-Contribuidores são bem-vindos para implementar as issues documentadas em PROJECT_STATUS.md. Além disso, encorajamos que as dores que encontramos aqui sejam levadas como propostas de Pull Requests para o repositório oficial do [Kof4j](https://github.com/KofLang/Kof4j):
+Contribuidores são bem-vindos para implementar as issues documentadas em [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md). Além disso, encorajamos que as dores que encontramos aqui sejam levadas como propostas de Pull Requests para o repositório oficial do [Kof4j](https://github.com/KofLang/Kof4j):
 
 1. **Suporte CI Headless:** Lançar uma flag --headless ou --ci no CLI do KOF para evitar crashes da máquina virtual Java no GitHub Actions.
 2. **Mensagens de Erro Semânticas:** Traduzir erros agressivos de geração de bytecode da JVM (ex: ArrayIndexOutOfBoundsException no ASM COMPUTE_FRAMES) para *SyntaxErrors* humanos apontando linha/coluna no parser.

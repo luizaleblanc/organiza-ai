@@ -19,7 +19,7 @@
    (por exemplo em `%TEMP%\organiza-scratch\`). Não apague arquivos existentes: liste-os e pergunte.
 5. **Use `kof.security`:** `passwords.hash/verify`, `security.constantTimeEquals`, `secrets.*`.
    Nenhum segredo escrito no código e nenhum segredo em log.
-6. **Mantenha a documentação congruente** ([README](../../README.md), [PROJECT_STATUS](../../PROJECT_STATUS.md),
+6. **Mantenha a documentação congruente** ([README](../../README.md), [PROJECT_STATUS](../PROJECT_STATUS.md),
    [CLAUDE.md](../../CLAUDE.md), [.specs/STATE.md](../../.specs/STATE.md)) e atualize o README ao fim da sessão.
 7. **Issues:** comentário de progresso, links de referência, demanda explícita e badge
    (`good first issue` / `intermediario` / `avancado`).
@@ -279,7 +279,7 @@ nova sem contorno medido, ou se uma versão nova do Kof quebrar algo que passava
 
 ## 7. Referências do projeto (RAG local)
 
-- Arquitetura e decisões: [.specs/STATE.md](../../.specs/STATE.md), [DECISIONS.md](../../DECISIONS.md), [docs/ARCHITECTURE_DECISIONS.md](../ARCHITECTURE_DECISIONS.md)
+- Arquitetura e decisões: [.specs/STATE.md](../../.specs/STATE.md), [docs/DECISIONS.md](../DECISIONS.md), [docs/ARCHITECTURE_DECISIONS.md](../ARCHITECTURE_DECISIONS.md)
 - Spec do MVP 1: [.specs/features/mvp1-koflith-attack/](../../.specs/features/mvp1-koflith-attack/spec.md), [docs/MVP1_EXECUTION_PLAN.md](../MVP1_EXECUTION_PLAN.md)
 - Issues: [guia](../ISSUES_GUIDE.md), [#41](https://github.com/luizaleblanc/organiza-ai/issues/41) (com a raiz e os repros do bug)
 - Benchmarks: [docs/BENCHMARKS.md](../BENCHMARKS.md), [scripts/benchmark_kof.ps1](../../scripts/benchmark_kof.ps1)

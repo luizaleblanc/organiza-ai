@@ -17,7 +17,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 
 ## Test Coverage Matrix
 
-> Generated from codebase, project guidelines (`README.md`, `CONTRIBUTING.md`, `AGENT_GUIDELINES.md`, `docs/LLM_KOF_UI_GUIDELINES.md`), and spec.
+> Generated from codebase, project guidelines (`README.md`, `docs/CONTRIBUTING.md`, `docs/AGENT_GUIDELINES.md`, `docs/LLM_KOF_UI_GUIDELINES.md`), and spec.
 
 | Code Layer | Required Test Type | Coverage Expectation | Location Pattern | Run Command |
 | ---------- | ------------------ | -------------------- | ---------------- | ----------- |
@@ -88,7 +88,7 @@ T14 → T15
 - **What**: Create `frontend/core/app_state.kf` defining `AppState` (`currentScreen`, `isDesktop`, `activeNotificationModel`), `SessionState` (`token`, `userId`, `userName`, `userEmail`, `tier`), `OnboardingState` (`salaryStr`, `incomeType`, `hasDebt`, `debtAmountStr`, `suggestedModel`, `modelDescription`), `DashboardState` (`dailyPulseStr`, `daysRemaining`, `tipText`, `needsPct`, `wantsPct`, `savingsPct`), and `ChatState` (`messages`).
 - **Where**: `frontend/core/app_state.kf`
 - **Depends on**: T1
-- **Reuses**: `KOF_REFERENCE.md` section 4
+- **Reuses**: `docs/KOF_REFERENCE.md` section 4
 - **Requirement**: REQ-MVP1-02
 - **Done when**:
   - [ ] All mutable state fields are `static` inside PascalCase classes with explicit non-null default values (zero `SEM048`)
@@ -103,7 +103,7 @@ T14 → T15
 - **What**: Create `frontend/core/api_client.kf` with functions calling `http://localhost:3000` (`apiLogin`, `apiRegister`, `apiSubmitOnboarding`, `apiFetchDailyPulse`, `apiFetchDashboard`, `apiFetchEnvelopes`, `apiCreateEnvelope`, `apiSendChatMessage`) using `http.get` / `http.post` with newline-joined header strings and safe fallback data if offline.
 - **Where**: `frontend/core/api_client.kf`
 - **Depends on**: T2
-- **Reuses**: `KOF_WEB_REFERENCE.md`, `backend/main.kf`
+- **Reuses**: `docs/KOF_WEB_REFERENCE.md`, `backend/main.kf`
 - **Requirement**: REQ-MVP1-03
 - **Done when**:
   - [ ] Uses `http.post(url, body, headers)` returning `String` (zero `.body` / `.status` fake properties)
@@ -286,8 +286,8 @@ T14 → T15
 ---
 
 ### T15: Run Full-Stack E2E Homologation (`scripts/test_e2e_flow.ps1`) & Final Verifier Audit
-- **What**: Execute full build gate (`kof check backend/main.kf`, `kof check frontend/main.kf`, `scripts/run_parity_tests.ps1`, `scripts/test_e2e_flow.ps1`), update `PROJECT_STATUS.md` checkboxes for MVP 1 completion (Issues #11, #32, #33, #34, #41), and generate `.specs/features/mvp1-koflith-attack/validation.md`.
-- **Where**: `PROJECT_STATUS.md`, `.specs/features/mvp1-koflith-attack/validation.md`
+- **What**: Execute full build gate (`kof check backend/main.kf`, `kof check frontend/main.kf`, `scripts/run_parity_tests.ps1`, `scripts/test_e2e_flow.ps1`), update `docs/PROJECT_STATUS.md` checkboxes for MVP 1 completion (Issues #11, #32, #33, #34, #41), and generate `.specs/features/mvp1-koflith-attack/validation.md`.
+- **Where**: `docs/PROJECT_STATUS.md`, `.specs/features/mvp1-koflith-attack/validation.md`
 - **Depends on**: T14
 - **Reuses**: `scripts/test_e2e_flow.ps1`
 - **Requirement**: REQ-MVP1-01 through REQ-MVP1-08

@@ -47,7 +47,7 @@ O desenvolvimento segue o fluxo **Spec-Driven Development (`tlc-spec-driven`)** 
 
 ### Fase 1 -- Design & Especificação (`.specs/`)
 
-Modelagem visual de dados em Mermaid.js, fidelidade à tríade do Design System (`DESIGN_SYSTEM.md`) e aprovação das especificações (`spec.md`, `design.md`, `tasks.md`) antes de escrever código:
+Modelagem visual de dados em Mermaid.js, fidelidade à tríade do Design System (`docs/DESIGN_SYSTEM.md`) e aprovação das especificações (`spec.md`, `design.md`, `tasks.md`) antes de escrever código:
 
 - Diagramas ER em `docs/DATA_MODEL.md`
 - Especificações da feature em `.specs/features/<feature>/` e plano executivo em `docs/MVP1_EXECUTION_PLAN.md`
@@ -55,7 +55,7 @@ Modelagem visual de dados em Mermaid.js, fidelidade à tríade do Design System 
 
 ### Fase 2 -- Desenvolvimento (Monólito Modular KOF)
 
-Implementação modular em KOF respeitando estritamente o corpus oficial (`docs/kof4j/` e `KOF_REFERENCE.md`).
+Implementação modular em KOF respeitando estritamente o corpus oficial (`docs/kof4j/` e `docs/KOF_REFERENCE.md`).
 
 **Backend Monolítico Modular (`backend/*.kf` — `kof.web`):**
 ```text
@@ -179,7 +179,7 @@ kof run --target=js frontend/main.kf
 
 ### Tom de voz
 
-Textos voltados ao usuário seguem o tom de voz da marca: linguagem simples, acolhedora, sem jargão financeiro e sem julgamento. Consulte `DESIGN_SYSTEM.md`.
+Textos voltados ao usuário seguem o tom de voz da marca: linguagem simples, acolhedora, sem jargão financeiro e sem julgamento. Consulte `docs/DESIGN_SYSTEM.md`.
 
 ---
 
@@ -238,7 +238,7 @@ Tipos permitidos: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 Abra o merge request da sua branch de feature para `dev`, referenciando a issue (`Closes #N`).
 
 ```markdown
-- [ ] Segue o contrato de API e a especificação em `.specs/features/` e `DESIGN_SYSTEM.md`
+- [ ] Segue o contrato de API e a especificação em `.specs/features/` e `docs/DESIGN_SYSTEM.md`
 - [ ] `kof check backend` e `kof check frontend` passam com `0` erros
 - [ ] Suíte E2E (`scripts/test_e2e_flow.ps1`) passa (`9/9 GREEN`)
 - [ ] Respeita as fronteiras da Arquitetura Monolítica Modular (`backend/*.kf` e `frontend/core/`, `components/`, `screens/`)
@@ -273,15 +273,15 @@ feature/* --MR--> dev --MR--> qa --(maintainer testa)--> main
 ## Guia de implementação e Especificações (SDD)
 
 Antes de começar uma issue ou lote de execução:
-1. Consulte o plano executivo em [docs/MVP1_EXECUTION_PLAN.md](docs/MVP1_EXECUTION_PLAN.md) e as especificações SDD em [.specs/features/mvp1-koflith-attack/](.specs/features/mvp1-koflith-attack/).
-2. Consulte [docs/ISSUES_GUIDE.md](docs/ISSUES_GUIDE.md) e o log de decisões arquiteturais em [.specs/STATE.md](.specs/STATE.md) e [DECISIONS.md](DECISIONS.md).
+1. Consulte o plano executivo em [docs/MVP1_EXECUTION_PLAN.md](MVP1_EXECUTION_PLAN.md) e as especificações SDD em [.specs/features/mvp1-koflith-attack/](../.specs/features/mvp1-koflith-attack/).
+2. Consulte [docs/ISSUES_GUIDE.md](ISSUES_GUIDE.md) e o log de decisões arquiteturais em [.specs/STATE.md](../.specs/STATE.md) e [docs/DECISIONS.md](DECISIONS.md).
 
 ## Referência técnica do KOF
 
 Consulte os seguintes documentos no repositório antes de tocar em qualquer arquivo `.kf`:
-- [KOF_REFERENCE.md](KOF_REFERENCE.md) — referência geral da linguagem e `kof.ui`
-- [KOF_WEB_REFERENCE.md](KOF_WEB_REFERENCE.md) — referência de `kof.web` e HTTP client
-- [docs/LLM_KOF_UI_GUIDELINES.md](docs/LLM_KOF_UI_GUIDELINES.md) — firewall anti-alucinação para `kof.ui` (`--target=js`)
+- [docs/KOF_REFERENCE.md](KOF_REFERENCE.md) — referência geral da linguagem e `kof.ui`
+- [docs/KOF_WEB_REFERENCE.md](KOF_WEB_REFERENCE.md) — referência de `kof.web` e HTTP client
+- [docs/LLM_KOF_UI_GUIDELINES.md](LLM_KOF_UI_GUIDELINES.md) — firewall anti-alucinação para `kof.ui` (`--target=js`)
 - `docs/kof4j/` — espelho local do `README.md` e da pasta `training/` do compilador oficial `Kof4j`
 
 ## Como configurar sua IA para codar em KOF
@@ -313,7 +313,7 @@ Os arquivos essenciais que todo agente ou subagente (**Gemini Flash Effort Alto*
 
 ### 2. Incluir na primeira mensagem
 
-Antes de pedir qualquer código KOF para a IA, instrua o agente a ler `docs/kof4j/README.md`, `docs/kof4j/training/`, `KOF_REFERENCE.md` e `docs/LLM_KOF_UI_GUIDELINES.md`.
+Antes de pedir qualquer código KOF para a IA, instrua o agente a ler `docs/kof4j/README.md`, `docs/kof4j/training/`, `docs/KOF_REFERENCE.md` e `docs/LLM_KOF_UI_GUIDELINES.md`.
 
 ### 3. Validar SEMPRE antes de commitar
 
@@ -337,6 +337,6 @@ Se não compilar, a IA inventou sintaxe. Corrija confrontando o erro com `traini
 ## Links Oficiais
 
 - [KOF Compiler GitHub (`KofLang/Kof4j`)](https://github.com/KofLang/Kof4j)
-- [Design System & Tríade de Artefatos MVP 1 (`DESIGN_SYSTEM.md`)](DESIGN_SYSTEM.md)
-- [Plano de Execução MVP 1 (`docs/MVP1_EXECUTION_PLAN.md`)](docs/MVP1_EXECUTION_PLAN.md)
-- [Metodologia de Benchmarks (`docs/BENCHMARKS.md`)](docs/BENCHMARKS.md)
+- [Design System & Tríade de Artefatos MVP 1 (`docs/DESIGN_SYSTEM.md`)](DESIGN_SYSTEM.md)
+- [Plano de Execução MVP 1 (`docs/MVP1_EXECUTION_PLAN.md`)](MVP1_EXECUTION_PLAN.md)
+- [Metodologia de Benchmarks (`docs/BENCHMARKS.md`)](BENCHMARKS.md)

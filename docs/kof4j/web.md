@@ -2,7 +2,7 @@
 
 > Fonte: `training/idioms/architecture.md`, `docs/stdlib-web.md` do
 > [KofLang/Kof4j](https://github.com/KofLang/Kof4j) (0.2.6-beta, snapshot
-> 2026-09-02). Complementa `KOF_WEB_REFERENCE.md` (raiz do projeto), que já
+> 2026-09-02). Complementa [`docs/KOF_WEB_REFERENCE.md`](../KOF_WEB_REFERENCE.md), que já
 > cobre rotas/`http.*`/headers -- aqui o foco é especificamente `app.use`.
 
 ## `app.use` -- semântica exata

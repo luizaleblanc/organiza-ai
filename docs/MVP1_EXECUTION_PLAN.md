@@ -8,7 +8,7 @@
 
 ## 🎨 1. Tríade de Referência Oficial do Design System (MVP 1)
 
-Todo agente e subagente escalado para o MVP 1 deve consultar as 3 fontes visuais canônicas juntamente com [`DESIGN_SYSTEM.md`](../DESIGN_SYSTEM.md) e [`specs/PHASE_1_CORE_MVP.md`](../specs/PHASE_1_CORE_MVP.md):
+Todo agente e subagente escalado para o MVP 1 deve consultar as 3 fontes visuais canônicas juntamente com [`docs/DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) e [`docs/specs/PHASE_1_CORE_MVP.md`](specs/PHASE_1_CORE_MVP.md):
 
 | Artefato | Link Oficial | Escopo no `kof.ui` (`frontend/*.kf`) |
 |---|---|---|
@@ -20,7 +20,7 @@ Todo agente e subagente escalado para o MVP 1 deve consultar as 3 fontes visuais
 
 ## 🧠 2. Protocolo Completo de Treinamento KOF (`KofLang/Kof4j/training`) para Subagentes Gemini Flash 3.6 (Effort Alto)
 
-Conforme a **Guideline de Uso de IA** do [`README.md`](../README.md), [`CONTRIBUTING.md`](../CONTRIBUTING.md) e [`AGENT_GUIDELINES.md`](../AGENT_GUIDELINES.md), nenhum subagente tem permissão para escrever uma única linha de `.kf` sem antes ingerir as **7 categorias oficiais** da pasta `training/` do repositório [KofLang/Kof4j](https://github.com/KofLang/Kof4j/tree/main/training) (disponível localmente em `c:\Users\luiza\OneDrive\Documentos\kof\Kof4j\training` e espelhada em [`docs/kof4j/`](kof4j/README.md), [`KOF_REFERENCE.md`](../KOF_REFERENCE.md), [`KOF_WEB_REFERENCE.md`](../KOF_WEB_REFERENCE.md) e [`docs/LLM_KOF_UI_GUIDELINES.md`](LLM_KOF_UI_GUIDELINES.md)).
+Conforme a **Guideline de Uso de IA** do [`README.md`](../README.md), [`docs/CONTRIBUTING.md`](CONTRIBUTING.md) e [`docs/AGENT_GUIDELINES.md`](AGENT_GUIDELINES.md), nenhum subagente tem permissão para escrever uma única linha de `.kf` sem antes ingerir as **7 categorias oficiais** da pasta `training/` do repositório [KofLang/Kof4j](https://github.com/KofLang/Kof4j/tree/main/training) (disponível localmente em `c:\Users\luiza\OneDrive\Documentos\kof\Kof4j\training` e espelhada em [`docs/kof4j/`](kof4j/README.md), [`docs/KOF_REFERENCE.md`](KOF_REFERENCE.md), [`docs/KOF_WEB_REFERENCE.md`](KOF_WEB_REFERENCE.md) e [`docs/LLM_KOF_UI_GUIDELINES.md`](LLM_KOF_UI_GUIDELINES.md)).
 
 ### 2.1. Síntese Canônica das 7 Subpastas de `KofLang/Kof4j/training`
 
@@ -45,8 +45,8 @@ Ao despachar qualquer um dos 3 subagentes Workers (`Batch Worker 1`, `Batch Work
 Você é um Subagente Especialista em KOF (KofLang 0.4.x-beta) operando em Gemini Flash 3.6 com Effort Alto no projeto Organiza IA (arquitetura KofLith).
 
 ### 1. FONTES DA VERDADE OBRIGATÓRIAS (LEIA ANTES DE TOCAR EM QUALQUER ARQUIVO):
-1. Corpus Oficial Kof4j (`c:\Users\luiza\OneDrive\Documentos\kof\Kof4j\training` — `README.md`, `language/`, `idioms/`, `patterns/`, `anti-patterns/`, `reference/`, `migration/` — e espelhos locais em `KOF_REFERENCE.md`, `KOF_WEB_REFERENCE.md`, `docs/LLM_KOF_UI_GUIDELINES.md` e `docs/kof4j/`).
-2. Tríade do Design System MVP 1 (`DESIGN_SYSTEM.md`):
+1. Corpus Oficial Kof4j (`c:\Users\luiza\OneDrive\Documentos\kof\Kof4j\training` — `README.md`, `language/`, `idioms/`, `patterns/`, `anti-patterns/`, `reference/`, `migration/` — e espelhos locais em `docs/KOF_REFERENCE.md`, `docs/KOF_WEB_REFERENCE.md`, `docs/LLM_KOF_UI_GUIDELINES.md` e `docs/kof4j/`).
+2. Tríade do Design System MVP 1 (`docs/DESIGN_SYSTEM.md`):
    - Design System (Tokens & Catálogo): https://claude.ai/artifact/JVjueTmHeJsnHLsow3LDVb
    - Protótipo Desktop (1280x800): https://claude.ai/artifact/64FYjX5UiveVxTtRGYurQP
    - Protótipo Mobile (360x640): https://claude.ai/artifact/8b3jFV4BrGj4YkDQAwDvDF
@@ -81,7 +81,7 @@ Seguindo a regra de empacotamento do `tlc-spec-driven` (`~5 a 6 tarefas atômica
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │ FASE 1 (SDLC: Design & Specs) — CONCLUÍDA E VALIDADA NESTA SESSÃO                   │
-│ • DESIGN_SYSTEM.md, README.md, PROJECT_STATUS.md e specs/PHASE_1_CORE_MVP.md        │
+│ • docs/DESIGN_SYSTEM.md, README.md, docs/PROJECT_STATUS.md e docs/specs/PHASE_1_CORE_MVP.md │
 │ • .specs/features/mvp1-koflith-attack/{spec.md, design.md, tasks.md} (0 erros/warns)│
 └─────────────────────────────────────────┬───────────────────────────────────────────┘
                                           ▼
@@ -126,7 +126,7 @@ Seguindo a regra de empacotamento do `tlc-spec-driven` (`~5 a 6 tarefas atômica
 | Issue | Título | Tarefa que Resolve |
 |---|---|---|
 | **#11** | `feat(frontend): tela de seleção/troca de modelo de orçamento` | **T9 & T10** (`onboarding_result_screen.kf` + seletor de modelo no cabeçalho do `dashboard_screen.kf`) |
-| **#25** | `docs: Atualizar spec do MVP 1 por estar obsoleto` | **Fase 1 (Concluída)** (`specs/PHASE_1_CORE_MVP.md` + `.specs/features/mvp1-koflith-attack/spec.md`) |
+| **#25** | `docs: Atualizar spec do MVP 1 por estar obsoleto` | **Fase 1 (Concluída)** (`docs/specs/PHASE_1_CORE_MVP.md` + `.specs/features/mvp1-koflith-attack/spec.md`) |
 | **#32** | `feat(frontend): Integrar Dashboard com API de Envelopes/Buckets` | **T3 & T10** (`api_client.kf` + `dashboard_screen.kf` consumindo `/api/budgets/daily-pulse`, `/api/envelopes` e `/api/transactions`) |
 | **#33** | `feat(frontend): Integrar fluxo de Onboarding com SuggestModel` | **T8 & T9** (`onboarding_steps_screens.kf` + `onboarding_result_screen.kf` submetendo a `POST /api/users/onboarding` e renderizando buckets sugeridos) |
 | **#34** | `feat(frontend): Integrar Motor de Ação do Chat` | **T11** (`chat_screen.kf` enviando `POST /api/chat/message` e `POST /api/transactions`, atualizando bolhas e pulso diário) |
@@ -141,7 +141,7 @@ Ao final de cada fase/lote revisado e aprovado na Fase 3 (Code Review), execute 
 ```powershell
 # 0. Commit de Documentação & Plano SDD do MVP 1 (Gerado nesta sessão):
 git status
-git add DESIGN_SYSTEM.md README.md PROJECT_STATUS.md specs/PHASE_1_CORE_MVP.md .specs/STATE.md .specs/features/mvp1-koflith-attack/ docs/MVP1_EXECUTION_PLAN.md
+git add docs/DESIGN_SYSTEM.md README.md docs/PROJECT_STATUS.md docs/specs/PHASE_1_CORE_MVP.md .specs/STATE.md .specs/features/mvp1-koflith-attack/ docs/MVP1_EXECUTION_PLAN.md
 git commit -m "docs(sdd): fechar design system mvp 1 (desk/mobile) e criar execution plan koflith"
 
 # Lote 1 (Core, Theme, State, API Client & Navigation Chrome - T1 a T4):
@@ -153,6 +153,6 @@ git add frontend/components/cards.kf frontend/components/visual_widgets.kf front
 git commit -m "feat(frontend): implementar componentes do design system e fluxo de auth e onboarding (#11, #33)"
 
 # Lote 3 (Dashboard, Chat Coach, Caixinhas, Shell Mobile/Desktop & Fix #41 - T10 a T15):
-git add frontend/screens/dashboard_screen.kf frontend/screens/chat_screen.kf frontend/screens/envelopes_screen.kf frontend/main.kf backend/coach.kf PROJECT_STATUS.md .specs/features/mvp1-koflith-attack/validation.md
+git add frontend/screens/dashboard_screen.kf frontend/screens/chat_screen.kf frontend/screens/envelopes_screen.kf frontend/main.kf backend/coach.kf docs/PROJECT_STATUS.md .specs/features/mvp1-koflith-attack/validation.md
 git commit -m "feat(mvp1): integrar dashboard, chat coach, caixinhas e layout desk/mobile ao koflith (#32, #34, #41)"
 ```

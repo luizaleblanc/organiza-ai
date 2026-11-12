@@ -7,7 +7,7 @@
 - **Design System (Tokens, Tipografia, Componentes & Notificações):** [https://claude.ai/artifact/JVjueTmHeJsnHLsow3LDVb](https://claude.ai/artifact/JVjueTmHeJsnHLsow3LDVb)
 - **Desktop Prototype (Web / KofJS Responsivo):** [https://claude.ai/artifact/64FYjX5UiveVxTtRGYurQP](https://claude.ai/artifact/64FYjX5UiveVxTtRGYurQP)
 - **Mobile Prototype (Viewport 360×640 Canônico):** [https://claude.ai/artifact/8b3jFV4BrGj4YkDQAwDvDF](https://claude.ai/artifact/8b3jFV4BrGj4YkDQAwDvDF)
-- **Local Reference:** [`DESIGN_SYSTEM.md`](../../../DESIGN_SYSTEM.md)
+- **Local Reference:** [`docs/DESIGN_SYSTEM.md`](../../../docs/DESIGN_SYSTEM.md)
 
 ---
 
@@ -26,7 +26,7 @@ Explicitly excluded. Documented to prevent scope creep.
 
 | Feature | Reason |
 | ------- | ------ |
-| Migrações Flyway em banco relacional externo | Mantido para fase pós-MVP 1 conforme `PROJECT_STATUS.md` |
+| Migrações Flyway em banco relacional externo | Mantido para fase pós-MVP 1 conforme `docs/PROJECT_STATUS.md` |
 | Compilação de APK Android nativo (`kof.mobile.onPush`) | Depende da futura API Mobile do compilador Kof4j; no MVP 1 o push é demonstrado via Toast Overlay da Tela 11 |
 | Retorno ao backend Java/Spring Boot | Arquivado definitivamente na Issue #37 (`archive/legacy-backend-java/`) |
 

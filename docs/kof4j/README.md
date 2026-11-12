@@ -15,15 +15,15 @@ confiar cegamente nestas cópias.
 
 Este diretório complementa, não substitui:
 
-- [`KOF_REFERENCE.md`](../../KOF_REFERENCE.md) (raiz do projeto) -- referência
+- [`docs/KOF_REFERENCE.md`](../KOF_REFERENCE.md) -- referência
   geral da linguagem, `kof.ui`, `kof.web`.
-- [`KOF_WEB_REFERENCE.md`](../../KOF_WEB_REFERENCE.md) (raiz do projeto) --
+- [`docs/KOF_WEB_REFERENCE.md`](../KOF_WEB_REFERENCE.md) --
   referência específica de `kof.web`/`kof.http`.
-- [`CONTRIBUTING.md`](../../CONTRIBUTING.md), seção "Como configurar sua IA
+- [`docs/CONTRIBUTING.md`](../CONTRIBUTING.md), seção "Como configurar sua IA
   para codar em KOF" -- processo de alimentar uma IA com o corpus de
   training antes de pedir código `.kf`.
 
-Use os arquivos abaixo quando `KOF_REFERENCE.md`/`KOF_WEB_REFERENCE.md` não
+Use os arquivos abaixo quando `docs/KOF_REFERENCE.md`/`docs/KOF_WEB_REFERENCE.md` não
 cobrirem o que você precisa (ex.: `kof.security`, módulos/`import`,
 tratamento de erros) -- não invente sintaxe que não apareça em nenhum dos
 dois conjuntos de documentos.

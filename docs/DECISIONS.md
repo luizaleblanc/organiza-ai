@@ -3,7 +3,7 @@
 > Log de decisões arquiteturais e de negócio (ADR - Architecture/business Decision Records).
 > Cada entrada documenta uma decisão que afeta o ciclo de vida do software: por que foi tomada, quais alternativas existiam, e quais as consequências (o que fica mais fácil, o que fica mais difícil, o que fica pendente).
 >
-> **Regra de manutenção:** este arquivo é atualizado a cada commit relevante e ao final de cada fase (`specs/PHASE_X_*.md`). Toda decisão nova ganha uma entrada; decisões supersedidas são marcadas como tal, nunca apagadas — preserva-se o histórico do porquê.
+> **Regra de manutenção:** este arquivo é atualizado a cada commit relevante e ao final de cada fase (`docs/specs/PHASE_X_*.md`). Toda decisão nova ganha uma entrada; decisões supersedidas são marcadas como tal, nunca apagadas — preserva-se o histórico do porquê.
 
 Formato de cada entrada:
 
@@ -137,7 +137,7 @@ Formato de cada entrada:
 - Contexto: KOF é uma linguagem própria (compilada para JVM, com alvo KofJS para UI via webview) desenvolvida no âmbito do projeto KofLang (https://github.com/KofLang/Kof4j). O usuário decidiu adotar o Organiza IA como app de referência dessa linguagem, substituindo tanto o plano de app mobile em Flutter (ADR-002, ainda não iniciado) quanto o BFF em Next.js (`frontend-voice/`, existente e com deploy ativo no Vercel).
 - Decisão: todo trabalho novo de UI é em `.kf` usando `kof.ui` (`frontend/`), e todo trabalho novo de BFF é em `.kf` usando `kof.web` (`bff/`). O backend Java/Spring Boot permanece inalterado (KOF não o substitui). `frontend-voice/` (Next.js) é descontinuado — nenhum trabalho novo acontece nele; o rota `/api/auth/mobile` que havia sido implementada ali (ADR-014) foi revertida antes de ser commitada.
 - Alternativas consideradas: manter Next.js como BFF e adicionar KOF só para o app mobile (ADR-002 original) — descartada pelo usuário em favor de uma stack única (KOF) para frontend+BFF; manter Flutter para o app mobile — descartada pelo mesmo motivo.
-- Consequências: `specs/PHASE_X_*.md` ainda referenciam Flutter/Next.js em alguns pontos — essas referências devem ser tratadas como desatualizadas para front-end/BFF; os itens de back-end desses specs continuam válidos. `KOF_REFERENCE.md` (raiz do projeto) é a referência técnica para escrever código `.kf` corretamente. Falta ainda: (1) decidir o que fazer fisicamente com `frontend-voice/` (arquivar, remover do repo, ou deixar rodando em produção sem manutenção — não decidido nesta sessão); (2) reescrever os itens de front-end/BFF pendentes da Fase 0 (antes "scaffold Flutter" e rota `/api/auth/mobile` em Next.js) como seus equivalentes KOF.
+- Consequências: `docs/specs/PHASE_X_*.md` ainda referenciam Flutter/Next.js em alguns pontos — essas referências devem ser tratadas como desatualizadas para front-end/BFF; os itens de back-end desses specs continuam válidos. `docs/KOF_REFERENCE.md` é a referência técnica para escrever código `.kf` corretamente. Falta ainda: (1) decidir o que fazer fisicamente com `frontend-voice/` (arquivar, remover do repo, ou deixar rodando em produção sem manutenção — não decidido nesta sessão); (2) reescrever os itens de front-end/BFF pendentes da Fase 0 (antes "scaffold Flutter" e rota `/api/auth/mobile` em Next.js) como seus equivalentes KOF.
 
 ## ADR-016: Health check de Redis desabilitado (`management.health.redis.enabled=false`)
 - Data: 2026-08-31

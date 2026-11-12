@@ -9,7 +9,7 @@
 
 Todo contribuidor ou subagente (**Gemini Flash Effort Alto** / Claude Code) deve obrigatoriamente ingerir a documentação do compilador `KofLang/Kof4j` na seguinte ordem antes de tocar em qualquer arquivo `.kf`:
 
-1. [`docs/kof4j/README.md`](kof4j/README.md) & [`KOF_REFERENCE.md`](../KOF_REFERENCE.md)
+1. [`docs/kof4j/README.md`](kof4j/README.md) & [`docs/KOF_REFERENCE.md`](KOF_REFERENCE.md)
 2. [`docs/kof4j/training/language/syntax.md`](kof4j/training/language/syntax.md) — Funções sem keyword `fun`/`fn`/`func`.
 3. [`docs/kof4j/training/language/types.md`](kof4j/training/language/types.md) — Null safety (`String?`), *smart cast* e `Double` de 64 bits.
 4. [`docs/kof4j/training/language/ui.md`](kof4j/training/language/ui.md) & [`docs/LLM_KOF_UI_GUIDELINES.md`](LLM_KOF_UI_GUIDELINES.md) — Primitivas reais do `kof.ui` (`Window`, `View`, `Column`, `Row`, `Label`, `Button`, `Input`, `Canvas`, `Style`, `Color`, `Theme`).

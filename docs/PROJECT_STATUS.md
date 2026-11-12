@@ -24,7 +24,7 @@
   - **Desktop:** `https://claude.ai/artifact/64FYjX5UiveVxTtRGYurQP`
   - **Mobile:** `https://claude.ai/artifact/8b3jFV4BrGj4YkDQAwDvDF`
 - Frontend legado (`frontend-voice`, Next.js): **REMOVIDO** -- expurgado por vulnerabilidades de segurança (commits `551eec4e`, `af6568eb`).
-- Consulte `KOF_REFERENCE.md`, `KOF_WEB_REFERENCE.md`, `docs/LLM_KOF_UI_GUIDELINES.md` e `docs/kof4j/` antes de escrever qualquer código `.kf`.
+- Consulte `docs/KOF_REFERENCE.md`, `docs/KOF_WEB_REFERENCE.md`, `docs/LLM_KOF_UI_GUIDELINES.md` e `docs/kof4j/` antes de escrever qualquer código `.kf`.
 
 ## O que está concluído
 
@@ -53,7 +53,7 @@
 - [x] **Lote 1 (`T1–T5`, Issue #38)**: Tokens `theme.kf`, estado `app_state.kf`, cliente HTTP `api_client.kf`, `brand_header.kf` + `nav_bar.kf`, dispatcher `core/navigation.kf` e `main.kf`
 - [ ] **Lote 2 (`T5–T9`)**: Componentes (`cards.kf`, `visual_widgets.kf`), Auth (`auth_screens.kf` — Telas 1–3) e Onboarding Adaptativo (`onboarding_steps_screens.kf` + `onboarding_result_screen.kf` — Telas 4–7, Issues #11 e #33)
 - [ ] **Lote 3 (`T10–T15`)**: Dashboard (`dashboard_screen.kf` — Tela 8, Issue #32), Chat Coach (`chat_screen.kf` — Tela 9, Issue #34), Caixinhas & Push Toast (`envelopes_screen.kf` — Telas 10–11), Shell Dual Mobile/Desktop (`main.kf`) e fix `ASM COMPUTE_FRAMES` (Issue #41)
-  - Batch 3, F2 (feito): Tela 10 Organiza AI (`screens/chat_screen.kf` + `core/chat_api.kf`): histórico, contador do plano, "digitando", erros 402/503; anexo e voz desativados ("Em breve"). Issue #34. As decisões 5 e 6 foram aprovadas, mas estão bloqueadas upstream no Kof 0.6.7, que não lê arquivo nem microfone no alvo js (ver ISSUES.md, "Pendente: anexo e voz").
+  - Batch 3, F2 (feito): Tela 10 Organiza AI (`screens/chat_screen.kf` + `core/chat_api.kf`): histórico, contador do plano, "digitando", erros 402/503; anexo e voz desativados ("Em breve"). Issue #34. As decisões 5 e 6 foram aprovadas, mas estão bloqueadas upstream no Kof 0.6.7, que não lê arquivo nem microfone no alvo js (ver [docs/ISSUES.md](ISSUES.md), "Pendente: anexo e voz").
 
 ### Design System
 - [x] Paleta de cores (base, accent, texto, estado, categoria)

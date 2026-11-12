@@ -38,10 +38,10 @@ Toda a lógica de gateway HTTP, modelos de domínio, cálculo financeiro com pre
 - Integração de tools cognitivas: `getDailyPulse`, `getBalance`, `suggestModelChange`.
 
 ### 7. Frontend KofUI & Tríade Oficial do Design System (`frontend/*.kf`)
-- **Design System (Core Tokens & Catálogo):** [https://claude.ai/artifact/JVjueTmHeJsnHLsow3LDVb](https://claude.ai/artifact/JVjueTmHeJsnHLsow3LDVb) (`DESIGN_SYSTEM.md`)
+- **Design System (Core Tokens & Catálogo):** [https://claude.ai/artifact/JVjueTmHeJsnHLsow3LDVb](https://claude.ai/artifact/JVjueTmHeJsnHLsow3LDVb) ([`docs/DESIGN_SYSTEM.md`](../DESIGN_SYSTEM.md))
 - **Protótipo Desktop (`1280×800`):** [https://claude.ai/artifact/64FYjX5UiveVxTtRGYurQP](https://claude.ai/artifact/64FYjX5UiveVxTtRGYurQP)
 - **Protótipo Mobile (`360×640` — 11 Telas):** [https://claude.ai/artifact/8b3jFV4BrGj4YkDQAwDvDF](https://claude.ai/artifact/8b3jFV4BrGj4YkDQAwDvDF)
-- **Execution Plan & SDD Artifacts:** Veja [`docs/MVP1_EXECUTION_PLAN.md`](../docs/MVP1_EXECUTION_PLAN.md) e [`.specs/features/mvp1-koflith-attack/`](../.specs/features/mvp1-koflith-attack/spec.md) (Tarefas `T1` a `T15` em 3 lotes para subagentes Gemini Flash 3.6 Effort Alto).
+- **Execution Plan & SDD Artifacts:** Veja [`docs/MVP1_EXECUTION_PLAN.md`](../MVP1_EXECUTION_PLAN.md) e [`.specs/features/mvp1-koflith-attack/`](../../.specs/features/mvp1-koflith-attack/spec.md) (Tarefas `T1` a `T15` em 3 lotes para subagentes Gemini Flash 3.6 Effort Alto).
 
 ---
 

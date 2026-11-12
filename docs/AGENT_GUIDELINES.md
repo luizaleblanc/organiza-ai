@@ -9,7 +9,7 @@ Nosso projeto passou por uma migração total (Kof Migrate). **Todos os resquíc
 
 ## 2. Instruções para Novos Agentes (Mapeamento de Gargalos do Design System)
 
-Seu objetivo como Agente é auditar o app e mapear gargalos que impedem a fidelidade 100% ao `DESIGN_SYSTEM.md` e contorná-los (ou reportá-los). Siga este fluxo:
+Seu objetivo como Agente é auditar o app e mapear gargalos que impedem a fidelidade 100% ao `docs/DESIGN_SYSTEM.md` e contorná-los (ou reportá-los). Siga este fluxo:
 
 1. **Inspecione o KofJS Runtime (Deep Dive)**
    - O Kof converte código `kof.ui` para CSS e DOM estrito (`window.__kofNodes`).

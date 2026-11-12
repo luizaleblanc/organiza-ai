@@ -8,7 +8,7 @@ Este documento descreve o design system do app. Ele reproduz os três artefatos 
 | Desktop | https://claude.ai/artifact/64FYjX5UiveVxTtRGYurQP |
 | Mobile | https://claude.ai/artifact/8b3jFV4BrGj4YkDQAwDvDF |
 
-No código, os tokens ficam em `frontend/core/theme.kf`. O documento antigo, `DESIGN_SYSTEM.md` na raiz, vale só como histórico. Quando os dois discordarem, este aqui prevalece.
+No código, os tokens ficam em `frontend/core/theme.kf`. O documento antigo, [`DESIGN_SYSTEM_LEGACY.md`](DESIGN_SYSTEM_LEGACY.md) em `docs/`, vale só como histórico. Quando os dois discordarem, este aqui prevalece.
 
 ## 1. Fonte oficial da marca e do fundo
 

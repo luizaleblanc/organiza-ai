@@ -87,3 +87,8 @@ CLAUDE.md
 
 # Banco local de desenvolvimento (H2 em arquivo; ver backend/store.kf)
 data/
+
+# Artefatos compilados e pastas temporárias locais
+*.class
+System.Collections.Hashtable/
+System.Collections.Hashtable

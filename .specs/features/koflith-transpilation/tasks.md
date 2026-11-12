@@ -22,7 +22,7 @@
   - **Commit:** `feat(koflith): unificar gateway HTTP e funcoes de dominio no monólito KofLith (backend/main.kf)`
 
 ## Phase 4: Documentation, Parity Verification & LinkedIn Post
-- [ ] **Task 4.1: Atualizar `README.md` e `PROJECT_STATUS.md`**
+- [ ] **Task 4.1: Atualizar `README.md` e `docs/PROJECT_STATUS.md`**
   - Explicar a unificação KofLith em português claro e gramaticalmente perfeito.
   - **Commit:** `docs: atualizar README e status do projeto com a migracao KofLith`
 - [ ] **Task 4.2: Elaborar Post Técnico para LinkedIn**

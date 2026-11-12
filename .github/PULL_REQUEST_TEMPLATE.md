@@ -9,4 +9,4 @@
 - [ ] Sem lógica de negócio no controller/frontend
 - [ ] Compila sem warnings
 - [ ] Sem arquivos pesados (node_modules, build/, .class)
-- [ ] Branch aberta contra `dev` (não contra `main`, ver CONTRIBUTING.md)
+- [ ] Branch aberta contra `dev` (não contra `main`, ver [docs/CONTRIBUTING.md](../docs/CONTRIBUTING.md))
