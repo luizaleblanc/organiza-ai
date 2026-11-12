@@ -138,3 +138,193 @@ Label errorBanner(String message) {
     l.setStyle(errorBannerCss())
     return l
 }
+
+// =============================================================================
+// A1 — widgets fiéis aos artefatos (docs/FORM_WIDGETS.md)
+// =============================================================================
+
+// Campo de 38 px (login e cadastro do Desktop); `type` = text/email/password.
+Input formField(String placeholder, String type, String id) {
+    var f = Input("")
+    f.setId(id)
+    f.setType(type)
+    f.setPlaceholder(placeholder)
+    f.setStyle(inputSmCss())
+    return f
+}
+
+// Label 12/600 em #7B8EAD, 6 px acima do campo.
+View labeled(String label, View field) {
+    var l = Label(label)
+    l.setStyle(fieldLabelCss())
+    var col = Column(listOf(l, field))
+    col.setStyle(labeledCss())
+    return col
+}
+
+// Campo de senha de 38 px com espaço para o olho à direita.
+Input passwordField(String placeholder, String id) {
+    var f = Input("")
+    f.setId(id)
+    f.setType("password")
+    f.setPlaceholder(placeholder)
+    f.setStyle(inputSmPasswordCss())
+    return f
+}
+
+class PasswordToggle {
+    static Bool visible = false
+}
+
+// Olho em Canvas (16 px, traço #7B8EAD): elipse + pupila.
+Canvas eyeCanvas() {
+    var c = Canvas(16, 16)
+    c.setStroke(colorTextSecondary())
+    c.setLineWidth(1)
+    c.beginPath()
+    c.moveTo(1, 8)
+    c.lineTo(4, 5)
+    c.lineTo(8, 3)
+    c.lineTo(12, 5)
+    c.lineTo(15, 8)
+    c.lineTo(12, 11)
+    c.lineTo(8, 13)
+    c.lineTo(4, 11)
+    c.closePath()
+    c.stroke()
+    c.beginPath()
+    c.arc(8, 8, 2, 0.0, 6.28318)
+    c.stroke()
+    return c
+}
+
+// Campo de senha + olho que alterna password/text com setType.
+View passwordBox(Input field, String id) {
+    var eye = View(screenStyle())
+    eye.setId(id + "-eye")
+    eye.setStyle(eyeButtonCss())
+    eye.bind(eyeCanvas())
+    eye.on("click", () -> {
+        PasswordToggle.visible = !PasswordToggle.visible
+        if (PasswordToggle.visible) {
+            field.setType("text")
+        } else {
+            field.setType("password")
+        }
+    })
+    var box = View(screenStyle())
+    box.setId(id)
+    box.setStyle(passwordBoxCss())
+    box.bind(Row(listOf(field, eye)))
+    return box
+}
+
+// Card de escolha com radio de 18 px (ponto de 9) à direita.
+View radioChoiceCard(String label, String id, Bool selected, () -> Void action) {
+    var l = Label(label)
+    l.setStyle(radioLabelCss())
+    var radio = View(screenStyle())
+    if (selected) {
+        radio.setStyle(radioOnCss())
+        var dot = View(screenStyle())
+        dot.setStyle(radioDotCss())
+        radio.bind(dot)
+    } else {
+        radio.setStyle(radioCss())
+    }
+    var card = View(screenStyle())
+    card.setId(id)
+    if (selected) {
+        card.setStyle(radioCardSelectedCss())
+    } else {
+        card.setStyle(radioCardCss())
+    }
+    card.bind(Row(listOf(l, radio)))
+    card.on("click", action)
+    return card
+}
+
+// Só dígitos de `raw`.
+String onlyDigits(String raw) {
+    var out = ""
+    for (var i = 0; i < raw.length(); i++) {
+        var ch = raw.charAt(i)
+        if (ch >= '0' && ch <= '9') {
+            out = out + ch
+        }
+    }
+    return out
+}
+
+// Máscara de milhar: "3000" -> "3.000".
+String thousands(String digits) {
+    var out = ""
+    var n = digits.length()
+    for (var i = 0; i < n; i++) {
+        if (i > 0 && (n - i) % 3 == 0) {
+            out = out + "."
+        }
+        out = out + digits.charAt(i)
+    }
+    return out
+}
+
+// Valor grande (52/700, accent) com máscara de milhar aplicada a cada input.
+Input bigMoneyField(String value, String id) {
+    var f = Input(value)
+    f.setId(id)
+    f.setType("text")
+    f.setPlaceholder("0")
+    f.setStyle(bigMoneyInputCss())
+    f.on("input", () -> {
+        var digits = onlyDigits(f.text())
+        if (digits.length() > 7) {
+            digits = digits.substring(0, 7)
+        }
+        var masked = thousands(digits)
+        if (masked != f.text()) {
+            f.setText(masked)
+        }
+    })
+    return f
+}
+
+// Linha "R$" + bigMoneyField.
+View bigMoneyAmount(Input field, String id) {
+    var prefix = Label("R$")
+    prefix.setStyle(bigMoneyPrefixCss())
+    var row = Row(listOf(prefix, field))
+    row.setId(id)
+    row.setStyle(bigMoneyRowCss())
+    return row
+}
+
+// Dica abaixo do valor (13 px, muted, centrada).
+Label moneyHint(String text) {
+    var l = Label(text)
+    l.setStyle(moneyHintCss())
+    return l
+}
+
+// Chip (raio 20, borda 1,5); selecionado em accent-sel.
+Button chip(String label, String id, Bool selected, () -> Void action) {
+    var b = Button(label, action)
+    b.setId(id)
+    if (selected) {
+        b.setStyle(chipSelectedCss())
+    } else {
+        b.setStyle(chipCss())
+    }
+    return b
+}
+
+// Título 11/700 em caixa alta + chips com quebra de linha.
+View chipGroup(String title, List<View> chips, String id) {
+    var t = Label(title)
+    t.setStyle(chipGroupTitleCss())
+    var row = Row(chips)
+    row.setStyle(chipGroupCss())
+    var col = Column(listOf(t, row))
+    col.setId(id)
+    return col
+}
