@@ -132,10 +132,10 @@ No frontend Kof existem só `frontend/main.kf`, `core/` (api_client, app_state, 
 | 9 | Dashboard (pulso, gastos do mês, reserva acumulada, pizza do modelo, últimas transações, Semana/Mês/Ano) | `GET /api/dashboard?period=week|month|year` em JSON real + `GET /api/budgets/balance` | ✅ (Fases 2 e 3) | #32 | ❌ |
 | 10 | Organiza AI (chat de texto, voz, upload de fatura PDF) | coach com LLM + tools + memória + limite freemium; voz (Whisper/TTS); leitura de PDF/imagem com confirmação; limite de 1 PDF/mês no Gratuito | ❌ (texto fixo) | #34 | ❌ |
 | 11 | Caixinhas por bucket (status Em dia/Alerta/Estourada, nova caixinha, histórico) | `GET /api/envelopes/overview`, `PUT`/`DELETE /api/envelopes/:id`; histórico por caixinha só no Mobile | ✅ (Fase 3) | #11 | ❌ |
-| 12 | Notificações (estouro, alerta, pulso, meta batida, lembrete; marcar como lidas) | `NotificationRow` + regras + `GET /api/notifications` e `POST /api/notifications/read-all` | ✅ (Fase 3) | #11 | ⚠️ (Batch 3 F4: lista com os 5 tipos, badge/tom/tempo e vazio; textos do backend até a DECISÃO-11; sem lida/não lida nem "Marcar todas como lidas", DECISÃO-10) |
+| 12 | Notificações (estouro, alerta, pulso, meta batida, lembrete; marcar como lidas) | `NotificationRow` + regras + `GET /api/notifications` e `POST /api/notifications/read-all` | ✅ (Fase 3) | #11 | ✅ (Batch 3 F4 + B4: topbar 56px com "Marcar todas como lidas" via `POST /api/notifications/read-all`, visual não lida/lida, trilho 56px com borda esquerda 3px e ícone SVG, badge/tempo, vazio e erro) |
 | 13 | Configurações: tema | — (local) | n/a | inerte com "Em breve" (Batch 3 F5; MVP 1 só escuro, decisão pendente) | ⚠️ |
-| 13 | Configurações: e-mail/push diário às 20h | preferências (`GET`/`PUT /api/users/me/preferences`, Fase 3) + job agendado + envio de e-mail | ⚠️ (preferências feitas; envio na Fase 3.1) | `settings_screen.kf` + `core/settings_api.kf`: toggles e select salvam via PUT e desfazem em erro (Batch 3 F5) | ⚠️ (envio na Fase 3.1) |
-| 13 | Configurações: rever salário (refaz o onboarding e migra o modelo) | `PATCH /api/users/me/salary` (migra o modelo) ou um novo `POST /api/users/onboarding`; troca manual `PUT /api/users/me/budget-model` (#11) | ✅ (Fase 3) | modal abre e fecha; "Refazer configuração" inerte com "Em breve" (DECISÃO-12); `PATCH /api/users/me/salary` sem `apiPatch` no cliente (lacuna) | ⚠️ |
+| 13 | Configurações: e-mail/push diário às 20h | preferências (`GET`/`PUT /api/users/me/preferences`, Fase 3) + job agendado (`d1`) | ✅ (Fase 3 + d1) | `settings_screen.kf` + `core/settings_api.kf`: switches 44×24 e select salvam via PUT e preservam após reload (F5 + B4) | ✅ |
+| 13 | Configurações: rever salário (refaz o onboarding e migra o modelo) | `PATCH /api/users/me/salary` (migra o modelo) ou um novo `POST /api/users/onboarding`; troca manual `PUT /api/users/me/budget-model` (#11) | ✅ (Fase 3) | modal abre, valida com `parseMoney` e envia `PATCH /api/users/me/salary` (Z + B4); "Refazer configuração" inerte com "Em breve" (DECISÃO-12) | ✅ |
 | 13 | Configurações: Open Finance "Demo · MVP 1" | `GET /api/open-finance/banks` e `POST /api/open-finance/connect`, marcados `demo: true`, sem conexão nem dado bancário | ✅ (Fase 3) | textos e badge renderizados; "Conectar banco" inerte com "Em breve" (DECISÃO-13) | ⚠️ |
 | 13 | Configurações: conta (e-mail, senha, 2FA) | marcado **MVP 2** no design | fora | inerte, opacidade .6, badge "MVP 2" (Batch 3 F5) | fora |
 | — | Sessão: `/api/users/me` (nome, e-mail, `onboardingCompleted`, tier) | F3 | ❌ | #33 | ❌ |
@@ -1011,3 +1011,26 @@ Entrega de frontend sobre `cc8e042` (`frontend/screens/login_screen.kf`, `fronte
 | 16. Zero `UNCAUGHT` exceptions | PASS (0) | PASS (0) |
 | 17. Zero `console.error` | PASS (0) | PASS (0) |
 | **Total G-UI (`gate_a4.mjs`)** | **17/17 PASS** | **17/17 PASS** |
+
+## 23. Fidelidade das Telas 12 (Notificações) e 13 (Configurações) (B4, 12/11/2026)
+
+Alinha `frontend/core/notifications_api.kf`, `frontend/screens/notifications_screen.kf` e `frontend/screens/settings_screen.kf` aos artefatos Desktop (`64FYjX5UiveVxTtRGYurQP`) e Mobile (`8b3jFV4BrGj4YkDQAwDvDF`) sobre a fundação A1 (`cc8e042`):
+
+- **Tela 12 Notificações (`notifications_screen.kf`, `notifications_api.kf`):**
+  - Topbar de 56 px com o botão `"Marcar todas como lidas"` (`#btn-read-all`) no slot `action`, chamando `POST /api/notifications/read-all` (`204`), recarregando `GET /api/notifications` (`read = true`) e mudando o estilo do card de `notif-unread` (opacidade `1`, borda `border-soft`) para `notif-read` (opacidade `0.72`, borda suave).
+  - Trilho colorido de 56 px com borda esquerda de 3 px no tom do `kind` (`danger`, `warning`, `success`, `accent`) e ícone SVG de `components/icons.kf` (`warn`, `pulse`, `check`, `bell`, 22 px).
+  - Corpo com badge por tom e tempo relativo (`REMINDER` sem badge, tempo ao lado do título), título `13px/700`, mensagem `12px/400`, e estados de carregamento (`#notif-loading`), vazio (`#notif-empty`) e erro (`#notif-error`).
+- **Tela 13 Configurações (`settings_screen.kf`):**
+  - Coluna de conteúdo com `max-width: 620px` no Desktop e `width: 100%` (sem teto de 620 px) no Mobile.
+  - Seis seções com rótulo em caixa alta fora do card (`Aparência`, `Notificações`, `Salário`, `Envio de fatura`, `Integrações` e `Conta` com badge `MVP 2`), linhas com `min-height: 52px`, switches 44×24 com indicador de 20 px e itens de checklist com ícone `check` em SVG.
+  - Toggles (`#pref-email`, `#pref-push`) e `Select` (`#pref-frequency`) persistem via `PUT /api/users/me/preferences` e mantêm o estado após recarregar a página; modal `"Rever meu salário"` valida e envia `PATCH /api/users/me/salary`; botão `"Sair"` limpa a sessão e navega para `welcome`.
+
+### 23.1 Gates (Kof 0.6.6 e Kof 0.7.2, Windows; H2 local)
+
+| Gate | Kof 0.6.6 | Kof 0.7.2 |
+|---|---|---|
+| G-BUILD `frontend --target js` + `backend --target jvm --fat` | exit 0 | exit 0 |
+| G-UI Edge headless (`1280×800` Desktop e `360×640` Mobile via `Emulation.setDeviceMetricsOverride`) | 21/21 PASS | 21/21 PASS |
+| Tela 12: topbar 56px, `"Marcar todas como lidas"` (`204`), `read=true` + transição visual, trilho 56px + SVG (`naturalWidth > 0`), badges/tempo, vazio e erro | PASS | PASS |
+| Tela 13: máx 620px Desktop / 100% Mobile, 6 seções, `PUT /api/users/me/preferences` + reload, modal `PATCH /api/users/me/salary`, `"Sair"` → `welcome` | PASS | PASS |
+| Higiene de UI: 0 rolagem horizontal, `font-family: system-ui` em todos os botões, 0 `UNCAUGHT`, 0 `console.error` | PASS | PASS |

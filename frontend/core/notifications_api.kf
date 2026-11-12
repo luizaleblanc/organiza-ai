@@ -24,6 +24,10 @@ class NotifState {
 // Lança a mensagem fixa da tela (msgNetwork/msgSessionExpired/msgGeneric).
 String fetchNotificationsRaw() = getOrThrow("/api/notifications")
 
+void markAllNotificationsRead() {
+    postOrThrow("/api/notifications/read-all", "")
+}
+
 List<NotificationItem> decodeNotifications(String body) {
     if (body == "") {
         return listOf()

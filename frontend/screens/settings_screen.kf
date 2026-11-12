@@ -8,41 +8,57 @@ import core.settings_api
 import core.format
 import components.form_widgets
 import components.topbar
+import components.icons
 
 // =============================================================================
-// Tela 13 Configurações + modal "Rever meu salário" (Batch 3, F5; spec S13)
+// Tela 13 Configurações + modal "Rever meu salário" (Batch 3, F5; fidelidade Desktop + Mobile)
 // =============================================================================
-// Seis seções do artefato. Ativas: Notificações (GET/PUT preferências; toggle
-// e select salvam na hora e desfazem se o PUT falhar), o modal (Editar abre, Salvar faz PATCH do salário,
-// Cancelar fecha) e Sair (resetSession + "welcome"). Inativas com "Em breve"
-// (decisões da usuária): Modo escuro, Seguir tema, Refazer configuração e
-// Conectar banco. Conta: inerte com badge "MVP 2". Estilos locais só com hex
-// do design system.
+// Seis seções do artefato com rótulo FORA do card: Aparência, Notificações,
+// Salário, Envio de fatura, Integrações e Conta.
+// Conteúdo limitado a max-width 620px no Desktop e 100% no Mobile.
+// Altura das linhas fiel ao artefato (min-height: 52px).
+// Switch/toggle fiel ao artefato (trilho 44x24 com indicador deslizante de 20px).
+// Ativas: Notificações (GET/PUT preferências), o modal "Rever meu salário"
+// (PATCH /api/users/me/salary) e "Sair" (resetSession + "welcome").
+// Inativas com "Em breve": Modo escuro, Seguir tema, Refazer configuração e
+// Conectar banco. Conta: inerte com badge "MVP 2".
+// Estilos locais só com hex da paleta oficial e font-family explícito em botões.
 // =============================================================================
 
-Style setSectionLabelCss() = Style("color: #7B8EAD; font-size: 12; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style setRowCss()          = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 16; width: 100%; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,.06)")
-Style setRowTextCss()      = Style("display: flex; flex-direction: column; gap: 4; flex-grow: 1; min-width: 0")
-Style setRowTitleCss()     = Style("color: #F0F0F0; font-size: 15; font-weight: 500; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style setRowDescCss()      = Style("color: #7B8EAD; font-size: 13; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style setSoonCss()         = Style("color: #4A5578; font-size: 12; font-style: italic; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style setSoonColCss()      = Style("display: flex; flex-direction: column; align-items: flex-end; gap: 4; flex-shrink: 0")
-Style setInertCss()        = Style("opacity: 0.6; pointer-events: none")
-Style setToggleOnOffCss()  = Style("width: 44; height: 24; border-radius: 12; border: none; background: #00D4FF; opacity: 0.5; cursor: not-allowed")
-Style setToggleOffOffCss() = Style("width: 44; height: 24; border-radius: 12; border: 1px solid rgba(255,255,255,.1); background: #1A1F3A; opacity: 0.5; cursor: not-allowed")
-Style setBtnCss()          = Style("background: transparent; color: #00D4FF; border: 1.5px solid #00D4FF; border-radius: 8; padding: 8px 16px; font-size: 14; font-weight: 600; cursor: pointer; flex-shrink: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style setBtnOffCss()       = Style("background: #12162A; color: #4A5578; border: 1px solid rgba(255,255,255,.06); border-radius: 8; padding: 8px 16px; font-size: 14; font-weight: 600; cursor: not-allowed; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style setBtnGhostCss()     = Style("background: transparent; color: #7B8EAD; border: 1px solid rgba(255,255,255,.1); border-radius: 8; padding: 8px 16px; font-size: 14; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style setLogoutCss()       = Style("background: transparent; color: #FF4A6E; border: 1px solid #FF4A6E; border-radius: 8; padding: 10px 16px; font-size: 14; font-weight: 600; cursor: pointer; align-self: flex-start; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style setCheckCss()        = Style("color: #F0F0F0; font-size: 13; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style setChecksCss()       = Style("display: flex; flex-direction: column; gap: 6")
-Style setPlanCss()         = Style("display: flex; flex-direction: column; gap: 4; padding: 12; background: #1A1F3A; border-radius: 8")
-Style setModalBoxCss()     = Style("display: flex; flex-direction: column; gap: 16; width: 90%; max-width: 440; padding: 24; box-sizing: border-box; background: #12162A; border: 1px solid rgba(255,255,255,.1); border-radius: 12")
-Style setModalOverlayCss() = Style("position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.65); z-index: 50")
-Style setExampleCss()      = Style("display: flex; flex-direction: column; gap: 4; padding: 12; background: rgba(0,212,255,.08); border: 1px solid rgba(0,212,255,.2); border-radius: 8")
-Style setModalActionsCss() = Style("display: flex; flex-direction: row; justify-content: flex-end; align-items: flex-start; gap: 12; flex-wrap: wrap")
-Style setHeadRowCss()      = Style("display: flex; flex-direction: row; align-items: center; gap: 8")
-Style setScreenCss()       = Style("display: flex; flex-direction: column; gap: 16; width: 100%")
+Style setSectionWrapCss()   = Style("display: flex; flex-direction: column; gap: 8; width: 100%")
+Style setSectionLabelCss()  = Style("color: #7B8EAD; font-size: 11; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style setRowCss()           = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 16; width: 100%; min-height: 52; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,.06)")
+Style setRowTextCss()       = Style("display: flex; flex-direction: column; gap: 4; flex-grow: 1; min-width: 0")
+Style setRowTitleCss()      = Style("color: #F0F0F0; font-size: 15; font-weight: 500; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style setRowDescCss()       = Style("color: #7B8EAD; font-size: 13; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style setSoonCss()          = Style("color: #4A5578; font-size: 12; font-style: italic; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style setSoonColCss()       = Style("display: flex; flex-direction: column; align-items: flex-end; gap: 4; flex-shrink: 0")
+Style setInertCss()         = Style("opacity: 0.6; pointer-events: none")
+
+Style switchTrackOnCss()     = Style("display: flex; flex-direction: row; align-items: center; justify-content: flex-end; width: 44; height: 24; border-radius: 12; background: #00D4FF; padding: 2; box-sizing: border-box; cursor: pointer")
+Style switchTrackOffCss()    = Style("display: flex; flex-direction: row; align-items: center; justify-content: flex-start; width: 44; height: 24; border-radius: 12; background: #1A1F3A; border: 1px solid rgba(255,255,255,.1); padding: 2; box-sizing: border-box; cursor: pointer")
+Style switchThumbOnCss()     = Style("width: 20; height: 20; border-radius: 10; background: #06121C")
+Style switchThumbOffCss()    = Style("width: 20; height: 20; border-radius: 10; background: #7B8EAD")
+
+Style switchTrackOnDisCss()  = Style("display: flex; flex-direction: row; align-items: center; justify-content: flex-end; width: 44; height: 24; border-radius: 12; background: #00D4FF; opacity: 0.5; padding: 2; box-sizing: border-box; cursor: not-allowed")
+Style switchTrackOffDisCss() = Style("display: flex; flex-direction: row; align-items: center; justify-content: flex-start; width: 44; height: 24; border-radius: 12; background: #1A1F3A; border: 1px solid rgba(255,255,255,.1); opacity: 0.5; padding: 2; box-sizing: border-box; cursor: not-allowed")
+Style switchThumbDisCss()    = Style("width: 20; height: 20; border-radius: 10; background: #4A5578")
+
+Style setBtnCss()           = Style("background: transparent; color: #00D4FF; border: 1.5px solid #00D4FF; border-radius: 8; padding: 8px 16px; font-size: 14; font-weight: 600; cursor: pointer; flex-shrink: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style setBtnOffCss()        = Style("background: #12162A; color: #4A5578; border: 1px solid rgba(255,255,255,.06); border-radius: 8; padding: 8px 16px; font-size: 14; font-weight: 600; cursor: not-allowed; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style setBtnGhostCss()      = Style("background: transparent; color: #7B8EAD; border: 1px solid rgba(255,255,255,.1); border-radius: 8; padding: 8px 16px; font-size: 14; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style setLogoutCss()        = Style("background: transparent; color: #FF4A6E; border: 1px solid #FF4A6E; border-radius: 8; padding: 10px 16px; font-size: 14; font-weight: 600; cursor: pointer; align-self: flex-start; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style setCheckCss()         = Style("color: #F0F0F0; font-size: 13; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style setCheckRowCss()      = Style("display: flex; flex-direction: row; align-items: flex-start; gap: 8; width: 100%")
+Style setChecksCss()        = Style("display: flex; flex-direction: column; gap: 8")
+Style setPlanCss()          = Style("display: flex; flex-direction: column; gap: 4; padding: 12; background: #1A1F3A; border-radius: 8")
+Style setModalBoxCss()      = Style("display: flex; flex-direction: column; gap: 16; width: 90%; max-width: 440; padding: 24; box-sizing: border-box; background: #12162A; border: 1px solid rgba(255,255,255,.1); border-radius: 12")
+Style setModalOverlayCss()  = Style("position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.65); z-index: 50")
+Style setExampleCss()       = Style("display: flex; flex-direction: column; gap: 4; padding: 12; background: rgba(0,212,255,.08); border: 1px solid rgba(0,212,255,.2); border-radius: 8")
+Style setModalActionsCss()  = Style("display: flex; flex-direction: row; justify-content: flex-end; align-items: flex-start; gap: 12; flex-wrap: wrap")
+Style setHeadRowCss()       = Style("display: flex; flex-direction: row; align-items: center; gap: 8")
+Style setContentCss()       = Style("display: flex; flex-direction: column; gap: 20; width: 100%; max-width: 620")
+Style setContentMobileCss() = Style("display: flex; flex-direction: column; gap: 20; width: 100%")
 
 Label txt(String s, Style st) {
     var l = Label(s)
@@ -67,14 +83,17 @@ View soonControl(View control) {
 }
 
 View inactiveToggle(Bool on, String id) {
-    var b = Button("", () -> {})
-    b.setId(id)
+    var thumb = View(screenStyle())
+    var track = Row(listOf(thumb))
+    track.setId(id)
     if (on) {
-        b.setStyle(setToggleOnOffCss())
+        thumb.setStyle(switchThumbOnCss())
+        track.setStyle(switchTrackOnDisCss())
     } else {
-        b.setStyle(setToggleOffOffCss())
+        thumb.setStyle(switchThumbDisCss())
+        track.setStyle(switchTrackOffDisCss())
     }
-    return soonControl(b)
+    return soonControl(track)
 }
 
 View inactiveButton(String text, String id) {
@@ -85,23 +104,31 @@ View inactiveButton(String text, String id) {
 }
 
 View section(String label, List<View> rows, String id) {
-    List<View> items = listOf()
-    if (label != "") {
-        items.add(txt(label, setSectionLabelCss()))
-    }
-    for (var r in rows) {
-        items.add(r)
-    }
-    var card = Column(items)
+    var card = Column(rows)
     card.setId(id)
     card.setStyle(cardCss())
-    return card
+    if (label == "") {
+        return card
+    }
+    var lbl = txt(label, setSectionLabelCss())
+    lbl.setId(id + "-label")
+    var sec = Column(listOf(lbl, card))
+    sec.setStyle(setSectionWrapCss())
+    return sec
+}
+
+View checkLine(String text) {
+    var ic = iconView("check", 14, "accent", "")
+    var l = txt(text, setCheckCss())
+    var r = Row(listOf(ic, l))
+    r.setStyle(setCheckRowCss())
+    return r
 }
 
 View checks(List<String> lines) {
     List<View> items = listOf()
     for (var s in lines) {
-        items.add(txt("✓ " + s, setCheckCss()))
+        items.add(checkLine(s))
     }
     var col = Column(items)
     col.setStyle(setChecksCss())
@@ -118,7 +145,17 @@ flipPref(Bool isEmail) {
 
 // Toggle ativo: inverte, salva e re-renderiza; se o PUT falhar, desfaz.
 View prefToggle(Window w, Bool on, String id, Bool isEmail) {
-    var b = Button("", () -> {
+    var thumb = View(screenStyle())
+    var track = Row(listOf(thumb))
+    track.setId(id)
+    if (on) {
+        thumb.setStyle(switchThumbOnCss())
+        track.setStyle(switchTrackOnCss())
+    } else {
+        thumb.setStyle(switchThumbOffCss())
+        track.setStyle(switchTrackOffCss())
+    }
+    track.on("click", () -> {
         spawn {
             flipPref(isEmail)
             mountScreen(w)
@@ -128,13 +165,7 @@ View prefToggle(Window w, Bool on, String id, Bool isEmail) {
             mountScreen(w)
         }
     })
-    b.setId(id)
-    if (on) {
-        b.setStyle(toggleOnCss())
-    } else {
-        b.setStyle(toggleOffCss())
-    }
-    return b
+    return track
 }
 
 View frequencySelect(Window w) {
@@ -196,8 +227,6 @@ View salaryModal(Window w) {
     return overlay
 }
 
-// "Salvar" do modal: parseMoney valida (mesma regra da Tela 4); válido faz
-// PATCH /api/users/me/salary. O texto digitado volta no re-render.
 submitSalaryEdit(Window w, String raw) {
     SettingsState.salaryInput = raw.trim()
     var value = 0.0
@@ -265,6 +294,7 @@ View settingsScreen(Window w) {
     ), "sec-integrations")
 
     View accHead = Row(listOf(txt("Conta", setSectionLabelCss()), txt("MVP 2", badgeWarningCss())))
+    accHead.setId("sec-account-label")
     accHead.setStyle(setHeadRowCss())
     View accRows = Column(listOf(
         settingsRow("Alterar e-mail", "Trocar o e-mail associado à sua conta", txt("›", setRowDescCss()), "row-change-email"),
@@ -272,8 +302,11 @@ View settingsScreen(Window w) {
         settingsRow("Autenticação de dois fatores", "Uma segunda camada de segurança no momento do login", txt("›", setRowDescCss()), "row-2fa")
     ))
     accRows.setStyle(setInertCss())
-    List<View> accParts = listOf(accHead, accRows)
-    var account = section("", accParts, "sec-account")
+    var accCard = Column(listOf(accRows))
+    accCard.setId("sec-account")
+    accCard.setStyle(cardCss())
+    var account = Column(listOf(accHead, accCard))
+    account.setStyle(setSectionWrapCss())
 
     var logout = Button("Sair", () -> {
         resetSettings()
@@ -283,30 +316,40 @@ View settingsScreen(Window w) {
     logout.setId("btn-logout")
     logout.setStyle(setLogoutCss())
 
-    List<View> items = listOf()
-    items.add(topbar("Configurações", "", null))
+    List<View> bodyItems = listOf()
     if (SettingsState.error != "") {
         var err = txt(SettingsState.error, errorBannerCss())
         err.setId("settings-error")
-        items.add(err)
+        bodyItems.add(err)
     }
     if (SettingsState.saving) {
         var s = txt("Salvando…", setRowDescCss())
         s.setId("settings-saving")
-        items.add(s)
+        bodyItems.add(s)
     }
-    items.add(appearance)
-    items.add(notifications)
-    items.add(salary)
-    items.add(invoice)
-    items.add(integrations)
-    items.add(account)
-    items.add(logout)
+    bodyItems.add(appearance)
+    bodyItems.add(notifications)
+    bodyItems.add(salary)
+    bodyItems.add(invoice)
+    bodyItems.add(integrations)
+    bodyItems.add(account)
+    bodyItems.add(logout)
+
+    var content = Column(bodyItems)
+    if (AppState.isDesktop) {
+        content.setStyle(setContentCss())
+    } else {
+        content.setStyle(setContentMobileCss())
+    }
+
+    List<View> items = listOf()
+    items.add(topbar("Configurações", "", null))
+    items.add(content)
     if (SettingsState.salaryModal) {
         items.add(salaryModal(w))
     }
     var col = Column(items)
     col.setId("screen-settings")
-    col.setStyle(setScreenCss())
+    col.setStyle(stackCss())
     return col
 }
