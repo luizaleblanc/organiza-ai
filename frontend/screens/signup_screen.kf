@@ -11,15 +11,19 @@ import components.form_widgets
 import screens.login_screen
 
 // =============================================================================
-// Tela 3 — Cadastro (spec B2-03; design.md §5)
+// Tela 3 — Cadastro com Nome, Sobrenome, Idade e Medidor de Senha (Desktop + Mobile)
 // =============================================================================
-// brandMark(92) + Form(nome, e-mail, senha, confirmar, Criar conta) +
-// errorBanner + rodapé "Já tem conta?" / "Entrar". Mesmo padrão da Tela 2:
-// Form.onSubmit, valores em SignupForm para sobreviver ao re-render.
+// Desktop (artefato 64FYjX5UiveVxTtRGYurQP, SignupWin): painel da marca à
+// esquerda (340 px) + formulário à direita.
+// Mobile (artefato 8b3jFV4BrGj4YkDQAwDvDF, SignupScreen): coluna única.
+// Usa formField, labeled e passwordBox de form_widgets.kf, validações locais
+// idênticas ao backend A2 e medidor de força 0..4 em tempo real via on("input").
 // =============================================================================
 
 class SignupForm {
-    static String name = ""
+    static String firstName = ""
+    static String lastName = ""
+    static String age = ""
     static String email = ""
     static String password = ""
     static String confirm = ""
@@ -27,25 +31,51 @@ class SignupForm {
 }
 
 clearSignupForm() {
-    SignupForm.name = ""
+    SignupForm.firstName = ""
+    SignupForm.lastName = ""
+    SignupForm.age = ""
     SignupForm.email = ""
     SignupForm.password = ""
     SignupForm.confirm = ""
-    AppState.formError = ""
     SignupForm.busy = false
+    AppState.formError = ""
+    PasswordToggle.visible = false
 }
 
-// Validações locais da spec B2-03 (itens 4–7), na ordem dos campos.
+Style signupNameGridCss() = Style("display: grid; grid-template-columns: 1fr 1fr; gap: 10; width: 100%; padding: 0; background: transparent")
+Style signupFormCss()     = Style("display: flex; flex-direction: column; align-items: stretch; gap: 10; width: 100%; margin: 0")
+
+// Validações locais idênticas ao contrato da A2 (backend/models.kf), na ordem.
 // "" = válido.
-String signupLocalError(String name, String email, String password, String confirm) {
-    if (name.trim() == "") {
-        return "Digite seu nome."
+String signupLocalError(String firstName, String lastName, String ageText, String email, String password, String confirm) {
+    if (firstName.trim() == "" || lastName.trim() == "" || ageText.trim() == "" || email.trim() == "" || password == "") {
+        return "Preencha nome, sobrenome, idade, e-mail e senha."
     }
-    if (!isEmailLike(email.trim())) {
+    val firstErr = personNameError(firstName, "nome")
+    if (firstErr != "") {
+        return firstErr
+    }
+    val lastErr = personNameError(lastName, "sobrenome")
+    if (lastErr != "") {
+        return lastErr
+    }
+    val age = parseAgeInt(ageText)
+    if (age == -9999) {
+        return "Digite uma idade válida."
+    }
+    if (age < MIN_AGE()) {
+        return "Você precisa ter pelo menos 18 anos para criar uma conta."
+    }
+    if (age > MAX_AGE()) {
+        return "Digite uma idade válida."
+    }
+    val cleanEmail = email.trim()
+    if (cleanEmail.length() > 255 || !isEmailLike(cleanEmail)) {
         return "Digite um e-mail válido."
     }
-    if (password.length < 8) {
-        return "A senha precisa ter pelo menos 8 caracteres."
+    val pwdErr = passwordPolicyError(password, cleanEmail, firstName.trim())
+    if (pwdErr != "") {
+        return pwdErr
     }
     if (password != confirm) {
         return "As senhas não conferem."
@@ -53,25 +83,37 @@ String signupLocalError(String name, String email, String password, String confi
     return ""
 }
 
-submitSignup(Window w, Input nameField, Input emailField, Input passwordField, Input confirmField) {
+submitSignup(Window w, Input firstField, Input lastField, Input ageField, Input emailField, Input pwdField, Input confirmField) {
     if (SignupForm.busy) {
         return
     }
-    SignupForm.name = nameField.text()
+    SignupForm.firstName = firstField.text()
+    SignupForm.lastName = lastField.text()
+    SignupForm.age = ageField.text()
     SignupForm.email = emailField.text()
-    SignupForm.password = passwordField.text()
+    SignupForm.password = pwdField.text()
     SignupForm.confirm = confirmField.text()
-    val localError = signupLocalError(SignupForm.name, SignupForm.email, SignupForm.password, SignupForm.confirm)
+
+    val localError = signupLocalError(
+        SignupForm.firstName,
+        SignupForm.lastName,
+        SignupForm.age,
+        SignupForm.email,
+        SignupForm.password,
+        SignupForm.confirm
+    )
     if (localError != "") {
         AppState.formError = localError
         mountScreen(w)
         return
     }
+
+    val ageVal = parseAgeInt(SignupForm.age)
     AppState.formError = ""
     SignupForm.busy = true
     mountScreen(w)
     try {
-        register(SignupForm.name, SignupForm.email, SignupForm.password)
+        register(SignupForm.firstName, SignupForm.lastName, ageVal, SignupForm.email, SignupForm.password)
         clearSignupForm()
         navigateTo(w, "onb_salary")
     } catch (String e) {
@@ -82,25 +124,63 @@ submitSignup(Window w, Input nameField, Input emailField, Input passwordField, I
     }
 }
 
+View buildSignupHeading(Bool desktop) {
+    if (desktop) {
+        var h1 = Label("Criar conta")
+        h1.setStyle(authHeadingDesktopCss())
+        var sub = Label("Rápido e gratuito.")
+        sub.setStyle(authSubheadingCss())
+        var block = Column(listOf(h1, sub))
+        block.setStyle(authHeaderBlockCss())
+        return block
+    }
+    var mark = brandMark(100, "brand-mark")
+    var h1 = Label("Criar sua conta")
+    h1.setStyle(authHeadingMobileCss())
+    var sub = Label("Rápido e gratuito.")
+    sub.setStyle(authSubheadingMobCss())
+    var hdr = Column(listOf(mark, h1, sub))
+    hdr.setStyle(authMobileHeaderCss())
+    return hdr
+}
+
 View signupScreen(Window w) {
-    var mark = brandMark(92, "brand-mark")
+    PasswordToggle.visible = false
+    val desktop = AppState.isDesktop
 
-    var nameField = filledField("Nome", "text", "signup-name", SignupForm.name)
-    // type=text e não email (medido na F7): com type=email o navegador barra o
-    // submit do <form> com o balão nativo, onSubmit não roda e a mensagem
-    // "Digite um e-mail válido." (B2-03 item 6) nunca aparece; o kof.ui não
-    // expõe `novalidate`. A validação fica em isEmailLike (core/format.kf).
-    var emailField = filledField("E-mail", "text", "signup-email", SignupForm.email)
-    var passwordField = filledField("Senha", "password", "signup-password", SignupForm.password)
-    var confirmField = filledField("Confirmar senha", "password", "signup-confirm", SignupForm.confirm)
-    var submit = submitButton("Criar conta", "Criando conta…", "btn-signup-submit", SignupForm.busy)
+    var firstField = filledFormField("Seu nome", "text", "signup-name", SignupForm.firstName)
+    var lastField = filledFormField("Sobrenome", "text", "signup-surname", SignupForm.lastName)
+    var nameRow = Row(listOf(
+        labeled("Nome", firstField),
+        labeled("Sobrenome", lastField)
+    ))
+    nameRow.setStyle(signupNameGridCss())
 
-    var form = Form(listOf(nameField, emailField, passwordField, confirmField, submit))
+    var ageField = filledFormField("18 anos ou mais", "text", "signup-age", SignupForm.age)
+    var emailField = filledFormField("seu@email.com", "text", "signup-email", SignupForm.email)
+    var pwdField = filledPasswordField("Crie uma senha", "signup-password", SignupForm.password)
+    var meter = createStrengthMeter("signup-strength", SignupForm.password)
+    pwdField.on("input", () -> {
+        SignupForm.password = pwdField.text()
+        refreshStrengthMeter(meter, SignupForm.password)
+    })
+    var confirmField = filledPasswordField("Repita a senha", "signup-confirm", SignupForm.confirm)
+    var submit = authSubmitButton("Criar conta", "Criando conta…", "btn-signup-submit", SignupForm.busy, desktop)
+
+    var form = Form(listOf(
+        nameRow,
+        labeled("Idade", ageField),
+        labeled("E-mail", emailField),
+        labeled("Senha", fullPasswordBox(pwdField, "signup-password-box")),
+        meter.root,
+        labeled("Confirmar senha", fullPasswordBox(confirmField, "signup-confirm-box")),
+        submit
+    ))
     form.setId("signup-form")
     form.setStyle(signupFormCss())
     form.onSubmit(() -> {
         spawn {
-            submitSignup(w, nameField, emailField, passwordField, confirmField)
+            submitSignup(w, firstField, lastField, ageField, emailField, pwdField, confirmField)
         }
     })
 
@@ -109,14 +189,27 @@ View signupScreen(Window w) {
         navigateTo(w, "login")
     })
 
-    var col = Column(listOf(mark, form, footer))
+    List<View> items = listOf(buildSignupHeading(desktop))
     if (AppState.formError != "") {
-        col = Column(listOf(mark, errorBanner(AppState.formError), form, footer))
+        items.add(errorBanner(AppState.formError))
     }
-    col.setStyle(authColumnCss())
+    items.add(form)
+    items.add(footer)
 
+    var formBox = Column(items)
+    if (desktop) {
+        formBox.setStyle(authDesktopBoxCss())
+        var brand = authBrandPanel(
+            "O único app que te diz quanto gastar por dia para terminar o mês sem estresse.",
+            "O Organiza te educa financeiramente durante o processo.",
+            "signup-brand-panel"
+        )
+        return authDesktopSplit(brand, formBox, "signup-desktop-split", "signup-form-panel")
+    }
+
+    formBox.setStyle(authMobileBoxCss())
     var body = View(screenStyle())
     body.setStyle(entryBodyCss())
-    body.bind(col)
+    body.bind(formBox)
     return body
 }

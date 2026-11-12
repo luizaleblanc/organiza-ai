@@ -5,57 +5,115 @@ import core.theme
 import core.app_state
 import core.navigation
 import core.auth_api
+import core.format
 import components.brand_mark
 import components.form_widgets
 
 // =============================================================================
-// Tela 2 — Login (spec B2-02; design.md §5)
+// Tela 2 — Login + Esqueci minha senha / Redefinir senha (Desktop 2 cols + Mobile)
 // =============================================================================
-// brandMark(120) + Form(e-mail, senha, Entrar) + errorBanner + rodapé
-// "Não tem conta?" / "Cadastre-se". O Form é o dono do envio (onSubmit): o
-// clique em "Entrar" e o Enter disparam o mesmo handler.
-// Erro e "carregando" re-renderizam a tela com mountScreen(w); os valores
-// digitados ficam em LoginForm (campos static) para sobreviver ao re-render.
-// Medido na F7: o re-render de "Entrando…" aparece no DOM antes da resposta
-// do await (o botão já está desabilitado quando o fetch ainda está pendente).
+// Desktop (artefato 64FYjX5UiveVxTtRGYurQP, LoginWin): painel da marca à
+// esquerda (340 px) + formulário à direita.
+// Mobile (artefato 8b3jFV4BrGj4YkDQAwDvDF, LoginScreen): coluna única.
+// Usa formField, labeled e passwordBox (olho toggle) de form_widgets.kf.
+// Fluxo "Esqueci minha senha" integrado a /api/auth/forgot-password e
+// /api/auth/reset-password.
 // =============================================================================
 
 class LoginForm {
     static String email = ""
     static String password = ""
     static Bool busy = false
+    static String mode = "login"
+    static String infoMessage = ""
+    static String forgotEmail = ""
+    static String resetToken = ""
+    static String resetPassword = ""
+    static String resetConfirm = ""
 }
 
 clearLoginForm() {
     LoginForm.email = ""
     LoginForm.password = ""
-    AppState.formError = ""
     LoginForm.busy = false
+    LoginForm.mode = "login"
+    LoginForm.infoMessage = ""
+    LoginForm.forgotEmail = ""
+    LoginForm.resetToken = ""
+    LoginForm.resetPassword = ""
+    LoginForm.resetConfirm = ""
+    AppState.formError = ""
+    PasswordToggle.visible = false
 }
 
-// Estilos das telas 2 e 3 (Style("css"), mesmo padrão de core/theme.kf).
-Style authColumnCss()   = Style("display: flex; flex-direction: column; align-items: stretch; gap: 24; width: 100%; max-width: 400")
-Style authFormCss()     = Style("display: flex; flex-direction: column; align-items: stretch; gap: 16; width: 100%; margin: 0")
-Style signupFormCss()   = Style("display: flex; flex-direction: column; align-items: stretch; gap: 20; width: 100%; margin: 0")
-Style authFooterCss()   = Style("display: flex; flex-direction: column; align-items: center; gap: 4; width: 100%")
-Style authLinkCss()     = Style("background: transparent; color: #00D4FF; border: none; padding: 4px 8px; font-size: 14; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style authBusyCss()     = Style("background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 48; width: 100%; border: none; border-radius: 12; font-size: 16; font-weight: 600; opacity: 0.6; cursor: wait; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style authSpacerCss()   = Style("height: 4; background: transparent; padding: 0")
+// ---- Estilos locais (paleta oficial + font-family em todo texto e botão) ----
 
-// Botão de envio do Form: sem ação própria (o <button> dentro do <form> é
-// submit e dispara onSubmit). Em "busy" fica desabilitado com o texto de espera.
-Button submitButton(String label, String busyLabel, String id, Bool busy) {
+Style authDesktopShellCss()    = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: stretch; flex-grow: 1; width: 100%; border-top: 1px solid rgba(255,255,255,.06); margin-top: 8px; padding: 0; background: transparent")
+Style authBrandPanelCss()      = Style("width: 340; flex-shrink: 0; background: linear-gradient(160deg, rgba(0,212,255,.07), rgba(0,102,255,.04)); border-right: 1px solid rgba(255,255,255,.06); display: flex; flex-direction: column; justify-content: center; align-items: flex-start; padding: 40px 36px; box-sizing: border-box")
+Style authBrandMarkLeftCss()   = Style("align-self: flex-start; padding: 0; background: transparent; line-height: 0")
+Style authBrandHeadlineCss()   = Style("color: #7B8EAD; font-size: 18; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; line-height: 25px; margin: 28px 0 10px 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style authBrandSubCss()        = Style("color: #7B8EAD; font-size: 13; line-height: 21px; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style authFormPanelCss()       = Style("flex-grow: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px 40px; box-sizing: border-box; background: transparent")
+Style authDesktopBoxCss()      = Style("display: flex; flex-direction: column; align-items: stretch; gap: 12; width: 100%; max-width: 360; padding: 0; background: transparent")
+Style authMobileBoxCss()       = Style("display: flex; flex-direction: column; align-items: stretch; gap: 14; width: 100%; max-width: 400; padding: 4px 4px 14px; box-sizing: border-box; background: transparent")
+Style authMobileHeaderCss()    = Style("display: flex; flex-direction: column; align-items: center; gap: 4; width: 100%; margin-bottom: 4px; padding: 0; background: transparent")
+Style passwordBoxBlockCss()    = Style("position: relative; display: block; width: 100%; padding: 0; background: transparent")
+Style authHeadingDesktopCss()  = Style("color: #F0F0F0; font-size: 20; font-weight: 600; margin: 0 0 4px 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style authHeadingMobileCss()   = Style("color: #F0F0F0; font-size: 20; font-weight: 700; margin: 12px 0 2px 0; text-align: center; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style authSubheadingCss()      = Style("color: #4A5578; font-size: 13; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style authSubheadingMobCss()   = Style("color: #4A5578; font-size: 14; margin: 0; text-align: center; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style authHeaderBlockCss()     = Style("display: flex; flex-direction: column; gap: 2; width: 100%; margin-bottom: 4px; padding: 0; background: transparent")
+Style authFormCss()            = Style("display: flex; flex-direction: column; align-items: stretch; gap: 14; width: 100%; margin: 0")
+Style authRightLinkRowCss()    = Style("display: flex; flex-direction: row; justify-content: flex-end; align-items: center; width: 100%; padding: 0; background: transparent")
+Style authFooterCss()          = Style("display: flex; flex-direction: column; align-items: center; gap: 4; width: 100%; margin-top: 2px")
+Style authLinksCenterCss()     = Style("display: flex; flex-direction: column; align-items: center; gap: 8; width: 100%; margin-top: 4px")
+Style authLinkCss()            = Style("background: transparent; color: #00D4FF; border: none; padding: 2px 4px; font-size: 13; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style authSubmitDesktopCss()   = Style("background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 40; width: 100%; border: none; border-radius: 10; font-size: 14; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style authSubmitMobileCss()    = Style("background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 48; width: 100%; border: none; border-radius: 10; font-size: 15; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style authBusyDesktopCss()     = Style("background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 40; width: 100%; border: none; border-radius: 10; font-size: 14; font-weight: 600; opacity: 0.6; cursor: wait; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style authBusyMobileCss()      = Style("background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 48; width: 100%; border: none; border-radius: 10; font-size: 15; font-weight: 600; opacity: 0.6; cursor: wait; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style infoBannerCss()          = Style("color: #00E5A0; background: rgba(0,229,160,.12); border: 1px solid #00E5A0; border-radius: 8; padding: 12; font-size: 13; line-height: 18px; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+
+// Medidor de força da senha (0..4) — atualizado in-place em on("input").
+Style strengthWrapCss()        = Style("display: flex; flex-direction: column; gap: 6; width: 100%; padding: 0; background: transparent")
+Style strengthTrackRowCss()    = Style("display: flex; flex-direction: row; flex-wrap: nowrap; gap: 6; width: 100%; align-items: center")
+Style strengthSegIdleCss()     = Style("flex-grow: 1; height: 4; border-radius: 2; background: rgba(255,255,255,.08); padding: 0")
+Style strengthSegWeakCss()     = Style("flex-grow: 1; height: 4; border-radius: 2; background: #FF4A6E; padding: 0")
+Style strengthSegFairCss()     = Style("flex-grow: 1; height: 4; border-radius: 2; background: #FFB800; padding: 0")
+Style strengthSegGoodCss()     = Style("flex-grow: 1; height: 4; border-radius: 2; background: #00D4FF; padding: 0")
+Style strengthSegStrongCss()   = Style("flex-grow: 1; height: 4; border-radius: 2; background: #00E5A0; padding: 0")
+Style strengthMetaRowCss()     = Style("display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: space-between; align-items: center; gap: 8; width: 100%")
+Style strengthHintCss()        = Style("color: #4A5578; font-size: 11; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style strengthLblIdleCss()     = Style("color: #4A5578; font-size: 11; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style strengthLblWeakCss()     = Style("color: #FF4A6E; font-size: 11; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style strengthLblFairCss()     = Style("color: #FFB800; font-size: 11; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style strengthLblGoodCss()     = Style("color: #00D4FF; font-size: 11; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style strengthLblStrongCss()   = Style("color: #00E5A0; font-size: 11; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+
+// ---- Helpers compartilhados entre Login e Cadastro ---------------------------
+
+Button authSubmitButton(String label, String busyLabel, String id, Bool busy, Bool desktop) {
     if (busy) {
         var b = Button(busyLabel, () -> {})
         b.setId(id)
         b.setDisabled(true)
-        b.setStyle(authBusyCss())
+        if (desktop) {
+            b.setStyle(authBusyDesktopCss())
+        } else {
+            b.setStyle(authBusyMobileCss())
+        }
         return b
     }
-    return primaryButton(label, id, false, () -> {})
+    var b = Button(label, () -> {})
+    b.setId(id)
+    if (desktop) {
+        b.setStyle(authSubmitDesktopCss())
+    } else {
+        b.setStyle(authSubmitMobileCss())
+    }
+    return b
 }
 
-// Rodapé "pergunta" + link cyan na linha de baixo (DESIGN_SYSTEM.md, Telas 2 e 3).
 Column authFooter(String question, String linkLabel, String linkId, () -> Void action) {
     var q = Label(question)
     q.setStyle(captionCss())
@@ -67,20 +125,153 @@ Column authFooter(String question, String linkLabel, String linkId, () -> Void a
     return col
 }
 
-// Campo de texto já preenchido com o valor guardado.
-Input filledField(String placeholder, String type, String id, String value) {
-    var f = textField(placeholder, type, id)
+Input filledFormField(String placeholder, String type, String id, String value) {
+    var f = formField(placeholder, type, id)
     f.setText(value)
     return f
 }
 
-// Valida, mostra "Entrando…", chama login + me e navega.
+Input filledPasswordField(String placeholder, String id, String value) {
+    var f = passwordField(placeholder, id)
+    f.setText(value)
+    return f
+}
+
+// passwordBox() de form_widgets.kf usa display:flex em volta do Row, o que
+// encolhe o Input; display:block devolve largura 100% mantendo o olho em
+// position:absolute à direita.
+View fullPasswordBox(Input field, String id) {
+    var box = passwordBox(field, id)
+    box.setStyle(passwordBoxBlockCss())
+    return box
+}
+
+Label infoBanner(String message) {
+    var l = Label(message)
+    l.setId("form-info")
+    l.setStyle(infoBannerCss())
+    return l
+}
+
+View authBrandPanel(String headline, String subtitle, String panelId) {
+    var mark = brandMark(120, "brand-mark")
+    var markBox = View(screenStyle())
+    markBox.setStyle(authBrandMarkLeftCss())
+    markBox.bind(mark)
+
+    var h2 = Label(headline)
+    h2.setStyle(authBrandHeadlineCss())
+    var p = Label(subtitle)
+    p.setStyle(authBrandSubCss())
+
+    var panel = View(screenStyle())
+    panel.setId(panelId)
+    panel.setStyle(authBrandPanelCss())
+    panel.bind(Column(listOf(markBox, h2, p)))
+    return panel
+}
+
+View authDesktopSplit(View brandPanel, View formCol, String shellId, String formPanelId) {
+    var formPanel = View(screenStyle())
+    formPanel.setId(formPanelId)
+    formPanel.setStyle(authFormPanelCss())
+    formPanel.bind(formCol)
+
+    var row = Row(listOf(brandPanel, formPanel))
+    row.setId(shellId)
+    row.setStyle(authDesktopShellCss())
+    return row
+}
+
+Style activeSegStyle(Int score) {
+    if (score == 1) { return strengthSegWeakCss() }
+    if (score == 2) { return strengthSegFairCss() }
+    if (score == 3) { return strengthSegGoodCss() }
+    return strengthSegStrongCss()
+}
+
+class StrengthMeter {
+    View root
+    View s1
+    View s2
+    View s3
+    View s4
+    Label lbl
+
+    public constructor(View root, View s1, View s2, View s3, View s4, Label lbl) {
+        this.root = root
+        this.s1 = s1
+        this.s2 = s2
+        this.s3 = s3
+        this.s4 = s4
+        this.lbl = lbl
+    }
+}
+
+refreshStrengthMeter(StrengthMeter m, String pwd) {
+    val score = passwordStrengthScore(pwd)
+    val text = passwordStrengthLabel(score)
+    m.lbl.setText(text)
+    if (score <= 0) {
+        m.lbl.setStyle(strengthLblIdleCss())
+        m.s1.setStyle(strengthSegIdleCss())
+        m.s2.setStyle(strengthSegIdleCss())
+        m.s3.setStyle(strengthSegIdleCss())
+        m.s4.setStyle(strengthSegIdleCss())
+        return
+    }
+    val activeCss = activeSegStyle(score)
+    if (score == 1) { m.lbl.setStyle(strengthLblWeakCss()) }
+    else if (score == 2) { m.lbl.setStyle(strengthLblFairCss()) }
+    else if (score == 3) { m.lbl.setStyle(strengthLblGoodCss()) }
+    else { m.lbl.setStyle(strengthLblStrongCss()) }
+
+    m.s1.setStyle(activeCss)
+    if (score >= 2) { m.s2.setStyle(activeCss) } else { m.s2.setStyle(strengthSegIdleCss()) }
+    if (score >= 3) { m.s3.setStyle(activeCss) } else { m.s3.setStyle(strengthSegIdleCss()) }
+    if (score >= 4) { m.s4.setStyle(activeCss) } else { m.s4.setStyle(strengthSegIdleCss()) }
+}
+
+StrengthMeter createStrengthMeter(String prefix, String initialPwd) {
+    var s1 = View(screenStyle())
+    s1.setId(prefix + "-seg-1")
+    var s2 = View(screenStyle())
+    s2.setId(prefix + "-seg-2")
+    var s3 = View(screenStyle())
+    s3.setId(prefix + "-seg-3")
+    var s4 = View(screenStyle())
+    s4.setId(prefix + "-seg-4")
+
+    var barRow = Row(listOf(s1, s2, s3, s4))
+    barRow.setId(prefix + "-bars")
+    barRow.setStyle(strengthTrackRowCss())
+
+    var hint = Label("8+ chars · maiúscula · minúscula · número · especial")
+    hint.setStyle(strengthHintCss())
+    var lbl = Label("")
+    lbl.setId(prefix + "-label")
+
+    var metaRow = Row(listOf(hint, lbl))
+    metaRow.setStyle(strengthMetaRowCss())
+
+    var wrap = Column(listOf(barRow, metaRow))
+    wrap.setId(prefix + "-meter")
+    wrap.setStyle(strengthWrapCss())
+
+    var meter = StrengthMeter(wrap, s1, s2, s3, s4, lbl)
+    refreshStrengthMeter(meter, initialPwd)
+    return meter
+}
+
+// ---- Ações de Login / Esqueci a Senha / Redefinir Senha ----------------------
+
 submitLogin(Window w, Input emailField, Input passwordField) {
     if (LoginForm.busy) {
         return
     }
     LoginForm.email = emailField.text()
     LoginForm.password = passwordField.text()
+    LoginForm.infoMessage = ""
     if (LoginForm.email.trim() == "" || LoginForm.password == "") {
         AppState.formError = "Preencha e-mail e senha."
         mountScreen(w)
@@ -106,38 +297,251 @@ submitLogin(Window w, Input emailField, Input passwordField) {
     }
 }
 
-View loginScreen(Window w) {
-    var markWidth = 120
-    var mark = brandMark(markWidth, "brand-mark")
+submitForgot(Window w, Input emailField) {
+    if (LoginForm.busy) {
+        return
+    }
+    LoginForm.forgotEmail = emailField.text()
+    LoginForm.infoMessage = ""
+    val clean = LoginForm.forgotEmail.trim()
+    if (!isEmailLike(clean) || clean.length() > 255) {
+        AppState.formError = "Digite um e-mail válido."
+        mountScreen(w)
+        return
+    }
+    AppState.formError = ""
+    LoginForm.busy = true
+    mountScreen(w)
+    try {
+        val msg = forgotPassword(clean)
+        LoginForm.busy = false
+        LoginForm.infoMessage = msg
+        mountScreen(w)
+    } catch (String e) {
+        LoginForm.busy = false
+        AppState.formError = e
+        mountScreen(w)
+    }
+}
 
-    var emailField = filledField("E-mail", "email", "login-email", LoginForm.email)
-    var passwordField = filledField("Senha", "password", "login-password", LoginForm.password)
-    var spacer = View(screenStyle())
-    spacer.setStyle(authSpacerCss())
-    var submit = submitButton("Entrar", "Entrando…", "btn-login-submit", LoginForm.busy)
+submitReset(Window w, Input tokenField, Input pwdField, Input confirmField) {
+    if (LoginForm.busy) {
+        return
+    }
+    LoginForm.resetToken = tokenField.text()
+    LoginForm.resetPassword = pwdField.text()
+    LoginForm.resetConfirm = confirmField.text()
+    LoginForm.infoMessage = ""
+    if (LoginForm.resetToken.trim() == "") {
+        AppState.formError = "Informe o token de redefinição."
+        mountScreen(w)
+        return
+    }
+    val shapeErr = passwordShapeError(LoginForm.resetPassword)
+    if (shapeErr != "") {
+        AppState.formError = shapeErr
+        mountScreen(w)
+        return
+    }
+    if (LoginForm.resetPassword != LoginForm.resetConfirm) {
+        AppState.formError = "As senhas não conferem."
+        mountScreen(w)
+        return
+    }
+    AppState.formError = ""
+    LoginForm.busy = true
+    mountScreen(w)
+    try {
+        val msg = resetPassword(LoginForm.resetToken, LoginForm.resetPassword)
+        LoginForm.busy = false
+        LoginForm.mode = "login"
+        LoginForm.resetToken = ""
+        LoginForm.resetPassword = ""
+        LoginForm.resetConfirm = ""
+        LoginForm.infoMessage = msg
+        mountScreen(w)
+    } catch (String e) {
+        LoginForm.busy = false
+        AppState.formError = e
+        mountScreen(w)
+    }
+}
 
-    var form = Form(listOf(emailField, passwordField, spacer, submit))
+switchLoginMode(Window w, String nextMode) {
+    AppState.formError = ""
+    LoginForm.infoMessage = ""
+    if (nextMode == "forgot" && LoginForm.forgotEmail == "" && LoginForm.email.trim() != "") {
+        LoginForm.forgotEmail = LoginForm.email.trim()
+    }
+    LoginForm.mode = nextMode
+    mountScreen(w)
+}
+
+// ---- Construção da coluna de formulário por modo -----------------------------
+
+View buildLoginHeading(String title, String subtitle, Bool desktop) {
+    if (desktop) {
+        var h1 = Label(title)
+        h1.setStyle(authHeadingDesktopCss())
+        var sub = Label(subtitle)
+        sub.setStyle(authSubheadingCss())
+        var block = Column(listOf(h1, sub))
+        block.setStyle(authHeaderBlockCss())
+        return block
+    }
+    var mark = brandMark(110, "brand-mark")
+    var h1 = Label(title)
+    h1.setStyle(authHeadingMobileCss())
+    var sub = Label(subtitle)
+    sub.setStyle(authSubheadingMobCss())
+    var hdr = Column(listOf(mark, h1, sub))
+    hdr.setStyle(authMobileHeaderCss())
+    return hdr
+}
+
+View buildLoginModeForm(Window w, Bool desktop) {
+    var emailField = filledFormField("seu@email.com", "text", "login-email", LoginForm.email)
+    var pwdField = filledPasswordField("Sua senha", "login-password", LoginForm.password)
+
+    var forgotLink = Button("Esqueci minha senha", () -> switchLoginMode(w, "forgot"))
+    forgotLink.setId("link-forgot-password")
+    forgotLink.setStyle(authLinkCss())
+    var forgotRow = Row(listOf(forgotLink))
+    forgotRow.setStyle(authRightLinkRowCss())
+
+    var submit = authSubmitButton("Entrar", "Entrando…", "btn-login-submit", LoginForm.busy, desktop)
+
+    var form = Form(listOf(
+        labeled("E-mail", emailField),
+        labeled("Senha", fullPasswordBox(pwdField, "login-password-box")),
+        forgotRow,
+        submit
+    ))
     form.setId("login-form")
     form.setStyle(authFormCss())
     form.onSubmit(() -> {
         spawn {
-            submitLogin(w, emailField, passwordField)
+            submitLogin(w, emailField, pwdField)
         }
     })
+    return form
+}
 
-    var footer = authFooter("Não tem conta?", "Cadastre-se", "link-signup", () -> {
-        clearLoginForm()
-        navigateTo(w, "signup")
+View buildForgotModeForm(Window w, Bool desktop) {
+    var emailField = filledFormField("seu@email.com", "text", "forgot-email", LoginForm.forgotEmail)
+    var submit = authSubmitButton("Enviar link", "Enviando…", "btn-forgot-submit", LoginForm.busy, desktop)
+
+    var form = Form(listOf(
+        labeled("E-mail", emailField),
+        submit
+    ))
+    form.setId("forgot-form")
+    form.setStyle(authFormCss())
+    form.onSubmit(() -> {
+        spawn {
+            submitForgot(w, emailField)
+        }
     })
+    return form
+}
 
-    var col = Column(listOf(mark, form, footer))
-    if (AppState.formError != "") {
-        col = Column(listOf(mark, errorBanner(AppState.formError), form, footer))
+View buildResetModeForm(Window w, Bool desktop) {
+    var tokenField = filledFormField("Cole o token recebido", "text", "reset-token", LoginForm.resetToken)
+    var pwdField = filledPasswordField("Crie uma nova senha", "reset-password", LoginForm.resetPassword)
+    var confirmField = filledPasswordField("Repita a nova senha", "reset-confirm", LoginForm.resetConfirm)
+    var meter = createStrengthMeter("reset-strength", LoginForm.resetPassword)
+    pwdField.on("input", () -> {
+        LoginForm.resetPassword = pwdField.text()
+        refreshStrengthMeter(meter, LoginForm.resetPassword)
+    })
+    var submit = authSubmitButton("Salvar nova senha", "Salvando…", "btn-reset-submit", LoginForm.busy, desktop)
+
+    var form = Form(listOf(
+        labeled("Token de redefinição", tokenField),
+        labeled("Nova senha", fullPasswordBox(pwdField, "reset-password-box")),
+        meter.root,
+        labeled("Confirmar nova senha", fullPasswordBox(confirmField, "reset-confirm-box")),
+        submit
+    ))
+    form.setId("reset-form")
+    form.setStyle(authFormCss())
+    form.onSubmit(() -> {
+        spawn {
+            submitReset(w, tokenField, pwdField, confirmField)
+        }
+    })
+    return form
+}
+
+View loginScreen(Window w) {
+    PasswordToggle.visible = false
+    val desktop = AppState.isDesktop
+
+    var title = "Entrar na conta"
+    var subtitle = "Entre para acompanhar seu pulso diário."
+    if (!desktop && LoginForm.mode == "login") {
+        title = "Entrar na sua conta"
     }
-    col.setStyle(authColumnCss())
+    if (LoginForm.mode == "forgot") {
+        title = "Esqueci minha senha"
+        subtitle = "Digite seu e-mail para receber o link de redefinição."
+    } else if (LoginForm.mode == "reset") {
+        title = "Redefinir senha"
+        subtitle = "Informe o token do e-mail e escolha uma nova senha."
+    }
 
+    List<View> items = listOf(buildLoginHeading(title, subtitle, desktop))
+    if (AppState.formError != "") {
+        items.add(errorBanner(AppState.formError))
+    }
+    if (LoginForm.infoMessage != "") {
+        items.add(infoBanner(LoginForm.infoMessage))
+    }
+
+    if (LoginForm.mode == "forgot") {
+        items.add(buildForgotModeForm(w, desktop))
+        var haveToken = Button("Já tenho o código / token", () -> switchLoginMode(w, "reset"))
+        haveToken.setId("link-reset-password")
+        haveToken.setStyle(authLinkCss())
+        var backBtn = Button("Voltar para o login", () -> switchLoginMode(w, "login"))
+        backBtn.setId("link-back-login")
+        backBtn.setStyle(authLinkCss())
+        var links = Column(listOf(haveToken, backBtn))
+        links.setStyle(authLinksCenterCss())
+        items.add(links)
+    } else if (LoginForm.mode == "reset") {
+        items.add(buildResetModeForm(w, desktop))
+        var forgotAgain = Button("Pedir novo link", () -> switchLoginMode(w, "forgot"))
+        forgotAgain.setId("link-forgot-again")
+        forgotAgain.setStyle(authLinkCss())
+        var backBtn = Button("Voltar para o login", () -> switchLoginMode(w, "login"))
+        backBtn.setId("link-back-login")
+        backBtn.setStyle(authLinkCss())
+        var links = Column(listOf(forgotAgain, backBtn))
+        links.setStyle(authLinksCenterCss())
+        items.add(links)
+    } else {
+        items.add(buildLoginModeForm(w, desktop))
+        items.add(authFooter("Não tem conta?", "Criar conta", "link-signup", () -> {
+            clearLoginForm()
+            navigateTo(w, "signup")
+        }))
+    }
+
+    var formBox = Column(items)
+    if (desktop) {
+        formBox.setStyle(authDesktopBoxCss())
+        var brand = authBrandPanel(
+            "Falta de planejamento financeiro nunca mais.",
+            "O Organiza escolhe o melhor modelo de economia baseado na sua realidade.",
+            "login-brand-panel"
+        )
+        return authDesktopSplit(brand, formBox, "login-desktop-split", "login-form-panel")
+    }
+
+    formBox.setStyle(authMobileBoxCss())
     var body = View(screenStyle())
     body.setStyle(entryBodyCss())
-    body.bind(col)
+    body.bind(formBox)
     return body
 }

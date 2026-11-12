@@ -958,3 +958,26 @@ Alinha `frontend/screens/chat_screen.kf` e `frontend/core/chat_api.kf` aos artef
   - Erro `503` simulado via CDP `Fetch.fulfillRequest` preserva o rascunho (`"jantar R$ 80"`) com o campo habilitado.
   - Contador oculto em `0/30`, `1/30` e `24/30`, visível em `25/30` (`"25 de 30 mensagens neste mês"`) com a lista rolando e `formBottom = 790 <= 800` no Desktop e `formBottom = 562 <= 640` no Mobile; na 31ª mensagem (`402`), mostra o erro de limite, atualiza para `"30 de 30 mensagens neste mês"`, preserva o rascunho (`"café R$ 12"`) e desabilita o envio.
   - **Resultado:** `36/36` asserções verdes em `0.6.6` e `36/36` em `0.7.2`, `0 FAILURES`, `0 UNCAUGHT`, `0 console.error`.
+
+## 21. Login e Cadastro fiéis aos artefatos + Esqueci a Senha e Medidor de Senha (B3, 12/11/2026)
+
+Entrega de frontend sobre `cc8e042` (`frontend/screens/login_screen.kf`, `frontend/screens/signup_screen.kf`, `frontend/core/auth_api.kf`), alinhada aos artefatos Desktop (`64FYjX5UiveVxTtRGYurQP`) e Mobile (`8b3jFV4BrGj4YkDQAwDvDF`) e ao contrato da tarefa A2:
+
+- **Layout dual (Desktop + Mobile):**
+  - Desktop (`AppState.isDesktop = true`): duas colunas em `LoginWin` e `SignupWin` — painel esquerdo da marca (`340 px`, logo 120, gradiente sutil e chamada) e painel direito centralizado com o formulário (`max-width: 360 px`, botão primário de 40 px).
+  - Mobile (`AppState.isDesktop = false`): coluna única em tela cheia com logo centrada, título, campos, ações e rodapé.
+  - Todo `Style` local de botão e texto declara `font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif` e usa exclusivamente cores da paleta oficial.
+- **Widgets e olho da senha:** campos com `labeled`, `formField` e `passwordBox` (`components/form_widgets.kf`). `fullPasswordBox` aplica `display: block` ao wrapper da `passwordBox` para que o `Input` ocupe 100% da largura mantendo o ícone de olho em `position: absolute` à direita sem alterar `form_widgets.kf`.
+- **Cadastro + medidor em tempo real (`signup_screen.kf` + `auth_api.kf`):**
+  - Campos `Nome` (`firstName`), `Sobrenome` (`lastName`), `Idade` (`age: Int`, `MIN_AGE() = 18`, máximo 120), `E-mail`, `Senha` e `Confirmar senha`, enviando `{"firstName","lastName","age","email","password"}` para `POST /api/auth/register`.
+  - Barra medidora de força (4 segmentos + rótulo) atualizada in-place via `on("input")` sem `mountScreen` (preserva o foco durante a digitação), espelhando o contrato A2 (`0` vazio, `1` Fraca, `2` Razoável, `3` Boa, `4` Forte; critérios Unicode de maiúscula, minúscula, dígito e caractere não alfanumérico).
+  - Validações locais na mesma ordem e com as mesmas mensagens do backend A2 (campos vazios, nome/sobrenome 1–60 com letras acentuadas/espaço/hífen/apóstrofo, idade 18–120, e-mail, P1–P8 de senha e confirmação); `apiErrorMessage` mapeia todos os erros do backend para mensagens fixas em PT.
+- **Login + Esqueci minha senha (`login_screen.kf` + `auth_api.kf`):**
+  - Fluxo completo integrado a `POST /api/auth/forgot-password` (modos `"login"` → `"forgot"` → `"reset"` com token e nova senha + medidor de força) e `POST /api/auth/reset-password`, incluindo tratamento explícito de 503 quando o serviço de e-mail está desligado (`KOF_EMAIL_API_KEY` ausente).
+
+### 21.1 Gates (Kof 0.6.6 e Kof 0.7.2, Windows; backend H2 com patch A2 `0008` em clone temporário + mock HTTP local para Resend)
+
+| Gate | Kof 0.6.6 | Kof 0.7.2 |
+|---|---|---|
+| `kof build frontend --target js` | exit 0 | exit 0 |
+| G-UI headless Desktop 1280×800 e Mobile 360×640 (`gate_b3.mjs`, porta 3087): 2 colunas Desktop / 1 coluna Mobile, 0 rolagem horizontal, 0 imagens quebradas, `font-family: system-ui` nos botões, medidor 0→4 + Unicode, olho da senha, todas as validações locais, cadastro → `onb_salary`, login senha errada, esqueci a senha (202 + token do mock) → reset → login com nova senha, 0 `UNCAUGHT`/`console.error` | 77/77 PASS | 77/77 PASS |

@@ -3,25 +3,38 @@ package core
 import kof.json
 import core.app_state
 import core.api_client
+import core.format
 
 // =============================================================================
-// Batch 2 (F5) — Autenticação e onboarding (design §4.1 e §4.2)
+// Batch 2 (F5) + B3 (A2) — Autenticação, cadastro, política de senha e onboarding
 // =============================================================================
 // Cada função devolve o resultado ou lança (throw) a MENSAGEM FIXA que a tela
-// mostra. Os textos vêm da spec; o corpo do backend só escolhe a mensagem,
-// por trechos ASCII (o acento chega corrompido no json.decode do KofJS).
+// mostra. Os textos vêm da spec/A2; o corpo do backend só escolhe a mensagem,
+// por trechos ASCII (o acento pode variar no json.decode do KofJS).
 // =============================================================================
 
 record LoginRequest(String email, String password)
-record RegisterRequest(String name, String email, String password)
+record RegisterRequest(String firstName, String lastName, Int age, String email, String password)
+record ForgotPasswordRequest(String email)
+record ResetPasswordRequest(String token, String password)
+record MessageResponse(String message)
 record OnboardingRequest(Double salary, String incomeType, Bool hasDebt, Double debtAmount)
 record MeResponse(String name, String email, Bool onboardingCompleted, String tier)
 record BucketSummary(String name, Int percentage, Double amount)
 record OnboardingResponse(String suggestedModel, String description, List<BucketSummary> buckets)
 
+Int MIN_AGE() = 18
+Int MAX_AGE() = 120
+Int MAX_NAME_LEN() = 60
+Int MIN_PASSWORD_LEN() = 8
+Int MAX_PASSWORD_LEN() = 128
+
 String msgNetwork() = "Não consegui falar com o servidor. Confira sua internet e tente de novo."
 String msgGeneric() = "Confira os dados e tente de novo."
 String msgSessionExpired() = "Sua sessão expirou. Entre de novo."
+String msgForgotUnavailable() = "Recuperação de senha indisponível no momento. Tente de novo mais tarde."
+String msgForgotSent() = "Se o e-mail estiver cadastrado, enviamos um link para redefinir a senha. Ele vale por 30 minutos."
+String msgResetDone() = "Senha alterada. Entre com a nova senha."
 
 // Mensagem fixa para um corpo {"error"...}. Token inválido limpa a sessão.
 String apiErrorMessage(String body) {
@@ -32,17 +45,77 @@ String apiErrorMessage(String body) {
     if (body.contains("Muitas tentativas")) {
         return "Muitas tentativas. Espere 1 minuto e tente de novo."
     }
+    if (body.contains("Muitos pedidos") && body.contains("para este")) {
+        return "Muitos pedidos de redefinição para este e-mail. Tente de novo mais tarde."
+    }
+    if (body.contains("Muitos pedidos")) {
+        return "Muitos pedidos de redefinição. Tente de novo mais tarde."
+    }
+    if (body.contains("indispon")) {
+        return msgForgotUnavailable()
+    }
     if (body.contains("Credenciais")) {
         return "E-mail ou senha incorretos."
     }
     if (body.contains("cadastrado")) {
         return "Já existe uma conta com esse e-mail. Quer entrar?"
     }
+    if (body.contains("Preencha e-mail")) {
+        return "Preencha e-mail e senha."
+    }
+    if (body.contains("Preencha nome")) {
+        return "Preencha nome, sobrenome, idade, e-mail e senha."
+    }
+    if (body.contains("O nome precisa")) {
+        return "O nome precisa ter de 1 a 60 caracteres."
+    }
+    if (body.contains("O nome") && body.contains("letras")) {
+        return "O nome só pode ter letras, espaço, hífen e apóstrofo."
+    }
+    if (body.contains("O sobrenome precisa")) {
+        return "O sobrenome precisa ter de 1 a 60 caracteres."
+    }
+    if (body.contains("O sobrenome") && body.contains("letras")) {
+        return "O sobrenome só pode ter letras, espaço, hífen e apóstrofo."
+    }
+    if (body.contains("18 anos")) {
+        return "Você precisa ter pelo menos 18 anos para criar uma conta."
+    }
+    if (body.contains("idade")) {
+        return "Digite uma idade válida."
+    }
+    if (body.contains("e-mail v")) {
+        return "Digite um e-mail válido."
+    }
     if (body.contains("8 caracteres")) {
         return "A senha precisa ter pelo menos 8 caracteres."
     }
-    if (body.contains("Preencha e-mail")) {
-        return "Preencha e-mail e senha."
+    if (body.contains("128 caracteres")) {
+        return "A senha pode ter no máximo 128 caracteres."
+    }
+    if (body.contains("letra mai")) {
+        return "A senha precisa ter pelo menos uma letra maiúscula."
+    }
+    if (body.contains("letra min")) {
+        return "A senha precisa ter pelo menos uma letra minúscula."
+    }
+    if (body.contains("pelo menos um n")) {
+        return "A senha precisa ter pelo menos um número."
+    }
+    if (body.contains("caractere especial")) {
+        return "A senha precisa ter pelo menos um caractere especial."
+    }
+    if (body.contains("conter o seu e-mail")) {
+        return "A senha não pode conter o seu e-mail."
+    }
+    if (body.contains("conter o seu nome")) {
+        return "A senha não pode conter o seu nome."
+    }
+    if (body.contains("Link inv")) {
+        return "Link inválido ou expirado. Peça um novo."
+    }
+    if (body.contains("Dados inv")) {
+        return "Dados inválidos."
     }
     return msgGeneric()
 }
@@ -65,6 +138,26 @@ String postOrThrow(String path, String payload) {
     return checked(body)
 }
 
+// Rotas de e-mail respondem 503 quando Resend não está configurado.
+String postEmailFlowOrThrow(String path, String payload) {
+    var body = ""
+    var failed = false
+    var is503 = false
+    try {
+        body = apiPost(path, payload)
+    } catch (String e) {
+        failed = true
+        is503 = String.valueOf(e).contains("503")
+    }
+    if (failed) {
+        if (is503) {
+            throw msgForgotUnavailable()
+        }
+        throw msgNetwork()
+    }
+    return checked(body)
+}
+
 String getOrThrow(String path) {
     var body = ""
     try {
@@ -76,25 +169,19 @@ String getOrThrow(String path) {
 }
 
 // JWT cru (design §4.1): três partes base64url separadas por ".", começando
-// com "eyJ". Nenhum outro corpo vira token (F7): um 4xx com JSON fora do
-// formato {"error"...} e uma página HTML de proxy/404 não podem ser gravados
-// em SessionState.token.
+// com "eyJ". Nenhum outro corpo vira token (F7).
 Bool looksLikeJwt(String body) {
     if (!body.startsWith("eyJ")) {
         return false
     }
-    if (body.contains(" ") || body.contains("
-") || body.contains("<") || body.contains("{") || body.contains("\"")) {
+    if (body.contains(" ") || body.contains("\n") || body.contains("\r") || body.contains("<") || body.contains("{") || body.contains("\"")) {
         return false
     }
     val first = body.indexOf(".")
     val last = body.lastIndexOf(".")
-    return first > 0 && last > first + 1 && last < body.length - 1 && body.indexOf("..") < 0
+    return first > 0 && last > first + 1 && last < body.length() - 1 && body.indexOf("..") < 0
 }
 
-// Corpo que começa com "{" e não é {"error"...} canônico ainda é tratado
-// como erro de API (mensagem genérica); qualquer outro corpo que não seja JWT
-// é tratado como falha de rede ou servidor.
 String tokenOrThrow(String body) {
     if (looksLikeJwt(body)) {
         return body
@@ -105,7 +192,203 @@ String tokenOrThrow(String body) {
     throw msgNetwork()
 }
 
-// Devolve o JWT e grava a sessão. E-mail vai sem espaços nas pontas.
+// =============================================================================
+// Validação local + medidor de força de senha (contrato A2, seção 16)
+// =============================================================================
+
+Bool isUpperChar(String ch) = ch.toLowerCase() != ch
+
+Bool isLowerChar(String ch) = ch.toUpperCase() != ch
+
+Bool isLetterUnit(String ch) = isUpperChar(ch) || isLowerChar(ch)
+
+Bool isDigitUnit(Char c) = c >= '0' && c <= '9'
+
+Bool isCombiningMark(Char c) {
+    val code = c as Int
+    return code >= 768 && code <= 879
+}
+
+Bool hasUpperLetter(String s) {
+    for (var i = 0; i < s.length(); i++) {
+        if (isUpperChar(s.substring(i, i + 1))) {
+            return true
+        }
+    }
+    return false
+}
+
+Bool hasLowerLetter(String s) {
+    for (var i = 0; i < s.length(); i++) {
+        if (isLowerChar(s.substring(i, i + 1))) {
+            return true
+        }
+    }
+    return false
+}
+
+Bool hasDigitChar(String s) {
+    for (var i = 0; i < s.length(); i++) {
+        if (isDigitUnit(s.charAt(i))) {
+            return true
+        }
+    }
+    return false
+}
+
+Bool hasSpecialChar(String s) {
+    for (var i = 0; i < s.length(); i++) {
+        val ch = s.substring(i, i + 1)
+        val c = s.charAt(i)
+        if (!isLetterUnit(ch) && !isDigitUnit(c)) {
+            return true
+        }
+    }
+    return false
+}
+
+// Medidor 0..4 (seção 16.3 de docs/MVP1_HOMOLOGACAO.md):
+// criterios = quantos de (maiúscula, minúscula, dígito, especial) cumpre;
+// "" -> 0; len < 8 -> min(criterios, 1); >= 8 -> criterios.
+Int passwordStrengthScore(String password) {
+    if (password == "") {
+        return 0
+    }
+    var criteria = 0
+    if (hasUpperLetter(password)) { criteria = criteria + 1 }
+    if (hasLowerLetter(password)) { criteria = criteria + 1 }
+    if (hasDigitChar(password)) { criteria = criteria + 1 }
+    if (hasSpecialChar(password)) { criteria = criteria + 1 }
+    if (password.length() < MIN_PASSWORD_LEN()) {
+        if (criteria > 1) {
+            return 1
+        }
+        return criteria
+    }
+    return criteria
+}
+
+String passwordStrengthLabel(Int score) {
+    if (score == 1) { return "Fraca" }
+    if (score == 2) { return "Razoável" }
+    if (score == 3) { return "Boa" }
+    if (score >= 4) { return "Forte" }
+    return ""
+}
+
+// Letras (com acento), espaço, hífen e apóstrofo (' ou ’).
+Bool isValidPersonName(String value) {
+    if (value == "") {
+        return false
+    }
+    for (var i = 0; i < value.length(); i++) {
+        val ch = value.substring(i, i + 1)
+        val c = value.charAt(i)
+        val ok = isLetterUnit(ch) || isCombiningMark(c) || ch == " " || ch == "-" || ch == "'" || ch == "’"
+        if (!ok) {
+            return false
+        }
+    }
+    return true
+}
+
+String personNameError(String value, String label) {
+    val clean = value.trim()
+    if (clean.length() < 1 || clean.length() > MAX_NAME_LEN()) {
+        return "O " + label + " precisa ter de 1 a 60 caracteres."
+    }
+    if (!isValidPersonName(clean)) {
+        return "O " + label + " só pode ter letras, espaço, hífen e apóstrofo."
+    }
+    return ""
+}
+
+// P1..P6 (mesmas mensagens do backend). "" = válido.
+String passwordShapeError(String password) {
+    if (password.length() < MIN_PASSWORD_LEN()) {
+        return "A senha precisa ter pelo menos 8 caracteres."
+    }
+    if (password.length() > MAX_PASSWORD_LEN()) {
+        return "A senha pode ter no máximo 128 caracteres."
+    }
+    if (!hasUpperLetter(password)) {
+        return "A senha precisa ter pelo menos uma letra maiúscula."
+    }
+    if (!hasLowerLetter(password)) {
+        return "A senha precisa ter pelo menos uma letra minúscula."
+    }
+    if (!hasDigitChar(password)) {
+        return "A senha precisa ter pelo menos um número."
+    }
+    if (!hasSpecialChar(password)) {
+        return "A senha precisa ter pelo menos um caractere especial."
+    }
+    return ""
+}
+
+// P7 e P8 (sem diferenciar maiúsculas). "" = válido.
+String passwordIdentityError(String password, String email, String firstName) {
+    val lower = password.toLowerCase()
+    val mail = email.trim().toLowerCase()
+    var local = mail
+    val at = mail.indexOf("@")
+    if (at >= 0) {
+        local = mail.substring(0, at)
+    }
+    if (mail != "" && lower.contains(mail)) {
+        return "A senha não pode conter o seu e-mail."
+    }
+    if (local.length() >= 3 && lower.contains(local)) {
+        return "A senha não pode conter o seu e-mail."
+    }
+    val first = firstName.trim().toLowerCase()
+    if (first.length() >= 3 && lower.contains(first)) {
+        return "A senha não pode conter o seu nome."
+    }
+    return ""
+}
+
+String passwordPolicyError(String password, String email, String firstName) {
+    val shape = passwordShapeError(password)
+    if (shape != "") {
+        return shape
+    }
+    return passwordIdentityError(password, email, firstName)
+}
+
+// Parse seguro de idade inteira; -9999 = não numérico.
+Int parseAgeInt(String raw) {
+    val s = raw.trim()
+    if (s == "") {
+        return -9999
+    }
+    var start = 0
+    var neg = false
+    if (s.startsWith("-")) {
+        neg = true
+        start = 1
+    }
+    if (start >= s.length()) {
+        return -9999
+    }
+    for (var i = start; i < s.length(); i++) {
+        if (!isDigitUnit(s.charAt(i))) {
+            return -9999
+        }
+    }
+    if (neg) {
+        return -1
+    }
+    if (s.length() > 6) {
+        return 999
+    }
+    return s.toInt()
+}
+
+// =============================================================================
+// Chamadas de autenticação
+// =============================================================================
+
 String login(String email, String password) {
     val cleanEmail = email.trim()
     val token = tokenOrThrow(postOrThrow("/api/auth/login", json.encode(LoginRequest(cleanEmail, password))))
@@ -114,17 +397,36 @@ String login(String email, String password) {
     return token
 }
 
-String register(String name, String email, String password) {
-    val cleanName = name.trim()
+String register(String firstName, String lastName, Int age, String email, String password) {
+    val cleanFirst = firstName.trim()
+    val cleanLast = lastName.trim()
     val cleanEmail = email.trim()
-    val token = tokenOrThrow(postOrThrow("/api/auth/register", json.encode(RegisterRequest(cleanName, cleanEmail, password))))
+    val token = tokenOrThrow(postOrThrow("/api/auth/register",
+        json.encode(RegisterRequest(cleanFirst, cleanLast, age, cleanEmail, password))))
     SessionState.token = token
     SessionState.userEmail = cleanEmail
-    SessionState.userName = cleanName
+    SessionState.userName = cleanFirst + " " + cleanLast
     return token
 }
 
-// GET /api/users/me; grava nome, e-mail e tier na sessão (spec B2-02 item 5).
+String forgotPassword(String email) {
+    val cleanEmail = email.trim()
+    val body = postEmailFlowOrThrow("/api/auth/forgot-password", json.encode(ForgotPasswordRequest(cleanEmail)))
+    if (body.contains("\"message\"")) {
+        return msgForgotSent()
+    }
+    throw msgNetwork()
+}
+
+String resetPassword(String token, String password) {
+    val body = postEmailFlowOrThrow("/api/auth/reset-password", json.encode(ResetPasswordRequest(token.trim(), password)))
+    if (body.contains("\"message\"")) {
+        return msgResetDone()
+    }
+    throw msgNetwork()
+}
+
+// GET /api/users/me; grava nome, e-mail e tier na sessão.
 MeResponse me() {
     val profile = json.decode<MeResponse>(getOrThrow("/api/users/me"))
     SessionState.userName = profile.name()
