@@ -38,8 +38,8 @@ Style authColumnCss()   = Style("display: flex; flex-direction: column; align-it
 Style authFormCss()     = Style("display: flex; flex-direction: column; align-items: stretch; gap: 16; width: 100%; margin: 0")
 Style signupFormCss()   = Style("display: flex; flex-direction: column; align-items: stretch; gap: 20; width: 100%; margin: 0")
 Style authFooterCss()   = Style("display: flex; flex-direction: column; align-items: center; gap: 4; width: 100%")
-Style authLinkCss()     = Style("background: transparent; color: #00D4FF; border: none; padding: 4px 8px; font-size: 14; font-weight: 600; cursor: pointer")
-Style authBusyCss()     = Style("background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 48; width: 100%; border: none; border-radius: 12; font-size: 16; font-weight: 600; opacity: 0.6; cursor: wait")
+Style authLinkCss()     = Style("background: transparent; color: #00D4FF; border: none; padding: 4px 8px; font-size: 14; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style authBusyCss()     = Style("background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 48; width: 100%; border: none; border-radius: 12; font-size: 16; font-weight: 600; opacity: 0.6; cursor: wait; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 Style authSpacerCss()   = Style("height: 4; background: transparent; padding: 0")
 
 // Botão de envio do Form: sem ação própria (o <button> dentro do <form> é

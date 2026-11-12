@@ -134,5 +134,5 @@ Style titleBlockCss()  = Style("display: flex; flex-direction: column; gap: 8; w
 Style bucketWrapCss()  = Style("display: flex; flex-direction: column; width: 100%; padding: 0; background: transparent")
 Style bucketRowCss()   = Style("display: flex; flex-direction: column; gap: 8; width: 100%")
 Style bucketHeadCss()  = Style("display: flex; flex-direction: row; justify-content: space-between; align-items: baseline; width: 100%")
-Style bucketNameCss()  = Style("color: #F0F0F0; font-size: 16; font-weight: 600; margin: 0")
-Style bucketValueCss() = Style("color: #00D4FF; font-size: 14; font-variant: tabular-nums; margin: 0")
+Style bucketNameCss()  = Style("color: #F0F0F0; font-size: 16; font-weight: 600; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style bucketValueCss() = Style("color: #00D4FF; font-size: 14; font-variant: tabular-nums; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")

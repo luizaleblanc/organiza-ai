@@ -767,3 +767,25 @@ Commits pequenos sobre as entregas B1–B4, T0 e F0–F5:
 | G-UI Desktop 1280 e Mobile 360: boas-vindas → cadastro → onboarding → dashboard → chat → caixinhas → notificações → configurações → sair | sem UNCAUGHT, sem rolagem horizontal | sem UNCAUGHT, sem rolagem horizontal |
 
 Nenhum gate chamou a OpenAI ou o Resend reais. O servidor rodou sem `OPENAI_API_KEY` e sem chave de e-mail. O `test_restart.ps1` precisa de um console Windows para o Ctrl+C: rodado a partir do Git Bash, ele dá 26/28 (passos 6 e 17) nas duas versões, por limitação do ambiente; pelo PowerShell, dá 28/28.
+
+## 15. Fundações de design fiéis aos artefatos (A1, 12/11/2026)
+
+Refaz, sobre `ed7e691`, o trabalho de 02 e 03/11 perdido na limpeza do Windows. Referência: `docs/DESIGN_SYSTEM.md` (paleta, tipografia, raios, alturas, ícones, ondas e a tabela de inconsistências entre os três artefatos com o valor adotado) e `docs/FORM_WIDGETS.md`.
+
+- **Marca e fundo oficiais em SVG.** A usuária entregou `organiza-simbolo.svg` e `organiza-fundo-ondas.svg`; ficam em `frontend/assets/brand/` e entram por `Image(...)` (`brand_mark.kf`, `background_waves.kf`). O desenho em Canvas (pixelado) foi abandonado. As ondas aparecem só nas telas de entrada que os artefatos mostram (`screenHasWaves`, em `core/navigation.kf`): Desktop = boas-vindas, salário, resultado, login e cadastro; Mobile = boas-vindas e todo o onboarding.
+- **Ícones do design system** como `.svg` estáticos (`scripts/gen-icons.sh` → `frontend/assets/icons/<nome>-<tom>.svg`, 11 nomes × 8 tons) e `components/icons.kf` (`icon`, `iconView`). Usados na nav (`nav_bar.kf`) e nas notificações. O `kof build` não copia assets: o `Dockerfile` copia `frontend/assets` para `/out/web/assets` e confere três arquivos.
+- **theme.kf:** pilha `system-ui, -apple-system, "Segoe UI", Roboto, sans-serif` em todo Style de texto, botão e input (o `.kof-button` não herda a fonte); raio de botão 10; tokens `colorCanvas`, `colorChartDes`, `borderSoft`; nenhum hex fora da paleta (as cores de categoria passaram a apontar para a paleta).
+- **topbar:** 56 px, borda border-soft, título 16/600, subtítulo 11 em #7B8EAD, ponto verde de 6 px em "Assistente online", slot `action` à direita (`#topbar-action`); assinatura mantida.
+- **form_widgets:** `formField` (38), `labeled`, `passwordField`/`passwordBox` (olho em Canvas + `setType`), `radioChoiceCard` (radio 18), `bigMoneyField`/`bigMoneyAmount` (52/700, máscara de milhar via `on("input")`), `moneyHint`, `chip`/`chipGroup`.
+
+### 15.1 Gates (Kof 0.6.6, Windows; backend H2 local em `PORT=3077`, `KOF_WEB_OUT=out/web`)
+
+- **G-BUILD js:** `kof build frontend --target js` sem diagnósticos (só a nota do alvo alpha); backend jvm com o MEM014 já conhecido.
+- **G-UI headless** (Edge `--headless=new` + CDP puro, `out/gate.mjs`; Mobile via `Emulation.setDeviceMetricsOverride`), Desktop 1280×800 e Mobile 360×640, dsf 1 e 2, cadastro + onboarding + 5 rotas logadas:
+  - 0 imagens quebradas em todas as telas (`naturalWidth` > 0; logo 926, fundo 1200).
+  - Ondas presentes exatamente nas telas listadas acima e ausentes nas demais (medido tela a tela).
+  - Topbar de 56 px nas 5 telas logadas, nos dois layouts e nos dois dsf; ponto verde só no chat.
+  - Fonte computada `system-ui` em texto e em botão.
+  - Nitidez da logo: amostrada em zoom 1 e 4, a razão pixels-de-borda/pixels-acesos cai ~4× (0.096 → 0.024 na boas-vindas; 0.18 → 0.057 na sidebar) nos dois dpr, isto é, as bordas continuam de 1 px ao ampliar: vetor, sem pixelado.
+  - 0 `UNCAUGHT` e 0 `console.error`.
+- **Pendente:** repetir o G-BUILD no Kof 0.7.2 (release estável mais recente); o download pela OneDrive não terminou dentro desta sessão.
