@@ -33,6 +33,11 @@ entity UserRow {
     // Batch 2. Ultima coluna de proposito: numa tabela antiga o ALTER de migrateUserNameColumn a acrescenta
     // no fim, e assim banco novo e banco migrado ficam com a mesma ordem de colunas.
     name: String
+    // A2 (cadastro com nome, sobrenome e idade). Tambem no fim, na mesma ordem do ALTER de
+    // migrateUserProfileColumns. As colunas do orm nao sao nullable: conta antiga = '' e 0.
+    firstName: String
+    lastName: String
+    age: Int
 }
 
 entity TransactionRow {
@@ -273,6 +278,40 @@ void migrateUserNameColumn(String conn) {
     log.info("migracao: coluna userrow.name adicionada")
 }
 
+// A2: mesma regra do migrateUserNameColumn para userrow.firstName, lastName e age (DDL fixa, padrao
+// '' e 0, nada apagado). Roda depois de migrateUserNameColumn, entao a ordem final das colunas e a
+// mesma de um banco novo. column e sempre uma constante deste arquivo (nunca entrada do usuario).
+Bool userColumnExists(String conn, String column) {
+    var rows = db.query(conn, "SELECT COUNT(*) AS n FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = SCHEMA() AND LOWER(TABLE_NAME) = 'userrow' AND LOWER(COLUMN_NAME) = '" + column + "'")
+    if (rows.size == 1) {
+        var row = rows.get(0).toLowerCase()
+        if (row == "{\"n\":1}") {
+            return true
+        }
+        if (row == "{\"n\":0}") {
+            return false
+        }
+    }
+    throw "migracao: resposta inesperada ao procurar a coluna userrow." + column
+}
+
+void addUserColumn(String conn, String column, String ddl) {
+    if (userColumnExists(conn, column.toLowerCase())) {
+        return
+    }
+    db.execute(conn, ddl)
+    if (!userColumnExists(conn, column.toLowerCase())) {
+        throw "migracao: a coluna userrow." + column + " nao foi criada"
+    }
+    log.info("migracao: coluna userrow." + column + " adicionada")
+}
+
+void migrateUserProfileColumns(String conn) {
+    addUserColumn(conn, "firstName", "ALTER TABLE \"userrow\" ADD COLUMN \"firstName\" VARCHAR(255) DEFAULT '' NOT NULL")
+    addUserColumn(conn, "lastName", "ALTER TABLE \"userrow\" ADD COLUMN \"lastName\" VARCHAR(255) DEFAULT '' NOT NULL")
+    addUserColumn(conn, "age", "ALTER TABLE \"userrow\" ADD COLUMN \"age\" INT DEFAULT 0 NOT NULL")
+}
+
 // B4: mesma regra do migrateUserNameColumn para enveloperow.bucket (DDL fixa, DEFAULT '', nada apagado).
 Bool envelopeBucketColumnExists(String conn) {
     var rows = db.query(conn, "SELECT COUNT(*) AS n FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = SCHEMA() AND LOWER(TABLE_NAME) = 'enveloperow' AND LOWER(COLUMN_NAME) = 'bucket'")
@@ -341,6 +380,7 @@ void migrateChatContentColumn(String conn) {
 void ensureSchema(String db) {
     orm.create<UserRow>(db)
     migrateUserNameColumn(db)
+    migrateUserProfileColumns(db)
     orm.create<TransactionRow>(db)
     orm.create<EnvelopeRow>(db)
     migrateEnvelopeBucketColumn(db)
@@ -525,13 +565,15 @@ UserEntity userFromRow(UserRow row) {
     return UserEntity(String.valueOf(row.id()), row.email(), row.passwordHash(), roleFromText(row.role()),
         row.salaryCents(), row.hasSalary(), tierFromText(row.tier()), row.hasVariableIncome(),
         row.emergencyGoalCents(), row.hasEmergencyGoal(), budgetModelFromText(row.budgetModel()),
-        incomeTypeFromText(row.incomeType()), row.hasDebt(), row.debtCents(), row.name())
+        incomeTypeFromText(row.incomeType()), row.hasDebt(), row.debtCents(), row.name(),
+        row.firstName(), row.lastName(), row.age())
 }
 
 UserRow userToRow(Long id, UserEntity user) {
     return UserRow(id, user.email, user.passwordHash, user.role.name(), user.salaryCents, user.hasSalary,
         user.tier.name(), user.hasVariableIncome, user.emergencyGoalCents, user.hasEmergencyGoal,
-        user.budgetModel.name(), user.incomeType.name(), user.hasDebt, user.debtCents, user.name)
+        user.budgetModel.name(), user.incomeType.name(), user.hasDebt, user.debtCents, user.name,
+        user.firstName, user.lastName, user.age)
 }
 
 // Id fora do formato do banco (ex.: "usr_1" de um token antigo) = usuario inexistente.

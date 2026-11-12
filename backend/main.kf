@@ -97,7 +97,7 @@ main() {
     app.post("/api/auth/register") {
         var req = decodeRegisterRequest(body())
         if (req != null) {
-            // Regras do cadastro (nome, e-mail, senha >= 8): 400 sem gravar nada.
+            // Regras do cadastro (nome, sobrenome, idade, e-mail e politica de senha): 400 sem gravar nada.
             var invalid = registerError(req)
             if (invalid != null) {
                 return status(400, json.encode(ApiError(invalid)))
@@ -111,7 +111,7 @@ main() {
             // Senha so como passwords.hash (PERS-12); o id vem do banco, nunca de contagem em memoria (PERS-06).
             // Corrida com o mesmo e-mail: a UNIQUE do banco barra o perdedor, que tambem recebe 409.
             // hasSalary = false ate o onboarding: o cadastro nao informa salario (onboardingCompleted, Batch 2).
-            var created = insertUserIfNew(UserEntity("", email, passwords.hash(req.password), Role.USER, 0, false, Tier.FREE, false, 0, true, BudgetModelType.STANDARD_503020, IncomeType.FIXED, false, 0, req.name.trim()))
+            var created = insertUserIfNew(UserEntity("", email, passwords.hash(req.password), Role.USER, 0, false, Tier.FREE, false, 0, true, BudgetModelType.STANDARD_503020, IncomeType.FIXED, false, 0, registerFullName(req), registerFirstName(req), registerLastName(req), registerAge(req)))
             if (created != null) {
                 return issueToken(created.id)
             }
@@ -156,8 +156,10 @@ main() {
         if (req == null) {
             return status(400, invalidBody())
         }
-        if (req.password.length() < 8 || req.password.length() > maxTextLength()) {
-            return status(400, json.encode(ApiError("A senha precisa ter pelo menos 8 caracteres.")))
+        // P1 a P6 antes de gastar o token; P7 e P8 (e-mail e nome) dependem da conta, entao vem depois.
+        var shape = passwordShapeError(req.password)
+        if (shape != null) {
+            return status(400, json.encode(ApiError(shape)))
         }
         if (!emailConfigured()) {
             return status(503, json.encode(ApiError("Recuperação de senha indisponível no momento. Tente de novo mais tarde.")))
@@ -172,6 +174,10 @@ main() {
         var user = findUserById(userId)
         if (user == null) {
             return status(400, json.encode(ApiError("Link inválido ou expirado. Peça um novo.")))
+        }
+        var identity = passwordIdentityError(req.password, user.email, meOf(user).firstName)
+        if (identity != null) {
+            return status(400, json.encode(ApiError(identity)))
         }
         user.passwordHash = passwords.hash(req.password)
         updateUser(user)

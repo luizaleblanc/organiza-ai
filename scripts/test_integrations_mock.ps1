@@ -141,13 +141,13 @@ try {
     Test-Step "Mock HTTPS local e backend sobem (e-mail ligado, mock confiado só pelo truststore de teste)" { Expect ($mockUp -and $up) "mock=$mockUp backend=$up" }
 
     $mail = "int_$([Guid]::NewGuid().ToString('N'))@organiza.ai"
-    $tk = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Ina Integração"; email = $mail; password = "senhaAntiga123" } | ConvertTo-Json -Compress)).Body
+    $tk = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Ina Integração"; email = $mail; password = "senhaAntiga123!" } | ConvertTo-Json -Compress)).Body
     Invoke-Api "POST" "/api/users/onboarding" $tk (@{ salary = 3000.0; incomeType = "FIXED"; hasDebt = $false } | ConvertTo-Json -Compress) | Out-Null
-    $tkNever = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Nico Nunca"; email = "never_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaDoN123" } | ConvertTo-Json -Compress)).Body
+    $tkNever = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Nico Nunca"; email = "never_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaDoN123!" } | ConvertTo-Json -Compress)).Body
     Invoke-Api "POST" "/api/users/onboarding" $tkNever (@{ salary = 2000.0; incomeType = "FIXED"; hasDebt = $false } | ConvertTo-Json -Compress) | Out-Null
     Invoke-Api "PUT" "/api/users/me/preferences" $tkNever (@{ emailEnabled = $true; frequency = "NEVER"; pushEnabled = $false } | ConvertTo-Json -Compress) | Out-Null
     $mailNoOnb = "noonb_$([Guid]::NewGuid().ToString('N'))@organiza.ai"
-    Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Sem Onboarding"; email = $mailNoOnb; password = "senhaDoS123" } | ConvertTo-Json -Compress) | Out-Null
+    Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Sem Onboarding"; email = $mailNoOnb; password = "senhaDoS123!" } | ConvertTo-Json -Compress) | Out-Null
 
     $script:token = ""
     Test-Step "Esqueci a senha: 202 e 1 e-mail no provedor com link de token de 64 hex" {
@@ -165,18 +165,41 @@ try {
         Expect ($r.Status -eq 202 -and ($r.Body | ConvertFrom-Json).message -like "Se o e-mail estiver cadastrado*" -and @(Get-MockEmails).Count -eq $antes) "$($r.Status) $($r.Body) e-mails antes=$antes depois=$(@(Get-MockEmails).Count)"
     }
 
-    Test-Step "Redefinir: senha curta e token desconhecido = 400; token certo = 200; nova senha entra e a antiga não" {
+    Test-Step "Redefinir: senha curta, senha sem especial e token desconhecido = 400 (sem gastar o token); token certo = 200; nova senha entra e a antiga não" {
         $short = Invoke-Api "POST" "/api/auth/reset-password" "" (@{ token = $script:token; password = "curta" } | ConvertTo-Json -Compress)
-        $bogus = Invoke-Api "POST" "/api/auth/reset-password" "" (@{ token = ("ab" * 32); password = "novaSenha123" } | ConvertTo-Json -Compress)
-        $ok = Invoke-Api "POST" "/api/auth/reset-password" "" (@{ token = $script:token; password = "novaSenha123" } | ConvertTo-Json -Compress)
-        $new = Invoke-Api "POST" "/api/auth/login" "" (@{ email = $mail; password = "novaSenha123" } | ConvertTo-Json -Compress)
-        $old = Invoke-Api "POST" "/api/auth/login" "" (@{ email = $mail; password = "senhaAntiga123" } | ConvertTo-Json -Compress)
+        $weak = Invoke-Api "POST" "/api/auth/reset-password" "" (@{ token = $script:token; password = "novaSenha123" } | ConvertTo-Json -Compress)
+        if ($weak.Body -cne '{"error":"A senha precisa ter pelo menos um caractere especial."}') { return "senha fraca: $($weak.Status) $($weak.Body)" }
+        $bogus = Invoke-Api "POST" "/api/auth/reset-password" "" (@{ token = ("ab" * 32); password = "novaSenha123!" } | ConvertTo-Json -Compress)
+        $ok = Invoke-Api "POST" "/api/auth/reset-password" "" (@{ token = $script:token; password = "novaSenha123!" } | ConvertTo-Json -Compress)
+        $new = Invoke-Api "POST" "/api/auth/login" "" (@{ email = $mail; password = "novaSenha123!" } | ConvertTo-Json -Compress)
+        $old = Invoke-Api "POST" "/api/auth/login" "" (@{ email = $mail; password = "senhaAntiga123!" } | ConvertTo-Json -Compress)
         Expect ($short.Status -eq 400 -and $bogus.Status -eq 400 -and $ok.Status -eq 200 -and $new.Status -eq 200 -and $old.Status -eq 401) "curta=$($short.Status) desconhecido=$($bogus.Status) $($bogus.Body) ok=$($ok.Status) $($ok.Body) nova=$($new.Status) antiga=$($old.Status)"
     }
 
     Test-Step "Token de uso único: 2º uso = 400" {
-        $r = Invoke-Api "POST" "/api/auth/reset-password" "" (@{ token = $script:token; password = "outraSenha123" } | ConvertTo-Json -Compress)
+        $r = Invoke-Api "POST" "/api/auth/reset-password" "" (@{ token = $script:token; password = "outraSenha123!" } | ConvertTo-Json -Compress)
         Expect ($r.Status -eq 400 -and ($r.Body | ConvertFrom-Json).error -like "Link inválido ou expirado*") "$($r.Status) $($r.Body)"
+    }
+
+    # A2: P7 e P8 vêm depois do token (dependem da conta), então a recusa gasta o link.
+    function Get-ResetToken([string]$To) {
+        $before = @(Get-MockEmails | Where-Object { $_.to -eq $To }).Count
+        Invoke-Api "POST" "/api/auth/forgot-password" "" (@{ email = $To } | ConvertTo-Json -Compress) | Out-Null
+        for ($k = 0; $k -lt 20; $k++) {
+            Start-Sleep -Milliseconds 500
+            $m = @(Get-MockEmails | Where-Object { $_.to -eq $To -and $_.text -match 'redefinir-senha\?token=([0-9a-f]{64})' })
+            if ($m.Count -gt $before) { $null = $m[-1].text -match 'redefinir-senha\?token=([0-9a-f]{64})'; return $Matches[1] }
+        }
+        return ""
+    }
+    Test-Step "Redefinir com senha que contém o e-mail = 400 e o link fica gasto; com o primeiro nome = 400" {
+        $t1 = Get-ResetToken $mailNoOnb
+        $local = $mailNoOnb.Split("@")[0]
+        $r1 = Invoke-Api "POST" "/api/auth/reset-password" "" (@{ token = $t1; password = "Xy9!" + $local.ToUpper() } | ConvertTo-Json -Compress)
+        $r1b = Invoke-Api "POST" "/api/auth/reset-password" "" (@{ token = $t1; password = "Outra#Senha9" } | ConvertTo-Json -Compress)
+        $t2 = Get-ResetToken $mailNoOnb
+        $r2 = Invoke-Api "POST" "/api/auth/reset-password" "" (@{ token = $t2; password = "sEm#Forte9x" } | ConvertTo-Json -Compress)
+        Expect ($t1 -and $t2 -and $r1.Body -ceq '{"error":"A senha não pode conter o seu e-mail."}' -and ($r1b.Body | ConvertFrom-Json).error -like "Link inválido ou expirado*" -and $r2.Body -ceq '{"error":"A senha não pode conter o seu nome."}') "e-mail: $($r1.Status) $($r1.Body) | reuso: $($r1b.Body) | nome: $($r2.Status) $($r2.Body)"
     }
 
     Test-Step "Limite: 4º pedido no mesmo e-mail em 1 hora = 429" {
@@ -218,13 +241,13 @@ try {
     $up2 = Wait-Up "$BaseUrl/health"
     Test-Step "Sem KOF_EMAIL_API_KEY: esqueci a senha e redefinir = 503 honesto, log explica e não vaza chave" {
         $r = Invoke-Api "POST" "/api/auth/forgot-password" "" (@{ email = $mail } | ConvertTo-Json -Compress)
-        $r2 = Invoke-Api "POST" "/api/auth/reset-password" "" (@{ token = ("ab" * 32); password = "novaSenha123" } | ConvertTo-Json -Compress)
+        $r2 = Invoke-Api "POST" "/api/auth/reset-password" "" (@{ token = ("ab" * 32); password = "novaSenha123!" } | ConvertTo-Json -Compress)
         Expect ($up2 -and $r.Status -eq 503 -and $r2.Status -eq 503 -and ($r.Body | ConvertFrom-Json).error -like "Recuperação de senha indisponível*") "$($r.Status) $($r.Body) / $($r2.Status)"
     }
 
     Test-Step "Sem OPENAI_API_KEY: o chat mantém a resposta fixa com o pulso e nenhuma chamada ao provedor" {
         $antes = @(Get-MockChats).Count
-        $tkN = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Sem Chave"; email = "nokey_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaSemChave1" } | ConvertTo-Json -Compress)).Body
+        $tkN = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Sem Chave"; email = "nokey_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "Chave!Ausente9" } | ConvertTo-Json -Compress)).Body
         Invoke-Api "POST" "/api/users/onboarding" $tkN (@{ salary = 3000.0; incomeType = "FIXED"; hasDebt = $false } | ConvertTo-Json -Compress) | Out-Null
         $r = Invoke-Api "POST" "/api/chat/message" $tkN (@{ message = "oi" } | ConvertTo-Json -Compress)
         Stop-All
@@ -238,7 +261,7 @@ try {
     Start-Java $cp $coach "coach" | Out-Null
     $up3 = Wait-Up "$BaseUrl/health"
     $cm = "coach_$([Guid]::NewGuid().ToString('N'))@organiza.ai"
-    $tkC = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Cora Coach"; email = $cm; password = "senhaDoCoach1" } | ConvertTo-Json -Compress)).Body
+    $tkC = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Cora Coach"; email = $cm; password = "senhaDoCoach1!" } | ConvertTo-Json -Compress)).Body
     Invoke-Api "POST" "/api/users/onboarding" $tkC (@{ salary = 3000.0; incomeType = "FIXED"; hasDebt = $false } | ConvertTo-Json -Compress) | Out-Null
     # Batch 3 (L3): 200 = {"reply","messagesUsed","messagesLimit"}; Body passa a ser o reply e Used o contador.
     function Chat([string]$Text) {
@@ -302,7 +325,7 @@ try {
     Start-Java $cp $bad "coach-401" | Out-Null
     $up4 = Wait-Up "$BaseUrl/health"
     Test-Step "Coach: chave recusada (401) = 503 honesto; log com o status e sem nenhuma das chaves" {
-        $tk4 = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Chave Errada"; email = "bad_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaErrada12" } | ConvertTo-Json -Compress)).Body
+        $tk4 = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Chave Errada"; email = "bad_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaErrada12!" } | ConvertTo-Json -Compress)).Body
         $r = Invoke-Api "POST" "/api/chat/message" $tk4 (@{ message = "oi" } | ConvertTo-Json -Compress)
         Stop-All
         $log = ($script:logs | ForEach-Object { $_.Err.Result + $_.Out.Result }) -join "`n"

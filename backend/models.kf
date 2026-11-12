@@ -53,6 +53,7 @@ enum VariableIncomeDestination { EMERGENCY_FUND, BUDGET_5030020 }
 // Espelho mutavel de UserRow (backend/store.kf): id = numero gerado pelo banco em texto ("1"),
 // dinheiro em centavos e valores opcionais como par valor + flag (sem T? primitivo: issue #41).
 // name: nome do cadastro (Batch 2); contas anteriores a coluna ficam com "".
+// firstName, lastName, age (A2): contas anteriores ficam com "", "" e 0 (0 = idade nao informada).
 class UserEntity {
     String id
     String email
@@ -69,11 +70,15 @@ class UserEntity {
     Bool hasDebt
     Long debtCents
     String name
+    String firstName
+    String lastName
+    Int age
 
     public constructor(String id, String email, String passwordHash, Role role,
             Long salaryCents, Bool hasSalary, Tier tier, Bool hasVariableIncome,
             Long emergencyGoalCents, Bool hasEmergencyGoal, BudgetModelType budgetModel,
-            IncomeType incomeType, Bool hasDebt, Long debtCents, String name) {
+            IncomeType incomeType, Bool hasDebt, Long debtCents, String name,
+            String firstName, String lastName, Int age) {
         this.id = id
         this.email = email
         this.passwordHash = passwordHash
@@ -89,6 +94,9 @@ class UserEntity {
         this.hasDebt = hasDebt
         this.debtCents = debtCents
         this.name = name
+        this.firstName = firstName
+        this.lastName = lastName
+        this.age = age
     }
 }
 
@@ -226,8 +234,10 @@ class KakeiboReflectionEntity {
 // =========================================================
 
 record LoginRequest(String email, String password)
-// Cadastro (Batch 2): o nome vai para a coluna name de UserRow.
-record RegisterRequest(String name, String email, String password)
+// Cadastro (A2): firstName, lastName e age (Int) vao para as colunas de mesmo nome, e
+// name = firstName + " " + lastName. name sozinho e o corpo legado (isLegacyRegister).
+// age em texto ("18") lanca String no json.decode -> 400 "Dados inválidos.".
+record RegisterRequest(String? firstName, String? lastName, Int? age, String? name, String email, String password)
 // debtAmount em reais (Batch 2). Opcional para manter os clientes antigos: ausente ou null = 0.0
 // (Double? no json.decode medido no 0.6.5: ausente/null = null, "abc" lanca String -> 400).
 record OnboardingRequest(Double salary, String incomeType, Bool hasDebt, Double? debtAmount)
@@ -257,7 +267,8 @@ record ApiError(String error)
 
 // GET /api/users/me (Batch 2). onboardingCompleted = hasSalary && salaryCents > 0: contas antigas
 // ficaram com hasSalary = true e salario 0 (o cadastro gravava true ate o F1) e continuam false.
-record MeResponse(String name, String email, Bool onboardingCompleted, String tier)
+// A2: firstName, lastName e age; age 0 (conta antiga) sai como null.
+record MeResponse(String name, String email, Bool onboardingCompleted, String tier, String firstName, String lastName, Int? age)
 
 // Resposta do POST /api/users/onboarding (Batch 2; antes era o texto "MODELO|descricao|nome:pct:valor,").
 // suggestedModel e o nome do enum (ASCII); buckets vazio no FREELANCER_BASE_ZERO.
@@ -267,8 +278,42 @@ Bool onboardingCompleted(UserEntity user) {
     return user.hasSalary && user.salaryCents > 0
 }
 
+// Conta antiga (firstName vazio): os nomes saem do name so na leitura; nada e gravado.
 MeResponse meOf(UserEntity user) {
-    return MeResponse(user.name, user.email, onboardingCompleted(user), user.tier.name())
+    var first = user.firstName
+    var last = user.lastName
+    if (first == "") {
+        first = firstNameOf(user.name)
+        last = lastNameOf(user.name)
+    }
+    return MeResponse(user.name, user.email, onboardingCompleted(user), user.tier.name(), first, last, publicAge(user.age))
+}
+
+// 0 = idade nao informada (conta antiga ou cadastro legado) -> null no JSON.
+Int? publicAge(Int age) {
+    if (age > 0) {
+        return age
+    }
+    return null
+}
+
+// Nome inteiro -> primeiro nome (ate o primeiro espaco) e sobrenome (o resto). Sem espaco = sobrenome "".
+String firstNameOf(String fullName) {
+    var clean = fullName.trim()
+    var space = clean.indexOf(" ")
+    if (space < 0) {
+        return clean
+    }
+    return clean.substring(0, space)
+}
+
+String lastNameOf(String fullName) {
+    var clean = fullName.trim()
+    var space = clean.indexOf(" ")
+    if (space < 0) {
+        return ""
+    }
+    return clean.substring(space + 1).trim()
 }
 
 // =========================================================
@@ -299,6 +344,11 @@ RegisterRequest? decodeRegisterRequest(String raw) {
     try {
         var req = json.decode<RegisterRequest>(raw)
         if (req.email() == null || req.password() == null) {
+            return null
+        }
+        // Medido no 0.6.6: json.decode<Int?> aceita "18" (texto) e converte. O contrato quer 400, entao
+        // o texto e barrado olhando o JSON bruto.
+        if (raw.matches("(?s).*\"age\"\s*:\s*\".*")) {
             return null
         }
         return req
@@ -382,20 +432,194 @@ Bool isEmailLike(String email) {
     return at < email.length() - 1 && !email.contains(" ")
 }
 
-String? registerError(RegisterRequest req) {
-    if (isBlank(req.name()) || isBlank(req.email()) || isBlank(req.password())) {
-        return "Preencha nome, e-mail e senha."
+// Idade minima do cadastro (decisao da usuaria).
+Int MIN_AGE() {
+    return 18
+}
+
+Int maxAge() {
+    return 120
+}
+
+Int maxNameLength() {
+    return 60
+}
+
+Int minPasswordLength() {
+    return 8
+}
+
+Int maxPasswordLength() {
+    return 128
+}
+
+// Texto opcional -> "" quando ausente, sem espacos nas pontas.
+String trimmedOrEmpty(String? text) {
+    if (text != null) {
+        return text.trim()
     }
-    if (req.name().trim().length() > maxTextLength() || req.email().trim().length() > maxTextLength()) {
-        return "Dados inválidos."
+    return ""
+}
+
+// Corpo legado {name, email, password}: nenhum dos campos novos veio. Remocao futura: quando nenhum
+// cliente mandar mais o corpo antigo (o frontend passa a mandar firstName/lastName/age), apague este
+// ramo, o campo name de RegisterRequest e registerLegacyError; a falta dos campos novos passa a dar
+// "Preencha nome, sobrenome, idade, e-mail e senha.".
+Bool isLegacyRegister(RegisterRequest req) {
+    return req.firstName() == null && req.lastName() == null && req.age() == null
+}
+
+// Primeiro nome do cadastro (P8 da senha e coluna firstName). Legado: o name ate o primeiro espaco.
+String registerFirstName(RegisterRequest req) {
+    if (isLegacyRegister(req)) {
+        return firstNameOf(trimmedOrEmpty(req.name()))
     }
-    if (!isEmailLike(req.email().trim())) {
-        return "Digite um e-mail válido."
+    return trimmedOrEmpty(req.firstName())
+}
+
+String registerLastName(RegisterRequest req) {
+    if (isLegacyRegister(req)) {
+        return lastNameOf(trimmedOrEmpty(req.name()))
     }
-    if (req.password().length() < 8) {
-        return "A senha precisa ter pelo menos 8 caracteres."
+    return trimmedOrEmpty(req.lastName())
+}
+
+// Legado = 0 (idade nao informada).
+Int registerAge(RegisterRequest req) {
+    var age = req.age()
+    if (age != null) {
+        return age
+    }
+    return 0
+}
+
+// name gravado: legado = o name do corpo; novo = firstName + " " + lastName.
+String registerFullName(RegisterRequest req) {
+    if (isLegacyRegister(req)) {
+        return trimmedOrEmpty(req.name())
+    }
+    return registerFirstName(req) + " " + registerLastName(req)
+}
+
+// Letras (com acento), espaco, hifen e apostrofo (' ou ’).
+Bool isValidPersonName(String value) {
+    return value.matches("[\\p{L}\\p{M} '’-]+")
+}
+
+String? personNameError(String value, String label) {
+    if (value.length() < 1 || value.length() > maxNameLength()) {
+        return "O " + label + " precisa ter de 1 a 60 caracteres."
+    }
+    if (!isValidPersonName(value)) {
+        return "O " + label + " só pode ter letras, espaço, hífen e apóstrofo."
     }
     return null
+}
+
+// P1 a P6 (so a senha). null = cumpre.
+String? passwordShapeError(String password) {
+    if (password.length() < minPasswordLength()) {
+        return "A senha precisa ter pelo menos 8 caracteres."
+    }
+    if (password.length() > maxPasswordLength()) {
+        return "A senha pode ter no máximo 128 caracteres."
+    }
+    if (!password.matches("(?s).*\\p{Lu}.*")) {
+        return "A senha precisa ter pelo menos uma letra maiúscula."
+    }
+    if (!password.matches("(?s).*\\p{Ll}.*")) {
+        return "A senha precisa ter pelo menos uma letra minúscula."
+    }
+    if (!password.matches("(?s).*\\p{Nd}.*")) {
+        return "A senha precisa ter pelo menos um número."
+    }
+    if (!password.matches("(?s).*[^\\p{L}\\p{Nd}].*")) {
+        return "A senha precisa ter pelo menos um caractere especial."
+    }
+    return null
+}
+
+// P7 e P8, sem diferenciar maiusculas: nem o e-mail inteiro, nem a parte antes do @ (com 3 ou mais
+// caracteres), nem o primeiro nome (com 3 ou mais caracteres).
+String? passwordIdentityError(String password, String email, String firstName) {
+    var lower = password.toLowerCase()
+    var mail = email.trim().toLowerCase()
+    var local = mail
+    var at = mail.indexOf("@")
+    if (at >= 0) {
+        local = mail.substring(0, at)
+    }
+    if (mail != "" && lower.contains(mail)) {
+        return "A senha não pode conter o seu e-mail."
+    }
+    if (local.length() >= 3 && lower.contains(local)) {
+        return "A senha não pode conter o seu e-mail."
+    }
+    var first = firstName.trim().toLowerCase()
+    if (first.length() >= 3 && lower.contains(first)) {
+        return "A senha não pode conter o seu nome."
+    }
+    return null
+}
+
+String? passwordPolicyError(String password, String email, String firstName) {
+    var shape = passwordShapeError(password)
+    if (shape != null) {
+        return shape
+    }
+    return passwordIdentityError(password, email, firstName)
+}
+
+String? emailError(String email) {
+    if (email.length() > maxTextLength() || !isEmailLike(email)) {
+        return "Digite um e-mail válido."
+    }
+    return null
+}
+
+// Corpo legado: nome, e-mail e a politica de senha (sem idade e sem a regra de caracteres do nome).
+String? registerLegacyError(RegisterRequest req) {
+    if (isBlank(req.name()) || isBlank(req.email()) || isBlank(req.password())) {
+        return "Preencha nome, sobrenome, idade, e-mail e senha."
+    }
+    if (trimmedOrEmpty(req.name()).length() > maxTextLength()) {
+        return "Dados inválidos."
+    }
+    var mail = emailError(req.email().trim())
+    if (mail != null) {
+        return mail
+    }
+    return passwordPolicyError(req.password(), req.email(), registerFirstName(req))
+}
+
+// Ordem: campo vazio, nome, sobrenome, idade, e-mail, senha (P1 a P8). A primeira regra violada vence.
+String? registerError(RegisterRequest req) {
+    if (isLegacyRegister(req)) {
+        return registerLegacyError(req)
+    }
+    if (isBlank(req.firstName()) || isBlank(req.lastName()) || req.age() == null || isBlank(req.email()) || isBlank(req.password())) {
+        return "Preencha nome, sobrenome, idade, e-mail e senha."
+    }
+    var first = personNameError(registerFirstName(req), "nome")
+    if (first != null) {
+        return first
+    }
+    var last = personNameError(registerLastName(req), "sobrenome")
+    if (last != null) {
+        return last
+    }
+    var age = registerAge(req)
+    if (age < MIN_AGE()) {
+        return "Você precisa ter pelo menos 18 anos para criar uma conta."
+    }
+    if (age > maxAge()) {
+        return "Digite uma idade válida."
+    }
+    var mail = emailError(req.email().trim())
+    if (mail != null) {
+        return mail
+    }
+    return passwordPolicyError(req.password(), req.email(), registerFirstName(req))
 }
 
 String? loginError(LoginRequest req) {

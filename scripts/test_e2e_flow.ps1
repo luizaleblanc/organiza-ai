@@ -160,7 +160,7 @@ for ($i = 0; $i -lt 40 -and -not $up; $i++) {
 
 try {
     $email = "e2e_$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())@organiza.ai"
-    $cred = (@{ name = "Ana Júlia E2E"; email = $email; password = "secretPassword123" } | ConvertTo-Json -Compress)
+    $cred = (@{ name = "Ana Júlia E2E"; email = $email; password = "secretPassword123!" } | ConvertTo-Json -Compress)
     $script:token = ""
     $script:userId = ""
 
@@ -284,16 +284,72 @@ try {
         }
     }
     $fresh = "f2_$([Guid]::NewGuid().ToString('N'))@organiza.ai"
-    Test-Invalid "Cadastro sem nome = 400" "/api/auth/register" "" (@{ name = "  "; email = $fresh; password = "senhaValida123" } | ConvertTo-Json -Compress) "Preencha nome, e-mail e senha."
-    Test-Invalid "Cadastro sem campo name = 400" "/api/auth/register" "" (@{ email = $fresh; password = "senhaValida123" } | ConvertTo-Json -Compress) "Preencha nome, e-mail e senha."
-    Test-Invalid "Cadastro com e-mail vazio = 400" "/api/auth/register" "" (@{ name = "Ana"; email = " "; password = "senhaValida123" } | ConvertTo-Json -Compress) "Preencha nome, e-mail e senha."
-    Test-Invalid "Cadastro com senha vazia = 400" "/api/auth/register" "" (@{ name = "Ana"; email = $fresh; password = "" } | ConvertTo-Json -Compress) "Preencha nome, e-mail e senha."
-    Test-Invalid "Cadastro com e-mail sem @ = 400" "/api/auth/register" "" (@{ name = "Ana"; email = "ana.organiza.ai"; password = "senhaValida123" } | ConvertTo-Json -Compress) "Digite um e-mail válido."
-    Test-Invalid "Cadastro com e-mail sem domínio = 400" "/api/auth/register" "" (@{ name = "Ana"; email = "ana@"; password = "senhaValida123" } | ConvertTo-Json -Compress) "Digite um e-mail válido."
-    Test-Invalid "Cadastro com senha de 7 caracteres = 400" "/api/auth/register" "" (@{ name = "Ana"; email = $fresh; password = "1234567" } | ConvertTo-Json -Compress) "A senha precisa ter pelo menos 8 caracteres."
-    Test-Step "Cadastro recusado não gravou: o mesmo e-mail com senha de 8 caracteres = 200" {
-        $r = Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Ana F2"; email = $fresh; password = "12345678" } | ConvertTo-Json -Compress)
+    # A2: corpo novo {firstName,lastName,age,email,password}; a primeira regra violada vence.
+    function New-Reg([hashtable]$Over = @{}) {
+        $b = [ordered]@{ firstName = "Ana"; lastName = "Souza"; age = 30; email = $fresh; password = "Forte#Senha9" }
+        foreach ($k in $Over.Keys) { if ($null -eq $Over[$k]) { $b.Remove($k) } else { $b[$k] = $Over[$k] } }
+        return ($b | ConvertTo-Json -Compress)
+    }
+    $vazio = "Preencha nome, sobrenome, idade, e-mail e senha."
+    $R = "/api/auth/register"
+    Test-Invalid "Cadastro: JSON malformado = 400" $R "" '{"firstName":' "Dados inválidos."
+    Test-Invalid "Cadastro: sem e-mail = 400" $R "" (New-Reg @{ email = $null }) "Dados inválidos."
+    Test-Invalid "Cadastro: sem senha = 400" $R "" (New-Reg @{ password = $null }) "Dados inválidos."
+    Test-Invalid "Cadastro: idade em texto = 400" $R "" (New-Reg @{ age = "18" }) "Dados inválidos."
+    Test-Invalid "Cadastro: nome vazio = 400" $R "" (New-Reg @{ firstName = "  " }) $vazio
+    Test-Invalid "Cadastro: sem sobrenome = 400" $R "" (New-Reg @{ lastName = $null }) $vazio
+    Test-Invalid "Cadastro: sem idade = 400" $R "" (New-Reg @{ age = $null }) $vazio
+    Test-Invalid "Cadastro: e-mail vazio = 400" $R "" (New-Reg @{ email = " " }) $vazio
+    Test-Invalid "Cadastro: senha vazia = 400" $R "" (New-Reg @{ password = "" }) $vazio
+    Test-Invalid "Cadastro: nome com 61 caracteres = 400" $R "" (New-Reg @{ firstName = ("a" * 61) }) "O nome precisa ter de 1 a 60 caracteres."
+    Test-Invalid "Cadastro: nome com número = 400" $R "" (New-Reg @{ firstName = "Ana2" }) "O nome só pode ter letras, espaço, hífen e apóstrofo."
+    Test-Invalid "Cadastro: nome com símbolo = 400" $R "" (New-Reg @{ firstName = "Ana@" }) "O nome só pode ter letras, espaço, hífen e apóstrofo."
+    Test-Invalid "Cadastro: sobrenome com 61 caracteres = 400" $R "" (New-Reg @{ lastName = ("b" * 61) }) "O sobrenome precisa ter de 1 a 60 caracteres."
+    Test-Invalid "Cadastro: sobrenome inválido = 400" $R "" (New-Reg @{ lastName = "Souza_1" }) "O sobrenome só pode ter letras, espaço, hífen e apóstrofo."
+    Test-Invalid "Cadastro: nome inválido vence o sobrenome inválido" $R "" (New-Reg @{ firstName = "1"; lastName = "2" }) "O nome só pode ter letras, espaço, hífen e apóstrofo."
+    Test-Invalid "Cadastro: idade 17 = 400" $R "" (New-Reg @{ age = 17 }) "Você precisa ter pelo menos 18 anos para criar uma conta."
+    Test-Invalid "Cadastro: idade 121 = 400" $R "" (New-Reg @{ age = 121 }) "Digite uma idade válida."
+    Test-Invalid "Cadastro: idade inválida vence o e-mail inválido" $R "" (New-Reg @{ age = 17; email = "x" }) "Você precisa ter pelo menos 18 anos para criar uma conta."
+    Test-Invalid "Cadastro: e-mail sem @ = 400" $R "" (New-Reg @{ email = "ana.organiza.ai" }) "Digite um e-mail válido."
+    Test-Invalid "Cadastro: e-mail sem domínio = 400" $R "" (New-Reg @{ email = "ana@" }) "Digite um e-mail válido."
+    Test-Invalid "Cadastro: e-mail inválido vence a senha fraca" $R "" (New-Reg @{ email = "ana@"; password = "x" }) "Digite um e-mail válido."
+    Test-Invalid "Senha P1: 7 caracteres = 400" $R "" (New-Reg @{ password = "Ab1!xyz" }) "A senha precisa ter pelo menos 8 caracteres."
+    Test-Invalid "Senha P2: 129 caracteres = 400" $R "" (New-Reg @{ password = ("Ab1!" + ("x" * 125)) }) "A senha pode ter no máximo 128 caracteres."
+    Test-Invalid "Senha P3: sem maiúscula = 400" $R "" (New-Reg @{ password = "forte#senha9" }) "A senha precisa ter pelo menos uma letra maiúscula."
+    Test-Invalid "Senha P4: sem minúscula = 400" $R "" (New-Reg @{ password = "FORTE#SENHA9" }) "A senha precisa ter pelo menos uma letra minúscula."
+    Test-Invalid "Senha P5: sem número = 400" $R "" (New-Reg @{ password = "Forte#Senha" }) "A senha precisa ter pelo menos um número."
+    Test-Invalid "Senha P6: sem especial = 400" $R "" (New-Reg @{ password = "ForteSenha9" }) "A senha precisa ter pelo menos um caractere especial."
+    Test-Invalid "Senha P7: contém o e-mail inteiro = 400" $R "" (New-Reg @{ email = "zé@x.io"; password = "a1!ZÉ@X.IO" }) "A senha não pode conter o seu e-mail."
+    Test-Invalid "Senha P7: contém a parte antes do @ = 400" $R "" (New-Reg @{ password = ("q9!" + $fresh.Split("@")[0].ToUpper()) }) "A senha não pode conter o seu e-mail."
+    Test-Invalid "Senha P8: contém o primeiro nome (sem diferenciar maiúsculas) = 400" $R "" (New-Reg @{ password = "x9#aNa_Forte" }) "A senha não pode conter o seu nome."
+    Test-Step "Senha P7/P8: e-mail local e nome com menos de 3 caracteres não contam = 200" {
+        $r = Invoke-Api "POST" $R "" (New-Reg @{ firstName = "Jo"; email = "ab_$([Guid]::NewGuid().ToString('N').Substring(0,6))@organiza.ai"; password = "Jo#Ab9xyzz" })
         Expect ($r.Status -eq 200 -and $r.Body.Split(".").Length -eq 3) "$($r.Status) $($r.Body)"
+    }
+    Test-Step "Cadastro recusado não gravou: idade 18 e nomes com acento, hífen e apóstrofos = 200 e /me traz os campos" {
+        $r = Invoke-Api "POST" $R "" (New-Reg @{ firstName = " Ana-Lú "; lastName = "D'Ávila O’Neil"; age = 18 })
+        $me = (Invoke-Api "GET" "/api/users/me" $r.Body).Body
+        $j = $me | ConvertFrom-Json
+        Expect ($r.Status -eq 200 -and $j.firstName -ceq "Ana-Lú" -and $j.lastName -ceq "D'Ávila O’Neil" -and $j.age -eq 18 -and $j.name -ceq "Ana-Lú D'Ávila O’Neil") "$($r.Status) /me: $me"
+    }
+    Test-Step "Cadastro: idade 120 = 200" {
+        $r = Invoke-Api "POST" $R "" (New-Reg @{ email = "old_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; age = 120 })
+        Expect ($r.Status -eq 200) "$($r.Status) $($r.Body)"
+    }
+    # Legado {name,email,password}: aceito sem idade; a política de senha vale.
+    $legacy = "lg_$([Guid]::NewGuid().ToString('N'))@organiza.ai"
+    Test-Invalid "Legado: sem nome = 400" $R "" (@{ email = $legacy; password = "Forte#Senha9" } | ConvertTo-Json -Compress) $vazio
+    Test-Invalid "Legado: senha fraca = 400" $R "" (@{ name = "Lia Legado"; email = $legacy; password = "12345678" } | ConvertTo-Json -Compress) "A senha precisa ter pelo menos uma letra maiúscula."
+    Test-Invalid "Legado: senha com o primeiro nome = 400" $R "" (@{ name = "Lia Legado"; email = $legacy; password = "Lia#Forte9" } | ConvertTo-Json -Compress) "A senha não pode conter o seu nome."
+    Test-Step "Legado: {name,email,password} = 200; /me separa no primeiro espaço e age = null" {
+        $r = Invoke-Api "POST" $R "" (@{ name = "Lia Maria Legado"; email = $legacy; password = "Forte#Senha9" } | ConvertTo-Json -Compress)
+        $me = (Invoke-Api "GET" "/api/users/me" $r.Body).Body
+        $j = $me | ConvertFrom-Json
+        Expect ($r.Status -eq 200 -and $j.firstName -ceq "Lia" -and $j.lastName -ceq "Maria Legado" -and $null -eq $j.age -and $me.Contains('"age":null') -and $j.name -ceq "Lia Maria Legado") "$($r.Status) /me: $me"
+    }
+    Test-Step "Login não passa pela política: senha fraca errada = 401, não 400" {
+        $r = Invoke-Api "POST" "/api/auth/login" "" (@{ email = $legacy; password = "abc" } | ConvertTo-Json -Compress)
+        Expect ($r.Status -eq 401) "$($r.Status) $($r.Body)"
     }
     Test-Invalid "Login com e-mail vazio = 400" "/api/auth/login" "" (@{ email = ""; password = "senhaValida123" } | ConvertTo-Json -Compress) "Preencha e-mail e senha."
     Test-Invalid "Login com senha vazia = 400" "/api/auth/login" "" (@{ email = $email; password = "" } | ConvertTo-Json -Compress) "Preencha e-mail e senha."
@@ -336,7 +392,7 @@ try {
     }
 
     Test-Step "Onboarding com dívida (5000,50) sugere ANTI_DEBT_701020 com Quitação de Dívida 20%" {
-        $tc = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Caio Dívida"; email = "debt_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaDoC123" } | ConvertTo-Json -Compress)).Body
+        $tc = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Caio Dívida"; email = "debt_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaDoC123!" } | ConvertTo-Json -Compress)).Body
         $body = (@{ salary = 3000.0; incomeType = "FIXED"; hasDebt = $true; debtAmount = 5000.5 } | ConvertTo-Json -Compress)
         $r = Invoke-Api "POST" "/api/users/onboarding" $tc $body
         $j = $r.Body | ConvertFrom-Json
@@ -346,7 +402,7 @@ try {
     }
 
     Test-Step "Onboarding VARIABLE sugere FREELANCER_BASE_ZERO sem buckets" {
-        $tv = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Vera"; email = "var_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaDaV123" } | ConvertTo-Json -Compress)).Body
+        $tv = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Vera"; email = "var_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaDaV123!" } | ConvertTo-Json -Compress)).Body
         $r = Invoke-Api "POST" "/api/users/onboarding" $tv (@{ salary = 4000.0; incomeType = "VARIABLE"; hasDebt = $false } | ConvertTo-Json -Compress)
         $j = $r.Body | ConvertFrom-Json
         Expect ($r.Status -eq 200 -and $j.suggestedModel -eq "FREELANCER_BASE_ZERO" -and @($j.buckets).Count -eq 0) "$($r.Status) $($r.Body)"
@@ -478,7 +534,7 @@ try {
     }
 
     Test-Step "Freemium: 30 mensagens no mês = 200; a 31ª = 402 com a mensagem do legado e não é gravada" {
-        $tf = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Fê Freemium"; email = "free_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaDaF123" } | ConvertTo-Json -Compress)).Body
+        $tf = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Fê Freemium"; email = "free_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaDaF123!" } | ConvertTo-Json -Compress)).Body
         $msg = (@{ message = "oi" } | ConvertTo-Json -Compress)
         $script:tfToken = $tf
         $codes = @(); for ($k = 1; $k -le 30; $k++) { $codes += (Invoke-Api "POST" "/api/chat/message" $tf $msg).Status }
@@ -519,7 +575,7 @@ try {
     }
 
     # ---- Isolamento entre usuários (IDOR): B nunca vê nem grava dados de A ----
-    $credB = (@{ name = "Bia E2E"; email = "b_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaDoB123" } | ConvertTo-Json -Compress)
+    $credB = (@{ name = "Bia E2E"; email = "b_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaDoB123!" } | ConvertTo-Json -Compress)
     $script:tokenB = (Invoke-Api "POST" "/api/auth/register" "" $credB).Body
 
     Test-Step "IDOR: B não vê os envelopes de A (nem com ?userId=A)" {
@@ -556,8 +612,8 @@ try {
     }
 
     # ---- Fase 3: rotas do Desktop (usuário D isolado, para não mexer nos totais de A) ----
-    $script:tokenD = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Duda Desktop"; email = "d_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaDaD123" } | ConvertTo-Json -Compress)).Body
-    $script:tokenE = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Edu Sem Onboarding"; email = "e_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaDoE123" } | ConvertTo-Json -Compress)).Body
+    $script:tokenD = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Duda Desktop"; email = "d_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaDaD123!" } | ConvertTo-Json -Compress)).Body
+    $script:tokenE = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Edu Sem Onboarding"; email = "e_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaDoE123!" } | ConvertTo-Json -Compress)).Body
     $chips = (@{ fixed = @("Aluguel", "Contas", "Transporte"); variable = @("Alimentação", "Delivery") } | ConvertTo-Json -Compress)
 
     Test-Step "Chips antes do onboarding = 409; chip desconhecido e lista vazia = 400" {

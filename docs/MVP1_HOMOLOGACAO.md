@@ -789,3 +789,63 @@ Refaz, sobre `ed7e691`, o trabalho de 02 e 03/11 perdido na limpeza do Windows. 
   - Nitidez da logo: amostrada em zoom 1 e 4, a razão pixels-de-borda/pixels-acesos cai ~4× (0.096 → 0.024 na boas-vindas; 0.18 → 0.057 na sidebar) nos dois dpr, isto é, as bordas continuam de 1 px ao ampliar: vetor, sem pixelado.
   - 0 `UNCAUGHT` e 0 `console.error`.
 - **Pendente:** repetir o G-BUILD no Kof 0.7.2 (release estável mais recente); o download pela OneDrive não terminou dentro desta sessão.
+
+## 16. Cadastro com nome, sobrenome, idade e política de senha (A2, backend, 12/11/2026)
+
+### 16.1 Contrato
+
+- `POST /api/auth/register` com `{"firstName","lastName","age":Int,"email","password"}` responde 200 com o JWT em texto, como antes. Grava `firstName`, `lastName` e `age` (sem espaços nas pontas) e `name = firstName + " " + lastName`.
+- **Legado:** `{"name","email","password"}` continua aceito quando o corpo não traz nenhum dos campos novos (`isLegacyRegister` em `backend/models.kf`). `firstName` e `lastName` saem do `name` (até o primeiro espaço / o resto) e `age = 0`. A política de senha vale também para ele. A regra de caracteres do nome e a idade não valem no legado. A remoção futura está descrita no comentário de `isLegacyRegister`.
+- `GET /api/users/me` acrescenta `firstName`, `lastName` e `age` (0 → `null`). Para contas antigas (`firstName` vazio), os nomes são derivados do `name` só na leitura; nada é regravado.
+- **Colunas:** `userrow` ganha `firstName VARCHAR(255) DEFAULT '' NOT NULL`, `lastName VARCHAR(255) DEFAULT '' NOT NULL` e `age INT DEFAULT 0 NOT NULL` no fim da tabela (`migrateUserProfileColumns` em `backend/store.kf`, chamada pelo `ensureSchema` logo depois de `migrateUserNameColumn`). Cada `ALTER` é fixo e só roda se `INFORMATION_SCHEMA.COLUMNS` não tiver a coluna; falha = boot abortado. As colunas do orm não são nullable, por isso o padrão `''`/`0`.
+- **Login** não passa pela política (uma senha antiga fraca continua entrando).
+
+### 16.2 Erros (400 `{"error":"..."}`, a primeira regra violada vence)
+
+| # | Regra | Mensagem |
+|---|---|---|
+| 1 | JSON inválido, `email` ou `password` ausentes, `age` que não é inteiro (ex.: `"18"`) | `Dados inválidos.` |
+| 2 | campo vazio (nome, sobrenome, `age` ausente, e-mail, senha) | `Preencha nome, sobrenome, idade, e-mail e senha.` |
+| 3 | nome: 1 a 60 caracteres depois do trim | `O nome precisa ter de 1 a 60 caracteres.` |
+| 3 | nome: só letras (com acento), espaço, hífen e apóstrofo (`'` ou `’`) | `O nome só pode ter letras, espaço, hífen e apóstrofo.` |
+| 4 | sobrenome: as mesmas regras | `O sobrenome precisa ter de 1 a 60 caracteres.` / `O sobrenome só pode ter letras, espaço, hífen e apóstrofo.` |
+| 5 | idade < `MIN_AGE()` = 18 | `Você precisa ter pelo menos 18 anos para criar uma conta.` |
+| 5 | idade > 120 | `Digite uma idade válida.` |
+| 6 | e-mail (um `@`, texto dos dois lados, sem espaço, até 255) | `Digite um e-mail válido.` |
+| P1 | senha com menos de 8 caracteres | `A senha precisa ter pelo menos 8 caracteres.` |
+| P2 | senha com mais de 128 | `A senha pode ter no máximo 128 caracteres.` |
+| P3 | sem `\p{Lu}` | `A senha precisa ter pelo menos uma letra maiúscula.` |
+| P4 | sem `\p{Ll}` | `A senha precisa ter pelo menos uma letra minúscula.` |
+| P5 | sem `\p{Nd}` | `A senha precisa ter pelo menos um número.` |
+| P6 | sem caractere fora de `[\p{L}\p{Nd}]` | `A senha precisa ter pelo menos um caractere especial.` |
+| P7 | contém o e-mail inteiro, ou a parte antes do @ quando ela tem 3+ caracteres (sem diferenciar maiúsculas) | `A senha não pode conter o seu e-mail.` |
+| P8 | contém o primeiro nome quando ele tem 3+ caracteres (sem diferenciar maiúsculas) | `A senha não pode conter o seu nome.` |
+
+No legado, o nome entra como antes (vazio → regra 2, mais de 255 → `Dados inválidos.`).
+
+**Reset** (`POST /api/auth/reset-password`, `backend/main.kf`): P1–P6 rodam antes de gastar o token (uma senha fraca não queima o link); P7–P8 dependem da conta e rodam depois do `consumePasswordResetToken`, então a recusa por e-mail/nome gasta o link e o usuário pede outro.
+
+### 16.3 Medidor de força (para o frontend)
+
+- `criterios` = quantos destes a senha cumpre: `\p{Lu}`, `\p{Ll}`, `\p{Nd}`, caractere não alfanumérico (`[^\p{L}\p{Nd}]`). Vai de 0 a 4.
+- `score` = 0 se a senha estiver vazia; `min(criterios, 1)` se tiver menos de 8 caracteres; senão `criterios`.
+- Rótulos por score: 1 Fraca, 2 Razoável, 3 Boa, 4 Forte (0 = sem rótulo).
+- No JS, as regex usam a flag `u` (`/\p{Lu}/u`, `/\p{Ll}/u`, `/\p{Nd}/u`, `/[^\p{L}\p{Nd}]/u`).
+- O medidor é só indicação: quem decide é o backend (P1–P8). Um score 4 ainda pode ser recusado por P2, P7 ou P8.
+
+### 16.4 Scripts
+
+As senhas de teste de `scripts/test_e2e_flow.ps1`, `test_integrations_mock.ps1` e `test_restart.ps1` passaram a cumprir a política (ex.: `secretPassword123!`). Casos novos: cada regra acima (inclusive a precedência entre regras), idade 17/18/120/121/texto, nomes com número e símbolo, nomes com acento, hífen e os dois apóstrofos, legado (aceito, senha fraca recusada, `/me` separando no primeiro espaço e `age: null`), login com senha fraca (401, não 400) e, no mock de integrações, reset com senha sem especial (400 sem gastar o token), com o e-mail (400 e link gasto) e com o primeiro nome.
+
+### 16.5 Gates (clone `work\a2`, base `ed7e691`, Kof 0.6.6 e 0.7.2 instalados em `work\_kof` com SHA256SUMS conferido)
+
+| Gate | 0.6.6 | 0.7.2 |
+|---|---|---|
+| G-BUILD backend jvm (11 arquivos) / frontend js | exit 0 (251 classes) | exit 0 (251 classes) |
+| G-BYTECODE (LinkAll `-Xverify:all`; controle sintético `bipush 7; areturn` acusa FAIL=1) | 251 OK, 0 FAIL | 251 OK, 0 FAIL |
+| `test_e2e_flow.ps1` H2 com `-WebOut` (casos novos da seção 16.4 inclusos) | 121/121 | 121/121 |
+| `test_e2e_flow.ps1` MySQL 8.4 (`ANSI_QUOTES`, container `mysql:8.4` próprio, porta 33086) | 121/121 | 121/121 |
+| `test_integrations_mock.ps1` (H2, mock HTTPS local) | 18/18 | 18/18 |
+| Migração: H2 criado pelo build de `origin/main`, conta legado `{"name":"Lia Antiga Legado"}` com senha `12345678`; o build do A2 sobe no mesmo banco | 3 `ALTER` no log (`firstName`, `lastName`, `age`), login 200 com a senha fraca antiga, `/me` = `firstName "Lia", lastName "Antiga Legado", age null`, cadastro novo 200 | 3 `ALTER` no log (`firstName`, `lastName`, `age`), login 200 com a senha fraca antiga, `/me` = `firstName "Lia", lastName "Antiga Legado", age null`, cadastro novo 200 |
+
+Medido no 0.6.6: `json.decode<Int?>` aceita `"18"` (texto) e converte para 18; por isso `decodeRegisterRequest` olha o JSON bruto (`"age"\s*:\s*"`) e responde `Dados inválidos.`. Nenhum gate chamou OpenAI ou Resend reais. O `kof build` do frontend não copia `frontend/assets` (ver briefing), e a suíte E2E só precisa do `index.html`.

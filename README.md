@@ -159,7 +159,7 @@ Especificação e design em [`.specs/features/mvp1-batch2-auth-onboarding/`](.sp
 - **Estilo novo** com `Style("css")` (gradiente, borda, altura de 48px).
 - **Backend** ganha `GET /api/users/me`, o nome no cadastro, a dívida (`debtAmount` gravado em `debtCents`) e validação com 400.
 - **Gate** é `kof build frontend --target js`, porque `kof check frontend` dá PKG006.
-- **Regras de validação (backend e cliente):** nome, e-mail e senha obrigatórios; senha com no mínimo 8 caracteres; salário maior que 0; com `hasDebt=true`, dívida maior que 0. Entrada inválida responde 400 com `ApiError` em JSON, nunca 500.
+- **Regras de validação (backend e cliente):** nome, sobrenome, idade (mínimo `MIN_AGE()` = 18, máximo 120), e-mail e senha obrigatórios; senha de 8 a 128 caracteres com maiúscula, minúscula, número e caractere especial, sem conter o e-mail nem o primeiro nome (A2, seção 16 de [`docs/MVP1_HOMOLOGACAO.md`](docs/MVP1_HOMOLOGACAO.md); o corpo legado `{"name","email","password"}` segue aceito com a mesma política); salário maior que 0; com `hasDebt=true`, dívida maior que 0. Entrada inválida responde 400 com `ApiError` em JSON, nunca 500.
 - **Onboarding concluído** = salário maior que 0, exposto em `GET /api/users/me` (`onboardingCompleted`). Após o login, o app vai para a Tela 4 se for `false` e para a Tela 8 se for `true`.
 - **Coluna `name`** entra por migração condicional (só adiciona se faltar), porque `orm.create` não altera tabela existente. Antes do deploy, ela passa por gate num MySQL local.
 - **Fora do MVP:** a fonte Manrope não carrega e o `index.html` gerado traz a barra de dev; os dois ficam para um `index.html` próprio (tarefa futura).
