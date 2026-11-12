@@ -15,12 +15,14 @@ import core.auth_api
 
 record EnvelopeItem(String id, String categoryName, String? bucket, Double limitAmount, Double spentThisMonth, Int percent, String status)
 record CreateEnvelopeRequest(String categoryName, Double limitAmount, String bucket)
+record CreateEnvelopeNoBucketRequest(String categoryName, Double limitAmount)
 // GET /api/budgets/balance: só o nome de cada bucket do modelo é lido (json.decode ignora o resto).
 record EnvBucketName(String name)
 record EnvBalance(String model, List<EnvBucketName> buckets)
 
 class EnvState {
     static String raw = ""
+    static String loadedFor = ""
     static Bool loaded = false
     static Bool showNew = false
     static Bool loading = false
@@ -48,20 +50,50 @@ String msgEnvelopeBucket() = "Esse grupo não existe no seu modelo de orçamento
 
 resetEnvelopes() {
     EnvState.raw = ""
+    EnvState.loadedFor = ""
     EnvState.loaded = false
+    EnvState.loading = false
+    EnvState.busy = false
+    EnvState.showNew = false
     EnvState.loadError = ""
+    EnvState.formError = ""
+    EnvState.confirmDelete = ""
+    EnvState.buckets = listOf()
 }
 
-// Carrega o overview; falha vira EnvState.loadError (texto fixo em PT).
+List<EnvelopeItem> decodeEnvelopeItemsOrThrow(String raw) {
+    if (!raw.trim().startsWith("[")) {
+        throw msgNetwork()
+    }
+    try {
+        val items = json.decode<List<EnvelopeItem>>(raw)
+        if (items == null) {
+            throw msgNetwork()
+        }
+        return items
+    } catch (String e) {
+        throw msgNetwork()
+    }
+}
+
+// Carrega o overview; falha vira EnvState.loadError (texto fixo em PT) e limpa raw.
 loadEnvelopes() {
     EnvState.loading = true
+    EnvState.loadError = ""
     try {
-        EnvState.raw = getOrThrow("/api/envelopes/overview")
-        EnvState.loadError = ""
+        val raw = getOrThrow("/api/envelopes/overview")
+        decodeEnvelopeItemsOrThrow(raw)
+        EnvState.raw = raw
+        EnvState.loadedFor = SessionState.token
     } catch (String e) {
+        EnvState.raw = ""
         EnvState.loadError = e
     }
-    loadBuckets()
+    if (SessionState.token != "" && EnvState.loadError == "") {
+        loadBuckets()
+    } else {
+        EnvState.buckets = listOf()
+    }
     EnvState.loaded = true
     EnvState.loading = false
 }
@@ -70,6 +102,10 @@ loadEnvelopes() {
 loadBuckets() {
     try {
         val raw = getOrThrow("/api/budgets/balance")
+        if (!raw.trim().startsWith("{")) {
+            EnvState.buckets = listOf()
+            return
+        }
         var names: List<String> = listOf()
         for (var b in json.decode<EnvBalance>(raw).buckets()) {
             names.add(b.name())
@@ -84,15 +120,25 @@ List<EnvelopeItem> envelopeItems() {
     if (EnvState.raw == "") {
         return listOf()
     }
-    return json.decode<List<EnvelopeItem>>(EnvState.raw)
+    try {
+        return json.decode<List<EnvelopeItem>>(EnvState.raw)
+    } catch (String e) {
+        return listOf()
+    }
 }
 
 // POST /api/envelopes {categoryName, limitAmount, bucket}. Bucket fora do
-// modelo = 400 "Bucket inválido..." -> mensagem fixa.
+// modelo = 400 "Bucket inválido..." -> mensagem fixa; "" omite bucket (Base Zero).
 createEnvelope(String category, Double limit, String bucket) {
+    var payload = ""
+    if (bucket != "") {
+        payload = json.encode(CreateEnvelopeRequest(category, limit, bucket))
+    } else {
+        payload = json.encode(CreateEnvelopeNoBucketRequest(category, limit))
+    }
     var body = ""
     try {
-        body = apiPost("/api/envelopes", json.encode(CreateEnvelopeRequest(category, limit, bucket)))
+        body = apiPost("/api/envelopes", payload)
     } catch (String e) {
         throw msgNetwork()
     }

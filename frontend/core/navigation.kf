@@ -4,6 +4,7 @@ import kof.ui
 import core.theme
 import core.app_state
 import core.auth_api
+import core.envelopes_api
 import components.brand_header
 import components.nav_bar
 import components.background_waves
@@ -87,6 +88,9 @@ mountScreen(Window w) {
 navigateTo(Window w, String screen) {
     AppState.loadError = ""
     AppState.loading = false
+    if (screen == "envelopes" || screen == "welcome" || screen == "login") {
+        resetEnvelopes()
+    }
     AppState.currentScreen = screen
     mountScreen(w)
 }

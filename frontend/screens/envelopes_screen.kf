@@ -5,6 +5,7 @@ import core.theme
 import core.app_state
 import core.format
 import core.navigation
+import core.auth_api
 import core.envelopes_api
 import components.topbar
 import components.form_widgets
@@ -162,20 +163,43 @@ View envelopeGroup(Window w, String bucket, List<EnvelopeItem> items) {
     return group
 }
 
+Bool redirectIfEnvSessionExpired(Window w, String err) {
+    if (SessionState.token != "") {
+        return false
+    }
+    resetEnvelopes()
+    if (err != "") {
+        AppState.formError = err
+    } else {
+        AppState.formError = msgSessionExpired()
+    }
+    navigateTo(w, "login")
+    return true
+}
+
 removeEnvelope(Window w, String id) {
     if (EnvState.busy) {
         return
     }
     EnvState.busy = true
+    var err = ""
     try {
         deleteEnvelope(id)
         EnvState.formError = ""
     } catch (String e) {
+        err = e
         EnvState.formError = e
     }
     EnvState.confirmDelete = ""
+    if (redirectIfEnvSessionExpired(w, err)) {
+        EnvState.busy = false
+        return
+    }
     loadEnvelopes()
     EnvState.busy = false
+    if (redirectIfEnvSessionExpired(w, EnvState.loadError)) {
+        return
+    }
     mountScreen(w)
 }
 
@@ -185,8 +209,8 @@ keepNewEnvelopeInput(Select category, Input limit) {
     EnvState.newLimit = limit.text()
 }
 
-// Validação local primeiro; só chama o backend com limite > 0 e grupo escolhido.
-submitNewEnvelope(Window w, Select category, Input limit) {
+// Validação local primeiro; só chama o backend com limite > 0 e grupo escolhido (quando o modelo tem grupos).
+submitNewEnvelope(Window w, Select category, Input limit, List<String> availableBuckets) {
     if (EnvState.busy) {
         return
     }
@@ -204,21 +228,29 @@ submitNewEnvelope(Window w, Select category, Input limit) {
         mountScreen(w)
         return
     }
-    if (EnvState.newBucket == "") {
+    if (availableBuckets.size() > 0 && EnvState.newBucket == "") {
         EnvState.formError = "Escolha o grupo da caixinha."
         mountScreen(w)
         return
     }
     EnvState.busy = true
+    var err = ""
     try {
         createEnvelope(categoryCodes().get(EnvState.newCategoryIdx), amount, EnvState.newBucket)
         EnvState.showNew = false
         resetNewEnvelopeForm()
         loadEnvelopes()
     } catch (String e) {
+        err = e
         EnvState.formError = e
     }
     EnvState.busy = false
+    if (redirectIfEnvSessionExpired(w, err)) {
+        return
+    }
+    if (redirectIfEnvSessionExpired(w, EnvState.loadError)) {
+        return
+    }
     mountScreen(w)
 }
 
@@ -258,8 +290,9 @@ View newEnvelopeModal(Window w, List<String> groups) {
     category.setSelected(EnvState.newCategoryIdx)
     var limit = moneyFieldWith(EnvState.newLimit, "0,00", "env-new-limit")
     limit.setStyle(envInputCss())
+    val availableBuckets = bucketChoices(groups)
     var choices: List<View> = listOf()
-    for (var g in bucketChoices(groups)) {
+    for (var g in availableBuckets) {
         val name = g
         var card = choiceCard(name, "env-new-bucket-" + name, EnvState.newBucket == name, () -> {
             keepNewEnvelopeInput(category, limit)
@@ -287,8 +320,14 @@ View newEnvelopeModal(Window w, List<String> groups) {
     items.add(category)
     items.add(envFieldLabel("Limite por mês (R$)"))
     items.add(limit)
-    items.add(envFieldLabel("Grupo"))
-    items.add(bucketList)
+    if (availableBuckets.size() > 0) {
+        items.add(envFieldLabel("Grupo"))
+        items.add(bucketList)
+    } else {
+        var noGroup = Label("Seu modelo atual não divide em grupos; a caixinha entra em Outras.")
+        noGroup.setStyle(envModalSubCss())
+        items.add(noGroup)
+    }
     if (EnvState.formError != "") {
         var err = errorBanner(EnvState.formError)
         err.setId("env-new-error")
@@ -302,7 +341,7 @@ View newEnvelopeModal(Window w, List<String> groups) {
     cancel.setId("env-new-cancel")
     var save = Button("Salvar caixinha", () -> {
         spawn {
-            submitNewEnvelope(w, category, limit)
+            submitNewEnvelope(w, category, limit, availableBuckets)
         }
     })
     save.setId("env-new-save")
@@ -347,12 +386,17 @@ View envelopesScreen(Window w) {
     newBtn.setStyle(envNewButtonCss())
     var items: List<View> = listOf(topbar("Caixinhas", "", newBtn))
 
-    if (!EnvState.loaded) {
+    if (!EnvState.loaded || (EnvState.loadError == "" && EnvState.loadedFor != SessionState.token)) {
         if (!EnvState.loading) {
             EnvState.loading = true
             spawn {
                 loadEnvelopes()
-                mountScreen(w)
+                if (redirectIfEnvSessionExpired(w, EnvState.loadError)) {
+                    return
+                }
+                if (AppState.currentScreen == "envelopes") {
+                    mountScreen(w)
+                }
             }
         }
         var l = Label("Carregando caixinhas...")
