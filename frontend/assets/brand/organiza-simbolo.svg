@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="4.25 9.25 231.5 97.5" width="926" height="390" role="img" aria-label="OrganizaIA">
+<title>OrganizaIA</title>
+<defs><linearGradient id="gm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#00D4FF"/><stop offset="1" stop-color="#0066FF"/></linearGradient></defs>
+<g fill="none" stroke="url(#gm)" stroke-width="3.5" stroke-linecap="round">
+<path d="M8 24 Q60 2 120 24 T232 24"/><path d="M8 58 Q60 36 120 58 T232 58" opacity=".78"/><path d="M8 92 Q60 70 120 92 T232 92" opacity=".58"/>
+</g>
+</svg>

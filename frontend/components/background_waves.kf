@@ -1,0 +1,50 @@
+package components
+
+import kof.ui
+import core.theme
+
+// =============================================================================
+// backgroundWaves — fundo oficial das telas de entrada
+// =============================================================================
+// Fonte: frontend/assets/brand/organiza-fundo-ondas.svg (1200x630, gradiente
+// #0A0D18 → #0B1430, brilho radial #0066FF a .18 e 6 ondas #0066FF), entregue
+// pela usuária (docs/DESIGN_SYSTEM.md §1 e §6). É vetor, então fica nítido em
+// qualquer dpr. Camada: View absoluto cobrindo a tela, pointer-events none,
+// z-index 0; a imagem usa object-fit: cover. O conteúdo vai por cima em
+// z-index 1 (withWaves).
+// Onde aparece (artefatos): Desktop = boas-vindas, salário, resultado, login e
+// cadastro; Mobile = boas-vindas e todo o onboarding.
+// =============================================================================
+
+String wavesSrc() = "assets/brand/organiza-fundo-ondas.svg"
+
+Bool screenHasWaves(String screen, Bool desktop) {
+    if (screen == "welcome") {
+        return true
+    }
+    if (desktop) {
+        return screen == "onb_salary" || screen == "onb_result" || screen == "login" || screen == "signup"
+    }
+    return screen == "onb_salary" || screen == "onb_income" || screen == "onb_debt"
+        || screen == "onb_debt_amount" || screen == "onb_result"
+}
+
+// Só a camada de fundo (id "background-waves").
+View backgroundWaves() {
+    var img = Image(wavesSrc())
+    img.setAlt("")
+    img.setStyle(wavesImageCss())
+    var layer = View(screenStyle())
+    layer.setId("background-waves")
+    layer.setStyle(wavesLayerCss())
+    layer.bind(img)
+    return layer
+}
+
+// Conteúdo por cima da camada de ondas, em z-index 1.
+View overWaves(View content) {
+    var top = View(screenStyle())
+    top.setStyle(overWavesCss())
+    top.bind(content)
+    return top
+}

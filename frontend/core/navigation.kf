@@ -6,6 +6,7 @@ import core.app_state
 import core.auth_api
 import components.brand_header
 import components.nav_bar
+import components.background_waves
 import screens.welcome_screen
 import screens.onb_salary_screen
 import screens.onb_income_screen
@@ -140,7 +141,15 @@ View buildEntryLayout(Window w) {
     }
     var stack = Column(listOf(buildViewportToggle(w), buildEntryContent(w)))
     stack.setStyle(entryStackCss())
-    root.bind(stack)
+    // Ondas de fundo (components/background_waves.kf) só nas telas de entrada
+    // em que os artefatos as mostram; o conteúdo fica por cima em z-index 1.
+    if (screenHasWaves(AppState.currentScreen, AppState.isDesktop)) {
+        var layered = Column(listOf(backgroundWaves(), overWaves(stack)))
+        layered.setStyle(entryStackCss())
+        root.bind(layered)
+    } else {
+        root.bind(stack)
+    }
     return root
 }
 
