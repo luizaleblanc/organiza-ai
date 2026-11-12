@@ -12,6 +12,7 @@ import screens.onb_salary_screen
 import screens.onb_income_screen
 import screens.onb_debt_screen
 import screens.onb_debt_amount_screen
+import screens.onb_chips_screen
 import screens.onb_result_screen
 import screens.login_screen
 import screens.signup_screen
@@ -113,7 +114,7 @@ Bool isEntryScreen() {
     var s = AppState.currentScreen
     return s == "welcome" || s == "login" || s == "signup" || s == "onboarding"
         || s == "onb_salary" || s == "onb_income" || s == "onb_debt"
-        || s == "onb_debt_amount" || s == "onb_result"
+        || s == "onb_debt_amount" || s == "onb_chips" || s == "onb_result"
 }
 
 View buildEntryContent(Window w) {
@@ -131,6 +132,9 @@ View buildEntryContent(Window w) {
     }
     if (AppState.currentScreen == "onb_debt_amount") {
         return onbDebtAmountScreen(w)
+    }
+    if (AppState.currentScreen == "onb_chips") {
+        return onbChipsScreen(w)
     }
     if (AppState.currentScreen == "onb_result") {
         return onbResultScreen(w)

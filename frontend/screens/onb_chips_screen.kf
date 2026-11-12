@@ -1,0 +1,156 @@
+package screens
+
+import kof.ui
+import core.theme
+import core.app_state
+import core.navigation
+import components.form_widgets
+
+// =============================================================================
+// Tela 6.2 — Gastos fixos e variáveis em chips (Etapa 4 de 5)
+// =============================================================================
+// Dots (3 de 5), título, subtítulo, chipGroup ("Gastos fixos" / "Gastos variáveis"),
+// layout em 2 colunas no Desktop (max-width 560) e empilhado no Mobile.
+// Ao avançar, valida >= 1 chip selecionado (contrato do backend/overview.kf) e
+// chama POST /api/users/onboarding seguido de POST /api/envelopes/from-chips.
+// =============================================================================
+
+Style chipsGridDesktopCss() = Style("display: grid; grid-template-columns: 1fr 1fr; gap: 24; width: 100%; align-items: start")
+Style chipsStackMobileCss() = Style("display: flex; flex-direction: column; gap: 14; width: 100%")
+
+List<String> allFixedChips() = listOf("Aluguel", "Contas", "Faculdade", "Transporte", "Assinaturas", "Escola")
+List<String> allVariableChips() = listOf("Alimentação", "Delivery", "Lazer", "Roupas", "Farmácia", "Pet", "Viagem")
+
+List<String> parseChipCsv(String csv) {
+    var out: List<String> = listOf()
+    if (csv == "") {
+        return out
+    }
+    for (var part in csv.split(",")) {
+        val trimmed = part.trim()
+        if (trimmed != "") {
+            out.add(trimmed)
+        }
+    }
+    return out
+}
+
+Bool containsChip(String csv, String target) {
+    for (var item in parseChipCsv(csv)) {
+        if (item == target) {
+            return true
+        }
+    }
+    return false
+}
+
+String toggleChipCsv(String csv, String target) {
+    var out = ""
+    var found = false
+    for (var item in parseChipCsv(csv)) {
+        if (item == target) {
+            found = true
+        } else {
+            if (out != "") {
+                out = out + ","
+            }
+            out = out + item
+        }
+    }
+    if (!found) {
+        if (out != "") {
+            out = out + ","
+        }
+        out = out + target
+    }
+    return out
+}
+
+String chipIdFor(String prefix, String label) {
+    if (label == "Aluguel") { return prefix + "aluguel" }
+    if (label == "Contas") { return prefix + "contas" }
+    if (label == "Faculdade") { return prefix + "faculdade" }
+    if (label == "Transporte") { return prefix + "transporte" }
+    if (label == "Assinaturas") { return prefix + "assinaturas" }
+    if (label == "Escola") { return prefix + "escola" }
+    if (label == "Alimentação") { return prefix + "alimentacao" }
+    if (label == "Delivery") { return prefix + "delivery" }
+    if (label == "Lazer") { return prefix + "lazer" }
+    if (label == "Roupas") { return prefix + "roupas" }
+    if (label == "Farmácia") { return prefix + "farmacia" }
+    if (label == "Pet") { return prefix + "pet" }
+    if (label == "Viagem") { return prefix + "viagem" }
+    return prefix + "outro"
+}
+
+toggleFixedChip(Window w, String label) {
+    OnboardingState.fixedChips = toggleChipCsv(OnboardingState.fixedChips, label)
+    AppState.formError = ""
+    mountScreen(w)
+}
+
+toggleVariableChip(Window w, String label) {
+    OnboardingState.variableChips = toggleChipCsv(OnboardingState.variableChips, label)
+    AppState.formError = ""
+    mountScreen(w)
+}
+
+submitChipsStep(Window w) {
+    val fixed = parseChipCsv(OnboardingState.fixedChips)
+    val variable = parseChipCsv(OnboardingState.variableChips)
+    if (fixed.isEmpty() && variable.isEmpty()) {
+        AppState.formError = "Escolha pelo menos um gasto."
+        mountScreen(w)
+        return
+    }
+    spawn {
+        sendOnboardingAndChips(w, fixed, variable)
+    }
+}
+
+View onbChipsScreen(Window w) {
+    var title = onbTitle("Quais são seus gastos fixos e variáveis?", "chips-title")
+    var subtitle = onbSubtitle("A IA vai criar as caixinhas certas pra você automaticamente", "chips-subtitle")
+
+    var fixedButtons: List<View> = listOf()
+    for (var label in allFixedChips()) {
+        val itemLabel = label
+        fixedButtons.add(chip(itemLabel, chipIdFor("chip-", itemLabel),
+            containsChip(OnboardingState.fixedChips, itemLabel), () -> toggleFixedChip(w, itemLabel)))
+    }
+    var variableButtons: List<View> = listOf()
+    for (var label in allVariableChips()) {
+        val itemLabel = label
+        variableButtons.add(chip(itemLabel, chipIdFor("chip-", itemLabel),
+            containsChip(OnboardingState.variableChips, itemLabel), () -> toggleVariableChip(w, itemLabel)))
+    }
+
+    var fixedGroup = chipGroup("Gastos fixos", fixedButtons, "chips-fixed-group")
+    var variableGroup = chipGroup("Gastos variáveis", variableButtons, "chips-variable-group")
+
+    var groupsBlock = View(screenStyle())
+    groupsBlock.setStyle(blockCss())
+    if (AppState.isDesktop) {
+        var grid = Row(listOf(fixedGroup, variableGroup))
+        grid.setId("chips-groups")
+        grid.setStyle(chipsGridDesktopCss())
+        groupsBlock.bind(grid)
+    } else {
+        var stack = Column(listOf(fixedGroup, variableGroup))
+        stack.setId("chips-groups")
+        stack.setStyle(chipsStackMobileCss())
+        groupsBlock.bind(stack)
+    }
+
+    var next = disabledButton("Salvando…", "btn-next")
+    if (!OnboardingState.submitting) {
+        next = primaryButton("Próximo", "btn-next", false, () -> submitChipsStep(w))
+    }
+
+    var items = listOf(dotsBlock(3), titleBlock(title, subtitle), groupsBlock)
+    if (AppState.formError != "") {
+        items.add(errorBlock(AppState.formError))
+    }
+    items.add(onbCtaBlock(next))
+    return onbBody(items, onbColumn560Css())
+}

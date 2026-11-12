@@ -8,55 +8,48 @@ import core.navigation
 import components.form_widgets
 
 // =============================================================================
-// Tela 6.1 — Valor da dívida (spec B2-06; design.md §5)
+// Tela 6.1 — Valor da dívida (sub-etapa da Etapa 3 de 5)
 // =============================================================================
-// Mesmas regras do salário (parseMoney: 0 < v <= 1.000.000, até 2 casas).
-// Válido → envia hasDebt=true e debtAmount em reais → Tela 7.
-// Inválido → "Digite um valor entre R$ 1 e R$ 1.000.000." e fica na tela.
+// Dots (2 de 5), título, subtítulo, bigMoneyAmount ("R$" + bigMoneyField com
+// máscara de milhar), validação via parseMoney e "Próximo" → "onb_chips".
 // =============================================================================
 
 String msgInvalidAmount() = "Digite um valor entre R$ 1 e R$ 1.000.000."
 
 debtAmountNext(Window w, Input field) {
-    val raw = field.text()
+    val raw = field.text().trim()
     OnboardingState.debtAmount = raw
-    var amount = 0.0
     try {
-        amount = parseMoney(raw)
+        parseMoney(raw)
     } catch (String e) {
         AppState.formError = msgInvalidAmount()
         mountScreen(w)
         return
     }
-    sendOnboarding(w, true, amount)
+    OnboardingState.hasDebt = true
+    AppState.formError = ""
+    navigateTo(w, "onb_chips")
 }
 
 View onbDebtAmountScreen(Window w) {
+    var title = onbTitle("Qual o valor aproximado da sua dívida?", "debt-amount-title")
+    var subtitle = onbSubtitle("Isso ajuda a modelar o modelo de economia que mais se adequa a sua realidade", "debt-amount-subtitle")
 
-    var title = Label("Qual o valor aproximado da sua dívida?")
-    title.setId("debt-amount-title")
-    title.setStyle(titleCss())
-    var subtitle = Label("Isso ajuda a modelar o modelo de economia que mais se adequa a sua realidade")
-    subtitle.setStyle(captionCss())
-
-    var prefix = Label("R$")
-    prefix.setStyle(moneyPrefixCss())
-    var field = moneyFieldWith(OnboardingState.debtAmount, "5.000", "debt-amount")
-    var money = Row(listOf(prefix, field))
-    money.setStyle(moneyRowCss())
+    var field = bigMoneyField(OnboardingState.debtAmount, "debt-amount")
+    var amount = bigMoneyAmount(field, "debt-amount-box")
+    var hint = moneyHint("O valor pode ser aproximado.")
+    var moneyCol = Column(listOf(amount, hint))
+    moneyCol.setStyle(salaryMoneyBlockCss())
     var moneyBlock = View(screenStyle())
     moneyBlock.setStyle(blockCss())
-    moneyBlock.bind(money)
+    moneyBlock.bind(moneyCol)
 
-    var next = disabledButton("Próximo", "btn-next")
-    if (!OnboardingState.submitting) {
-        next = primaryButton("Próximo", "btn-next", false, () -> { spawn { debtAmountNext(w, field) } })
-    }
+    var next = primaryButton("Próximo", "btn-next", false, () -> debtAmountNext(w, field))
 
-    var items = listOf(dotsBlock(3), titleBlock(title, subtitle), moneyBlock)
+    var items = listOf(dotsBlock(2), titleBlock(title, subtitle), moneyBlock)
     if (AppState.formError != "") {
         items.add(errorBlock(AppState.formError))
     }
     items.add(buttonBlock(next))
-    return entryBody(items)
+    return onbBody(items, onbColumn480Css())
 }

@@ -52,6 +52,9 @@ class OnboardingState {
     static String debtChoice = ""
     // Telas 6/6.1: envio do onboarding em andamento (um toque = uma chamada).
     static Bool submitting = false
+    // Etapa 4 (chips): selecionados separados por "," (defaults dos artefatos).
+    static String fixedChips = "Aluguel,Contas,Transporte"
+    static String variableChips = "Alimentação,Delivery"
 }
 
 // Deprecado (Batch 3): F1 usa DashState em core/dashboard_api.kf. Remover num

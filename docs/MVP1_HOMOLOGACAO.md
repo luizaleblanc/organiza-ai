@@ -876,3 +876,29 @@ Limites medidos: `Style("css")` aceita `position: fixed`, mas recusa `calc()` (S
 | Mobile 412×915 (CDP) | 27/27 | 27/27 |
 | Mobile pelo controle em 1280×800 (entrada e shell em tela cheia) | 9/9 | 9/9 |
 | **Total G-UI** | **117/117** | **117/117** |
+
+## 18. Onboarding completo em 5 etapas e chips de gastos (B5, 12/11/2026)
+
+Empilhado sobre o commit da A3 (`e8fc33c`), mantendo os widgets de `components/form_widgets.kf`, os tokens de `core/theme.kf` e o shell/viewport da A3 sem alterar `auth_api.kf`.
+
+| Item | Mudança |
+|---|---|
+| Indicador de 5 etapas | `onbProgressDots` e `dotsBlock` (`screens/onb_result_screen.kf`) renderizam 5 pontos (`0` Salário, `1` Tipo de renda, `2` Dívida e Valor da dívida, `3` Chips de gastos, `4` Resultado) com `progressDot`. |
+| Salário e dívida | `screens/onb_salary_screen.kf` e `screens/onb_debt_amount_screen.kf` usam `bigMoneyField` + `bigMoneyAmount` (52/700 com `"R$"` e máscara de milhar) e `moneyHint`, preservando a validação por `parseMoney`. |
+| Tipo de renda e dívidas | `screens/onb_income_screen.kf` e `screens/onb_debt_screen.kf` usam `radioChoiceCard` (radio de 18 px, ponto de 9 px), com botão `"Próximo"` desabilitado até a escolha. |
+| Chips e API própria | `screens/onb_chips_screen.kf` usa `chip` / `chipGroup` em grade de 2 colunas no Desktop (`max-width: 560`) e empilhada no Mobile (`Aluguel,Contas,Transporte` e `Alimentação,Delivery` pré-selecionados em `OnboardingState`), valida seleção mínima (`"Escolha pelo menos um gasto."`, conforme `backend/overview.kf`) e `core/onb_api.kf` (`submitChips`) chama `POST /api/envelopes/from-chips` somente após `POST /api/users/onboarding` concluir. |
+| Resultado | `screens/onb_result_screen.kf` exibe título centralizado, percentual junto ao nome e valor à direita, barras coloridas (`accent`, `chart-des`, `success`) e o card informativo `"Organiza AI"`. Todo `Style` de texto/botão local declara `system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`. |
+
+### 18.1 Gates (Kof 0.6.6 e 0.7.2, backend local H2, Edge headless via CDP)
+
+- **G-BUILD:** `kof build frontend --target js` (`exit=0`, com cópia de `frontend/assets`) e `kof build backend --target jvm --fat` (`exit=0`) nas duas versões.
+- **G-UI (`build/onb-gui-gate.mjs`, portas locais `3089` e `3090`, H2, `PORT` + `KOF_WEB_OUT`):**
+  - Desktop 1280×800 (`FIXED`, sem dívida, salário `5.000` → `50/30/20`, 5 chips selecionados → `["EDUCATION","GROCERIES","HOUSING","LEISURE","PHARMA"]` confirmadas via `GET /api/envelopes`) e Mobile 360×640 (`VARIABLE`, com dívida `5.000` → `Base Zero`, 4 chips selecionados → `["FOOD","HOUSING","OTHER","TRANSPORT"]` confirmadas via `GET /api/envelopes`).
+  - Conferidos em todas as etapas: 5 pontos de progresso corretos, `bigMoney` 52/700, radio 18 px, erro de 0 chips, fonte `system-ui` nos botões e chips, 0 imagens quebradas, `scrollWidth <= innerWidth` (sem rolagem horizontal) e 0 `UNCAUGHT`.
+
+| Cenário | 0.6.6 | 0.7.2 |
+|---|---|---|
+| Desktop 1280×800 (Fixa, sem dívida, 5 chips) | 42/42 | 42/42 |
+| Mobile 360×640 (Variável, com dívida, 4 chips) | 42/42 | 42/42 |
+| **Total G-UI** | **84/84** | **84/84** |
+

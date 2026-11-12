@@ -7,42 +7,41 @@ import core.navigation
 import components.form_widgets
 
 // =============================================================================
-// Tela 5 — Tipo de renda (spec B2-05; design.md F8a)
+// Tela 5 — Tipo de renda (Etapa 2 de 5)
 // =============================================================================
-// Dois cards; nenhum selecionado ao abrir e "Próximo" desabilitado. Tocar um
-// card grava OnboardingState.incomeType ("FIXED"/"VARIABLE"), marca
-// incomeChosen e re-renderiza. "Próximo" vai para "onb_debt" (Tela 6, F8b).
+// Dots (1 de 5), título, subtítulo, dois radioChoiceCard (radio 18px) e "Próximo".
 // =============================================================================
 
 View onbIncomeScreen(Window w) {
-    var title = Label("Sua renda é fixa ou variável?")
-    title.setId("onb-title")
-    title.setStyle(titleCss())
+    var title = onbTitle("Sua renda é fixa ou variável?", "onb-title")
+    var subtitle = onbSubtitle("Isso muda como calculamos seu dia a dia", "onb-subtitle")
 
     var chosen = OnboardingState.incomeChosen
-    var fixed = choiceCard("Fixa (CLT, salário todo mês)", "card-fixed",
+    var fixed = radioChoiceCard("Fixa (CLT, salário todo mês)", "card-fixed",
         chosen && OnboardingState.incomeType == "FIXED", () -> chooseIncome(w, "FIXED"))
-    var variable = choiceCard("Variável (freela, PJ, bicos)", "card-variable",
+    var variable = radioChoiceCard("Variável (freela, PJ, bicos)", "card-variable",
         chosen && OnboardingState.incomeType == "VARIABLE", () -> chooseIncome(w, "VARIABLE"))
     var cards = Column(listOf(fixed, variable))
     cards.setStyle(choiceListCss())
+    var cardsBlock = View(screenStyle())
+    cardsBlock.setStyle(blockCss())
+    cardsBlock.bind(cards)
 
     var next = disabledButton("Próximo", "btn-next")
     if (chosen) {
-        next = primaryButton("Próximo", "btn-next", false, () -> navigateTo(w, "onb_debt"))
+        next = primaryButton("Próximo", "btn-next", false, () -> {
+            AppState.formError = ""
+            navigateTo(w, "onb_debt")
+        })
     }
 
-    var col = Column(listOf(progressDots(1), title, cards, next))
-    col.setStyle(onbColumnCss())
-
-    var body = View(screenStyle())
-    body.setStyle(entryBodyCss())
-    body.bind(col)
-    return body
+    var items = listOf(dotsBlock(1), titleBlock(title, subtitle), cardsBlock, buttonBlock(next))
+    return onbBody(items, onbColumn480Css())
 }
 
 chooseIncome(Window w, String type) {
     OnboardingState.incomeType = type
     OnboardingState.incomeChosen = true
+    AppState.formError = ""
     mountScreen(w)
 }

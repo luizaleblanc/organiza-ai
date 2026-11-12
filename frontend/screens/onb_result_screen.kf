@@ -5,41 +5,43 @@ import core.theme
 import core.app_state
 import core.format
 import core.auth_api
+import core.onb_api
 import core.navigation
 import components.form_widgets
 
 // =============================================================================
-// Tela 7 — Resultado do onboarding (spec B2-07; design.md §5)
+// Tela 7 — Resultado do onboarding + helpers compartilhados do fluxo (5 etapas)
 // =============================================================================
-// `sendOnboarding` é o envio único das Telas 6 ("Não") e 6.1: chama
-// submitOnboarding (F5), guarda a resposta em ResultState e abre a Tela 7.
-// Falha: token inválido (sessão já limpa pelo auth_api) → Tela 2; outra
-// falha → mensagem fixa (AppState.formError) na tela atual e botão reabilitado.
-// Salário e tipo vêm das Telas 4/5 (F8a): parseMoney(salary) e incomeType.
-// FREELANCER_BASE_ZERO chega sem buckets: só a descrição, sem barras.
+// Etapas: 0 Salário → 1 Renda → 2 Dívida (e Valor) → 3 Chips → 4 Resultado.
+// `sendOnboardingAndChips` envia POST /api/users/onboarding antes de
+// POST /api/envelopes/from-chips (o backend exige onboarding concluído antes
+// de criar as caixinhas) e navega para `onb_result`.
 // =============================================================================
 
-// Resposta do último envio. `?` sem inicializador lê null até a 1ª escrita.
 class ResultState {
     static OnboardingResponse? last
 }
 
-sendOnboarding(Window w, Bool hasDebt, Double debtAmount) {
+sendOnboardingAndChips(Window w, List<String> fixed, List<String> variable) {
     if (OnboardingState.submitting) {
         return
     }
     OnboardingState.submitting = true
     AppState.formError = ""
-    OnboardingState.hasDebt = hasDebt
+    mountScreen(w)
+    var debt = 0.0
+    if (OnboardingState.hasDebt) {
+        debt = parseMoney(OnboardingState.debtAmount)
+    }
     try {
-        val result = submitOnboarding(parseMoney(OnboardingState.salary), OnboardingState.incomeType, hasDebt, debtAmount)
+        val result = submitOnboarding(parseMoney(OnboardingState.salary), OnboardingState.incomeType, OnboardingState.hasDebt, debt)
         ResultState.last = result
+        submitChips(fixed, variable)
         OnboardingState.submitting = false
         navigateTo(w, "onb_result")
     } catch (String e) {
         OnboardingState.submitting = false
         if (SessionState.token == "") {
-            // Token inválido: auth_api já limpou a sessão; a Tela 2 mostra a mensagem.
             AppState.formError = msgSessionExpired()
             navigateTo(w, "login")
         } else {
@@ -49,30 +51,82 @@ sendOnboarding(Window w, Bool hasDebt, Double debtAmount) {
     }
 }
 
-// Largura útil da coluna: Mobile 360 - 2x16 de padding; Desktop max-width 480.
 Int resultBarWidth() {
     if (AppState.isDesktop) {
-        return 480
+        return 540
     }
     return 328
 }
 
-// Nome à esquerda, "70% · R$ 2.100,00" à direita e a barra embaixo.
+// Cores das barras conforme os artefatos: Necessidades accent, Desejos #0066FF, Futuro success.
+Style onbFillCss(Int index) {
+    if (index == 0) { return progressFillAccentCss() }
+    if (index == 1) { return progressFillDesCss() }
+    if (index == 2) { return progressFillSuccessCss() }
+    return progressFillWarningCss()
+}
+
+View coloredBucketBar(Int pct, Int index, Int widthPx, String id) {
+    var p = pct
+    if (p > 100) {
+        p = 100
+    }
+    if (p < 0) {
+        p = 0
+    }
+    var fill = View(screenStyle())
+    fill.setStyle(onbFillCss(index))
+    fill.setFlexBasis(p * 100)
+    var rest = View(screenStyle())
+    rest.setStyle(fillRestCss())
+    rest.setFlexBasis((100 - p) * 100)
+    var track = View(screenStyle())
+    track.setId(id)
+    track.setStyle(progressTrackCss())
+    track.setMaxWidth(widthPx)
+    var parts = Row(listOf(fill, rest))
+    parts.setStyle(fillRowCss())
+    track.bind(parts)
+    return track
+}
+
+// Nome + percentual em muted à esquerda; valor R$ à direita; barra colorida embaixo.
 View bucketRow(BucketSummary b, Int index) {
     var name = Label(b.name())
     name.setId("bucket-name-" + String.valueOf(index))
     name.setStyle(bucketNameCss())
-    var value = Label(String.valueOf(b.percentage()) + "% · " + brl(b.amount()))
+    var pct = Label(String.valueOf(b.percentage()) + "%")
+    pct.setId("bucket-pct-" + String.valueOf(index))
+    pct.setStyle(bucketPctCss())
+    var left = Row(listOf(name, pct))
+    left.setStyle(bucketLeftCss())
+
+    var value = Label(brl(b.amount()))
     value.setId("bucket-value-" + String.valueOf(index))
     value.setStyle(bucketValueCss())
-    var head = Row(listOf(name, value))
+
+    var head = Row(listOf(left, value))
     head.setStyle(bucketHeadCss())
-    var col = Column(listOf(head, bucketBar(b.percentage(), resultBarWidth(), "bucket-bar-" + String.valueOf(index))))
+    var col = Column(listOf(head, coloredBucketBar(b.percentage(), index, resultBarWidth(), "bucket-bar-" + String.valueOf(index))))
     col.setStyle(bucketRowCss())
     var row = View(screenStyle())
     row.setStyle(bucketWrapCss())
     row.bind(col)
     return row
+}
+
+View resultInfoCard() {
+    var brand = Label("Organiza AI")
+    brand.setStyle(infoBrandCss())
+    var copy = Label("Calcula o modelo de economia que mais se adequa a sua realidade do momento.")
+    copy.setStyle(infoCopyCss())
+    var col = Column(listOf(brand, copy))
+    col.setStyle(infoCardColCss())
+    var card = View(screenStyle())
+    card.setId("result-info-card")
+    card.setStyle(infoCardCss())
+    card.bind(col)
+    return card
 }
 
 View onbResultScreen(Window w) {
@@ -84,32 +138,73 @@ View onbResultScreen(Window w) {
         description = r.description()
     }
 
-    var title = Label("Seu modelo: " + modelFriendlyName(model))
-    title.setId("result-title")
-    title.setStyle(titleCss())
-    var text = Label(description)
-    text.setId("result-description")
-    text.setStyle(captionCss())
+    var title = onbTitle("Seu modelo: " + modelFriendlyName(model), "result-title")
+    var text = onbSubtitle(description, "result-description")
 
-    var items = listOf(dotsBlock(3), titleBlock(title, text))
+    var items = listOf(dotsBlock(4), titleBlock(title, text))
     if (r != null) {
+        var bucketRows: List<View> = listOf()
         var i = 0
         for (var b in r.buckets()) {
-            items.add(bucketRow(b, i))
+            bucketRows.add(bucketRow(b, i))
             i = i + 1
         }
+        if (!bucketRows.isEmpty()) {
+            var listCol = Column(bucketRows)
+            listCol.setStyle(bucketListCss())
+            var listWrap = View(screenStyle())
+            listWrap.setStyle(blockCss())
+            listWrap.bind(listCol)
+            items.add(listWrap)
+        }
     }
+    items.add(resultInfoCard())
     items.add(buttonBlock(primaryButton("Começar a organizar", "btn-start", false, () -> navigateTo(w, "dashboard"))))
 
-    return entryBody(items)
+    return onbBody(items, onbColumn540Css())
 }
 
-// Blocos como View para a lista de filhos ter um tipo só.
+// ---- Helpers compartilhados entre as telas de onboarding --------------------
+
+Row onbProgressDots(Int current) {
+    var r = Row(listOf(
+        progressDot(0, current),
+        progressDot(1, current),
+        progressDot(2, current),
+        progressDot(3, current),
+        progressDot(4, current)))
+    r.setId("onb-dots")
+    r.setStyle(dotsCss())
+    return r
+}
+
 View dotsBlock(Int current) {
     var v = View(screenStyle())
     v.setStyle(blockCss())
-    v.bind(progressDots(current))
+    v.bind(onbProgressDots(current))
     return v
+}
+
+Label onbTitle(String text, String id) {
+    var l = Label(text)
+    l.setId(id)
+    if (AppState.isDesktop) {
+        l.setStyle(onbTitleDesktopCss())
+    } else {
+        l.setStyle(onbTitleMobileCss())
+    }
+    return l
+}
+
+Label onbSubtitle(String text, String id) {
+    var l = Label(text)
+    l.setId(id)
+    if (AppState.isDesktop) {
+        l.setStyle(onbSubtitleDesktopCss())
+    } else {
+        l.setStyle(onbSubtitleMobileCss())
+    }
+    return l
 }
 
 View titleBlock(Label title, Label text) {
@@ -128,11 +223,60 @@ View buttonBlock(Button b) {
     return v
 }
 
-// Estilos locais das Telas 6, 6.1 e 7 (Style("css"), design.md §3).
-Style blockCss()       = Style("display: flex; flex-direction: column; align-items: stretch; width: 100%; padding: 0; background: transparent")
-Style titleBlockCss()  = Style("display: flex; flex-direction: column; gap: 8; width: 100%")
-Style bucketWrapCss()  = Style("display: flex; flex-direction: column; width: 100%; padding: 0; background: transparent")
-Style bucketRowCss()   = Style("display: flex; flex-direction: column; gap: 8; width: 100%")
-Style bucketHeadCss()  = Style("display: flex; flex-direction: row; justify-content: space-between; align-items: baseline; width: 100%")
-Style bucketNameCss()  = Style("color: #F0F0F0; font-size: 16; font-weight: 600; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style bucketValueCss() = Style("color: #00D4FF; font-size: 14; font-variant: tabular-nums; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+// Botão limitado a 300 px centrado no Desktop (Salário e Chips nos artefatos).
+View onbCtaBlock(Button b) {
+    var v = View(screenStyle())
+    if (AppState.isDesktop) {
+        v.setStyle(onbCtaCenteredCss())
+    } else {
+        v.setStyle(blockCss())
+    }
+    v.bind(b)
+    return v
+}
+
+View errorBlock(String message) {
+    var v = View(screenStyle())
+    v.setStyle(blockCss())
+    v.bind(errorBanner(message))
+    return v
+}
+
+View onbBody(List<View> items, Style desktopColStyle) {
+    var column = Column(items)
+    if (AppState.isDesktop) {
+        column.setStyle(desktopColStyle)
+    } else {
+        column.setStyle(onbColumnMobileCss())
+    }
+    var body = View(screenStyle())
+    body.setStyle(entryBodyCss())
+    body.bind(column)
+    return body
+}
+
+// ---- Estilos locais das telas de onboarding (Style("css")) ------------------
+Style onbColumn480Css()      = Style("display: flex; flex-direction: column; align-items: stretch; gap: 24; width: 100%; max-width: 480")
+Style onbColumn500Css()      = Style("display: flex; flex-direction: column; align-items: stretch; gap: 24; width: 100%; max-width: 500")
+Style onbColumn540Css()      = Style("display: flex; flex-direction: column; align-items: stretch; gap: 24; width: 100%; max-width: 540")
+Style onbColumn560Css()      = Style("display: flex; flex-direction: column; align-items: stretch; gap: 24; width: 100%; max-width: 560")
+Style onbColumnMobileCss()   = Style("display: flex; flex-direction: column; align-items: stretch; gap: 16; width: 100%; max-width: 480")
+Style onbTitleDesktopCss()   = Style("color: #F0F0F0; font-size: 26; font-weight: 600; text-align: center; line-height: 1.25; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style onbTitleMobileCss()    = Style("color: #F0F0F0; font-size: 22; font-weight: 700; text-align: center; line-height: 1.25; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style onbSubtitleDesktopCss() = Style("color: #7B8EAD; font-size: 15; font-weight: 400; text-align: center; line-height: 1.5; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style onbSubtitleMobileCss() = Style("color: #7B8EAD; font-size: 14; font-weight: 400; text-align: center; line-height: 1.5; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style onbCtaCenteredCss()    = Style("display: flex; flex-direction: column; align-items: stretch; width: 100%; max-width: 300; align-self: center; padding: 0; background: transparent")
+Style blockCss()             = Style("display: flex; flex-direction: column; align-items: stretch; width: 100%; padding: 0; background: transparent")
+Style titleBlockCss()        = Style("display: flex; flex-direction: column; gap: 8; width: 100%")
+Style bucketListCss()        = Style("display: flex; flex-direction: column; gap: 20; width: 100%")
+Style bucketWrapCss()        = Style("display: flex; flex-direction: column; width: 100%; padding: 0; background: transparent")
+Style bucketRowCss()         = Style("display: flex; flex-direction: column; gap: 8; width: 100%")
+Style bucketHeadCss()        = Style("display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: space-between; align-items: baseline; gap: 8; width: 100%")
+Style bucketLeftCss()        = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: baseline; gap: 6; min-width: 0")
+Style bucketNameCss()        = Style("color: #F0F0F0; font-size: 14; font-weight: 500; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style bucketPctCss()         = Style("color: #4A5578; font-size: 14; font-weight: 400; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style bucketValueCss()       = Style("color: #7B8EAD; font-size: 14; font-weight: 400; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style infoCardCss()          = Style("display: flex; flex-direction: column; width: 100%; box-sizing: border-box; padding: 12px 14px; border-radius: 10; background: #12162A; border: 1px solid rgba(0,212,255,.12)")
+Style infoCardColCss()       = Style("display: flex; flex-direction: column; gap: 4; width: 100%")
+Style infoBrandCss()         = Style("color: #00D4FF; font-size: 13; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style infoCopyCss()          = Style("color: #7B8EAD; font-size: 13; font-weight: 400; line-height: 1.5; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")

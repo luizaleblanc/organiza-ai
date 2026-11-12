@@ -1,0 +1,41 @@
+package core
+
+import kof.json
+import core.app_state
+import core.api_client
+import core.auth_api
+
+// =============================================================================
+// Onboarding — criação de caixinhas a partir dos chips selecionados
+// =============================================================================
+// Chama POST /api/envelopes/from-chips após /api/users/onboarding concluir.
+// Contrato (backend/main.kf + backend/overview.kf):
+//   Body: {"fixed": [...], "variable": [...]}
+//   200: JSON array [EnvelopeOutput, ...]
+//   400: {"error": "Escolha pelo menos um gasto."} ou gasto desconhecido
+//   409: {"error": "Conclua o onboarding antes de criar as caixinhas."}
+// =============================================================================
+
+record ChipsRequest(List<String> fixed, List<String> variable)
+
+String submitChips(List<String> fixed, List<String> variable) {
+    var body = ""
+    try {
+        body = apiPost("/api/envelopes/from-chips", json.encode(ChipsRequest(fixed, variable)))
+    } catch (String e) {
+        throw msgNetwork()
+    }
+    if (isApiError(body)) {
+        if (body.contains("Escolha pelo menos")) {
+            throw "Escolha pelo menos um gasto."
+        }
+        if (body.contains("Conclua o onboarding")) {
+            throw "Conclua o onboarding antes de criar as caixinhas."
+        }
+        throw apiErrorMessage(body)
+    }
+    if (!body.trim().startsWith("[")) {
+        throw msgNetwork()
+    }
+    return body
+}
