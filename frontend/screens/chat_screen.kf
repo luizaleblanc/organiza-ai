@@ -27,19 +27,20 @@ Style chatScreenDesktopCss() = Style("display: flex; flex-direction: column; gap
 Style chatScreenMobileCss()  = Style("display: flex; flex-direction: column; gap: 12; width: 100%; flex: 1 1 0; min-height: 0")
 Style chatBodyCss()          = Style("display: flex; flex-direction: column; gap: 12; width: 100%; flex: 1 1 0; min-height: 0; padding-top: 10px; box-sizing: border-box")
 Style chatListCss()          = Style("display: flex; flex-direction: column-reverse; gap: 18; width: 100%; max-width: 1088; align-self: center; flex: 1 1 0; min-height: 0; overflow-y: auto; padding: 16px 10px; box-sizing: border-box")
-Style chatBubbleAiCss()      = Style("align-self: flex-start; max-width: 74%; background: #1A1F3A; color: #F0F0F0; border: none; border-radius: 20px 20px 20px 4px; padding: 18px 22px; font-size: 1.125rem; font-weight: 500; line-height: 1.4em; white-space: pre-wrap; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style chatBubbleUserCss()    = Style("align-self: flex-end; max-width: 62%; background: #00C8F5; color: #06121C; font-weight: 600; border: none; border-radius: 20px 20px 4px 20px; padding: 18px 22px; font-size: 1.125rem; line-height: 1.4em; white-space: pre-wrap; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style chatTypingCss()        = Style("align-self: flex-start; max-width: 74%; background: #1A1F3A; color: #AAB9D3; border: none; border-radius: 20px 20px 20px 4px; padding: 18px 22px; font-size: 1rem; line-height: 1.4em; font-style: italic; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style chatComposerCss()      = Style("display: flex; flex-direction: column; width: 100%; max-width: 1088; align-self: center; flex-shrink: 0; gap: 8")
-Style chatBarCss()           = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 10; width: 100%; min-height: 70; flex-shrink: 0; box-sizing: border-box; background: #12141F; border: 1px solid rgba(255,255,255,.12); border-radius: 22; padding: 9px 12px")
-Style chatInputCss()         = Style("background: transparent; color: #F0F0F0; border: none; outline: none; height: 48; width: auto; flex: 1 1 0; min-width: 0; box-sizing: border-box; padding: 0 6px; font-size: 1.0625rem; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style chatAttachCss()        = Style("outline: none; width: 46; height: 46; min-width: 46; flex-shrink: 0; border-radius: 23; background: transparent; border: 1px solid rgba(255,255,255,.14); display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style chatAttachOffCss()     = Style("width: 46; height: 46; min-width: 46; flex-shrink: 0; border-radius: 23; background: transparent; border: 1px solid rgba(255,255,255,.1); display: flex; align-items: center; justify-content: center; padding: 0; opacity: 0.4; cursor: not-allowed; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style chatMicCss()           = Style("outline: none; width: 42; height: 42; min-width: 42; flex-shrink: 0; border-radius: 21; background: transparent; border: none; display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style chatMicOffCss()        = Style("width: 42; height: 42; min-width: 42; flex-shrink: 0; border-radius: 21; background: transparent; border: none; display: flex; align-items: center; justify-content: center; padding: 0; opacity: 0.4; cursor: not-allowed; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style chatSendCss()          = Style("outline: none; width: 48; height: 48; min-width: 48; flex-shrink: 0; border-radius: 24; background: linear-gradient(135deg, #00D4FF, #0066FF); border: none; display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; box-shadow: 0 6px 18px rgba(0,102,255,.3); font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style chatSendOffCss()       = Style("width: 48; height: 48; min-width: 48; flex-shrink: 0; border-radius: 24; background: #1A1F3A; border: none; display: flex; align-items: center; justify-content: center; padding: 0; opacity: 0.45; cursor: not-allowed; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style chatCounterCss()       = Style("color: #AAB9D3; font-size: 0.8125rem; align-self: flex-end; flex-shrink: 0; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style chatBubbleAiCss()      = themed(Style("align-self: flex-start; max-width: 74%; background: #E5E7EB; color: #1A1D2E; border: none; border-radius: 20px 20px 20px 4px; padding: 18px 22px; font-size: 1.125rem; font-weight: 500; line-height: 1.4em; white-space: pre-wrap; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("align-self: flex-start; max-width: 74%; background: #1A1F3A; color: #F0F0F0; border: none; border-radius: 20px 20px 20px 4px; padding: 18px 22px; font-size: 1.125rem; font-weight: 500; line-height: 1.4em; white-space: pre-wrap; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style chatBubbleUserCss()    = themed(Style("align-self: flex-end; max-width: 62%; background: #2563EB; color: #FFFFFF; font-weight: 600; border: none; border-radius: 20px 20px 4px 20px; padding: 18px 22px; font-size: 1.125rem; line-height: 1.4em; white-space: pre-wrap; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("align-self: flex-end; max-width: 62%; background: #00C8F5; color: #06121C; font-weight: 600; border: none; border-radius: 20px 20px 4px 20px; padding: 18px 22px; font-size: 1.125rem; line-height: 1.4em; white-space: pre-wrap; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style chatTypingCss()        = themed(Style("align-self: flex-start; max-width: 74%; background: #E5E7EB; color: #6B7280; border: none; border-radius: 20px 20px 20px 4px; padding: 18px 22px; font-size: 1rem; line-height: 1.4em; font-style: italic; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("align-self: flex-start; max-width: 74%; background: #1A1F3A; color: #7B8EAD; border: none; border-radius: 20px 20px 20px 4px; padding: 18px 22px; font-size: 1rem; line-height: 1.4em; font-style: italic; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style chatComposerCss()      = Style("display: flex; flex-direction: column; width: 100%; max-width: 1040; align-self: center; flex-shrink: 0; gap: 8")
+Style chatBarCss()           = themed(Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 12; width: 100%; min-height: 78; flex-shrink: 0; box-sizing: border-box; background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 20; padding: 11px 12px; box-shadow: 0 8px 28px rgba(37,99,235,.08)"), Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 12; width: 100%; min-height: 78; flex-shrink: 0; box-sizing: border-box; background: #12162A; border: 1px solid rgba(0,212,255,.22); border-radius: 20; padding: 11px 12px; box-shadow: 0 8px 28px rgba(0,0,0,.2)"))
+Style chatInputCss()         = themed(Style("background: transparent; color: #1A1D2E; border: none; outline: none; height: 54; width: auto; flex: 1 1 0; min-width: 0; box-sizing: border-box; padding: 0 8px; font-size: 1.0625rem; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("background: transparent; color: #F0F0F0; border: none; outline: none; height: 54; width: auto; flex: 1 1 0; min-width: 0; box-sizing: border-box; padding: 0 8px; font-size: 1.0625rem; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style chatAttachCss()        = themed(Style("outline: none; width: 46; height: 46; min-width: 46; flex-shrink: 0; border-radius: 23; background: transparent; border: 1px solid rgba(0,0,0,.14); display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; width: 46; height: 46; min-width: 46; flex-shrink: 0; border-radius: 23; background: transparent; border: 1px solid rgba(255,255,255,.14); display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style chatAttachOffCss()     = themed(Style("width: 46; height: 46; min-width: 46; flex-shrink: 0; border-radius: 23; background: transparent; border: 1px solid #E5E7EB; display: flex; align-items: center; justify-content: center; padding: 0; opacity: 0.4; cursor: not-allowed; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("width: 46; height: 46; min-width: 46; flex-shrink: 0; border-radius: 23; background: transparent; border: 1px solid rgba(255,255,255,.1); display: flex; align-items: center; justify-content: center; padding: 0; opacity: 0.4; cursor: not-allowed; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style chatMicCss()           = themed(Style("outline: none; width: 52; height: 52; min-width: 52; flex-shrink: 0; border-radius: 18; background: rgba(37,99,235,.08); border: 1px solid rgba(37,99,235,.28); display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 0; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; width: 52; height: 52; min-width: 52; flex-shrink: 0; border-radius: 18; background: rgba(0,212,255,.08); border: 1px solid rgba(0,212,255,.28); display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 0; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style chatMicOffCss()        = themed(Style("width: 52; height: 52; min-width: 52; flex-shrink: 0; border-radius: 18; background: #FFFFFF; border: 1px solid #E5E7EB; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 0; opacity: 0.45; cursor: not-allowed; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("width: 52; height: 52; min-width: 52; flex-shrink: 0; border-radius: 18; background: #12162A; border: 1px solid rgba(255,255,255,.1); display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 0; opacity: 0.45; cursor: not-allowed; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+// Círculo do enviar: claro = branco com borda #E5E7EB; escuro = card-2; as ondas azuis são as mesmas nos dois temas.
+Style chatSendCss()          = themed(Style("outline: none; width: 48; height: 48; min-width: 48; flex-shrink: 0; border-radius: 24; background: #FFFFFF; border: 1px solid #E5E7EB; box-sizing: border-box; display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; width: 48; height: 48; min-width: 48; flex-shrink: 0; border-radius: 24; background: #1A1F3A; border: 1px solid rgba(255,255,255,.1); box-sizing: border-box; display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style chatSendOffCss()       = themed(Style("width: 48; height: 48; min-width: 48; flex-shrink: 0; border-radius: 24; background: #FFFFFF; border: 1px solid #E5E7EB; box-sizing: border-box; display: flex; align-items: center; justify-content: center; padding: 0; opacity: 0.4; cursor: not-allowed; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("width: 48; height: 48; min-width: 48; flex-shrink: 0; border-radius: 24; background: #1A1F3A; border: 1px solid rgba(255,255,255,.1); box-sizing: border-box; display: flex; align-items: center; justify-content: center; padding: 0; opacity: 0.4; cursor: not-allowed; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style chatCounterCss()       = themed(Style("color: #6B7280; font-size: 0.8125rem; align-self: flex-end; flex-shrink: 0; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #7B8EAD; font-size: 0.8125rem; align-self: flex-end; flex-shrink: 0; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 
 String chatGreeting() {
     var name = SessionState.userName.trim()
@@ -130,6 +131,26 @@ View chatFeatureButton(String iconName, Int size, String tone, String id, Bool e
     return b
 }
 
+// O mascote transparente identifica a acao de voz sem competir com o botao
+// de envio. A ponte Web Speech continua ligada ao id estavel `chat-mic`.
+View chatVoiceButton(Bool enabled, String label) {
+    var mascot = Image("assets/brand/kof-voice.png")
+    mascot.setAlt("")
+    mascot.setWidth(43)
+    mascot.setHeight(36)
+    var b = View(screenStyle())
+    b.setId("chat-mic")
+    b.setAccessibleName(label)
+    if (enabled) {
+        b.setStyle(chatMicCss())
+    } else {
+        b.setDisabled(true)
+        b.setStyle(chatMicOffCss())
+    }
+    b.bind(mascot)
+    return b
+}
+
 ensureChatLoaded(Window w) {
     if (SessionState.token == "" || ChatUi.loadedFor == SessionState.token) {
         return
@@ -149,7 +170,7 @@ View chatScreen(Window w) {
     list.setId("chat-messages")
     list.setStyle(chatListCss())
 
-    var field = textField("Pergunte qualquer coisa", "text", "chat-input")
+    var field = textField("Digite uma mensagem ou fale com o KOF", "text", "chat-input")
     field.setText(ChatUi.draft)
     field.setStyle(chatInputCss())
     field.on("input", () -> {
@@ -162,7 +183,7 @@ View chatScreen(Window w) {
     var attachLabel = "Anexar PDF, DOCX ou JPEG — disponível no Pro"
     var attach = chatFeatureButton("plus", 20, "secondary", "chat-attach", ChatUi.pro, chatAttachCss(), chatAttachOffCss(), attachLabel)
     var micLabel = "Entrada por voz — disponível no Pro"
-    var mic = chatFeatureButton("mic", 20, "secondary", "chat-mic", ChatUi.voiceEnabled, chatMicCss(), chatMicOffCss(), micLabel)
+    var mic = chatVoiceButton(ChatUi.voiceEnabled, micLabel)
 
     var send = View(screenStyle())
     send.setId("chat-send")
@@ -171,10 +192,10 @@ View chatScreen(Window w) {
         field.setDisabled(true)
         send.setDisabled(true)
         send.setStyle(chatSendOffCss())
-        send.bind(brandMarkOnAccent(34, "chat-send-mark"))
+        send.bind(sendSymbol("chat-send-mark"))
     } else {
         send.setStyle(chatSendCss())
-        send.bind(brandMarkOnAccent(34, "chat-send-mark"))
+        send.bind(sendSymbol("chat-send-mark"))
     }
 
     var bar = Form(listOf(attach, field, mic, send))

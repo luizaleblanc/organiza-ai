@@ -14,10 +14,18 @@ if (-not (Test-Path -LiteralPath $indexPath) -or -not (Test-Path -LiteralPath $m
 # auxiliares. A ponte Web Speech é estática e precisa seguir com o bundle.
 $voiceBridgeSource = Join-Path (Split-Path -Parent $PSScriptRoot) "frontend\assets\voice_bridge.js"
 $voiceBridgeTarget = Join-Path $WebDir "assets\voice_bridge.js"
+$assetsSource = Join-Path (Split-Path -Parent $PSScriptRoot) "frontend\assets"
+$assetsTarget = Join-Path $WebDir "assets"
 if (-not (Test-Path -LiteralPath $voiceBridgeSource)) {
     throw "Ponte de voz ausente: '$voiceBridgeSource'."
 }
-New-Item -ItemType Directory -Path (Split-Path -Parent $voiceBridgeTarget) -Force | Out-Null
+if (-not (Test-Path -LiteralPath $assetsSource)) {
+    throw "Assets do frontend ausentes: '$assetsSource'."
+}
+New-Item -ItemType Directory -Path $assetsTarget -Force | Out-Null
+# O KofJS referencia os assets declarados por Image, mas nao os copia para o
+# diretorio de saida. Mantemos a mesma regra do Dockerfile no build local.
+Copy-Item -Path (Join-Path $assetsSource "*") -Destination $assetsTarget -Recurse -Force
 Copy-Item -LiteralPath $voiceBridgeSource -Destination $voiceBridgeTarget -Force
 
 $index = [IO.File]::ReadAllText($indexPath)
