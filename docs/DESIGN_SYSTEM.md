@@ -136,4 +136,51 @@ Para referência, a geometria das ondas nos artefatos é esta:
 | Ondas no onboarding do Desktop | não há | salário, gastos e resultado | todo o onboarding | Desktop: salário e resultado, conforme a tarefa A1 |
 | Sidebar | 200 (token) | 190 | não há | 190 |
 | Fonte | system-ui | system-ui | system-ui | system-ui (o `theme.kf` antigo usava Manrope) |
-| Tema claro | existe | existe | existe | fora do MVP 1 |
+| Tema claro | existe | existe | existe | existe, escolhido só em Configurações > Aparência (seção 8) |
+
+## 8. Tema claro
+
+O artefato Desktop (`64FYjX5UiveVxTtRGYurQP`) define o tema claro em `body[data-theme=light]`; os tokens abaixo foram conferidos nele e batem com o design system (`JVjueTmHeJsnHLsow3LDVb`). Onde o app diverge do artefato, a divergência está listada depois da tabela.
+
+| Token | Escuro | Claro | Função em `theme.kf` |
+|---|---|---|---|
+| bg | `#0A0D18` | `#F8F9FC` | `colorBgPrimary()` |
+| canvas | `#05060B` | `#E7EAF2` | `colorCanvas()` |
+| card / card-2 | `#12162A` / `#1A1F3A` | `#FFFFFF` / `#FFFFFF` | `colorCard()` / `colorCardSecondary()` |
+| accent / accent-end | `#00D4FF` / `#0066FF` | `#2563EB` / `#1D4ED8` | `colorAccent()` / `colorAccent2()` |
+| on-accent | `#06121C` | `#FFFFFF` | `colorAccentContrast()` |
+| text | `#F0F0F0` | `#1A1D2E` | `colorTextPrimary()` |
+| secondary | `#7B8EAD` | `#6B7280` | `colorTextSecondary()` |
+| muted | `#4A5578` | `#9CA3AF` | `colorTextMuted()` |
+| success / warning / danger | `#00E5A0` / `#FFB800` / `#FF4A6E` | `#10B981` / `#F59E0B` / `#E63946` | `colorSuccess()` / `colorWarning()` / `colorDanger()` |
+| chart-des | `#0066FF` | `#7C3AED` | `colorChartDes()` |
+| border-soft | `rgba(255,255,255,.1)` | `#E5E7EB` | `borderSoft()` |
+| border | `rgba(255,255,255,.06)` | `rgba(0,0,0,.06)` | literal nos Styles |
+| input-bg / track-bg | `rgba(255,255,255,.04)` / `#1A1F3A` | `#FFFFFF` / `#E5E7EB` | literal nos Styles |
+| ai-bubble | `#1A1F3A` | `#F1F3F9` | literal |
+| card-shadow | nenhuma | `0 1px 3px rgba(0,0,0,.04)` | `cardCss()` |
+
+**Mecanismo.** O `Style("css")` do kof.ui recusa `var()` (SEM078) e só aceita literal (SEM077); `Window.setTheme` não existe. Cada token é `pickColor(claro, escuro)` e cada Style é `themed(Style("claro"), Style("escuro"))`, lidos de `AppState.themeMode` na hora de desenhar; a troca chama `mountScreen`. Ícones: `<nome>-l<tom>.svg` (`scripts/gen-icons.sh`). Ondas: `organiza-fundo-ondas-light.svg`.
+
+**Divergências do artefato (o artefato manda, salvo estas, por contraste AA):**
+- Texto em tom `success`, `warning` e `danger` (badges, valores grandes como "Reserva acumulada") usa `text` `#1A1D2E`; o tom fica na borda, no fundo translúcido e nas barras. Sobre branco, `#10B981` dá 2,54:1, `#F59E0B` 2,15:1 e `#E63946` 4,17:1. Exceção: mensagens de erro e o botão "Sair" mantêm `danger` como texto (3,96 a 4,17:1, sem token mais escuro; passa só em texto grande).
+- Texto em `muted` `#9CA3AF` (2,54:1 no branco) usa `secondary` `#6B7280`; `muted` fica para bordas do radio, ícones e placeholders.
+- Sidebar do claro usa `bg` `#F8F9FC` (como o artefato), não `canvas`.
+- Cartões de "pulso" do dashboard: branco com borda azul translúcida e sombra leve (como o `.pulse-card` claro), sem o gradiente azul do escuro.
+- Escuro: três hex fora da paleta foram trocados pelos tokens (`#AAB9D3` por `secondary`, `#12141F` por `card`, `#FF6B85` por `danger`).
+
+**Contraste (WCAG, texto sobre fundo; mínimo 4,5:1)**, calculado por `work/lm/contrast.py`:
+
+| texto | card #FFFFFF | bg #F8F9FC | ai-bubble #F1F3F9 | track #E5E7EB |
+|---|---|---|---|---|
+| texto principal #1A1D2E | 16.68 ok | 15.84 ok | 15.03 ok | 13.47 ok |
+| texto secundário #6B7280 | 4.83 ok | 4.59 ok | 4.36 FALHA | 3.90 FALHA |
+| texto muted #9CA3AF | 2.54 FALHA | 2.41 FALHA | 2.29 FALHA | 2.05 FALHA |
+| accent (links, rótulos) #2563EB | 5.17 ok | 4.91 ok | 4.66 ok | 4.17 FALHA |
+| danger #E63946 | 4.17 FALHA | 3.96 FALHA | 3.76 FALHA | 3.37 FALHA |
+| success #10B981 | 2.54 FALHA | 2.41 FALHA | 2.29 FALHA | 2.05 FALHA |
+| warning #F59E0B | 2.15 FALHA | 2.04 FALHA | 1.94 FALHA | 1.73 FALHA |
+on-accent #FFFFFF sobre accent-end #1D4ED8 6.70
+on-accent #FFFFFF sobre accent #2563EB (botões, aba ativa) 5.17
+
+Pares que falham e como foram resolvidos: `muted` como texto (virou `secondary`); `success`/`warning` como texto (viraram `text`); `danger` como texto só em erros (exceção acima); `secondary` sobre `ai-bubble` (4,36) não ocorre, porque a bolha da IA usa `text`; `accent` sobre `track` não ocorre.

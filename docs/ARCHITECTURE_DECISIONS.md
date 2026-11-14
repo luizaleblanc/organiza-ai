@@ -27,3 +27,7 @@ O histórico de conversas com o coach é salvo no banco de dados em vez de viver
 ## Sobre alucinação de LLMs com KOF
 
 KOF é uma linguagem nova e pouco representada nos dados de treinamento das LLMs, o que faz com que elas frequentemente "inventem" sintaxe que não existe. A pasta `training/` do repositório oficial ([KofLang/Kof4j](https://github.com/KofLang/Kof4j)) é a fonte de verdade sobre a linguagem -- em caso de conflito entre o que uma IA "sabe" e o que está documentado ali, o training/ vence. Todo código KOF gerado por IA deve ser compilado com `kof run` antes de ser considerado concluído ou commitado.
+
+## Por que o QA local usa rotas e contas próprias?
+
+O KofJS não expõe navegação por URL diretamente à aplicação. Para tornar cada tela reproduzível, o backend oferece atalhos e bundles de tela somente quando `KOF_QA=true` e o ambiente não é produção. O seed usa exclusivamente contas `@organiza.local`, é idempotente e o reset remove apenas os dados da conta de demonstração. O risco principal é um token local de demonstração; ele é mitigado pela dupla guarda de ambiente, por uma lista fechada de telas e pela ausência de `KOF_QA` no Dockerfile e no Render.

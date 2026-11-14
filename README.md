@@ -53,6 +53,8 @@ Conheça a interface do Organiza IA:
 
 **Anti-alucinação** -- o coach de IA usa tool calling para consultar seus dados reais (transações, envelopes, pulso diário) antes de responder. A IA nunca inventa números: ela fala sobre o que existe de fato no seu histórico financeiro.
 
+**Caixinhas de nome livre.** As caixinhas não são pré-definidas: o usuário digita o nome (1 a 40 caracteres, sem caracteres de controle; vazio ou maior = 400 `Dê um nome de até 40 caracteres para a caixinha.`). Nome repetido para o mesmo usuário, sem diferenciar maiúsculas, acentos nem espaços sobrando = 409 `Você já tem uma caixinha com esse nome.` `PUT /api/envelopes/:id` renomeia só caixinha livre; a ligada a uma das 12 categorias é automática (400 `Esta caixinha é automática e não pode ser renomeada.`) e aceita mudar só o limite. No chat, "gastei 40 na caixinha Viagem" chega pela tool `persistTransaction` com o argumento opcional `caixinha`; se o nome não existir, nada é gravado e o coach recebe `Não achei a caixinha X. Suas caixinhas: A, B, C.`
+
 ## Stack
 
 | Camada | Tecnologia |
@@ -155,18 +157,18 @@ Especificação e design em [`.specs/features/mvp1-batch2-auth-onboarding/`](.sp
 - **Mesmo domínio:** o backend serve o frontend (`app.serveDir("/", KOF_WEB_OUT)`) e o frontend chama `/api/...` por caminho relativo. O backend não tem CORS, e fora de `/api/` tudo passa a ser público.
 - **Navegação** continua com `mountScreen` e campos `static`: `Router` e `Component` existem no `kof.ui`, mas no Chromium o re-render deixa a tela em branco.
 - **Correção da navegação (16/10/2026):** depois do PR #43, `main.kf` montava a tela inicial com `window.bind` direto, e o primeiro clique deixava duas telas no DOM. Agora `main.kf` começa em `welcome` com `applyViewport` + `mountScreen`; `welcome` e `onboarding` usam o layout de entrada (cabeçalho com a logomarca de 3 ondas em `Canvas`, sem nav bar) e `dashboard` volta a ser placeholder. Medido no Edge headless em 360×640 com Kof 0.6.3 e 0.6.5: uma tela montada antes e depois do clique em "Começar". As telas reais seguem nas tarefas F6–F8.
-- **Janela inteira (A3, 12/11/2026):** o app abre em Desktop; o shell e as telas de entrada usam `position: fixed` com os offsets medidos da moldura do Kof (61/53/33), só o conteúdo rola e o rodapé da sidebar (avatar e nome) fica sempre visível. O kof.ui não dá largura nem resize da janela, então a troca Mobile/Desktop é pelo botão "Ver como Mobile / Ver como Desktop". Detalhes na seção 17 de [`docs/MVP1_HOMOLOGACAO.md`](docs/MVP1_HOMOLOGACAO.md).
+- **Janela inteira (A3, 12/11/2026):** o shell e as telas de entrada ocupam todo o viewport, só o conteúdo rola e o rodapé da sidebar fica visível. O backend escolhe automaticamente o bundle Desktop ou Mobile pelo `User-Agent`; o seletor manual existe apenas em `/dev`. A moldura do Kof fica oculta antes do primeiro frame.
 - **Onboarding completo em 5 etapas (B5, 12/11/2026):** indicador de 5 pontos em `onb_*.kf`, `bigMoneyField`/`bigMoneyAmount` + `moneyHint` em Salário e Valor da dívida, `radioChoiceCard` (18 px) em Renda e Dívidas, nova etapa `onb_chips` (`screens/onb_chips_screen.kf`) com `chip`/`chipGroup` e envio sequencial `POST /api/users/onboarding` → `POST /api/envelopes/from-chips` via `core/onb_api.kf`, e resultado fiel ao artefato (`onb_result_screen.kf`). Detalhes e gates (0.6.6 e 0.7.2) na seção 18 de [`docs/MVP1_HOMOLOGACAO.md`](docs/MVP1_HOMOLOGACAO.md).
 - **HTTP** sempre com `spawn` + `await`: no navegador, `http.post` síncrono devolve uma Promise.
 - **Estilo novo** com `Style("css")` (gradiente, borda, altura de 48px).
 - **Backend** ganha `GET /api/users/me`, o nome no cadastro, a dívida (`debtAmount` gravado em `debtCents`) e validação com 400.
-- **Login e Cadastro (12/11/2026):** sem faixa de topo nem linha de separação, painel da marca com mais respiro, checklist de regras da senha com medidor na paleta do DS, e-mail normalizado em minúsculas (sem contas duplicadas), botão Desktop/Mobile flutuante. Detalhes na seção 25 de [`docs/MVP1_HOMOLOGACAO.md`](docs/MVP1_HOMOLOGACAO.md).
+- **Login e Cadastro (12/11/2026):** sem faixa de topo nem linha de separação, painel da marca com mais respiro, checklist de regras da senha com medidor na paleta do DS e e-mail normalizado em minúsculas (sem contas duplicadas). O layout é escolhido automaticamente; o botão de viewport não aparece nas rotas públicas.
 - **Login e Cadastro escuro/claro (12/11/2026):** painel de 37% com divisória de 2 px e ondas dentro do painel, área do formulário lisa, botão "Modo claro / Modo escuro" e textos do artefato. Seção 26 de [`docs/MVP1_HOMOLOGACAO.md`](docs/MVP1_HOMOLOGACAO.md).
 - **Gate** é `kof build frontend --target js`, porque `kof check frontend` dá PKG006.
 - **Regras de validação (backend e cliente):** nome, sobrenome, idade (mínimo `MIN_AGE()` = 18, máximo 120), e-mail e senha obrigatórios; senha de 8 a 128 caracteres com maiúscula, minúscula, número e caractere especial, sem conter o e-mail nem o primeiro nome (A2, seção 16 de [`docs/MVP1_HOMOLOGACAO.md`](docs/MVP1_HOMOLOGACAO.md); o corpo legado `{"name","email","password"}` segue aceito com a mesma política); salário maior que 0; com `hasDebt=true`, dívida maior que 0. Entrada inválida responde 400 com `ApiError` em JSON, nunca 500.
 - **Onboarding concluído** = salário maior que 0, exposto em `GET /api/users/me` (`onboardingCompleted`). Após o login, o app vai para a Tela 4 se for `false` e para a Tela 8 se for `true`.
 - **Coluna `name`** entra por migração condicional (só adiciona se faltar), porque `orm.create` não altera tabela existente. Antes do deploy, ela passa por gate num MySQL local.
-- **Fora do MVP:** a fonte Manrope não carrega e o `index.html` gerado traz a barra de dev; os dois ficam para um `index.html` próprio (tarefa futura).
+- **Índice do frontend:** o build pós-processa o `index.html` gerado para ocultar a moldura do Kof, aplicar o título Organiza AI e manter a escala responsiva sem flash visual.
 - **Plano:** F1–F4 no backend (nome, validações, dívida e `/me`, mesmo domínio + Dockerfile), F5 cliente HTTP assíncrono, F6–F8 telas 1–7, F9 ferramentas de screenshot em `scripts/ui/`.
 
 **Estado da implementação (Kof 0.6.5, revalidado na 0.6.6):**
@@ -188,6 +190,7 @@ Especificação e design em [`.specs/features/mvp1-batch2-auth-onboarding/`](.sp
 - **Batch 3, F4 / B4 (feito):** Tela 12 Notificações (`screens/notifications_screen.kf` + `core/notifications_api.kf`). Topbar de 56 px com o botão `"Marcar todas como lidas"` no slot `action`, que chama `POST /api/notifications/read-all` (`204`), atualiza `read = true` e muda o visual de não lida (`notif-unread`) para lida (`notif-read`, esmaecido). Lista de `GET /api/notifications` (largura máx. 560); cada item tem trilho colorido de 56 px com borda esquerda de 3 px no tom do `kind` e ícone SVG de `components/icons.kf` (`warn`, `pulse`, `check`, `bell`), badge de `notificationBadge`/`notificationTone` (`REMINDER` sem badge, com o tempo ao lado do título), título 13/700, texto 12/400 e tempo relativo (`relativeTime` sobre `secondsSince`). Estados: carregando, erro (`#notif-error`) e vazio (`#notif-empty`, `Nenhuma notificação por enquanto.`). G-UI no Edge headless contra H2 (Kof 0.6.6 e 0.7.2, Desktop 1280×800 e Mobile 360×640): os 5 tipos semeados, ícones SVG carregados (`complete && naturalWidth > 0`), `read-all` (`204`) atualizando visual e backend, estados vazio e erro, 0 rolagem horizontal, `system-ui` nos botões, 0 `UNCAUGHT` e 0 `console.error`.
 - **Batch 3, Z (integração final):** shell em `Row` com `flex-wrap: nowrap` (textos longos não jogam mais a tela para baixo da sidebar no Desktop; saiu o contorno `width: 0; min-width: 100%` de Configurações). `apiPatch` em `core/api_client.kf` (`http.patch` vira `kofHttpPatchHeaders` → `fetch` com `PATCH` no alvo js, 0.6.6 e 0.6.7); o modal "Rever meu salário" valida com `parseMoney` e faz `PATCH /api/users/me/salary` (sucesso: "Salário atualizado."; erro: a mensagem do backend). Chat: só o texto do limite de mensagens bloqueia o envio; outro `{"error"}` mostra a mensagem do backend e mantém o rascunho. A resposta fixa do coach sem chave sai em BRL (`R$ 116,67`, `formatBrl`). Mobile 360: a barra de entrada do chat quebra em duas linhas (campo inteiro em cima, botões embaixo) e o placeholder não é mais cortado. Gates na seção 14 de [`docs/MVP1_HOMOLOGACAO.md`](docs/MVP1_HOMOLOGACAO.md).
 - **B3 (Login e Cadastro fiéis Desktop + Mobile):** `frontend/screens/login_screen.kf`, `frontend/screens/signup_screen.kf` e `frontend/core/auth_api.kf` entregam `LoginWin`/`SignupWin` em duas colunas no Desktop (painel da marca à esquerda + formulário à direita) e coluna única no Mobile, usando `labeled`, `formField` e `passwordBox` (toggle de olho). Cadastro envia `{firstName, lastName, age, email, password}` (`MIN_AGE = 18`), espelha as validações locais P1–P8 da A2 e exibe barra medidora de força de senha em tempo real (`on("input")`, 0–4: Fraca / Razoável / Boa / Forte). Login integra o fluxo "Esqueci minha senha" e "Redefinir senha" com `POST /api/auth/forgot-password` e `POST /api/auth/reset-password`. Gates em Kof 0.6.6 e 0.7.2 documentados em [`docs/MVP1_HOMOLOGACAO.md`](docs/MVP1_HOMOLOGACAO.md).
+- **Caixinhas com nome digitado (CXF):** o formulário "Nova caixinha" não tem mais o `Select` das 12 categorias: o nome é um campo de texto livre (1 a 40 caracteres, validado antes de chamar o backend; erros 400 e 409 aparecem dentro do formulário sem perder o que foi digitado). Na edição, o limite muda em todas e o nome só nas livres; as de categoria mostram o rótulo em português e "Caixinha automática". `envelopeLabel` (`core/format.kf`) mostra o rótulo em português para nome de `Category` e o texto digitado para os demais. Dica no formulário e no estado vazio: "gastei 40 na caixinha Viagem". Contraste AA nos textos (sem `#4A5578` nem `#AAB9D3`). G-UI Desktop 1280 e Mobile 360 em [`docs/MVP1_HOMOLOGACAO.md`](docs/MVP1_HOMOLOGACAO.md) (seção 34).
 - **Caixinhas (A4, correção de estado, sessão e fidelidade visual):** `core/envelopes_api.kf`, `core/navigation.kf` e `screens/envelopes_screen.kf` agora reiniciam `EnvState` ao entrar na rota e ao voltar para `welcome`/`login`, validam o JSON de `/api/envelopes/overview` dentro de `try/catch` (evitando trava em "Carregando..." com respostas não-JSON), redirecionam 401 para `login` com `"Sua sessão expirou. Entre de novo."` e permitem criar caixinha sem grupo no Base Zero. A Tela 11 (`screens/envelopes_screen.kf`) foi alinhada aos artefatos Desktop e Mobile: botão da topbar com ícone `plus` (`+ Nova caixinha` no Desktop e `+ Nova` no Mobile), grade Desktop `g3` e pilha Mobile, cards com os 3 estados (`Em dia` em `#00E5A0`/valor e barra em `#00D4FF`, `Alerta` em `#FFB800`, `Estourada` em `#FF4A6E`), barra limitada a 100%, modal/sheet de criação e confirmação de exclusão no próprio card. Gates 17/17 PASS no Kof 0.6.6 e 0.7.2 (Desktop + Mobile) na seção A4 de [`docs/MVP1_HOMOLOGACAO.md`](docs/MVP1_HOMOLOGACAO.md).
 
 ### Leitura de fatura PDF (Fase 4) -- backend feito, sem integração com o coach
@@ -237,6 +240,26 @@ Na visão KOF, segregar o frontend e o backend em dois mundos artificiais com pr
 - **Código Java legado:** arquivado em `archive/legacy-backend-java/` (não compila mais como parte do projeto), preservado como *Ground Truth* histórico via tag `legacy/java-spring-boot`.
 - **Pendência conhecida de validação de bytecode:** `scripts/validate_architecture.ps1` está atualmente bloqueado por um bug do compilador Kof4j na geração de bytecode JVM (`ASM COMPUTE_FRAMES`) ao construir `record`s com campos `Double` seguidos de um campo `String?` nulo -- ver Issue #41. O `kof check` (typecheck) passa normalmente; o bloqueio é só na fase de emissão de bytecode.
 
+
+## Rodar local
+
+O backend serve o frontend compilado (`KOF_WEB_OUT`), mas o `kof build frontend --target js` **não copia** `frontend/assets`. Sem essa cópia, ícones e o símbolo da marca ficam quebrados no build local (no Docker já funciona). Depois de compilar, copie os assets para a pasta de saída (PowerShell):
+
+```powershell
+kof build frontend --target js --output <pasta-de-saida>\web
+Copy-Item -Recurse -Force frontendssets <pasta-de-saida>\webssets
+$env:KOF_WEB_OUT = "<pasta-de-saida>\web"   # e suba o backend como em docs/DEPLOY.md
+```
+
+## QA local
+
+O ambiente isolado de QA usa H2 persistente, dados sintéticos e nunca acessa serviços de produção:
+
+```powershell
+.\scripts\qa.ps1 -Rebuild
+```
+
+O comando imprime o endereço, cria as contas `qa@organiza.local` e `qa-novo@organiza.local` (senha `Qa@Organiza1`) e libera atalhos como `/qa/dashboard`, `/qa/chat`, `/qa/caixinhas`, `/qa/configuracoes` e as versões `/qa/mobile/...`. Use `-Reset` para recriar somente os dados de demonstração e `-Stop` para encerrar exclusivamente o processo dessa pasta. O modo depende de `KOF_QA=true`, fica desativado por padrão e é recusado quando `KOF_ENV=production`.
 
 ## Documentação (`docs/`)
 
@@ -424,3 +447,8 @@ Contribuidores são bem-vindos para implementar as issues documentadas em [`docs
 2. **Mensagens de Erro Semânticas:** Traduzir erros agressivos de geração de bytecode da JVM (ex: ArrayIndexOutOfBoundsException no ASM COMPUTE_FRAMES) para *SyntaxErrors* humanos apontando linha/coluna no parser.
 3. **Router Nativo (kof.ui.Router):** Absorver nativamente nossas abstrações customizadas de roteamento para garantir uma geração de bytecode mais fluida nas trocas de tela.
 4. **Estado Reativo (State<T>):** Prover suporte oficial a variáveis de estado reativo, reduzindo nossa dependência de instâncias *static* nas classes da arquitetura.
+
+### Tema por usuário (API)
+
+`GET /api/users/me/preferences` devolve `{emailEnabled, frequency, pushEnabled, theme}` com `theme` igual a `"DARK"` ou `"LIGHT"` (padrão `DARK`, também para quem já tinha preferências). `PUT /api/users/me/preferences` aceita `theme` opcional: ausente não muda; maiúsculas e minúsculas são aceitas na entrada, a saída é sempre em maiúsculas; outro valor devolve 400 `{"error":"Tema inválido. Use DARK ou LIGHT."}`. `GET /api/users/me` não muda.
+- **Tema claro no app inteiro (13/11/2026):** `AppState.themeMode` ("dark" ou "light"; o app abre escuro) vale para todas as telas. A troca existe só em Configurações > Aparência e é guardada no servidor por usuário (`GET/PUT /api/users/me/preferences`, campo `theme` "DARK" | "LIGHT"); ao entrar, o app lê a preferência antes de mostrar o shell. O controle `#dev-viewport` existe somente no bundle servido por `/dev`. Como o `Style` não aceita `var()`, cada token é `pickColor(claro, escuro)` e cada estilo é `themed(claro, escuro)`.
