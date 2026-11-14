@@ -128,7 +128,8 @@ Bool isActiveRoute(String route) = AppState.currentScreen == route
 
 // ---- Desktop ---------------------------------------------------------------
 
-Style navItemRowCss() = Style("display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: center; align-items: center; gap: 12; width: 100%; padding: 0; background: transparent")
+// Ícone e rótulo começam sempre na mesma coluna, inclusive no item ativo.
+Style navItemRowCss() = Style("display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: flex-start; align-items: center; gap: 14; width: 100%; padding: 0; background: transparent")
 
 View sidebarItem(Window w, String route, String text) {
     var active = isActiveRoute(route)
@@ -182,7 +183,9 @@ View userBlock() {
     return col
 }
 
-// Sidebar vertical (Desktop), 190 px.
+// Sidebar vertical (Desktop). A rota interna de notificações não entra na
+// navegação: ela sustenta disparos automáticos quando o app acompanha as
+// finanças, sem expor uma aba dedicada ao usuário.
 // Sidebar presa à altura do shell: só a lista do meio rola; o rodapé
 // (Configurações, avatar e nome) fica sempre visível.
 Style sidebarFixedCss()       = Style("display: flex; flex-direction: column; align-items: center; flex-wrap: nowrap; align-self: stretch; width: 224; flex-shrink: 0; min-height: 0; gap: 8; padding: 28px 16px; box-sizing: border-box; overflow: hidden; background: #0A0D18; border-right: 1px solid rgba(255,255,255,.1)")
@@ -196,8 +199,7 @@ View buildSidebar(Window w) {
     var nav = Column(listOf(
         sidebarItem(w, "dashboard", "Dashboard"),
         sidebarItem(w, "chat", "Organiza AI"),
-        sidebarItem(w, "envelopes", "Caixinhas"),
-        sidebarItem(w, "notifications", "Notificações")))
+        sidebarItem(w, "envelopes", "Caixinhas")))
     nav.setStyle(sidebarNavScrollCss())
     var footer = Column(listOf(sidebarItem(w, "settings", "Configurações"), userBlock()))
     footer.setStyle(sidebarFooterFixedCss())
@@ -227,13 +229,12 @@ View bottomTabItem(Window w, String route, String text) {
     return col
 }
 
-// Barra inferior de 5 abas (Mobile).
+// Barra inferior Mobile; notificações continuam como rota interna de disparo.
 View buildNavBar(Window w) {
     var row = Row(listOf(
         bottomTabItem(w, "dashboard", "Dashboard"),
         bottomTabItem(w, "chat", "Organiza AI"),
         bottomTabItem(w, "envelopes", "Caixinhas"),
-        bottomTabItem(w, "notifications", "Alertas"),
         bottomTabItem(w, "settings", "Config")))
     row.setId("bottom-tab")
     row.setStyle(bottomTabFixedCss())
