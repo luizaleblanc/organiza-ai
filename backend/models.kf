@@ -652,9 +652,76 @@ UpdateEnvelopeInput? decodeUpdateEnvelopeInput(String raw) {
     }
 }
 
+// Caixinha de nome livre: 1 a 40 caracteres depois do trim, sem caracteres de controle.
+// null = valido; senao a mensagem do 400. A comparacao de nomes e feita aqui, em Kof (envelopeNameKey),
+// para nao depender do collation de cada banco.
+String? envelopeNameError(String? name) {
+    var text = ""
+    if (name != null) {
+        text = name.trim()
+    }
+    var bad = text == "" || text.length() > 40
+    var i = 0
+    while (!bad && i < text.length()) {
+        var c = text.charAt(i)
+        if (c < 32 || c == 127) {
+            bad = true
+        }
+        i = i + 1
+    }
+    if (bad) {
+        return "Dê um nome de até 40 caracteres para a caixinha."
+    }
+    return null
+}
+
+// Chave de comparacao: minusculas, sem acento, espacos sobrando removidos.
+String envelopeNameKey(String name) {
+    var s = name.trim().toLowerCase()
+    var from = "áàâãäéèêëíìîïóòôõöúùûüçñ"
+    var to = "aaaaaeeeeiiiiooooouuuucn"
+    var i = 0
+    while (i < from.length()) {
+        s = s.replace(from.substring(i, i + 1), to.substring(i, i + 1))
+        i = i + 1
+    }
+    while (s.contains("  ")) {
+        s = s.replace("  ", " ")
+    }
+    return s
+}
+
+// Conversao segura: nome que nao e de uma Category (caixinha livre) = null, nunca excecao.
+Category? categoryOrNull(String? raw) {
+    if (raw == null) {
+        return null
+    }
+    try {
+        return Category.valueOf(raw)
+    } catch (Exception e) {
+        return null
+    }
+}
+
+// Caixinha livre = nome que nao e o de uma Category (as automaticas nao podem ser renomeadas).
+Bool isFreeEnvelopeName(String name) {
+    return categoryOrNull(name) == null
+}
+
+// A caixinha do usuario com esse nome (comparacao normalizada), exceto a de id `exceptId`; nenhuma = null.
+EnvelopeEntity? findEnvelopeByName(String userId, String name, String exceptId) {
+    var key = envelopeNameKey(name)
+    var found = findEnvelopesByUserId(userId).filter((e: EnvelopeEntity) -> e.id != exceptId && envelopeNameKey(e.categoryName) == key)
+    if (found.isEmpty()) {
+        return null
+    }
+    return found.get(0)
+}
+
 String? envelopeError(String categoryName, Double limitAmount, String? limitType) {
-    if (isBlank(categoryName) || categoryName.length() > maxTextLength()) {
-        return "Nome da caixinha inválido."
+    var nameErr = envelopeNameError(categoryName)
+    if (nameErr != null) {
+        return nameErr
     }
     if (limitAmount < 0.0) {
         return "O limite da caixinha não pode ser negativo."

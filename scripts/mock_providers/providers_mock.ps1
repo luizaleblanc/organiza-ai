@@ -44,6 +44,14 @@ function Handle-Chat($req) {
     if ($lastUser -match "falha500") { return @(500, '{"error":{"message":"The server had an error","type":"server_error"}}') }
     if ($lastUser -match "formato quebrado") { return @(200, '{"inesperado":true}') }
     if ($lastUser -match "lento") { Start-Sleep -Seconds 4 }
+    if ($lastUser -match "caixinhaok") {
+        $call = ToolCall "call_cx" "persistTransaction" @{ amount = 40.0; category = "LEISURE"; description = "passeio no mock"; caixinha = "  VIAGEM  A  praia " }
+        return @(200, (Completion @{ role = "assistant"; content = $null; tool_calls = @($call) } "tool_calls"))
+    }
+    if ($lastUser -match "caixinhanao") {
+        $call = ToolCall "call_cn" "persistTransaction" @{ amount = 12.0; category = "FOOD"; description = "lanche fantasma"; caixinha = "Fantasma" }
+        return @(200, (Completion @{ role = "assistant"; content = $null; tool_calls = @($call) } "tool_calls"))
+    }
     if ($lastUser -match "gastei") {
         $call = ToolCall "call_gasto" "persistTransaction" @{ amount = 35.5; category = "FOOD"; description = "almoço no mock" }
         return @(200, (Completion @{ role = "assistant"; content = $null; tool_calls = @($call) } "tool_calls"))

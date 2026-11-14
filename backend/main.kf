@@ -38,6 +38,7 @@ main() {
         throw e
     }
     var app = web.app()
+    logQaMode()
 
     // Middleware global de autenticação: fora das rotas públicas, exige token válido
     // (assinatura, exp, iss e aud via currentClaims). As rotas só leem o usuário.
@@ -64,6 +65,29 @@ main() {
             return "OK"
         }
         return status(503, json.encode(ApiError("Banco de dados indisponível.")))
+    }
+
+    app.get("/qa") {
+        if (!qaEnabled()) { return qaNotFound() }
+        setHeader("Content-Type", "text/plain; charset=utf-8")
+        return qaGuide()
+    }
+
+    app.post("/api/qa/seed") {
+        if (!qaEnabled()) { return qaNotFound() }
+        return json.encode(seedQaData())
+    }
+
+    app.post("/api/qa/reset") {
+        if (!qaEnabled()) { return qaNotFound() }
+        return json.encode(resetQaData())
+    }
+
+    app.get("/api/qa/session") {
+        if (!qaEnabled()) { return qaNotFound() }
+        var demo = findUserByEmail(qaDemoEmail())
+        if (demo == null) { return status(409, json.encode(ApiError("Execute POST /api/qa/seed primeiro."))) }
+        return json.encode(mapOf("token", issueToken(demo.id), "screen", "dashboard"))
     }
 
     // =========================================================
@@ -450,6 +474,15 @@ main() {
         if (current == null) {
             return status(404, json.encode(ApiError("Caixinha não encontrada.")))
         }
+        var newName = req.categoryName.trim()
+        if (newName != current.categoryName) {
+            if (!isFreeEnvelopeName(current.categoryName)) {
+                return status(400, json.encode(ApiError("Esta caixinha é automática e não pode ser renomeada.")))
+            }
+            if (findEnvelopeByName(userId, newName, current.id) != null) {
+                return status(409, json.encode(ApiError("Você já tem uma caixinha com esse nome.")))
+            }
+        }
         var limitType = EnvelopeLimitType.FIXED
         var typeText = req.limitType
         if (typeText != null) {
@@ -460,7 +493,7 @@ main() {
         if (givenMonths != null) {
             months = givenMonths
         }
-        return json.encode(envelopeEntityToOutput(updateEnvelope(userId, current.id, EnvelopeEntity(current.id, userId, req.categoryName.trim(), req.limitAmount, current.currentSpent, limitType, months, current.createdAt, current.bucket))))
+        return json.encode(envelopeEntityToOutput(updateEnvelope(userId, current.id, EnvelopeEntity(current.id, userId, newName, req.limitAmount, current.currentSpent, limitType, months, current.createdAt, current.bucket))))
     }
 
     app.delete("/api/envelopes/:id") {
@@ -476,6 +509,10 @@ main() {
     app.post("/api/envelopes") {
         var req = decodeCreateEnvelopeInput(body())
         if (req != null) {
+            var nameErr = envelopeNameError(req.categoryName)
+            if (nameErr != null) {
+                return status(400, json.encode(ApiError(nameErr)))
+            }
             // B4: bucket opcional, validado contra os buckets do modelo atual do usuario.
             var owner = findUserById(currentUserId())
             if (owner == null) {
@@ -485,8 +522,11 @@ main() {
             if (bucketErr != null) {
                 return status(400, json.encode(ApiError(bucketErr)))
             }
+            if (findEnvelopeByName(currentUserId(), req.categoryName, "") != null) {
+                return status(409, json.encode(ApiError("Você já tem uma caixinha com esse nome.")))
+            }
             // id "" = novo: o banco gera o id (PERS-06); o dono vem das claims (PERS-09)
-            var newEnv = EnvelopeEntity("", currentUserId(), req.categoryName, req.limitAmount, 0.0, EnvelopeLimitType.FIXED, 0, nowIso(), req.bucket)
+            var newEnv = EnvelopeEntity("", currentUserId(), req.categoryName.trim(), req.limitAmount, 0.0, EnvelopeLimitType.FIXED, 0, nowIso(), req.bucket)
             var saved = createEnvelope(newEnv)
             return json.encode(envelopeEntityToOutput(saved))
         }
@@ -691,17 +731,49 @@ main() {
         app.get("/Default-qa-login.mjs") {
             setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
             setHeader("Content-Type", "text/javascript; charset=utf-8")
-            return qaScreenModule(webOut, "login")
+            return qaScreenModule(webOut, "login", isMobileUserAgent(header("User-Agent")))
         }
         app.get("/Default-qa-cadastro.mjs") {
             setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
             setHeader("Content-Type", "text/javascript; charset=utf-8")
-            return qaScreenModule(webOut, "signup")
+            return qaScreenModule(webOut, "signup", isMobileUserAgent(header("User-Agent")))
         }
         app.get("/Default-qa-onboarding.mjs") {
             setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
             setHeader("Content-Type", "text/javascript; charset=utf-8")
-            return qaScreenModule(webOut, "onb_salary")
+            return qaScreenModule(webOut, "onb_salary", isMobileUserAgent(header("User-Agent")))
+        }
+        app.get("/Default-mobile.mjs") {
+            setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
+            setHeader("Content-Type", "text/javascript; charset=utf-8")
+            return viewportModule(webOut, true, false)
+        }
+        app.get("/Default-dev.mjs") {
+            setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
+            setHeader("Content-Type", "text/javascript; charset=utf-8")
+            return viewportModule(webOut, false, true)
+        }
+        app.get("/qa/dashboard") { return qaIndexForShortcut(webOut, buildTag, "dashboard", true) }
+        app.get("/qa/chat") { return qaIndexForShortcut(webOut, buildTag, "chat", true) }
+        app.get("/qa/caixinhas") { return qaIndexForShortcut(webOut, buildTag, "envelopes", true) }
+        app.get("/qa/notificacoes") { return qaIndexForShortcut(webOut, buildTag, "notifications", true) }
+        app.get("/qa/configuracoes") { return qaIndexForShortcut(webOut, buildTag, "settings", true) }
+        app.get("/qa/boas-vindas") { return qaIndexForShortcut(webOut, buildTag, "welcome", true) }
+        app.get("/qa/mobile/dashboard") { return qaIndexForShortcut(webOut, buildTag, "dashboard", false) }
+        app.get("/qa/mobile/chat") { return qaIndexForShortcut(webOut, buildTag, "chat", false) }
+        app.get("/qa/mobile/caixinhas") { return qaIndexForShortcut(webOut, buildTag, "envelopes", false) }
+        app.get("/qa/mobile/notificacoes") { return qaIndexForShortcut(webOut, buildTag, "notifications", false) }
+        app.get("/qa/mobile/configuracoes") { return qaIndexForShortcut(webOut, buildTag, "settings", false) }
+        app.get("/qa/mobile/boas-vindas") { return qaIndexForShortcut(webOut, buildTag, "welcome", false) }
+        app.get("/Default-qa-shell.mjs") {
+            if (!qaEnabled()) { return qaNotFound() }
+            setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
+            setHeader("Content-Type", "text/javascript; charset=utf-8")
+            var screen = "dashboard"
+            var requestedScreen = query("screen")
+            if (requestedScreen != null) { screen = qaScreenName(requestedScreen) }
+            var desktop = query("desktop") != "false"
+            return qaAuthenticatedModule(webOut, screen, desktop)
         }
         // O serveDir do runtime grava "Cache-Control: public, max-age=86400" fixo: o navegador ficava
         // um dia com o app antigo depois de cada deploy. O index.html sai por esta rota, sem cache, e
@@ -709,19 +781,28 @@ main() {
         app.get("/") {
             setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
             setHeader("Content-Type", "text/html; charset=utf-8")
-            return indexHtmlWithVersion(webOut, buildTag)
+            setHeader("Vary", "User-Agent")
+            return indexHtmlForClient(webOut, buildTag, isMobileUserAgent(header("User-Agent")))
+        }
+        // Unico caminho que expoe o controle manual Desktop/Mobile.
+        app.get("/dev") {
+            setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
+            setHeader("Content-Type", "text/html; charset=utf-8")
+            return indexHtmlWithBundle(webOut, buildTag, "Default-dev.mjs")
         }
         // A CSP padrao das rotas (default-src 'self') bloqueia o <style> inline do index: o CSS dele sai
         // num arquivo do proprio dominio.
         app.get("/kof-index.css") {
             setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
             setHeader("Content-Type", "text/css; charset=utf-8")
-            return indexInlineCss(webOut)
+            setHeader("Vary", "User-Agent")
+            return indexInlineCss(webOut, isMobileUserAgent(header("User-Agent")))
         }
         app.get("/index.html") {
             setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
             setHeader("Content-Type", "text/html; charset=utf-8")
-            return indexHtmlWithVersion(webOut, buildTag)
+            setHeader("Vary", "User-Agent")
+            return indexHtmlForClient(webOut, buildTag, isMobileUserAgent(header("User-Agent")))
         }
         app.serveDir("/", webOut)
         log.info("frontend servido de KOF_WEB_OUT")
@@ -735,13 +816,50 @@ main() {
 
 // index.html do frontend com o bundle versionado (quebra o cache de 1 dia do serveDir).
 String indexHtmlWithVersion(String webOut, String tag) {
+    return indexHtmlWithBundle(webOut, tag, "Default.mjs")
+}
+
+// Remove a moldura tambem antes do CSS externo carregar: hidden e atributo de
+// fundo sao interpretados pelo navegador no primeiro parse, sem depender do JS.
+String indexHtmlWithBundle(String webOut, String tag, String bundle) {
     var html = readWebFile(webOut, "index.html")
     var start = html.indexOf("<style>")
     var end = html.indexOf("</style>")
     if (start >= 0 && end > start) {
         html = html.substring(0, start) + "<link rel=\"stylesheet\" href=\"kof-index.css?v=" + tag + "\">" + html.substring(end + 8)
     }
-    return html.replace("src=\"Default.mjs\"", "src=\"Default.mjs?v=" + tag + "\"")
+    var titleStart = html.indexOf("<title>")
+    var titleEnd = html.indexOf("</title>")
+    if (titleStart >= 0 && titleEnd > titleStart) {
+        html = html.substring(0, titleStart) + "<title>Organiza AI</title>" + html.substring(titleEnd + 8)
+    }
+    html = html.replace("<body>", "<body bgcolor=\"#0A0D18\">")
+    html = html.replace("<div id=\"kof-titlebar\">", "<div id=\"kof-titlebar\" hidden>")
+    html = html.replace("<div id=\"kof-status\">", "<div id=\"kof-status\" hidden>")
+    return replaceDefaultBundle(html, bundle + "?v=" + tag)
+}
+
+String replaceDefaultBundle(String html, String source) {
+    var start = html.indexOf("src=\"Default.mjs")
+    if (start < 0) { return html }
+    var end = html.indexOf("\"", start + 5)
+    if (end <= start) { return html }
+    return html.substring(0, start) + "src=\"" + source + "\"" + html.substring(end + 1)
+}
+
+Bool isMobileUserAgent(String? userAgent) {
+    if (userAgent == null) {
+        return false
+    }
+    var ua = userAgent.toLowerCase()
+    return ua.contains("mobile") || ua.contains("android") || ua.contains("iphone") || ua.contains("ipad")
+}
+
+String indexHtmlForClient(String webOut, String tag, Bool mobile) {
+    if (mobile) {
+        return indexHtmlWithBundle(webOut, tag, "Default-mobile.mjs")
+    }
+    return indexHtmlWithVersion(webOut, tag)
 }
 
 // Varia apenas o bundle inicial; navegacao e estado do app continuam sendo os normais.
@@ -749,28 +867,89 @@ String indexHtmlForScreen(String webOut, String tag, String screen) {
     var html = indexHtmlWithVersion(webOut, tag)
     html = html.replace("<head>", "<head><base href=\"/\">")
     html = html.replace("href=\"kof-index.css?v=", "href=\"/kof-index.css?v=")
-    return html.replace("src=\"Default.mjs?v=" + tag + "\"", "src=\"/Default-qa-" + screen + ".mjs?v=" + tag + "\"")
+    return replaceDefaultBundle(html, "/Default-qa-" + screen + ".mjs?v=" + tag)
 }
 
 // Os bundles da UI sao gerados pelo KOF. Troca a tela inicial dentro de main(),
 // preservando as demais ocorrencias que retornam ao welcome apos sair da conta.
-String qaScreenModule(String webOut, String screen) {
+String qaScreenModule(String webOut, String screen, Bool mobile) {
     var module = readWebFile(webOut, "Default.mjs")
     var startup = "(core_AppState.currentScreen = \"welcome\");\n    applyViewport(window);"
     var replacement = "(core_AppState.currentScreen = \"" + screen + "\");\n    applyViewport(window);"
     if (!module.contains(startup)) {
         throw "bundle do frontend sem o ponto de entrada esperado para as rotas de QA"
     }
+    module = module.replace(startup, replacement)
+    if (mobile) {
+        module = mobileViewportModule(module)
+    }
+    return module
+}
+
+String mobileViewportModule(String module) {
+    var desktop = "static isDesktop = 1;"
+    if (!module.contains(desktop)) {
+        throw "bundle do frontend sem o estado inicial de viewport"
+    }
+    return module.replace(desktop, "static isDesktop = 0;")
+}
+
+String viewportModule(String webOut, Bool mobile, Bool dev) {
+    var module = readWebFile(webOut, "Default.mjs")
+    if (mobile) {
+        module = mobileViewportModule(module)
+    }
+    if (dev) {
+        var flag = "class components_ViewportDev {\n    static enabled = 0;"
+        if (!module.contains(flag)) {
+            throw "bundle do frontend sem a flag do controle de viewport"
+        }
+        module = module.replace(flag, "class components_ViewportDev {\n    static enabled = 1;")
+    }
+    return module
+}
+
+String qaIndexForShortcut(String webOut, String tag, String screen, Bool desktop) {
+    if (!qaEnabled()) { return qaNotFound() }
+    var demo = findUserByEmail(qaDemoEmail())
+    if (demo == null) { return status(409, json.encode(ApiError("Execute POST /api/qa/seed primeiro."))) }
+    setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
+    setHeader("Content-Type", "text/html; charset=utf-8")
+    var html = indexHtmlWithVersion(webOut, tag)
+    html = html.replace("<head>", "<head><base href=\"/\">")
+    html = html.replace("href=\"kof-index.css?v=", "href=\"/kof-index.css?v=")
+    var mode = "true"
+    if (!desktop) { mode = "false" }
+    return replaceDefaultBundle(html,
+        "/Default-qa-shell.mjs?screen=" + screen + "&desktop=" + mode + "&v=" + tag)
+}
+
+String qaAuthenticatedModule(String webOut, String screen, Bool desktop) {
+    var demo = findUserByEmail(qaDemoEmail())
+    if (demo == null) { throw "Conta de QA ausente" }
+    var module = readWebFile(webOut, "Default.mjs")
+    var startup = "(core_AppState.currentScreen = \"welcome\");\n    applyViewport(window);"
+    var mode = "true"
+    if (!desktop) { mode = "false" }
+    var replacement = "(core_SessionState.token = \"" + issueToken(demo.id) + "\");\n" +
+        "    (core_AppState.isDesktop = " + mode + ");\n" +
+        "    (core_AppState.currentScreen = \"" + screen + "\");\n    applyViewport(window);"
+    if (!module.contains(startup)) { throw "bundle do frontend sem o ponto de entrada esperado para QA" }
     return module.replace(startup, replacement)
 }
 
 // Conteudo do <style> do index.html gerado (moldura do Kof, fonte raiz responsiva, olho do Edge).
-String indexInlineCss(String webOut) {
+String indexInlineCss(String webOut, Bool mobile) {
     var html = readWebFile(webOut, "index.html")
     var start = html.indexOf("<style>")
     var end = html.indexOf("</style>")
     if (start >= 0 && end > start) {
-        return html.substring(start + 7, end)
+        var css = html.substring(start + 7, end)
+        css = css + "\n#kof-titlebar,#kof-status{display:none!important}html,body{background:#0A0D18}#kof-root{padding:0;gap:0;overflow:hidden;background:#0A0D18}.kof-window{padding:0;border:0;border-radius:0;min-height:100%;background:#0A0D18}html{font-size:clamp(14px,calc(0.6vw + 8.32px),24px)}"
+        if (mobile) {
+            css = css + "\nhtml{font-size:16px}"
+        }
+        return css
     }
     return ""
 }

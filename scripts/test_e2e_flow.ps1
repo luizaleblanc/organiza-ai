@@ -319,9 +319,19 @@ try {
     Test-Invalid "Senha P4: sem minúscula = 400" $R "" (New-Reg @{ password = "FORTE#SENHA9" }) "A senha precisa ter pelo menos uma letra minúscula."
     Test-Invalid "Senha P5: sem número = 400" $R "" (New-Reg @{ password = "Forte#Senha" }) "A senha precisa ter pelo menos um número."
     Test-Invalid "Senha P6: sem especial = 400" $R "" (New-Reg @{ password = "ForteSenha9" }) "A senha precisa ter pelo menos um caractere especial."
-    Test-Invalid "Senha P7: contém o e-mail inteiro = 400" $R "" (New-Reg @{ email = "zé@x.io"; password = "a1!ZÉ@X.IO" }) "A senha não pode conter o seu e-mail."
-    Test-Invalid "Senha P7: contém a parte antes do @ = 400" $R "" (New-Reg @{ password = ("q9!" + $fresh.Split("@")[0].ToUpper()) }) "A senha não pode conter o seu e-mail."
-    Test-Invalid "Senha P8: contém o primeiro nome (sem diferenciar maiúsculas) = 400" $R "" (New-Reg @{ password = "x9#aNa_Forte" }) "A senha não pode conter o seu nome."
+    # Sem a regra "senha não contém e-mail/nome" (removida do backend em 67ddaae): essas senhas agora passam (200).
+    Test-Step "Senha: contém o e-mail inteiro = 200 (regra removida)" {
+        $r = Invoke-Api "POST" $R "" (New-Reg @{ email = "zé_$([Guid]::NewGuid().ToString('N'))@x.io"; password = "a1!ZÉ@X.IO" })
+        Expect ($r.Status -eq 200) "$($r.Status) $($r.Body)"
+    }
+    Test-Step "Senha: contém a parte antes do @ = 200 (regra removida)" {
+        $r = Invoke-Api "POST" $R "" (New-Reg @{ email = "pq_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "q9!PQ_ABC" })
+        Expect ($r.Status -eq 200) "$($r.Status) $($r.Body)"
+    }
+    Test-Step "Senha: contém o primeiro nome = 200 (regra removida)" {
+        $r = Invoke-Api "POST" $R "" (New-Reg @{ email = "pn_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "x9#aNa_Forte" })
+        Expect ($r.Status -eq 200) "$($r.Status) $($r.Body)"
+    }
     Test-Step "Senha P7/P8: e-mail local e nome com menos de 3 caracteres não contam = 200" {
         $r = Invoke-Api "POST" $R "" (New-Reg @{ firstName = "Jo"; email = "ab_$([Guid]::NewGuid().ToString('N').Substring(0,6))@organiza.ai"; password = "Jo#Ab9xyzz" })
         Expect ($r.Status -eq 200 -and $r.Body.Split(".").Length -eq 3) "$($r.Status) $($r.Body)"
@@ -340,7 +350,10 @@ try {
     $legacy = "lg_$([Guid]::NewGuid().ToString('N'))@organiza.ai"
     Test-Invalid "Legado: sem nome = 400" $R "" (@{ email = $legacy; password = "Forte#Senha9" } | ConvertTo-Json -Compress) $vazio
     Test-Invalid "Legado: senha fraca = 400" $R "" (@{ name = "Lia Legado"; email = $legacy; password = "12345678" } | ConvertTo-Json -Compress) "A senha precisa ter pelo menos uma letra maiúscula."
-    Test-Invalid "Legado: senha com o primeiro nome = 400" $R "" (@{ name = "Lia Legado"; email = $legacy; password = "Lia#Forte9" } | ConvertTo-Json -Compress) "A senha não pode conter o seu nome."
+    Test-Step "Legado: senha com o primeiro nome = 200 (regra removida)" {
+        $r = Invoke-Api "POST" $R "" (@{ name = "Lia Outra"; email = "lo_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "Lia#Forte9" } | ConvertTo-Json -Compress)
+        Expect ($r.Status -eq 200) "$($r.Status) $($r.Body)"
+    }
     Test-Step "Legado: {name,email,password} = 200; /me separa no primeiro espaço e age = null" {
         $r = Invoke-Api "POST" $R "" (@{ name = "Lia Maria Legado"; email = $legacy; password = "Forte#Senha9" } | ConvertTo-Json -Compress)
         $me = (Invoke-Api "GET" "/api/users/me" $r.Body).Body
@@ -605,6 +618,64 @@ try {
         Expect ($r.Status -eq 200 -and $created.userId -ne $script:userId -and @($listA | Where-Object { $_.categoryName -eq "LEISURE" }).Count -eq 0) "$($r.Status) $($r.Body) | envelopes de A: $($listA.Count)"
     }
 
+    # ---- Caixinhas de nome livre (CXB) ----
+    Test-Step "Caixinha livre: nome com acento, espaço e hífen é criado como digitado (trim)" {
+        $r = Invoke-Api "POST" "/api/envelopes" $script:tokenB (@{ categoryName = "  Viagem à Foz-do-Iguaçu  "; limitAmount = 500.0 } | ConvertTo-Json -Compress)
+        $j = $r.Body | ConvertFrom-Json
+        Expect ($r.Status -eq 200 -and $j.categoryName -ceq "Viagem à Foz-do-Iguaçu" -and $j.limitAmount -eq 500.0) "$($r.Status) $($r.Body)"
+    }
+
+    Test-Step "Caixinha livre: duplicata com outra caixa, sem acento ou com espaços sobrando = 409; de outro usuário pode" {
+        $msg = "Você já tem uma caixinha com esse nome."
+        $a = Invoke-Api "POST" "/api/envelopes" $script:tokenB (@{ categoryName = "VIAGEM A FOZ-DO-IGUACU"; limitAmount = 1.0 } | ConvertTo-Json -Compress)
+        $b = Invoke-Api "POST" "/api/envelopes" $script:tokenB (@{ categoryName = "viagem   à  foz-do-iguaçu"; limitAmount = 1.0 } | ConvertTo-Json -Compress)
+        $c = Invoke-Api "POST" "/api/envelopes" $script:token (@{ categoryName = "Viagem à Foz-do-Iguaçu"; limitAmount = 10.0 } | ConvertTo-Json -Compress)
+        Expect ($a.Status -eq 409 -and ($a.Body | ConvertFrom-Json).error -ceq $msg -and $b.Status -eq 409 -and $c.Status -eq 200) "$($a.Status) $($a.Body) | $($b.Status) | $($c.Status) $($c.Body)"
+    }
+
+    Test-Step "Caixinha livre: nome vazio, só espaços, 41 caracteres ou com caractere de controle = 400; 40 caracteres passa" {
+        $msg = "Dê um nome de até 40 caracteres para a caixinha."
+        $codes = @()
+        foreach ($n in @("", "   ", ("x" * 41), "a`tb")) {
+            $r = Invoke-Api "POST" "/api/envelopes" $script:tokenB (@{ categoryName = $n; limitAmount = 1.0 } | ConvertTo-Json -Compress)
+            $codes += "$($r.Status):$((($r.Body | ConvertFrom-Json).error -ceq $msg))"
+        }
+        $ok40 = Invoke-Api "POST" "/api/envelopes" $script:tokenB (@{ categoryName = ("y" * 40); limitAmount = 1.0 } | ConvertTo-Json -Compress)
+        Expect (($codes -join ",") -ceq "400:True,400:True,400:True,400:True" -and $ok40.Status -eq 200) "$($codes -join ',') | $($ok40.Status) $($ok40.Body)"
+    }
+
+    Test-Step "Renomear: caixinha livre ok (409 se colidir); automática (categoria) = 400; só o limite continua permitido" {
+        $list = (ConvertFrom-JsonList (Invoke-Api "GET" "/api/envelopes" $script:tokenB).Body)
+        $free = @($list | Where-Object { $_.categoryName -ceq "Viagem à Foz-do-Iguaçu" })[0]
+        $auto = @($list | Where-Object { $_.categoryName -ceq "LEISURE" })[0]
+        $other = @($list | Where-Object { $_.categoryName -ceq ("y" * 40) })[0]
+        $ren = Invoke-Api "PUT" "/api/envelopes/$($free.id)" $script:tokenB (@{ categoryName = "Férias 2027"; limitAmount = 700.0 } | ConvertTo-Json -Compress)
+        $col = Invoke-Api "PUT" "/api/envelopes/$($other.id)" $script:tokenB (@{ categoryName = "FÉRIAS 2027"; limitAmount = 1.0 } | ConvertTo-Json -Compress)
+        $rejA = Invoke-Api "PUT" "/api/envelopes/$($auto.id)" $script:tokenB (@{ categoryName = "Lazer"; limitAmount = 99.0 } | ConvertTo-Json -Compress)
+        $lim = Invoke-Api "PUT" "/api/envelopes/$($auto.id)" $script:tokenB (@{ categoryName = "LEISURE"; limitAmount = 123.0 } | ConvertTo-Json -Compress)
+        $empty = Invoke-Api "PUT" "/api/envelopes/$($free.id)" $script:tokenB (@{ categoryName = ""; limitAmount = 1.0 } | ConvertTo-Json -Compress)
+        Expect ($ren.Status -eq 200 -and ($ren.Body | ConvertFrom-Json).categoryName -ceq "Férias 2027" -and $col.Status -eq 409 -and $rejA.Status -eq 400 -and ($rejA.Body | ConvertFrom-Json).error -ceq "Esta caixinha é automática e não pode ser renomeada." -and $lim.Status -eq 200 -and ($lim.Body | ConvertFrom-Json).limitAmount -eq 123.0 -and $empty.Status -eq 400) "$($ren.Status) $($ren.Body) | $($col.Status) | $($rejA.Status) $($rejA.Body) | $($lim.Status) | $($empty.Status)"
+    }
+
+    Test-Step "Caixinha livre: overview, dashboard e notificações sem 500; gasto pelo envelopeId estoura e notifica com o nome digitado" {
+        $env = @((ConvertFrom-JsonList (Invoke-Api "GET" "/api/envelopes" $script:tokenB).Body) | Where-Object { $_.categoryName -ceq "Férias 2027" })[0]
+        $tx = Invoke-Api "POST" "/api/transactions" $script:tokenB (@{ description = "Hotel"; amount = 800; category = "LEISURE"; currency = "BRL"; envelopeId = $env.id } | ConvertTo-Json -Compress)
+        $ov = Invoke-Api "GET" "/api/envelopes/overview" $script:tokenB
+        $dash = Invoke-Api "GET" "/api/dashboard" $script:tokenB
+        $nt = Invoke-Api "GET" "/api/notifications" $script:tokenB
+        $o = @((ConvertFrom-JsonList $ov.Body) | Where-Object { $_.categoryName -ceq "Férias 2027" })[0]
+        $exc = @((ConvertFrom-JsonList $nt.Body) | Where-Object { $_.kind -eq "ENVELOPE_EXCEEDED" -and $_.title -like "*Férias 2027*" })
+        Expect ($tx.Status -eq 200 -and $ov.Status -eq 200 -and $dash.Status -eq 200 -and $nt.Status -eq 200 -and $o.status -eq "ESTOURADA" -and $o.spentThisMonth -eq 800.0 -and $null -eq $o.bucket -and $exc.Count -eq 1) "$($tx.Status) | $($ov.Status) $($ov.Body) | $($dash.Status) | $($nt.Status) $($nt.Body)"
+    }
+
+    Test-Step "Caixinha livre: usuário A não vê nem altera a de B; sem token = 401" {
+        $listA = (ConvertFrom-JsonList (Invoke-Api "GET" "/api/envelopes" $script:token).Body)
+        $envB = @((ConvertFrom-JsonList (Invoke-Api "GET" "/api/envelopes" $script:tokenB).Body) | Where-Object { $_.categoryName -ceq "Férias 2027" })[0]
+        $put = Invoke-Api "PUT" "/api/envelopes/$($envB.id)" $script:token (@{ categoryName = "Roubada"; limitAmount = 1.0 } | ConvertTo-Json -Compress)
+        $noTok = Invoke-Api "POST" "/api/envelopes" "" (@{ categoryName = "Sem token"; limitAmount = 1.0 } | ConvertTo-Json -Compress)
+        Expect (@($listA | Where-Object { $_.categoryName -ceq "Férias 2027" }).Count -eq 0 -and $put.Status -eq 404 -and $noTok.Status -eq 401) "$($put.Status) | $($noTok.Status)"
+    }
+
     Test-Step "Pulso de A não muda com dados de B" {
         $r = Invoke-Api "GET" "/api/budgets/daily-pulse" $script:token
         $j = $r.Body | ConvertFrom-Json
@@ -734,6 +805,23 @@ try {
         $bad = Invoke-Api "PUT" "/api/users/me/preferences" $script:tokenD (@{ emailEnabled = $true; frequency = "HORA"; pushEnabled = $false } | ConvertTo-Json -Compress)
         $e = (Invoke-Api "GET" "/api/users/me/preferences" $script:tokenE).Body | ConvertFrom-Json
         Expect ($d0.emailEnabled -eq $true -and $d0.frequency -eq "DAILY" -and $d0.pushEnabled -eq $false -and $p.Status -eq 200 -and $d1.emailEnabled -eq $false -and $d1.frequency -eq "WEEKLY" -and $d1.pushEnabled -eq $true -and $bad.Status -eq 400 -and $e.frequency -eq "DAILY") "padrão=$($d0 | ConvertTo-Json -Compress) depois=$($d1 | ConvertTo-Json -Compress) inválido=$($bad.Status) E=$($e | ConvertTo-Json -Compress)"
+    }
+
+    Test-Step "Tema (preferência): padrão DARK; PUT sem theme não muda; LIGHT e volta (sem diferenciar maiúsculas); inválido = 400; isolado de E" {
+        $t0 = (Invoke-Api "GET" "/api/users/me/preferences" $script:tokenD).Body | ConvertFrom-Json
+        $t1 = (Invoke-Api "GET" "/api/users/me/preferences" $script:tokenE).Body | ConvertFrom-Json
+        $pl = Invoke-Api "PUT" "/api/users/me/preferences" $script:tokenD (@{ emailEnabled = $false; frequency = "WEEKLY"; pushEnabled = $true; theme = "light" } | ConvertTo-Json -Compress)
+        $t2 = (Invoke-Api "GET" "/api/users/me/preferences" $script:tokenD).Body | ConvertFrom-Json
+        $t3 = (Invoke-Api "GET" "/api/users/me/preferences" $script:tokenE).Body | ConvertFrom-Json
+        $pn = Invoke-Api "PUT" "/api/users/me/preferences" $script:tokenD (@{ emailEnabled = $true; frequency = "DAILY"; pushEnabled = $false } | ConvertTo-Json -Compress)
+        $t4 = (Invoke-Api "GET" "/api/users/me/preferences" $script:tokenD).Body | ConvertFrom-Json
+        $bad = Invoke-Api "PUT" "/api/users/me/preferences" $script:tokenD (@{ emailEnabled = $true; frequency = "DAILY"; pushEnabled = $false; theme = "AZUL" } | ConvertTo-Json -Compress)
+        $t5 = (Invoke-Api "GET" "/api/users/me/preferences" $script:tokenD).Body | ConvertFrom-Json
+        $pd = Invoke-Api "PUT" "/api/users/me/preferences" $script:tokenD (@{ emailEnabled = $true; frequency = "DAILY"; pushEnabled = $false; theme = "Dark" } | ConvertTo-Json -Compress)
+        $t6 = (Invoke-Api "GET" "/api/users/me/preferences" $script:tokenD).Body | ConvertFrom-Json
+        $badFreq = Invoke-Api "PUT" "/api/users/me/preferences" $script:tokenD (@{ emailEnabled = $true; frequency = "HORA"; pushEnabled = $false; theme = "DARK" } | ConvertTo-Json -Compress)
+        $nt = Invoke-Api "PUT" "/api/users/me/preferences" "" '{"emailEnabled":true,"frequency":"DAILY","pushEnabled":false,"theme":"LIGHT"}'
+        Expect ($t0.theme -ceq "DARK" -and $t1.theme -ceq "DARK" -and $pl.Status -eq 200 -and ($pl.Body | ConvertFrom-Json).theme -ceq "LIGHT" -and $t2.theme -ceq "LIGHT" -and $t3.theme -ceq "DARK" -and $pn.Status -eq 200 -and $t4.theme -ceq "LIGHT" -and $t4.frequency -eq "DAILY" -and $bad.Status -eq 400 -and ($bad.Body | ConvertFrom-Json).error -ceq "Tema inválido. Use DARK ou LIGHT." -and $t5.theme -ceq "LIGHT" -and $pd.Status -eq 200 -and $t6.theme -ceq "DARK" -and $badFreq.Status -eq 400 -and $nt.Status -eq 401) "t0=$($t0.theme) E=$($t1.theme) light=$($pl.Status) t2=$($t2.theme) E2=$($t3.theme) semTheme=$($pn.Status)/$($t4.theme) inválido=$($bad.Status)/$($t5.theme) dark=$($pd.Status)/$($t6.theme) freq=$($badFreq.Status) semToken=$($nt.Status)"
     }
 
     Test-Step "Open Finance DEMO: 5 bancos marcados como demonstração; conectar não conecta nada; banco fora = 400" {

@@ -1,0 +1,122 @@
+// Modo de QA local. Nunca habilita em producao e nunca usa credenciais reais.
+
+record QaSeedResult(String demoUserId, String newUserId, Int envelopes, Int transactions,
+    Int notifications, Int chatMessages)
+
+String qaDemoEmail() = "qa@organiza.local"
+String qaNewEmail() = "qa-novo@organiza.local"
+String qaPassword() = "Qa@Organiza1"
+
+String qaScreenName(String requested) {
+    var allowed = listOf("dashboard", "chat", "envelopes", "notifications", "settings", "welcome")
+    if (allowed.contains(requested)) { return requested }
+    return "dashboard"
+}
+
+Bool qaRequested() {
+    var value = config.env("KOF_QA")
+    if (value != null) {
+        return value.trim().toLowerCase() == "true"
+    }
+    return false
+}
+
+Bool qaEnabled() {
+    return qaRequested() && !isProduction()
+}
+
+void logQaMode() {
+    if (qaRequested() && isProduction()) {
+        log.warn("QA desligado em producao")
+        return
+    }
+    if (qaEnabled()) {
+        log.info("QA local habilitado")
+    }
+}
+
+String qaNotFound() {
+    return status(404, json.encode(ApiError("Rota nao encontrada")))
+}
+
+UserEntity qaUser(String email, String name, Bool onboarded) {
+    var salary: Long = 0
+    if (onboarded) {
+        salary = 500000
+    }
+    return UserEntity("", email, passwords.hash(qaPassword()), Role.USER, salary, onboarded,
+        Tier.PREMIUM, false, 149100, onboarded, BudgetModelType.STANDARD_503020,
+        IncomeType.FIXED, false, 0, name, firstNameOf(name), lastNameOf(name), 29)
+}
+
+UserEntity ensureQaUser(String email, String name, Bool onboarded) {
+    var existing = findUserByEmail(email)
+    if (existing == null) {
+        var created = insertUserIfNew(qaUser(email, name, onboarded))
+        if (created == null) {
+            var concurrent = findUserByEmail(email)
+            if (concurrent != null) {
+                return concurrent
+            }
+            throw "Nao foi possivel criar a conta de QA."
+        }
+        return created
+    }
+    var desired = qaUser(email, name, onboarded)
+    desired.id = existing.id
+    return updateUser(desired)
+}
+
+QaSeedResult seedQaData() {
+    var demo = ensureQaUser(qaDemoEmail(), "Luiza QA", true)
+    var fresh = ensureQaUser(qaNewEmail(), "Nova QA", false)
+    deleteQaRows(demo.id)
+    deleteQaRows(fresh.id)
+
+    var housing = saveEnvelope(EnvelopeEntity("", demo.id, "Moradia", 2000.0, 900.0,
+        EnvelopeLimitType.FIXED, 3, nowIso(), "Necessidades"))
+    var food = saveEnvelope(EnvelopeEntity("", demo.id, "Alimentacao", 800.0, 680.0,
+        EnvelopeLimitType.FIXED, 3, nowIso(), "Necessidades"))
+    var leisure = saveEnvelope(EnvelopeEntity("", demo.id, "Lazer", 300.0, 390.0,
+        EnvelopeLimitType.FIXED, 3, nowIso(), "Desejos"))
+
+    insertTransaction(TransactionEntity("", "Aluguel", 90000, Category.HOUSING, "BRL", demo.id,
+        Bucket.NEEDS, Source.MANUAL, nowIso(), housing.id))
+    insertTransaction(TransactionEntity("", "Mercado", 43000, Category.GROCERIES, "BRL", demo.id,
+        Bucket.NEEDS, Source.INVOICE, nowIso(), food.id))
+    insertTransaction(TransactionEntity("", "Restaurante", 25000, Category.FOOD, "BRL", demo.id,
+        Bucket.NEEDS, Source.MANUAL, nowIso(), food.id))
+    insertTransaction(TransactionEntity("", "Cinema", 39000, Category.LEISURE, "BRL", demo.id,
+        Bucket.WANTS, Source.MANUAL, nowIso(), leisure.id))
+
+    var day = monthStartIso()
+    insertNotificationOnce(demo.id, "DAILY_PULSE", "Pulso do dia", "Seu limite diario foi recalculado.", day + "-pulse")
+    insertNotificationOnce(demo.id, "ENVELOPE_WARNING", "Caixinha em alerta", "Alimentacao chegou a 85%.", day + "-warning")
+    insertNotificationOnce(demo.id, "ENVELOPE_EXCEEDED", "Caixinha estourada", "Lazer passou do limite.", day + "-exceeded")
+    insertNotificationOnce(demo.id, "SAVINGS", "Reserva crescendo", "Sua reserva continua evoluindo.", day + "-savings")
+    insertNotificationOnce(demo.id, "MONTHLY_SUMMARY", "Resumo do mes", "Confira como seus gastos foram distribuidos.", day + "-summary")
+    savePreferences(demo.id, PreferencesInput(true, "DAILY", true, "DARK"))
+    saveChatMessage(ChatMessageEntity("", demo.id, ChatRole.ASSISTANT, "Oi, Luiza! Como posso organizar seus gastos hoje?", nowIso()))
+    saveChatMessage(ChatMessageEntity("", demo.id, ChatRole.USER, "Gastei R$ 43 no mercado.", nowIso()))
+    saveChatMessage(ChatMessageEntity("", demo.id, ChatRole.ASSISTANT, "Registrei R$ 43,00 em Alimentacao.", nowIso()))
+
+    return QaSeedResult(demo.id, fresh.id, 3, 4, 5, 3)
+}
+
+QaSeedResult resetQaData() {
+    var demo = ensureQaUser(qaDemoEmail(), "Luiza QA", false)
+    var fresh = ensureQaUser(qaNewEmail(), "Nova QA", false)
+    deleteQaRows(demo.id)
+    return QaSeedResult(demo.id, fresh.id, 0, 0, 0, 0)
+}
+
+String qaGuide() {
+    return "Organiza AI - QA local\n" +
+        "Conta pronta: qa@organiza.local / Qa@Organiza1\n" +
+        "Conta sem onboarding: qa-novo@organiza.local / Qa@Organiza1\n" +
+        "POST /api/qa/seed - recria os dados da demonstracao\n" +
+        "POST /api/qa/reset - limpa somente os dados da conta pronta\n" +
+        "Desktop: /qa/dashboard /qa/chat /qa/caixinhas /qa/notificacoes /qa/configuracoes /qa/boas-vindas\n" +
+        "Mobile: /qa/mobile/dashboard /qa/mobile/chat /qa/mobile/caixinhas /qa/mobile/notificacoes /qa/mobile/configuracoes /qa/mobile/boas-vindas\n" +
+        "Entrada: /login /cadastro /onboarding\n"
+}

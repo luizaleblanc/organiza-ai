@@ -90,6 +90,7 @@ List<ToolDef> coachTools() {
     expense.put("amount", ToolProperty("number", "Valor em reais, maior que zero"))
     expense.put("category", ToolProperty("string", categoryHelp()))
     expense.put("description", ToolProperty("string", "Descricao curta do gasto"))
+    expense.put("caixinha", ToolProperty("string", "Opcional: nome da caixinha do usuario, quando ele citar uma (ex: Viagem). Passe o nome como ele disse."))
 
     var byCategory: Map<String, ToolProperty> = mapOf()
     byCategory.put("category", ToolProperty("string", categoryHelp()))
@@ -135,6 +136,21 @@ List<String> kakeiboQuestions() {
     )
 }
 
+String envelopeNamesText(String userId) {
+    var names = findEnvelopesByUserId(userId).map((e: EnvelopeEntity) -> e.categoryName)
+    if (names.isEmpty()) {
+        return "o usuário ainda não tem caixinhas."
+    }
+    var text = ""
+    for (var n in names) {
+        if (text != "") {
+            text = text + ", "
+        }
+        text = text + n
+    }
+    return text
+}
+
 String coachSystemPrompt(UserEntity user, Bool kakeiboPending) {
     var today = localTodayIso()
     var dow = time.dayOfWeek(today.substring(0, 4).toInt(), today.substring(5, 7).toInt(), today.substring(8, 10).toInt())
@@ -162,7 +178,9 @@ String coachSystemPrompt(UserEntity user, Bool kakeiboPending) {
         "FOOD (restaurante, lanche, delivery, café, almoço, jantar fora), PHARMA (farmácia, remédio), HEALTH (consulta, exame, dentista, plano de saúde, psicólogo), " +
         "AUTO (combustível, estacionamento, pedágio, mecânico, seguro do carro), TRANSPORT (uber, táxi, ônibus, metrô, passagem), HOUSING (aluguel, condomínio, luz, água, gás, internet de casa, IPTU), " +
         "EDUCATION (curso, faculdade, escola, material escolar), SHOPPING (roupa, calçado, eletrônico, presente), SUBSCRIPTIONS (netflix, spotify, software, assinatura mensal), " +
-        "OTHER (só quando nada acima se encaixa). Escolha a categoria mais próxima pelo significado; nunca use GROCERIES como padrão de segurança.\n"
+        "OTHER (só quando nada acima se encaixa). Escolha a categoria mais próxima pelo significado; nunca use GROCERIES como padrão de segurança.\n\n" +
+        "CAIXINHAS DO USUÁRIO: " + envelopeNamesText(user.id) + "\n" +
+        "Se o usuário citar uma caixinha ao registrar um gasto (ex: \"gastei 40 na caixinha Viagem\"), passe o nome dela no argumento caixinha da tool persistTransaction, junto com a categoria que melhor descreve o gasto. Se a caixinha não existir, a tool devolve um erro com a lista: pergunte ao usuário qual ele quis dizer, sem registrar o gasto.\n"
     if (kakeiboPending) {
         p = p + "\nO usuário está no KAKEIBO e ainda não respondeu a reflexão desta semana. As 4 perguntas:"
         for (var q in kakeiboQuestions()) {
@@ -177,7 +195,7 @@ String coachSystemPrompt(UserEntity user, Bool kakeiboPending) {
 // Execucao das tools (sempre no usuario do token)
 // =========================================================
 
-record ExpenseArgs(Double? amount, String? category, String? description)
+record ExpenseArgs(Double? amount, String? category, String? description, String? caixinha)
 record CategoryArgs(String? category)
 record IncomeArgs(Double? amount, String? source)
 record KakeiboArgs(String? answers)
@@ -209,6 +227,28 @@ String runCoachTool(String userId, String name, String arguments) {
             var a = json.decode<ExpenseArgs>(arguments)
             var amount = a.amount()
             var category = parseCategory(a.category())
+            var boxName = a.caixinha()
+            if (boxName != null && boxName.trim() != "") {
+                var box = findEnvelopeByName(userId, boxName, "")
+                if (box == null) {
+                    return toolError("Não achei a caixinha " + boxName.trim() + ". Suas caixinhas: " + envelopeNamesText(userId) + ".")
+                }
+                if (amount == null) {
+                    return toolError("amount é obrigatório")
+                }
+                var boxCategory = Category.OTHER
+                if (category != null) {
+                    boxCategory = category
+                }
+                var boxDescription = box.categoryName
+                var boxGiven = a.description()
+                if (boxGiven != null && boxGiven.trim() != "") {
+                    boxDescription = boxGiven.trim()
+                }
+                var boxSaved = persistTransactionAmount(boxDescription, amount, boxCategory, "BRL", box.id, userId)
+                notifyEnvelopeCrossing(userId, box.id, toCents(amount))
+                return json.encode(boxSaved)
+            }
             if (amount != null) {
                 if (category != null) {
                     var description = category.name()

@@ -296,6 +296,38 @@ try {
         Expect ($r.Status -eq 200 -and $res.Count -eq 8 -and $ok) "$($r.Status) | $($res | ConvertTo-Json -Compress)"
     }
 
+    # ---- Caixinha de nome livre no chat (CXB): usuário próprio, para não mexer na memória do coach acima ----
+    $tkX = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Xavi Caixinha"; email = "cx_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaDoXavi1!" } | ConvertTo-Json -Compress)).Body
+    Invoke-Api "POST" "/api/users/onboarding" $tkX (@{ salary = 3000.0; incomeType = "FIXED"; hasDebt = $false } | ConvertTo-Json -Compress) | Out-Null
+    $viagem = (Invoke-Api "POST" "/api/envelopes" $tkX (@{ categoryName = "Viagem à praia"; limitAmount = 200.0 } | ConvertTo-Json -Compress)).Body | ConvertFrom-Json
+    Invoke-Api "POST" "/api/envelopes" $tkX (@{ categoryName = "Pet"; limitAmount = 100.0 } | ConvertTo-Json -Compress) | Out-Null
+    function ChatX([string]$Text) { return (Invoke-Api "POST" "/api/chat/message" $tkX (@{ message = $Text } | ConvertTo-Json -Compress)) }
+
+    Test-Step "Coach: ferramenta persistTransaction ganha o argumento caixinha e o prompt lista as caixinhas pelo nome" {
+        $r = ChatX "oi coach"
+        $req = @(Get-MockChats)[-1]
+        $pt = @($req.tools | Where-Object { $_.function.name -eq "persistTransaction" })[0]
+        $props = @($pt.function.parameters.properties.PSObject.Properties.Name) -join ","
+        $req2 = [string]$req.messages[0].content
+        Expect ($r.Status -eq 200 -and $props -like "*caixinha*" -and $req2 -like "*CAIXINHAS DO USUÁRIO: Viagem à praia, Pet*" -and @($pt.function.parameters.required) -notcontains "caixinha") "$($r.Status) | props=$props | sys=$($req2.Substring([Math]::Max(0, $req2.Length - 500)))"
+    }
+
+    Test-Step "Coach: caixinha achada pelo nome normalizado grava o gasto no envelope dela e o overview sobe" {
+        $r = ChatX "caixinhaok"
+        $tx = @(((Invoke-Api "GET" "/api/transactions" $tkX).Body | ConvertFrom-Json) | Where-Object { $_.description -eq "passeio no mock" })
+        $o = @(((Invoke-Api "GET" "/api/envelopes/overview" $tkX).Body | ConvertFrom-Json) | Where-Object { $_.categoryName -ceq "Viagem à praia" })[0]
+        Expect ($r.Status -eq 200 -and $tx.Count -eq 1 -and $tx[0].envelopeId -eq $viagem.id -and [double]$tx[0].value -eq 40.0 -and $tx[0].category -eq "LEISURE" -and $o.spentThisMonth -eq 40.0 -and $o.percent -eq 20) "$($r.Status) $($r.Body) | tx=$($tx | ConvertTo-Json -Compress) | overview=$($o | ConvertTo-Json -Compress)"
+    }
+
+    Test-Step "Coach: caixinha não achada devolve o erro com a lista e nada é gravado" {
+        $antes = @(((Invoke-Api "GET" "/api/transactions" $tkX).Body | ConvertFrom-Json)).Count
+        $r = ChatX "caixinhanao"
+        $depois = @(((Invoke-Api "GET" "/api/transactions" $tkX).Body | ConvertFrom-Json))
+        $last = @(Get-MockChats)[-1]
+        $toolMsg = [string](@($last.messages | Where-Object { $_.role -eq "tool" })[0].content)
+        Expect ($r.Status -eq 200 -and $depois.Count -eq $antes -and @($depois | Where-Object { $_.description -eq "lanche fantasma" }).Count -eq 0 -and $toolMsg -like "*Não achei a caixinha Fantasma. Suas caixinhas: Viagem à praia, Pet.*") "$($r.Status) | antes=$antes depois=$($depois.Count) | tool=$toolMsg"
+    }
+
     Test-Step "Coach: memória = últimas 20 mensagens do banco (sistema + 20 + nova = 22 no pedido), em ordem" {
         $last = $null
         for ($k = 1; $k -le 8; $k++) { $last = Chat "conversa $k" }

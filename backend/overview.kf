@@ -58,7 +58,9 @@ EnvelopeOverview overviewOf(EnvelopeEntity e, BudgetModelType model, List<Bucket
     var limit = toCents(e.limitAmount)
     var bucket = e.bucket
     if (bucket == null) {
-        bucket = planBucketFor(model, plan, Category.valueOf(e.categoryName))
+        if (!isFreeEnvelopeName(e.categoryName)) {
+            bucket = planBucketFor(model, plan, categoryOrNull(e.categoryName))
+        }
     }
     return EnvelopeOverview(e.id, e.categoryName, bucket,
         e.limitAmount, centsToReais(spent), percentOf(spent, limit), envelopeStatus(spent, limit))
@@ -136,14 +138,14 @@ List<EnvelopeEntity> createEnvelopesFromChips(UserEntity user, List<String> chip
     var model = user.budgetModel
     var plan = buildBudgetBuckets(model, userSalary(user))
     var categories = chips.map((c: String) -> chipCategories().getOrDefault(c, "OTHER")).distinct()
-    var byBucket = categories.groupBy((c: String) -> nullToText(planBucketFor(model, plan, Category.valueOf(c))))
+    var byBucket = categories.groupBy((c: String) -> nullToText(planBucketFor(model, plan, categoryOrNull(c))))
     var existing = findEnvelopesByUserId(user.id).map((e: EnvelopeEntity) -> e.categoryName)
     return categories.filter((c: String) -> !existing.contains(c))
         .map((c: String) -> createChipEnvelope(user, plan, byBucket, c))
 }
 
 EnvelopeEntity createChipEnvelope(UserEntity user, List<BucketSummaryDTO> plan, Map<String, List<String>> byBucket, String category) {
-    var bucket = nullToText(planBucketFor(user.budgetModel, plan, Category.valueOf(category)))
+    var bucket = nullToText(planBucketFor(user.budgetModel, plan, categoryOrNull(category)))
     var limit = chipLimit(plan, bucket, byBucket.getOrDefault(bucket, listOf()).size)
     return createEnvelope(EnvelopeEntity("", user.id, category, limit, 0.0, EnvelopeLimitType.FIXED, 0, nowIso(), textOrNull(bucket)))
 }
@@ -290,7 +292,9 @@ void ensureDailyNotifications(UserEntity user) {
 // Preferencias (Tela 13): e-mail diario/semanal/nunca e push
 // =========================================================
 
-record PreferencesInput(Bool emailEnabled, String frequency, Bool pushEnabled)
+// theme: DARK ou LIGHT. Na entrada (PUT) e opcional (ausente = nao muda); na saida e sempre preenchido, em
+// maiusculas. String e nao enum: o enum no json.decode do Kof 0.6.x falha.
+record PreferencesInput(Bool emailEnabled, String frequency, Bool pushEnabled, String theme)
 
 PreferencesInput? decodePreferencesInput(String raw) {
     try {
@@ -307,6 +311,9 @@ PreferencesInput? decodePreferencesInput(String raw) {
 String? preferencesError(PreferencesInput req) {
     if (!setOf("DAILY", "WEEKLY", "NEVER").contains(req.frequency())) {
         return "Frequência inválida: use DAILY, WEEKLY ou NEVER."
+    }
+    if (req.theme() != null && !setOf("DARK", "LIGHT").contains(req.theme().toUpperCase())) {
+        return "Tema inválido. Use DARK ou LIGHT."
     }
     return null
 }

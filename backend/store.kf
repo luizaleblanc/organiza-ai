@@ -129,6 +129,32 @@ entity PreferenceRow {
     emailEnabled: Bool
     frequency: String
     pushEnabled: Bool
+    theme: String
+}
+
+// Limpeza isolada do modo QA. A funcao fica neste arquivo porque o analisador do
+// Kof associa as operacoes orm<T> ao arquivo que declara as entities.
+void deleteQaRows(String userId) {
+    if (!strings.isNumeric(userId)) { return }
+    var uid = userId.toLong()
+    var transactions = orm.where<TransactionRow>(DbConn.handle, "userId", uid)
+    for (var row in transactions) { orm.delete<TransactionRow>(DbConn.handle, row.id()) }
+    var envelopes = orm.where<EnvelopeRow>(DbConn.handle, "userId", uid)
+    for (var row in envelopes) { orm.delete<EnvelopeRow>(DbConn.handle, row.id()) }
+    var messages = orm.where<ChatMessageRow>(DbConn.handle, "userId", uid)
+    for (var row in messages) { orm.delete<ChatMessageRow>(DbConn.handle, row.id()) }
+    var notifications = orm.where<NotificationRow>(DbConn.handle, "userId", uid)
+    for (var row in notifications) { orm.delete<NotificationRow>(DbConn.handle, row.id()) }
+    var preferences = orm.where<PreferenceRow>(DbConn.handle, "userId", uid)
+    for (var row in preferences) { orm.delete<PreferenceRow>(DbConn.handle, row.id()) }
+    var variableIncome = orm.where<VariableIncomeRow>(DbConn.handle, "userId", uid)
+    for (var row in variableIncome) { orm.delete<VariableIncomeRow>(DbConn.handle, row.id()) }
+    var reflections = orm.where<KakeiboReflectionRow>(DbConn.handle, "userId", uid)
+    for (var row in reflections) { orm.delete<KakeiboReflectionRow>(DbConn.handle, row.id()) }
+    var resets = orm.where<PasswordResetRow>(DbConn.handle, "userId", uid)
+    for (var row in resets) { orm.delete<PasswordResetRow>(DbConn.handle, row.id()) }
+    var emails = orm.where<EmailLogRow>(DbConn.handle, "userId", uid)
+    for (var row in emails) { orm.delete<EmailLogRow>(DbConn.handle, row.id()) }
 }
 
 // Conexao principal do processo, compartilhada pelas requisicoes (o servidor do kof.web atende cada
@@ -375,6 +401,43 @@ void migrateChatContentColumn(String conn) {
     log.info("migracao: coluna chatmessagerow.content ampliada")
 }
 
+// Tema (claro/escuro) por usuario: preferencerow.theme. DDL fixa, DEFAULT 'DARK' NOT NULL, so se a tabela
+// existir e a coluna faltar (as linhas existentes ficam DARK). Roda ANTES do orm.create<PreferenceRow>:
+// medido, o orm.create de uma tabela ja existente adiciona a coluna nova como NULL, sem DEFAULT.
+// Banco novo: a tabela ainda nao existe e o orm.create ja a cria com a coluna.
+Int preferenceCount(String conn, String sql) {
+    var rows = db.query(conn, sql)
+    if (rows.size == 1) {
+        var row = rows.get(0).toLowerCase()
+        if (row == "{\"n\":1}") {
+            return 1
+        }
+        if (row == "{\"n\":0}") {
+            return 0
+        }
+    }
+    throw "migracao: resposta inesperada ao procurar preferencerow.theme"
+}
+
+Bool preferenceThemeColumnExists(String conn) {
+    return preferenceCount(conn, "SELECT COUNT(*) AS n FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = SCHEMA() AND LOWER(TABLE_NAME) = 'preferencerow' AND LOWER(COLUMN_NAME) = 'theme'") == 1
+}
+
+Bool preferenceTableExists(String conn) {
+    return preferenceCount(conn, "SELECT COUNT(*) AS n FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = SCHEMA() AND LOWER(TABLE_NAME) = 'preferencerow'") == 1
+}
+
+void migratePreferenceThemeColumn(String conn) {
+    if (!preferenceTableExists(conn) || preferenceThemeColumnExists(conn)) {
+        return
+    }
+    db.execute(conn, "ALTER TABLE \"preferencerow\" ADD COLUMN \"theme\" VARCHAR(255) DEFAULT 'DARK' NOT NULL")
+    if (!preferenceThemeColumnExists(conn)) {
+        throw "migracao: a coluna preferencerow.theme nao foi criada"
+    }
+    log.info("migracao: coluna preferencerow.theme adicionada")
+}
+
 // Cria as tabelas que faltam (PERS-22): orm.create e idempotente (medido: 3x no mesmo banco = true).
 // Banco novo: orm.create ja cria userrow com name e a migracao nao faz nada.
 void ensureSchema(String db) {
@@ -389,6 +452,7 @@ void ensureSchema(String db) {
     orm.create<VariableIncomeRow>(db)
     orm.create<KakeiboReflectionRow>(db)
     orm.create<NotificationRow>(db)
+    migratePreferenceThemeColumn(db)
     orm.create<PreferenceRow>(db)
     orm.create<PasswordResetRow>(db)
     orm.create<EmailLogRow>(db)
@@ -1096,9 +1160,9 @@ Int markNotificationsRead(String userId) {
 PreferencesInput findPreferences(String userId) {
     var row = findPreferenceRow(userId)
     if (row != null) {
-        return PreferencesInput(row.emailEnabled(), row.frequency(), row.pushEnabled())
+        return PreferencesInput(row.emailEnabled(), row.frequency(), row.pushEnabled(), row.theme())
     }
-    return PreferencesInput(true, "DAILY", false)
+    return PreferencesInput(true, "DAILY", false, "DARK")
 }
 
 PreferenceRow? findPreferenceRow(String userId) {
@@ -1114,12 +1178,18 @@ PreferenceRow? findPreferenceRow(String userId) {
 
 PreferencesInput savePreferences(String userId, PreferencesInput prefs) {
     var id: Long = 0
+    var theme = "DARK"
     var existing = findPreferenceRow(userId)
     if (existing != null) {
         id = existing.id()
+        theme = existing.theme()
     }
-    var saved = orm.save(DbConn.handle, PreferenceRow(id, userId.toLong(), prefs.emailEnabled(), prefs.frequency(), prefs.pushEnabled()))
-    return PreferencesInput(saved.emailEnabled(), saved.frequency(), saved.pushEnabled())
+    // theme ausente no PUT = nao muda; presente ja foi validado (DARK ou LIGHT, sem diferenciar maiusculas).
+    if (prefs.theme() != null) {
+        theme = prefs.theme().toUpperCase()
+    }
+    var saved = orm.save(DbConn.handle, PreferenceRow(id, userId.toLong(), prefs.emailEnabled(), prefs.frequency(), prefs.pushEnabled(), theme))
+    return PreferencesInput(saved.emailEnabled(), saved.frequency(), saved.pushEnabled(), saved.theme())
 }
 
 // =========================================================
