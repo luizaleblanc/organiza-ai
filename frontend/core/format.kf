@@ -153,9 +153,8 @@ String modelFriendlyName(String model) {
     return model
 }
 
-// Título do card do Dashboard a partir do modelo do usuário (DECISÃO-2):
-// "Distribuição 50/30/20", "Distribuição 70/20/10", "Distribuição Kakeibo"...
-String distributionTitle(String model) = "Distribuição " + modelFriendlyName(model)
+// Título do card do Dashboard a partir do modelo do usuário.
+String distributionTitle(String model) = "Modelo de Economia " + modelFriendlyName(model)
 
 // Category (backend/models.kf) -> rótulo PT.
 String categoryLabel(String category) {

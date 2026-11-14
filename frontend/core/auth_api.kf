@@ -16,7 +16,7 @@ import core.format
 record LoginRequest(String email, String password)
 record RegisterRequest(String firstName, String lastName, Int age, String email, String password)
 record ForgotPasswordRequest(String email)
-record ResetPasswordRequest(String token, String password)
+record ResetPasswordRequest(String email, String token, String password)
 record MessageResponse(String message)
 record OnboardingRequest(Double salary, String incomeType, Bool hasDebt, Double debtAmount)
 record MeResponse(String name, String email, Bool onboardingCompleted, String tier)
@@ -33,7 +33,7 @@ String msgNetwork() = "Não consegui falar com o servidor. Confira sua internet 
 String msgGeneric() = "Confira os dados e tente de novo."
 String msgSessionExpired() = "Sua sessão expirou. Entre de novo."
 String msgForgotUnavailable() = "Recuperação de senha indisponível no momento. Tente de novo mais tarde."
-String msgForgotSent() = "Se o e-mail estiver cadastrado, enviamos um link para redefinir a senha. Ele vale por 30 minutos."
+String msgForgotSent() = "Se o e-mail estiver cadastrado, enviamos um código de 6 números. Ele vale por 30 minutos."
 String msgResetDone() = "Senha alterada. Entre com a nova senha."
 
 // Mensagem fixa para um corpo {"error"...}. Token inválido limpa a sessão.
@@ -58,7 +58,7 @@ String apiErrorMessage(String body) {
         return "E-mail ou senha incorretos."
     }
     if (body.contains("cadastrado")) {
-        return "Já existe uma conta com esse e-mail. Quer entrar?"
+        return "Este e-mail já tem uma conta. Entre ou use outro e-mail."
     }
     if (body.contains("Preencha e-mail")) {
         return "Preencha e-mail e senha."
@@ -111,8 +111,8 @@ String apiErrorMessage(String body) {
     if (body.contains("conter o seu nome")) {
         return "A senha não pode conter o seu nome."
     }
-    if (body.contains("Link inv")) {
-        return "Link inválido ou expirado. Peça um novo."
+    if (body.contains("Link inv") || body.contains("digo inv")) {
+        return "Código inválido ou expirado. Peça um novo."
     }
     if (body.contains("Dados inv")) {
         return "Dados inválidos."
@@ -328,23 +328,7 @@ String passwordShapeError(String password) {
 
 // P7 e P8 (sem diferenciar maiúsculas). "" = válido.
 String passwordIdentityError(String password, String email, String firstName) {
-    val lower = password.toLowerCase()
-    val mail = email.trim().toLowerCase()
-    var local = mail
-    val at = mail.indexOf("@")
-    if (at >= 0) {
-        local = mail.substring(0, at)
-    }
-    if (mail != "" && lower.contains(mail)) {
-        return "A senha não pode conter o seu e-mail."
-    }
-    if (local.length() >= 3 && lower.contains(local)) {
-        return "A senha não pode conter o seu e-mail."
-    }
-    val first = firstName.trim().toLowerCase()
-    if (first.length() >= 3 && lower.contains(first)) {
-        return "A senha não pode conter o seu nome."
-    }
+    // Regra removida a pedido da usuária (12/11/2026), igual ao backend.
     return ""
 }
 
@@ -418,8 +402,8 @@ String forgotPassword(String email) {
     throw msgNetwork()
 }
 
-String resetPassword(String token, String password) {
-    val body = postEmailFlowOrThrow("/api/auth/reset-password", json.encode(ResetPasswordRequest(token.trim(), password)))
+String resetPassword(String email, String token, String password) {
+    val body = postEmailFlowOrThrow("/api/auth/reset-password", json.encode(ResetPasswordRequest(email.trim().toLowerCase(), token.trim(), password)))
     if (body.contains("\"message\"")) {
         return msgResetDone()
     }

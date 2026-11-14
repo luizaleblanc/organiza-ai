@@ -269,19 +269,36 @@ String thousands(String digits) {
     return out
 }
 
+// Contador para ids únicos: o kof.ui não tem autocomplete="off", e o Chrome sugeria valores já
+// digitados no mesmo id (a prévia da sugestão aparece em fonte pequena dentro do campo grande).
+class MoneyFieldSeq {
+    static Int n = 0
+}
+
 // Valor grande (52/700, accent) com máscara de milhar aplicada a cada input.
+// O id real é `<id>-<n>`; para achar o campo use [id^="<id>"] ou o id do bigMoneyAmount.
+// "R$ 3.000": o prefixo vai dentro do próprio campo, então o valor inteiro fica centrado sob o
+// título (parseMoney ignora "R$" e espaços).
+String moneyDisplay(String raw) {
+    var digits = onlyDigits(raw)
+    if (digits.length() > 7) {
+        digits = digits.substring(0, 7)
+    }
+    if (digits == "") {
+        return ""
+    }
+    return "R$ " + thousands(digits)
+}
+
 Input bigMoneyField(String value, String id) {
-    var f = Input(value)
-    f.setId(id)
+    var f = Input(moneyDisplay(value))
+    MoneyFieldSeq.n = MoneyFieldSeq.n + 1
+    f.setId(id + "-" + MoneyFieldSeq.n)
     f.setType("text")
-    f.setPlaceholder("0")
+    f.setPlaceholder("R$ 0")
     f.setStyle(bigMoneyInputCss())
     f.on("input", () -> {
-        var digits = onlyDigits(f.text())
-        if (digits.length() > 7) {
-            digits = digits.substring(0, 7)
-        }
-        var masked = thousands(digits)
+        var masked = moneyDisplay(f.text())
         if (masked != f.text()) {
             f.setText(masked)
         }
@@ -291,15 +308,13 @@ Input bigMoneyField(String value, String id) {
 
 // Linha "R$" + bigMoneyField.
 View bigMoneyAmount(Input field, String id) {
-    var prefix = Label("R$")
-    prefix.setStyle(bigMoneyPrefixCss())
-    var row = Row(listOf(prefix, field))
+    var row = Row(listOf(field))
     row.setId(id)
     row.setStyle(bigMoneyRowCss())
     return row
 }
 
-// Dica abaixo do valor (13 px, muted, centrada).
+// Dica abaixo do valor (16 px, secundária, centrada, com quebra de linha).
 Label moneyHint(String text) {
     var l = Label(text)
     l.setStyle(moneyHintCss())

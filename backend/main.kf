@@ -79,7 +79,7 @@ main() {
             if (invalid != null) {
                 return status(400, json.encode(ApiError(invalid)))
             }
-            var email = req.email.trim()
+            var email = req.email.trim().toLowerCase()
             // Limite de tentativas por e-mail (5 por minuto) contra força bruta
             if (!security.rateLimit("login:" + email, 5, 60)) {
                 return status(429, json.encode(ApiError("Muitas tentativas de login. Tente de novo em 1 minuto.")))
@@ -102,7 +102,7 @@ main() {
             if (invalid != null) {
                 return status(400, json.encode(ApiError(invalid)))
             }
-            var email = req.email.trim()
+            var email = req.email.trim().toLowerCase()
             var existing = findUserByEmail(email)
             if (existing != null) {
                 return status(409, json.encode(ApiError("Usuário já cadastrado")))
@@ -127,7 +127,7 @@ main() {
         if (req == null) {
             return status(400, invalidBody())
         }
-        var email = req.email.trim()
+        var email = req.email.trim().toLowerCase()
         if (!isEmailLike(email) || email.length() > maxTextLength()) {
             return status(400, json.encode(ApiError("Digite um e-mail válido.")))
         }
@@ -167,13 +167,25 @@ main() {
         if (!security.rateLimit("reset-ip:" + clientIpKey(header("X-Forwarded-For")), 20, 3600)) {
             return status(429, json.encode(ApiError("Muitas tentativas. Tente de novo mais tarde.")))
         }
-        var userId = consumePasswordResetToken(crypto.sha256(req.token), nowIso())
-        if (userId == null) {
-            return status(400, json.encode(ApiError("Link inválido ou expirado. Peça um novo.")))
+        // E-mail + código de 6 números: no máximo 5 tentativas por e-mail a cada 30 minutos.
+        var resetEmail = req.email.trim().toLowerCase()
+        if (!security.rateLimit("reset-email:" + resetEmail, 5, 1800)) {
+            return status(429, json.encode(ApiError("Muitas tentativas. Peça um novo código e tente de novo mais tarde.")))
         }
-        var user = findUserById(userId)
+        var owner = findUserByEmail(resetEmail)
+        if (owner == null) {
+            return status(400, json.encode(ApiError("Código inválido ou expirado. Peça um novo.")))
+        }
+        var userId = consumePasswordResetToken(resetCodeHash(owner.id, req.token), nowIso())
+        if (userId == null) {
+            return status(400, json.encode(ApiError("Código inválido ou expirado. Peça um novo.")))
+        }
+        if (userId != owner.id) {
+            return status(400, json.encode(ApiError("Código inválido ou expirado. Peça um novo.")))
+        }
+        var user = findUserById(owner.id)
         if (user == null) {
-            return status(400, json.encode(ApiError("Link inválido ou expirado. Peça um novo.")))
+            return status(400, json.encode(ApiError("Código inválido ou expirado. Peça um novo.")))
         }
         var identity = passwordIdentityError(req.password, user.email, meOf(user).firstName)
         if (identity != null) {
@@ -658,6 +670,59 @@ main() {
     // Sem a variavel, so a API e o /health, como antes.
     var webOut = config.env("KOF_WEB_OUT")
     if (webOut != null) {
+        var buildTag = "" + time.now()
+        // Deep links usados pelo QA. Cada caminho devolve o mesmo app shell, mas
+        // aponta para um bundle cuja tela inicial corresponde ao destino.
+        app.get("/login") {
+            setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
+            setHeader("Content-Type", "text/html; charset=utf-8")
+            return indexHtmlForScreen(webOut, buildTag, "login")
+        }
+        app.get("/cadastro") {
+            setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
+            setHeader("Content-Type", "text/html; charset=utf-8")
+            return indexHtmlForScreen(webOut, buildTag, "cadastro")
+        }
+        app.get("/onboarding") {
+            setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
+            setHeader("Content-Type", "text/html; charset=utf-8")
+            return indexHtmlForScreen(webOut, buildTag, "onboarding")
+        }
+        app.get("/Default-qa-login.mjs") {
+            setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
+            setHeader("Content-Type", "text/javascript; charset=utf-8")
+            return qaScreenModule(webOut, "login")
+        }
+        app.get("/Default-qa-cadastro.mjs") {
+            setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
+            setHeader("Content-Type", "text/javascript; charset=utf-8")
+            return qaScreenModule(webOut, "signup")
+        }
+        app.get("/Default-qa-onboarding.mjs") {
+            setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
+            setHeader("Content-Type", "text/javascript; charset=utf-8")
+            return qaScreenModule(webOut, "onb_salary")
+        }
+        // O serveDir do runtime grava "Cache-Control: public, max-age=86400" fixo: o navegador ficava
+        // um dia com o app antigo depois de cada deploy. O index.html sai por esta rota, sem cache, e
+        // aponta para Default.mjs?v=<inicio do servidor>, entao cada novo boot invalida o bundle.
+        app.get("/") {
+            setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
+            setHeader("Content-Type", "text/html; charset=utf-8")
+            return indexHtmlWithVersion(webOut, buildTag)
+        }
+        // A CSP padrao das rotas (default-src 'self') bloqueia o <style> inline do index: o CSS dele sai
+        // num arquivo do proprio dominio.
+        app.get("/kof-index.css") {
+            setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
+            setHeader("Content-Type", "text/css; charset=utf-8")
+            return indexInlineCss(webOut)
+        }
+        app.get("/index.html") {
+            setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
+            setHeader("Content-Type", "text/html; charset=utf-8")
+            return indexHtmlWithVersion(webOut, buildTag)
+        }
         app.serveDir("/", webOut)
         log.info("frontend servido de KOF_WEB_OUT")
     }
@@ -666,4 +731,46 @@ main() {
     log.info(llmStatus())
     startDailyDigest()
     app.listen(listenPort())
+}
+
+// index.html do frontend com o bundle versionado (quebra o cache de 1 dia do serveDir).
+String indexHtmlWithVersion(String webOut, String tag) {
+    var html = readWebFile(webOut, "index.html")
+    var start = html.indexOf("<style>")
+    var end = html.indexOf("</style>")
+    if (start >= 0 && end > start) {
+        html = html.substring(0, start) + "<link rel=\"stylesheet\" href=\"kof-index.css?v=" + tag + "\">" + html.substring(end + 8)
+    }
+    return html.replace("src=\"Default.mjs\"", "src=\"Default.mjs?v=" + tag + "\"")
+}
+
+// Varia apenas o bundle inicial; navegacao e estado do app continuam sendo os normais.
+String indexHtmlForScreen(String webOut, String tag, String screen) {
+    var html = indexHtmlWithVersion(webOut, tag)
+    html = html.replace("<head>", "<head><base href=\"/\">")
+    html = html.replace("href=\"kof-index.css?v=", "href=\"/kof-index.css?v=")
+    return html.replace("src=\"Default.mjs?v=" + tag + "\"", "src=\"/Default-qa-" + screen + ".mjs?v=" + tag + "\"")
+}
+
+// Os bundles da UI sao gerados pelo KOF. Troca a tela inicial dentro de main(),
+// preservando as demais ocorrencias que retornam ao welcome apos sair da conta.
+String qaScreenModule(String webOut, String screen) {
+    var module = readWebFile(webOut, "Default.mjs")
+    var startup = "(core_AppState.currentScreen = \"welcome\");\n    applyViewport(window);"
+    var replacement = "(core_AppState.currentScreen = \"" + screen + "\");\n    applyViewport(window);"
+    if (!module.contains(startup)) {
+        throw "bundle do frontend sem o ponto de entrada esperado para as rotas de QA"
+    }
+    return module.replace(startup, replacement)
+}
+
+// Conteudo do <style> do index.html gerado (moldura do Kof, fonte raiz responsiva, olho do Edge).
+String indexInlineCss(String webOut) {
+    var html = readWebFile(webOut, "index.html")
+    var start = html.indexOf("<style>")
+    var end = html.indexOf("</style>")
+    if (start >= 0 && end > start) {
+        return html.substring(start + 7, end)
+    }
+    return ""
 }

@@ -157,7 +157,7 @@ View signupScreen(Window w) {
     nameRow.setStyle(signupNameGridCss())
 
     var ageField = filledFormField("18 anos ou mais", "text", "signup-age", SignupForm.age)
-    var emailField = filledFormField("seu@email.com", "text", "signup-email", SignupForm.email)
+    var emailField = filledFormField("Seu e-mail", "text", "signup-email", SignupForm.email)
     var pwdField = filledPasswordField("Crie uma senha", "signup-password", SignupForm.password)
     var meter = createStrengthMeter("signup-strength", SignupForm.password)
     pwdField.on("input", () -> {

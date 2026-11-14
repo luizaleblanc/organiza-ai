@@ -30,6 +30,9 @@ class DashState {
     static Bool loaded = false
     static Bool fresh = false
     static Int selectedSlice = -1
+    // Impede que o clique em uma legenda seja interpretado como clique na área
+    // vazia do cartão quando o evento propaga para o contêiner.
+    static Bool keepSliceSelection = false
 }
 
 String dashboardPath(String period) = "/api/dashboard?period=" + period

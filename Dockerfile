@@ -67,9 +67,14 @@ RUN /opt/kof/bin/kof check backend \
 # Frontend (Batch 2, design 2.7): o mesmo Kof compila frontend/ para JS; o backend serve a pasta em / (app.serveDir).
 # O gate e o build: `kof check frontend` da PKG006 nos imports core.* (medido).
 # O `kof build` nao copia os assets (icones e marca em frontend/assets): copiados a mao e conferidos.
+# O Edge desenha o proprio olho de "mostrar senha" (::-ms-reveal) ao lado do olho do app; o Style do
+# kof.ui nao aceita pseudo-elementos, entao a regra entra no index.html gerado. A fonte raiz (rem) escala
+# com a largura da janela (clamp 17-23px); os Style do app usam rem porque o Style recusa clamp/calc (SEM078).
 RUN /opt/kof/bin/kof build frontend --target js --output /out/web \
  && test -f /out/web/index.html && test -f /out/web/Default.mjs \
  && cp -r /src/frontend/assets /out/web/assets \
+ && sed -i 's#</style>#    input::-ms-reveal, input::-ms-clear { display: none; }\n    html { font-size: clamp(17px, calc(0.6vw + 10px), 23px); }\n  </style>#' /out/web/index.html \
+ && grep -q 'ms-reveal' /out/web/index.html \
  && test -f /out/web/assets/brand/organiza-simbolo.svg \
  && test -f /out/web/assets/brand/organiza-fundo-ondas.svg \
  && test -f /out/web/assets/icons/dash-accent.svg

@@ -21,82 +21,93 @@ import components.topbar
 
 // ---- Topbar tabs ------------------------------------------------------------
 Style dashTabsCss()           = Style("display: inline-flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 2; padding: 3; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); border-radius: 9")
-Style dashTabCss()            = Style("background: transparent; color: #7B8EAD; border: none; border-radius: 7; padding: 5px 12px; font-size: 12; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style dashTabActiveCss()      = Style("background: #00D4FF; color: #06121C; border: none; border-radius: 7; padding: 5px 12px; font-size: 12; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style dashTabMobileCss()      = Style("background: transparent; color: #7B8EAD; border: none; border-radius: 7; padding: 4px 8px; font-size: 11; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style dashTabActiveMobileCss() = Style("background: #00D4FF; color: #06121C; border: none; border-radius: 7; padding: 4px 8px; font-size: 11; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style dashTabCss()            = Style("outline: none; background: transparent; color: #7B8EAD; border: none; border-radius: 7; padding: 5px 12px; font-size: 0.75rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style dashTabActiveCss()      = Style("outline: none; background: #00D4FF; color: #06121C; border: none; border-radius: 7; padding: 5px 12px; font-size: 0.75rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style dashTabMobileCss()      = Style("outline: none; background: transparent; color: #7B8EAD; border: none; border-radius: 7; padding: 4px 8px; font-size: 0.6875rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style dashTabActiveMobileCss() = Style("outline: none; background: #00D4FF; color: #06121C; border: none; border-radius: 7; padding: 4px 8px; font-size: 0.6875rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 
 // ---- Grids & cards ----------------------------------------------------------
-Style dashGridG3Css()         = Style("display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: stretch; gap: 12; width: 100%")
-Style dashGridG2Css()         = Style("display: grid; grid-template-columns: 1fr 1fr; align-items: stretch; gap: 14; width: 100%")
+Style dashGridG3Css()         = Style("display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: stretch; gap: 12; width: 100%; min-height: 156")
+Style dashGridG2Css()         = Style("display: grid; grid-template-columns: 1fr 1fr; align-items: stretch; gap: 14; width: 100%; min-height: 360; flex-grow: 1")
 Style dashMobileG2Css()       = Style("display: grid; grid-template-columns: 1fr 1fr; align-items: stretch; gap: 10; width: 100%")
 Style dashMobileStackCss()    = Style("display: flex; flex-direction: column; gap: 12; width: 100%")
-Style dashPulseCardCss()      = Style("display: flex; flex-direction: column; gap: 4; padding: 20; box-sizing: border-box; background: linear-gradient(135deg, #12162A, #1A1F3A); border: 1px solid rgba(0,212,255,.15); border-radius: 14; min-width: 0")
+Style dashPulseCardCss()      = Style("display: flex; flex-direction: column; justify-content: center; gap: 10; padding: 24; box-sizing: border-box; background: linear-gradient(135deg, #12162A, #1A1F3A); border: 1px solid rgba(0,212,255,.15); border-radius: 14; min-width: 0")
 Style dashPulseHeroCss()      = Style("display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4; padding: 18; box-sizing: border-box; background: linear-gradient(135deg, #12162A, #1A1F3A); border: 1px solid rgba(0,212,255,.12); border-radius: 16; width: 100%")
-Style dashCardCss()           = Style("display: flex; flex-direction: column; gap: 12; padding: 18; box-sizing: border-box; background: #12162A; border: 1px solid rgba(255,255,255,.06); border-radius: 14; min-width: 0")
+Style dashCardCss()           = Style("display: flex; flex-direction: column; gap: 12; height: 100%; padding: 18; box-sizing: border-box; background: #12162A; border: 1px solid rgba(255,255,255,.06); border-radius: 14; min-width: 0")
 Style dashCardMobileCss()     = Style("display: flex; flex-direction: column; gap: 10; padding: 16; box-sizing: border-box; background: #12162A; border: 1px solid rgba(255,255,255,.06); border-radius: 16; min-width: 0")
+Style dashScreenDesktopCss()  = Style("display: flex; flex-direction: column; gap: 16; width: 100%; min-height: 0; flex-grow: 1")
 
 // ---- Tipografia dos tiles & cards -------------------------------------------
-Style tileLabelCss()          = Style("color: #4A5578; font-size: 10; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style tileValueCss()          = Style("color: #F0F0F0; font-size: 24; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style tileAccentCss()         = Style("color: #00D4FF; font-size: 24; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style tileSuccessCss()        = Style("color: #00E5A0; font-size: 24; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style tileSubCss()            = Style("color: #7B8EAD; font-size: 11; margin: 2px 0 0 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style tileLabelCss()          = Style("color: #AAB9D3; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style tileValueCss()          = Style("color: #F0F0F0; font-size: 2rem; font-weight: 700; line-height: 1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style tileAccentCss()         = Style("color: #00D4FF; font-size: 2rem; font-weight: 700; line-height: 1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style tileSuccessCss()        = Style("color: #00E5A0; font-size: 2rem; font-weight: 700; line-height: 1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style tileSubCss()            = Style("color: #AAB9D3; font-size: 0.875rem; margin: 2px 0 0 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 
-Style tileHeroLabelCss()      = Style("color: #4A5578; font-size: 11; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style tileHeroValueCss()      = Style("color: #00D4FF; font-size: 36; font-weight: 700; margin: 2px 0 0 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style tileHeroSubCss()        = Style("color: #7B8EAD; font-size: 12; margin: 2px 0 0 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style tileMobileLabelCss()    = Style("color: #4A5578; font-size: 10; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style tileMobileValueCss()    = Style("color: #F0F0F0; font-size: 20; font-weight: 700; margin: 2px 0 0 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style tileMobileSuccessCss()  = Style("color: #00E5A0; font-size: 20; font-weight: 700; margin: 2px 0 0 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style tileHeroLabelCss()      = Style("color: #4A5578; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style tileHeroValueCss()      = Style("color: #00D4FF; font-size: 2.25rem; font-weight: 700; margin: 2px 0 0 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style tileHeroSubCss()        = Style("color: #7B8EAD; font-size: 0.75rem; margin: 2px 0 0 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style tileMobileLabelCss()    = Style("color: #4A5578; font-size: 0.625rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style tileMobileValueCss()    = Style("color: #F0F0F0; font-size: 1.25rem; font-weight: 700; margin: 2px 0 0 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style tileMobileSuccessCss()  = Style("color: #00E5A0; font-size: 1.25rem; font-weight: 700; margin: 2px 0 0 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 
-Style cardTitleCss()          = Style("color: #F0F0F0; font-size: 13; font-weight: 600; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style cardTitleMobileCss()    = Style("color: #F0F0F0; font-size: 14; font-weight: 600; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style cardTitleCss()          = Style("color: #F0F0F0; font-size: 1.125rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style cardTitleMobileCss()    = Style("color: #F0F0F0; font-size: 0.875rem; font-weight: 600; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 
 // ---- Donut & legenda --------------------------------------------------------
-Style distBodyDesktopCss()    = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 16; width: 100%; flex-grow: 1")
+Style distBodyDesktopCss()    = Style("display: flex; flex-direction: column; flex-wrap: nowrap; align-items: center; justify-content: center; gap: 28; width: 100%; flex-grow: 1")
 Style distBodyMobileCss()     = Style("display: flex; flex-direction: column; align-items: center; gap: 14; width: 100%")
-Style donutOuterCss()         = Style("position: relative; width: 144; height: 144; flex-shrink: 0; padding: 0; background: transparent; cursor: pointer")
-Style canvasZoomCss()         = Style("padding: 0; background: transparent; line-height: 0; zoom: 0.25")
+Style donutOuterCss() {
+    if (AppState.isDesktop) {
+        return Style("outline: none; position: relative; width: 192; height: 192; flex-shrink: 0; padding: 0; background: transparent; cursor: pointer")
+    }
+    return Style("outline: none; position: relative; width: 144; height: 144; flex-shrink: 0; padding: 0; background: transparent; cursor: pointer")
+}
+Style canvasZoomCss() {
+    if (AppState.isDesktop) {
+        return Style("padding: 0; background: transparent; line-height: 0em; zoom: 0.333333")
+    }
+    return Style("padding: 0; background: transparent; line-height: 0em; zoom: 0.25")
+}
 Style donutCenterCss()        = Style("position: absolute; top: 0; left: 0; width: 144; height: 144; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 1; padding: 0; background: transparent; pointer-events: none")
-Style donutPctAccentCss()     = Style("color: #00D4FF; font-size: 20; font-weight: 700; line-height: 1.1; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style donutPctDesCss()        = Style("color: #0066FF; font-size: 20; font-weight: 700; line-height: 1.1; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style donutPctSuccessCss()    = Style("color: #00E5A0; font-size: 20; font-weight: 700; line-height: 1.1; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style donutPctWarningCss()    = Style("color: #FFB800; font-size: 20; font-weight: 700; line-height: 1.1; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style donutCenterTitleCss()   = Style("color: #F0F0F0; font-size: 11; font-weight: 600; max-width: 76; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style donutCenterModelCss()   = Style("color: #F0F0F0; font-size: 13; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style donutCenterSubCss()     = Style("color: #7B8EAD; font-size: 10; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style donutPctAccentCss()     = Style("color: #00D4FF; font-size: 1.25rem; font-weight: 700; line-height: 1.1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style donutPctDesCss()        = Style("color: #0066FF; font-size: 1.25rem; font-weight: 700; line-height: 1.1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style donutPctSuccessCss()    = Style("color: #00E5A0; font-size: 1.25rem; font-weight: 700; line-height: 1.1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style donutPctWarningCss()    = Style("color: #FFB800; font-size: 1.25rem; font-weight: 700; line-height: 1.1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style donutCenterTitleCss()   = Style("color: #F0F0F0; font-size: 0.6875rem; font-weight: 600; max-width: 76; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style donutCenterModelCss()   = Style("color: #F0F0F0; font-size: 0.8125rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style donutCenterSubCss()     = Style("color: #7B8EAD; font-size: 0.625rem; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 
-Style legendCss()             = Style("display: flex; flex-direction: column; gap: 6; flex: 1 1 auto; min-width: 0; width: 100%")
-Style legendItemCss()         = Style("display: flex; flex-direction: column; gap: 4; width: 100%; box-sizing: border-box; padding: 6px 8px; border-radius: 8; background: transparent; border: 1px solid transparent; cursor: pointer")
-Style legendItemSelCss()      = Style("display: flex; flex-direction: column; gap: 4; width: 100%; box-sizing: border-box; padding: 6px 8px; border-radius: 8; background: rgba(0,212,255,.08); border: 1px solid #00D4FF; cursor: pointer")
-Style legendItemDimCss()      = Style("display: flex; flex-direction: column; gap: 4; width: 100%; box-sizing: border-box; padding: 6px 8px; border-radius: 8; background: transparent; border: 1px solid transparent; cursor: pointer; opacity: 0.45")
+Style legendCss()             = Style("display: flex; flex-direction: column; gap: 12; flex: 1 1 auto; min-width: 0; width: 100%")
+Style legendItemCss()         = Style("outline: none; display: flex; flex-direction: column; gap: 8; width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10; background: transparent; border: 1px solid transparent; cursor: pointer")
+Style legendItemSelCss()      = Style("outline: none; display: flex; flex-direction: column; gap: 8; width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10; background: rgba(0,212,255,.08); border: 1px solid #00D4FF; cursor: pointer")
+Style legendItemDimCss()      = Style("outline: none; display: flex; flex-direction: column; gap: 8; width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10; background: transparent; border: 1px solid transparent; cursor: pointer; opacity: 0.45")
 Style rowBetweenCss()         = Style("display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: space-between; align-items: center; gap: 8; width: 100%")
 Style legendLeftCss()         = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 6; min-width: 0")
 Style legendDotAccentCss()    = Style("width: 7; height: 7; min-width: 7; border-radius: 4; background: #00D4FF; padding: 0; flex-shrink: 0")
 Style legendDotDesCss()       = Style("width: 7; height: 7; min-width: 7; border-radius: 4; background: #0066FF; padding: 0; flex-shrink: 0")
 Style legendDotSuccessCss()   = Style("width: 7; height: 7; min-width: 7; border-radius: 4; background: #00E5A0; padding: 0; flex-shrink: 0")
 Style legendDotWarningCss()   = Style("width: 7; height: 7; min-width: 7; border-radius: 4; background: #FFB800; padding: 0; flex-shrink: 0")
-Style legendNameCss()         = Style("color: #F0F0F0; font-size: 11; font-weight: 500; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style legendNameSelCss()      = Style("color: #F0F0F0; font-size: 11; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style legendValCss()          = Style("color: #7B8EAD; font-size: 11; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style sliceTrackCss()         = Style("display: flex; height: 5; width: 100%; border-radius: 3; background: rgba(255,255,255,.08); overflow: hidden")
-Style sliceRowCss()           = Style("display: flex; flex-direction: row; flex-wrap: nowrap; width: 100%; height: 5; gap: 0")
-Style sliceRestCss()          = Style("height: 5; background: transparent; padding: 0; min-width: 0")
-Style sliceBarAccentCss()     = Style("height: 5; border-radius: 3; background: #00D4FF; min-width: 0")
-Style sliceBarDesCss()        = Style("height: 5; border-radius: 3; background: #0066FF; min-width: 0")
-Style sliceBarSuccessCss()    = Style("height: 5; border-radius: 3; background: #00E5A0; min-width: 0")
-Style sliceBarWarningCss()    = Style("height: 5; border-radius: 3; background: #FFB800; min-width: 0")
+Style legendNameCss()         = Style("color: #F0F0F0; font-size: 0.875rem; font-weight: 600; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style legendNameSelCss()      = Style("color: #F0F0F0; font-size: 0.875rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style legendValCss()          = Style("color: #AAB9D3; font-size: 0.8125rem; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style sliceTrackCss()         = Style("display: flex; height: 7; width: 100%; border-radius: 4; background: rgba(255,255,255,.08); overflow: hidden")
+Style sliceRowCss()           = Style("display: flex; flex-direction: row; flex-wrap: nowrap; width: 100%; height: 7; gap: 0")
+Style sliceRestCss()          = Style("height: 7; background: transparent; padding: 0; min-width: 0")
+Style sliceBarAccentCss()     = Style("height: 7; border-radius: 4; background: #00D4FF; min-width: 0")
+Style sliceBarDesCss()        = Style("height: 7; border-radius: 4; background: #0066FF; min-width: 0")
+Style sliceBarSuccessCss()    = Style("height: 7; border-radius: 4; background: #00E5A0; min-width: 0")
+Style sliceBarWarningCss()    = Style("height: 7; border-radius: 4; background: #FFB800; min-width: 0")
 
 // ---- Transações -------------------------------------------------------------
 Style txListCss()             = Style("display: flex; flex-direction: column; gap: 0; width: 100%")
 Style txRowCss()              = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 10; padding: 10px 0; width: 100%; border-bottom: 1px solid rgba(255,255,255,.06)")
 Style txRowLastCss()          = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 10; padding: 10px 0 0 0; width: 100%")
 Style txTextCss()             = Style("display: flex; flex-direction: column; gap: 2; flex: 1 1 auto; min-width: 0")
-Style txNameCss()             = Style("color: #F0F0F0; font-size: 13; font-weight: 600; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style txCatCss()              = Style("color: #4A5578; font-size: 11; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style txValueCss()            = Style("color: #F0F0F0; font-size: 12; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style retryCss()              = Style("background: transparent; color: #00D4FF; border: 1px solid #00D4FF; border-radius: 8; padding: 8px 16px; align-self: flex-start; font-size: 13; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style txNameCss()             = Style("color: #F0F0F0; font-size: 0.8125rem; font-weight: 600; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style txCatCss()              = Style("color: #4A5578; font-size: 0.6875rem; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style txValueCss()            = Style("color: #F0F0F0; font-size: 0.75rem; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style retryCss()              = Style("outline: none; background: transparent; color: #00D4FF; border: 1px solid #00D4FF; border-radius: 8; padding: 8px 16px; align-self: flex-start; font-size: 0.8125rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 
 // Fatia i do donut: Necessidades accent, Desejos #0066FF, Futuro success.
 Color sliceColor(Int i) {
@@ -166,6 +177,7 @@ startLoad(Window w) {
     AppState.loading = true
     DashState.loaded = false
     DashState.selectedSlice = -1
+    DashState.keepSliceSelection = false
     spawn {
         loadDashboard(w)
     }
@@ -179,6 +191,7 @@ selectPeriod(Window w, String period) {
     DashState.raw = ""
     DashState.fresh = false
     DashState.selectedSlice = -1
+    DashState.keepSliceSelection = false
     AppState.loadError = ""
     mountScreen(w)
 }
@@ -195,21 +208,29 @@ toggleSlice(Window w, Int index) {
     } else {
         DashState.selectedSlice = index
     }
+    DashState.keepSliceSelection = true
     DashState.fresh = true
     mountScreen(w)
 }
 
-cycleSlice(Window w, Int count) {
-    if (count <= 0) {
+clearSlice(Window w) {
+    if (DashState.selectedSlice == -1) {
         return
     }
-    var next = DashState.selectedSlice + 1
-    if (next >= count) {
-        next = -1
-    }
-    DashState.selectedSlice = next
+    DashState.selectedSlice = -1
     DashState.fresh = true
     mountScreen(w)
+}
+
+clearSliceFromDistributionCard(Window w) {
+    // Os itens da legenda também disparam o clique do cartão. Nesse caso,
+    // preservamos a seleção recém-escolhida; qualquer clique no espaço vazio
+    // restaura o gráfico ao seu estado natural.
+    if (DashState.keepSliceSelection) {
+        DashState.keepSliceSelection = false
+        return
+    }
+    clearSlice(w)
 }
 
 // ---------------------------------------------------------------- partes
@@ -426,9 +447,8 @@ View distributionCard(Window w, DashboardResponse d) {
     var holder = View(screenStyle())
     holder.setId("dash-donut")
     holder.setStyle(donutOuterCss())
-    holder.bind(Column(listOf(canvasWrap, donutCenterOverlay(d, sel))))
-    val bucketCount = d.buckets.size
-    holder.on("click", () -> cycleSlice(w, bucketCount))
+    holder.bind(canvasWrap)
+    holder.on("click", () -> clearSlice(w))
 
     var items: List<View> = listOf()
     var i = 0
@@ -458,6 +478,7 @@ View distributionCard(Window w, DashboardResponse d) {
     var card = Column(listOf(idLabel(distributionTitle(d.budgetModel), "dist-title", titleCss), body))
     card.setId("card-distribution")
     card.setStyle(cardCss)
+    card.on("click", () -> clearSliceFromDistributionCard(w))
     return card
 }
 
@@ -563,6 +584,10 @@ View dashboardScreen(Window w) {
     }
     var col = Column(items)
     col.setId("screen-dashboard")
-    col.setStyle(stackCss())
+    if (AppState.isDesktop) {
+        col.setStyle(dashScreenDesktopCss())
+    } else {
+        col.setStyle(stackCss())
+    }
     return col
 }

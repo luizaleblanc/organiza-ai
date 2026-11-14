@@ -48,47 +48,181 @@ clearLoginForm() {
 
 // ---- Estilos locais (paleta oficial + font-family em todo texto e botão) ----
 
-Style authDesktopShellCss()    = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: stretch; flex-grow: 1; width: 100%; border-top: 1px solid rgba(255,255,255,.06); margin-top: 8px; padding: 0; background: transparent")
-Style authBrandPanelCss()      = Style("width: 340; flex-shrink: 0; background: linear-gradient(160deg, rgba(0,212,255,.07), rgba(0,102,255,.04)); border-right: 1px solid rgba(255,255,255,.06); display: flex; flex-direction: column; justify-content: center; align-items: flex-start; padding: 40px 36px; box-sizing: border-box")
-Style authBrandMarkLeftCss()   = Style("align-self: flex-start; padding: 0; background: transparent; line-height: 0")
-Style authBrandHeadlineCss()   = Style("color: #7B8EAD; font-size: 18; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; line-height: 25px; margin: 28px 0 10px 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style authBrandSubCss()        = Style("color: #7B8EAD; font-size: 13; line-height: 21px; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style authFormPanelCss()       = Style("flex-grow: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px 40px; box-sizing: border-box; background: transparent")
-Style authDesktopBoxCss()      = Style("display: flex; flex-direction: column; align-items: stretch; gap: 12; width: 100%; max-width: 360; padding: 0; background: transparent")
+Style authDesktopShellCss()    = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: stretch; flex-grow: 1; width: 100%; padding: 0; background: transparent")
+Style authBrandPanelCss() {
+    if (authLight()) {
+        return Style("flex: 0 0 37%; min-width: 300; position: relative; overflow: hidden; background: linear-gradient(160deg, rgba(0,212,255,.09), rgba(37,99,235,.05)); border-right: 2px solid rgba(0,0,0,.06); display: flex; flex-direction: column; justify-content: center; align-items: flex-start; padding: 72px 64px; box-sizing: border-box")
+    }
+    return Style("flex: 0 0 37%; min-width: 300; position: relative; overflow: hidden; background: linear-gradient(160deg, rgba(0,212,255,.10), rgba(0,102,255,.04)); border-right: 2px solid rgba(255,255,255,.06); display: flex; flex-direction: column; justify-content: center; align-items: flex-start; padding: 72px 64px; box-sizing: border-box")
+}
+Style authPanelContentCss() = Style("position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; width: 100%; padding: 0; background: transparent")
+Style authBrandMarkLeftCss()   = Style("align-self: center; padding: 0; background: transparent; line-height: 0em")
+Style authBrandHeadlineCss() {
+    if (authLight()) {
+        return Style("color: #6B7280; font-size: 1.375rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; line-height: 2.125rem; margin: 44px 0 18px 0; max-width: 100%; overflow-wrap: break-word; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+    }
+    return Style("color: #7B8EAD; font-size: 1.375rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; line-height: 2.125rem; margin: 44px 0 18px 0; max-width: 100%; overflow-wrap: break-word; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+}
+Style authBrandSubCss() {
+    if (authLight()) {
+        return Style("color: #6B7280; font-size: 1.1875rem; line-height: 1.875rem; margin: 0; max-width: 100%; overflow-wrap: break-word; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+    }
+    return Style("color: #7B8EAD; font-size: 1.1875rem; line-height: 1.875rem; margin: 0; max-width: 100%; overflow-wrap: break-word; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+}
+Style authFormPanelCss()       = Style("flex-grow: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 32px; box-sizing: border-box; overflow-y: auto; background: transparent")
+Style authDesktopBoxCss()      = Style("display: flex; flex-direction: column; align-items: stretch; gap: 12; width: 100%; max-width: 440; padding: 0; background: transparent")
 Style authMobileBoxCss()       = Style("display: flex; flex-direction: column; align-items: stretch; gap: 14; width: 100%; max-width: 400; padding: 4px 4px 14px; box-sizing: border-box; background: transparent")
 Style authMobileHeaderCss()    = Style("display: flex; flex-direction: column; align-items: center; gap: 4; width: 100%; margin-bottom: 4px; padding: 0; background: transparent")
 Style passwordBoxBlockCss()    = Style("position: relative; display: block; width: 100%; padding: 0; background: transparent")
-Style authHeadingDesktopCss()  = Style("color: #F0F0F0; font-size: 20; font-weight: 600; margin: 0 0 4px 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style authHeadingMobileCss()   = Style("color: #F0F0F0; font-size: 20; font-weight: 700; margin: 12px 0 2px 0; text-align: center; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style authSubheadingCss()      = Style("color: #4A5578; font-size: 13; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style authSubheadingMobCss()   = Style("color: #4A5578; font-size: 14; margin: 0; text-align: center; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style authHeadingDesktopCss() {
+    if (authLight()) {
+        return Style("color: #1A1D2E; font-size: 1.625rem; font-weight: 600; margin: 0 0 4px 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+    }
+    return Style("color: #F0F0F0; font-size: 1.625rem; font-weight: 600; margin: 0 0 4px 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+}
+Style authHeadingMobileCss() {
+    if (authLight()) {
+        return Style("color: #1A1D2E; font-size: 1.25rem; font-weight: 700; margin: 12px 0 2px 0; text-align: center; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+    }
+    return Style("color: #F0F0F0; font-size: 1.25rem; font-weight: 700; margin: 12px 0 2px 0; text-align: center; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+}
+Style authSubheadingCss() {
+    if (authLight()) {
+        return Style("color: #9CA3AF; font-size: 0.9375rem; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+    }
+    return Style("color: #4A5578; font-size: 0.9375rem; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+}
+Style authSubheadingMobCss() {
+    if (authLight()) {
+        return Style("color: #9CA3AF; font-size: 0.875rem; margin: 0; text-align: center; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+    }
+    return Style("color: #4A5578; font-size: 0.875rem; margin: 0; text-align: center; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+}
 Style authHeaderBlockCss()     = Style("display: flex; flex-direction: column; gap: 2; width: 100%; margin-bottom: 4px; padding: 0; background: transparent")
 Style authFormCss()            = Style("display: flex; flex-direction: column; align-items: stretch; gap: 14; width: 100%; margin: 0")
 Style authRightLinkRowCss()    = Style("display: flex; flex-direction: row; justify-content: flex-end; align-items: center; width: 100%; padding: 0; background: transparent")
 Style authFooterCss()          = Style("display: flex; flex-direction: column; align-items: center; gap: 4; width: 100%; margin-top: 2px")
 Style authLinksCenterCss()     = Style("display: flex; flex-direction: column; align-items: center; gap: 8; width: 100%; margin-top: 4px")
-Style authLinkCss()            = Style("background: transparent; color: #00D4FF; border: none; padding: 2px 4px; font-size: 13; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style authSubmitDesktopCss()   = Style("background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 40; width: 100%; border: none; border-radius: 10; font-size: 14; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style authSubmitMobileCss()    = Style("background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 48; width: 100%; border: none; border-radius: 10; font-size: 15; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style authBusyDesktopCss()     = Style("background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 40; width: 100%; border: none; border-radius: 10; font-size: 14; font-weight: 600; opacity: 0.6; cursor: wait; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style authBusyMobileCss()      = Style("background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 48; width: 100%; border: none; border-radius: 10; font-size: 15; font-weight: 600; opacity: 0.6; cursor: wait; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style infoBannerCss()          = Style("color: #00E5A0; background: rgba(0,229,160,.12); border: 1px solid #00E5A0; border-radius: 8; padding: 12; font-size: 13; line-height: 18px; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style authLinkCss() {
+    if (authLight()) {
+        return Style("outline: none; background: transparent; color: #2563EB; border: none; padding: 2px 4px; font-size: 0.9375rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+    }
+    return Style("outline: none; background: transparent; color: #00D4FF; border: none; padding: 2px 4px; font-size: 0.9375rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+}
+Style authSubmitDesktopCss() {
+    if (authLight()) {
+        return Style("outline: none; background: linear-gradient(90deg, #2563EB, #1D4ED8); color: #FFFFFF; height: 48; width: 100%; border: none; border-radius: 10; font-size: 1rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+    }
+    return Style("outline: none; background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 48; width: 100%; border: none; border-radius: 10; font-size: 1rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+}
+Style authSubmitMobileCss() {
+    if (authLight()) {
+        return Style("outline: none; background: linear-gradient(90deg, #2563EB, #1D4ED8); color: #FFFFFF; height: 48; width: 100%; border: none; border-radius: 10; font-size: 0.9375rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+    }
+    return Style("outline: none; background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 48; width: 100%; border: none; border-radius: 10; font-size: 0.9375rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+}
+Style authBusyDesktopCss() {
+    if (authLight()) {
+        return Style("background: linear-gradient(90deg, #2563EB, #1D4ED8); color: #FFFFFF; height: 48; width: 100%; border: none; border-radius: 10; font-size: 1rem; font-weight: 600; opacity: 0.6; cursor: wait; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+    }
+    return Style("background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 48; width: 100%; border: none; border-radius: 10; font-size: 1rem; font-weight: 600; opacity: 0.6; cursor: wait; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+}
+Style authBusyMobileCss() {
+    if (authLight()) {
+        return Style("background: linear-gradient(90deg, #2563EB, #1D4ED8); color: #FFFFFF; height: 48; width: 100%; border: none; border-radius: 10; font-size: 0.9375rem; font-weight: 600; opacity: 0.6; cursor: wait; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+    }
+    return Style("background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 48; width: 100%; border: none; border-radius: 10; font-size: 0.9375rem; font-weight: 600; opacity: 0.6; cursor: wait; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+}
+Style infoBannerCss() {
+    if (authLight()) {
+        return Style("color: #10B981; background: rgba(16,185,129,.10); border: 1px solid #10B981; border-radius: 8; padding: 12; font-size: 0.8125rem; line-height: 1.125rem; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+    }
+    return Style("color: #00E5A0; background: rgba(0,229,160,.12); border: 1px solid #00E5A0; border-radius: 8; padding: 12; font-size: 0.8125rem; line-height: 1.125rem; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+}
 
 // Medidor de força da senha (0..4) — atualizado in-place em on("input").
 Style strengthWrapCss()        = Style("display: flex; flex-direction: column; gap: 6; width: 100%; padding: 0; background: transparent")
 Style strengthTrackRowCss()    = Style("display: flex; flex-direction: row; flex-wrap: nowrap; gap: 6; width: 100%; align-items: center")
-Style strengthSegIdleCss()     = Style("flex-grow: 1; height: 4; border-radius: 2; background: rgba(255,255,255,.08); padding: 0")
-Style strengthSegWeakCss()     = Style("flex-grow: 1; height: 4; border-radius: 2; background: #FF4A6E; padding: 0")
-Style strengthSegFairCss()     = Style("flex-grow: 1; height: 4; border-radius: 2; background: #FFB800; padding: 0")
-Style strengthSegGoodCss()     = Style("flex-grow: 1; height: 4; border-radius: 2; background: #00D4FF; padding: 0")
-Style strengthSegStrongCss()   = Style("flex-grow: 1; height: 4; border-radius: 2; background: #00E5A0; padding: 0")
+Style strengthSegIdleCss() {
+    if (authLight()) {
+        return Style("flex-grow: 1; height: 4; border-radius: 2; background: rgba(0,0,0,.08); padding: 0")
+    }
+    return Style("flex-grow: 1; height: 4; border-radius: 2; background: rgba(255,255,255,.08); padding: 0")
+}
+Style strengthSegWeakCss() {
+    if (authLight()) {
+        return Style("flex-grow: 1; height: 4; border-radius: 2; background: #E63946; padding: 0")
+    }
+    return Style("flex-grow: 1; height: 4; border-radius: 2; background: #FF4A6E; padding: 0")
+}
+Style strengthSegFairCss() {
+    if (authLight()) {
+        return Style("flex-grow: 1; height: 4; border-radius: 2; background: #F59E0B; padding: 0")
+    }
+    return Style("flex-grow: 1; height: 4; border-radius: 2; background: #FFB800; padding: 0")
+}
+Style strengthSegGoodCss() {
+    if (authLight()) {
+        return Style("flex-grow: 1; height: 4; border-radius: 2; background: #2563EB; padding: 0")
+    }
+    return Style("flex-grow: 1; height: 4; border-radius: 2; background: #00D4FF; padding: 0")
+}
+Style strengthSegStrongCss() {
+    if (authLight()) {
+        return Style("flex-grow: 1; height: 4; border-radius: 2; background: #10B981; padding: 0")
+    }
+    return Style("flex-grow: 1; height: 4; border-radius: 2; background: #00E5A0; padding: 0")
+}
 Style strengthMetaRowCss()     = Style("display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: space-between; align-items: center; gap: 8; width: 100%")
-Style strengthHintCss()        = Style("color: #4A5578; font-size: 11; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style strengthLblIdleCss()     = Style("color: #4A5578; font-size: 11; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style strengthLblWeakCss()     = Style("color: #FF4A6E; font-size: 11; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style strengthLblFairCss()     = Style("color: #FFB800; font-size: 11; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style strengthLblGoodCss()     = Style("color: #00D4FF; font-size: 11; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style strengthLblStrongCss()   = Style("color: #00E5A0; font-size: 11; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style strengthRulesGridCss()  = Style("display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; width: 100%; padding: 0; background: transparent")
+Style strengthRuleIdleCss() {
+    if (authLight()) {
+        return Style("color: #6B7280; font-size: 0.875rem; line-height: 1.25rem; margin: 0; overflow-wrap: break-word; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+    }
+    return Style("color: #7B8EAD; font-size: 0.875rem; line-height: 1.25rem; margin: 0; overflow-wrap: break-word; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+}
+Style strengthRuleMetCss() {
+    if (authLight()) {
+        return Style("color: #10B981; font-size: 0.875rem; line-height: 1.25rem; margin: 0; overflow-wrap: break-word; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+    }
+    return Style("color: #00E5A0; font-size: 0.875rem; line-height: 1.25rem; margin: 0; overflow-wrap: break-word; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+}
+Style strengthHintCss() {
+    if (authLight()) {
+        return Style("color: #6B7280; font-size: 0.875rem; line-height: 1.25rem; margin: 0; overflow-wrap: break-word; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+    }
+    return Style("color: #7B8EAD; font-size: 0.875rem; line-height: 1.25rem; margin: 0; overflow-wrap: break-word; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+}
+Style strengthLblIdleCss() {
+    if (authLight()) {
+        return Style("color: #6B7280; font-size: 0.875rem; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+    }
+    return Style("color: #7B8EAD; font-size: 0.875rem; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+}
+Style strengthLblWeakCss() {
+    if (authLight()) {
+        return Style("color: #E63946; font-size: 0.875rem; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+    }
+    return Style("color: #FF4A6E; font-size: 0.875rem; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+}
+Style strengthLblFairCss() {
+    if (authLight()) {
+        return Style("color: #F59E0B; font-size: 0.875rem; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+    }
+    return Style("color: #FFB800; font-size: 0.875rem; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+}
+Style strengthLblGoodCss() {
+    if (authLight()) {
+        return Style("color: #2563EB; font-size: 0.875rem; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+    }
+    return Style("color: #00D4FF; font-size: 0.875rem; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+}
+Style strengthLblStrongCss() {
+    if (authLight()) {
+        return Style("color: #10B981; font-size: 0.875rem; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+    }
+    return Style("color: #00E5A0; font-size: 0.875rem; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+}
 
 // ---- Helpers compartilhados entre Login e Cadastro ---------------------------
 
@@ -153,21 +287,93 @@ Label infoBanner(String message) {
     return l
 }
 
+// Três ondas presas dentro do painel (fundos exportados pela usuária, escuro e claro).
+String authPanelWavesSrc() {
+    if (authLight()) {
+        return "assets/brand/auth-panel-waves-light.svg"
+    }
+    return "assets/brand/auth-panel-waves-dark.svg"
+}
+
+// Título do painel palavra a palavra: o kof.ui não estiliza trecho de Label, então cada
+// palavra é um Label numa linha que quebra; as palavras de "quanto gastar por dia" levam
+// sublinhado (artefato: underline em text-secondary, offset 3px). Espaço não separável
+// dentro do trecho para o sublinhado ficar contínuo.
+Style headlineWrapCss() = Style("display: flex; flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 0; margin: 44px 0 18px 0; padding: 0; background: transparent; max-width: 100%")
+Style headlineWordCss() {
+    if (authLight()) {
+        return Style("color: #6B7280; font-size: 1.375rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; line-height: 2.125rem; margin: 0; white-space: pre; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+    }
+    return Style("color: #7B8EAD; font-size: 1.375rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; line-height: 2.125rem; margin: 0; white-space: pre; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+}
+Style headlineUnderCss() {
+    if (authLight()) {
+        return Style("color: #6B7280; font-size: 1.375rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; line-height: 2.125rem; margin: 0 9px 0 0; white-space: pre; text-decoration: underline; text-decoration-color: #6B7280; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+    }
+    return Style("color: #7B8EAD; font-size: 1.375rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; line-height: 2.125rem; margin: 0 9px 0 0; white-space: pre; text-decoration: underline; text-decoration-color: #7B8EAD; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+}
+
+View brandHeadline(String headline) {
+    val mark = "quanto gastar por dia"
+    val at = headline.indexOf(mark)
+    List<View> words = listOf()
+    if (at < 0) {
+        var whole = Label(headline)
+        whole.setStyle(headlineWordCss())
+        words.add(whole)
+    } else {
+        val before = headline.substring(0, at).trim().split(" ")
+        for (var i = 0; i < before.length; i++) {
+            val part = before[i]
+            var l = Label(part + " ")
+            l.setStyle(headlineWordCss())
+            words.add(l)
+        }
+        var under = Label("quanto gastar por dia")
+        under.setId("brand-headline-underline")
+        under.setStyle(headlineUnderCss())
+        words.add(under)
+        val rest = headline.substring(at + mark.length()).trim()
+        var first = true
+        val after = rest.split(" ")
+        for (var j = 0; j < after.length; j++) {
+            val part = after[j]
+            first = false
+            var l = Label(part + " ")
+            l.setStyle(headlineWordCss())
+            words.add(l)
+        }
+    }
+    var row = Row(words)
+    row.setId("brand-headline")
+    row.setStyle(headlineWrapCss())
+    return row
+}
+
 View authBrandPanel(String headline, String subtitle, String panelId) {
     var mark = brandMark(120, "brand-mark")
     var markBox = View(screenStyle())
     markBox.setStyle(authBrandMarkLeftCss())
     markBox.bind(mark)
 
-    var h2 = Label(headline)
-    h2.setStyle(authBrandHeadlineCss())
+    var h2 = brandHeadline(headline)
     var p = Label(subtitle)
     p.setStyle(authBrandSubCss())
+
+    var content = Column(listOf(markBox, h2, p))
+    content.setStyle(authPanelContentCss())
+    var wavesImg = Image(authPanelWavesSrc())
+    wavesImg.setAlt("")
+    wavesImg.setStyle(wavesImageCss())
+    var wavesLayer = View(screenStyle())
+    wavesLayer.setId(panelId + "-waves")
+    wavesLayer.setStyle(wavesLayerCss())
+    wavesLayer.bind(wavesImg)
 
     var panel = View(screenStyle())
     panel.setId(panelId)
     panel.setStyle(authBrandPanelCss())
-    panel.bind(Column(listOf(markBox, h2, p)))
+    panel.bind(Column(listOf(wavesLayer, content)))
     return panel
 }
 
@@ -197,8 +403,18 @@ class StrengthMeter {
     View s3
     View s4
     Label lbl
+    Label r1
+    Label r2
+    Label r3
+    Label r4
+    Label r5
 
-    public constructor(View root, View s1, View s2, View s3, View s4, Label lbl) {
+    public constructor(View root, View s1, View s2, View s3, View s4, Label lbl, Label r1, Label r2, Label r3, Label r4, Label r5) {
+        this.r1 = r1
+        this.r2 = r2
+        this.r3 = r3
+        this.r4 = r4
+        this.r5 = r5
         this.root = root
         this.s1 = s1
         this.s2 = s2
@@ -208,7 +424,23 @@ class StrengthMeter {
     }
 }
 
+// Uma regra da senha: "✓" verde quando cumprida, "○" cinza enquanto falta.
+refreshRule(Label l, String text, Bool met) {
+    if (met) {
+        l.setText("✓  " + text)
+        l.setStyle(strengthRuleMetCss())
+    } else {
+        l.setText("○  " + text)
+        l.setStyle(strengthRuleIdleCss())
+    }
+}
+
 refreshStrengthMeter(StrengthMeter m, String pwd) {
+    refreshRule(m.r1, "Mínimo de 8 caracteres", pwd.length() >= MIN_PASSWORD_LEN())
+    refreshRule(m.r2, "Uma letra maiúscula", hasUpperLetter(pwd))
+    refreshRule(m.r3, "Uma letra minúscula", hasLowerLetter(pwd))
+    refreshRule(m.r4, "Um número", hasDigitChar(pwd))
+    refreshRule(m.r5, "Um caractere especial", hasSpecialChar(pwd))
     val score = passwordStrengthScore(pwd)
     val text = passwordStrengthLabel(score)
     m.lbl.setText(text)
@@ -246,7 +478,7 @@ StrengthMeter createStrengthMeter(String prefix, String initialPwd) {
     barRow.setId(prefix + "-bars")
     barRow.setStyle(strengthTrackRowCss())
 
-    var hint = Label("8+ chars · maiúscula · minúscula · número · especial")
+    var hint = Label("Força da senha")
     hint.setStyle(strengthHintCss())
     var lbl = Label("")
     lbl.setId(prefix + "-label")
@@ -254,11 +486,29 @@ StrengthMeter createStrengthMeter(String prefix, String initialPwd) {
     var metaRow = Row(listOf(hint, lbl))
     metaRow.setStyle(strengthMetaRowCss())
 
-    var wrap = Column(listOf(barRow, metaRow))
+    var r1 = Label("")
+    r1.setId(prefix + "-rule-len")
+    var r2 = Label("")
+    r2.setId(prefix + "-rule-upper")
+    var r3 = Label("")
+    r3.setId(prefix + "-rule-lower")
+    var r4 = Label("")
+    r4.setId(prefix + "-rule-digit")
+    var r5 = Label("")
+    r5.setId(prefix + "-rule-special")
+    var rules = Row(listOf(r1, r2, r3, r4, r5))
+    rules.setId(prefix + "-rules")
+    rules.setStyle(strengthRulesGridCss())
+
+    var note = Label("Caracteres especiais: ! @ # $ % & *")
+    note.setId(prefix + "-rule-identity")
+    note.setStyle(strengthHintCss())
+
+    var wrap = Column(listOf(barRow, metaRow, rules, note))
     wrap.setId(prefix + "-meter")
     wrap.setStyle(strengthWrapCss())
 
-    var meter = StrengthMeter(wrap, s1, s2, s3, s4, lbl)
+    var meter = StrengthMeter(wrap, s1, s2, s3, s4, lbl, r1, r2, r3, r4, r5)
     refreshStrengthMeter(meter, initialPwd)
     return meter
 }
@@ -324,16 +574,34 @@ submitForgot(Window w, Input emailField) {
     }
 }
 
-submitReset(Window w, Input tokenField, Input pwdField, Input confirmField) {
+Bool isSixDigits(String v) {
+    if (v.length() != 6) {
+        return false
+    }
+    for (var i = 0; i < v.length(); i++) {
+        if (!isDigitUnit(v.charAt(i))) {
+            return false
+        }
+    }
+    return true
+}
+
+submitReset(Window w, Input emailField, Input tokenField, Input pwdField, Input confirmField) {
     if (LoginForm.busy) {
         return
     }
+    LoginForm.forgotEmail = emailField.text()
     LoginForm.resetToken = tokenField.text()
     LoginForm.resetPassword = pwdField.text()
     LoginForm.resetConfirm = confirmField.text()
     LoginForm.infoMessage = ""
-    if (LoginForm.resetToken.trim() == "") {
-        AppState.formError = "Informe o token de redefinição."
+    if (!isEmailLike(LoginForm.forgotEmail.trim())) {
+        AppState.formError = "Digite o e-mail da sua conta."
+        mountScreen(w)
+        return
+    }
+    if (!isSixDigits(LoginForm.resetToken.trim())) {
+        AppState.formError = "Digite o código de 6 números que enviamos por e-mail."
         mountScreen(w)
         return
     }
@@ -352,7 +620,7 @@ submitReset(Window w, Input tokenField, Input pwdField, Input confirmField) {
     LoginForm.busy = true
     mountScreen(w)
     try {
-        val msg = resetPassword(LoginForm.resetToken, LoginForm.resetPassword)
+        val msg = resetPassword(LoginForm.forgotEmail, LoginForm.resetToken, LoginForm.resetPassword)
         LoginForm.busy = false
         LoginForm.mode = "login"
         LoginForm.resetToken = ""
@@ -399,13 +667,21 @@ View buildLoginHeading(String title, String subtitle, Bool desktop) {
     return hdr
 }
 
+Style authLinkViewCss() = Style("outline: none; display: flex; padding: 0; background: transparent; cursor: pointer")
+
 View buildLoginModeForm(Window w, Bool desktop) {
     var emailField = filledFormField("seu@email.com", "text", "login-email", LoginForm.email)
     var pwdField = filledPasswordField("Sua senha", "login-password", LoginForm.password)
 
-    var forgotLink = Button("Esqueci minha senha", () -> switchLoginMode(w, "forgot"))
+    // Não é Button: um <button> dentro do <form> antes de "Entrar" virava o botão de envio
+    // (Enter ou o envio do form abriam "Esqueci minha senha"). Um View clicável não envia o form.
+    var forgotText = Label("Esqueci a senha")
+    forgotText.setStyle(authLinkCss())
+    var forgotLink = View(screenStyle())
     forgotLink.setId("link-forgot-password")
-    forgotLink.setStyle(authLinkCss())
+    forgotLink.setStyle(authLinkViewCss())
+    forgotLink.bind(forgotText)
+    forgotLink.on("click", () -> switchLoginMode(w, "forgot"))
     var forgotRow = Row(listOf(forgotLink))
     forgotRow.setStyle(authRightLinkRowCss())
 
@@ -446,7 +722,8 @@ View buildForgotModeForm(Window w, Bool desktop) {
 }
 
 View buildResetModeForm(Window w, Bool desktop) {
-    var tokenField = filledFormField("Cole o token recebido", "text", "reset-token", LoginForm.resetToken)
+    var emailField = filledFormField("Seu e-mail", "text", "reset-email", LoginForm.forgotEmail)
+    var tokenField = filledFormField("000000", "text", "reset-token", LoginForm.resetToken)
     var pwdField = filledPasswordField("Crie uma nova senha", "reset-password", LoginForm.resetPassword)
     var confirmField = filledPasswordField("Repita a nova senha", "reset-confirm", LoginForm.resetConfirm)
     var meter = createStrengthMeter("reset-strength", LoginForm.resetPassword)
@@ -457,7 +734,8 @@ View buildResetModeForm(Window w, Bool desktop) {
     var submit = authSubmitButton("Salvar nova senha", "Salvando…", "btn-reset-submit", LoginForm.busy, desktop)
 
     var form = Form(listOf(
-        labeled("Token de redefinição", tokenField),
+        labeled("E-mail", emailField),
+        labeled("Código de 6 números", tokenField),
         labeled("Nova senha", fullPasswordBox(pwdField, "reset-password-box")),
         meter.root,
         labeled("Confirmar nova senha", fullPasswordBox(confirmField, "reset-confirm-box")),
@@ -467,7 +745,7 @@ View buildResetModeForm(Window w, Bool desktop) {
     form.setStyle(authFormCss())
     form.onSubmit(() -> {
         spawn {
-            submitReset(w, tokenField, pwdField, confirmField)
+            submitReset(w, emailField, tokenField, pwdField, confirmField)
         }
     })
     return form
@@ -478,7 +756,7 @@ View loginScreen(Window w) {
     val desktop = AppState.isDesktop
 
     var title = "Entrar na conta"
-    var subtitle = "Entre para acompanhar seu pulso diário."
+    var subtitle = "Bem-vinda de volta"
     if (!desktop && LoginForm.mode == "login") {
         title = "Entrar na sua conta"
     }
@@ -487,7 +765,7 @@ View loginScreen(Window w) {
         subtitle = "Digite seu e-mail para receber o link de redefinição."
     } else if (LoginForm.mode == "reset") {
         title = "Redefinir senha"
-        subtitle = "Informe o token do e-mail e escolha uma nova senha."
+        subtitle = "Digite o código de 6 números que enviamos por e-mail e escolha uma nova senha."
     }
 
     List<View> items = listOf(buildLoginHeading(title, subtitle, desktop))
@@ -500,7 +778,7 @@ View loginScreen(Window w) {
 
     if (LoginForm.mode == "forgot") {
         items.add(buildForgotModeForm(w, desktop))
-        var haveToken = Button("Já tenho o código / token", () -> switchLoginMode(w, "reset"))
+        var haveToken = Button("Já tenho o código", () -> switchLoginMode(w, "reset"))
         haveToken.setId("link-reset-password")
         haveToken.setStyle(authLinkCss())
         var backBtn = Button("Voltar para o login", () -> switchLoginMode(w, "login"))
@@ -532,7 +810,7 @@ View loginScreen(Window w) {
     if (desktop) {
         formBox.setStyle(authDesktopBoxCss())
         var brand = authBrandPanel(
-            "Falta de planejamento financeiro nunca mais.",
+            "Falta de planejamento financeiro\nnunca mais.",
             "O Organiza escolhe o melhor modelo de economia baseado na sua realidade.",
             "login-brand-panel"
         )

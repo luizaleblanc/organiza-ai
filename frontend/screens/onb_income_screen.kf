@@ -4,6 +4,7 @@ import kof.ui
 import core.theme
 import core.app_state
 import core.navigation
+import core.format
 import components.form_widgets
 
 // =============================================================================
@@ -11,6 +12,11 @@ import components.form_widgets
 // =============================================================================
 // Dots (1 de 5), título, subtítulo, dois radioChoiceCard (radio 18px) e "Próximo".
 // =============================================================================
+
+// Bloco PJ todo em azul (accent do DS).
+Style pjBoxCss()   = Style("display: flex; flex-direction: column; align-items: center; gap: 8; width: 100%; padding: 20px 16px; box-sizing: border-box; border: 1.5px solid #00D4FF; border-radius: 12; background: rgba(0,212,255,.08); margin: 0 0 24px 0")
+Style pjLabelCss() = Style("color: #00D4FF; font-size: 1rem; font-weight: 600; margin: 0; text-align: center; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style pjHintCss()  = Style("color: #00D4FF; font-size: 0.8125rem; margin: 0; text-align: center; overflow-wrap: break-word; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 
 View onbIncomeScreen(Window w) {
     var title = onbTitle("Sua renda é fixa ou variável?", "onb-title")
@@ -27,15 +33,47 @@ View onbIncomeScreen(Window w) {
     cardsBlock.setStyle(blockCss())
     cardsBlock.bind(cards)
 
+    var isPj = chosen && OnboardingState.incomeType == "VARIABLE"
+    var pjField = bigMoneyField(OnboardingState.pjIncome, "pj-income-input")
+    pjField.on("input", () -> {
+        OnboardingState.pjIncome = pjField.text()
+    })
+
     var next = disabledButton("Próximo", "btn-next")
     if (chosen) {
         next = primaryButton("Próximo", "btn-next", false, () -> {
+            if (OnboardingState.incomeType == "VARIABLE") {
+                OnboardingState.pjIncome = pjField.text()
+                try {
+                    parseMoney(OnboardingState.pjIncome)
+                } catch (String e) {
+                    AppState.formError = "Digite quanto você ganha como PJ, entre R$ 1 e R$ 1.000.000."
+                    mountScreen(w)
+                    return
+                }
+                // A renda PJ é a renda do mês usada no cálculo do modelo.
+                OnboardingState.salary = OnboardingState.pjIncome
+            }
             AppState.formError = ""
             navigateTo(w, "onb_debt")
         })
     }
 
-    var items = listOf(dotsBlock(1), titleBlock(title, subtitle), cardsBlock, buttonBlock(next))
+    List<View> items = listOf(dotsBlock(1), titleBlock(title, subtitle), cardsBlock)
+    if (isPj) {
+        var pjLabel = Label("Quanto você ganha como PJ por mês?")
+        pjLabel.setStyle(pjLabelCss())
+        var pjHint = Label("Use a média dos últimos meses. Você pode ajustar depois em Configurações.")
+        pjHint.setStyle(pjHintCss())
+        var pjBox = Column(listOf(pjLabel, bigMoneyAmount(pjField, "pj-income-amount"), pjHint))
+        pjBox.setId("pj-income-box")
+        pjBox.setStyle(pjBoxCss())
+        items.add(pjBox)
+    }
+    if (AppState.formError != "") {
+        items.add(errorBanner(AppState.formError))
+    }
+    items.add(buttonBlock(next))
     return onbBody(items, onbColumn480Css())
 }
 

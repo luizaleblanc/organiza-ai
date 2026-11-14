@@ -542,23 +542,7 @@ String? passwordShapeError(String password) {
 // P7 e P8, sem diferenciar maiusculas: nem o e-mail inteiro, nem a parte antes do @ (com 3 ou mais
 // caracteres), nem o primeiro nome (com 3 ou mais caracteres).
 String? passwordIdentityError(String password, String email, String firstName) {
-    var lower = password.toLowerCase()
-    var mail = email.trim().toLowerCase()
-    var local = mail
-    var at = mail.indexOf("@")
-    if (at >= 0) {
-        local = mail.substring(0, at)
-    }
-    if (mail != "" && lower.contains(mail)) {
-        return "A senha não pode conter o seu e-mail."
-    }
-    if (local.length() >= 3 && lower.contains(local)) {
-        return "A senha não pode conter o seu e-mail."
-    }
-    var first = firstName.trim().toLowerCase()
-    if (first.length() >= 3 && lower.contains(first)) {
-        return "A senha não pode conter o seu nome."
-    }
+    // Regra removida a pedido da usuária (12/11/2026): a senha pode conter nome e e-mail.
     return null
 }
 

@@ -23,7 +23,7 @@ Bool screenHasWaves(String screen, Bool desktop) {
         return true
     }
     if (desktop) {
-        return screen == "onb_salary" || screen == "onb_result" || screen == "login" || screen == "signup"
+        return screen == "onb_salary" || screen == "onb_result"
     }
     return screen == "onb_salary" || screen == "onb_income" || screen == "onb_debt"
         || screen == "onb_debt_amount" || screen == "onb_result"

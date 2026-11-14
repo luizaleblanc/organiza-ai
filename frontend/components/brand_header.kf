@@ -35,22 +35,13 @@ Canvas buildLogomark() {
     return c
 }
 
-String viewportLabel() {
-    if (AppState.isDesktop) {
-        return "Ver como Mobile"
-    }
-    return "Ver como Desktop"
-}
-
 View buildBrandHeader(Window w) {
     var name = Label("Organiza AI")
     name.fontSize = sizeSubtitle()
     name.bold = true
     name.color = colorTextPrimary()
 
-    var toggle = Button(viewportLabel(), () -> switchViewport(w))
-    var toggleView = View(cardSecondaryStyle())
-    toggleView.bind(toggle)
+    var toggleView = viewportIconButton(w)
 
     var row = Row(listOf(buildLogomark(), name, toggleView))
     var header = View(Style(colorBgPrimary(), colorTextPrimary(), 12, 0))
@@ -58,19 +49,95 @@ View buildBrandHeader(Window w) {
     return header
 }
 
-// Controle discreto de viewport (tokens do DS: texto muted, borda border-soft).
-// O .kof-button não herda a fonte do body, então o font-family é declarado.
-Style viewportToggleCss() = Style("background: transparent; color: #4A5578; border: 1px solid rgba(255,255,255,.1); border-radius: 8; padding: 4px 10px; font-size: 12; font-weight: 500; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style viewportBarCss()    = Style("display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: flex-end; width: 100%; flex-shrink: 0; padding: 0; background: transparent")
+// Controles fixos no canto superior direito, fora do fluxo e da rolagem das telas.
+Style viewportBarFloatCss() = Style("position: fixed; top: 16; right: 16; width: auto; display: flex; flex-direction: row; flex-wrap: nowrap; gap: 8; align-items: center; z-index: 100; padding: 0; background: transparent")
 
-// Barra das telas: só o toggle Mobile/Desktop, sem marca
-// (a Tela 1 já mostra a logomarca grande): "Ver como Mobile / Ver como Desktop".
-View buildViewportToggle(Window w) {
-    var toggle = Button(viewportLabel(), () -> switchViewport(w))
-    toggle.setId("dev-viewport")
-    toggle.setStyle(viewportToggleCss())
-    var bar = View(screenStyle())
-    bar.setStyle(viewportBarCss())
-    bar.bind(toggle)
-    return bar
+// =============================================================================
+// Toggle de tema (pílula com 3 posições: Sistema, Claro, Escuro). A opção ativa
+// fica no círculo com o gradiente da marca; as outras, ícone em text-secondary.
+// =============================================================================
+Style themePillCss() {
+    if (authLight()) {
+        return Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 4; padding: 4; border-radius: 999; background: #FFFFFF; border: 1px solid #E5E7EB; box-shadow: 0 4px 14px rgba(37,99,235,.12)")
+    }
+    return Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 4; padding: 4; border-radius: 999; background: #12162A; border: 1px solid rgba(255,255,255,.1); box-shadow: 0 8px 24px rgba(0,0,0,.45)")
+}
+Style themeKnobIdleCss() = Style("outline: none; display: flex; align-items: center; justify-content: center; width: 40; height: 40; border-radius: 999; background: transparent; cursor: pointer; padding: 0; line-height: 0em")
+Style themeKnobActiveCss() {
+    if (authLight()) {
+        return Style("outline: none; display: flex; align-items: center; justify-content: center; width: 40; height: 40; border-radius: 999; background: linear-gradient(135deg, #2563EB, #1D4ED8); box-shadow: 0 2px 8px rgba(37,99,235,.35); cursor: pointer; padding: 0; line-height: 0em")
+    }
+    return Style("outline: none; display: flex; align-items: center; justify-content: center; width: 40; height: 40; border-radius: 999; background: linear-gradient(135deg, #00D4FF, #0066FF); box-shadow: 0 0 0 3px rgba(0,212,255,.15), 0 4px 12px rgba(0,102,255,.4); cursor: pointer; padding: 0; line-height: 0em")
+}
+
+setThemeMode(Window w, String mode) {
+    AppState.themeMode = mode
+    AppState.lightAuth = mode == "light"
+    mountScreen(w)
+}
+
+View themeKnob(Window w, String mode, String icon, String label) {
+    val active = AppState.themeMode == mode
+    var color = "secondary"
+    if (authLight()) {
+        color = "lightsecondary"
+    }
+    if (active) {
+        color = "onaccent"
+        if (authLight()) {
+            color = "white"
+        }
+    }
+    var img = Image("assets/icons/theme-" + icon + "-" + color + ".svg")
+    img.setAlt(label)
+    img.setWidth(20)
+    img.setHeight(20)
+    var knob = View(screenStyle())
+    knob.setId("theme-" + mode)
+    if (active) {
+        knob.setStyle(themeKnobActiveCss())
+    } else {
+        knob.setStyle(themeKnobIdleCss())
+    }
+    knob.bind(img)
+    knob.on("click", () -> setThemeMode(w, mode))
+    return knob
+}
+
+View themeToggle(Window w) {
+    var row = Row(listOf(
+        themeKnob(w, "system", "monitor", "Tema do sistema"),
+        themeKnob(w, "light", "sun", "Modo claro"),
+        themeKnob(w, "dark", "moon", "Modo escuro")))
+    row.setId("auth-theme-toggle")
+    row.setStyle(themePillCss())
+    return row
+}
+
+// Botão redondo de viewport (ícone de celular no Desktop, de monitor no Mobile), no mesmo
+// estilo da pílula de tema.
+View viewportIconButton(Window w) {
+    var color = "secondary"
+    if (authLight()) {
+        color = "lightsecondary"
+    }
+    var icon = "phone"
+    var label = "Ver como Mobile"
+    if (!AppState.isDesktop) {
+        icon = "monitor"
+        label = "Ver como Desktop"
+    }
+    var img = Image("assets/icons/theme-" + icon + "-" + color + ".svg")
+    img.setAlt(label)
+    img.setWidth(20)
+    img.setHeight(20)
+    var knob = View(screenStyle())
+    knob.setId("dev-viewport")
+    knob.setStyle(themeKnobIdleCss())
+    knob.bind(img)
+    knob.on("click", () -> switchViewport(w))
+    var pill = Row(listOf(knob))
+    pill.setId("viewport-pill")
+    pill.setStyle(themePillCss())
+    return pill
 }

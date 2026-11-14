@@ -13,6 +13,11 @@ package core
 class AppState {
     static String currentScreen = "welcome"
     static Bool isDesktop = true
+    // Modo claro de Login e Cadastro (botão "Modo claro / Modo escuro").
+    static Bool lightAuth = false
+    // Toggle de tema: "system", "light" ou "dark". O kof.ui não lê a preferência do sistema,
+    // então "system" usa o escuro (padrão do app).
+    static String themeMode = "dark"
     static String activeToast = ""
     static String activeNotificationModel = ""
     static Bool showNotificationOverlay = false
@@ -44,6 +49,8 @@ class OnboardingState {
     static String salary = ""
     static String incomeType = "FIXED"
     static Bool incomeChosen = false
+    // Renda mensal como PJ (renda variável), texto com máscara; vira o salário do onboarding.
+    static String pjIncome = ""
     static Bool hasDebt = false
     static String debtAmount = ""
     static String suggestedModel = ""

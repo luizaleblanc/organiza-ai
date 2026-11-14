@@ -228,7 +228,7 @@ List<BucketSummaryDTO> buildBudgetBuckets(BudgetModelType model, Double salary) 
         case SURVIVAL_702010 -> listOf(
             bucketOf("Necessidades", 70, salary),
             bucketOf("Folga", 20, salary),
-            bucketOf("Guarda", 10, salary))
+            bucketOf("Poupança", 10, salary))
         case ANTI_DEBT_701020 -> listOf(
             bucketOf("Necessidades", 70, salary),
             bucketOf("Pessoal", 10, salary),

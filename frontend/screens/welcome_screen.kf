@@ -15,21 +15,21 @@ import components.brand_mark
 // Desktop: marca 200px, gap 32, botões lado a lado 200x48px / r10 (gap 16).
 // =============================================================================
 
-Style welcomeColDesktopCss() = Style("display: flex; flex-direction: column; align-items: center; gap: 32; width: 100%; max-width: 480")
+Style welcomeColDesktopCss() = Style("display: flex; flex-direction: column; align-items: center; gap: 40; width: 100%; max-width: 600")
 Style welcomeColMobileCss()  = Style("display: flex; flex-direction: column; align-items: center; gap: 28; width: 100%; padding: 0 16px; box-sizing: border-box")
-Style welcomeSloganDesktopCss() = Style("color: #7B8EAD; font-size: 16; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; text-align: center; max-width: 320; align-self: center; margin: 8px 0 0 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style welcomeSloganMobileCss()  = Style("color: #7B8EAD; font-size: 18; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; text-align: center; align-self: center; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style welcomeBtnPrimaryDesktopCss()   = Style("background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 48; width: 200; border: none; border-radius: 10; font-size: 15; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style welcomeBtnSecondaryDesktopCss() = Style("background: transparent; color: #00D4FF; height: 48; width: 200; border: 1.5px solid #00D4FF; border-radius: 10; font-size: 15; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style welcomeBtnPrimaryMobileCss()    = Style("background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 50; width: 100%; border: none; border-radius: 14; font-size: 15; font-weight: 700; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style welcomeBtnSecondaryMobileCss()  = Style("background: transparent; color: #00D4FF; height: 50; width: 100%; border: 1.5px solid #00D4FF; border-radius: 14; font-size: 15; font-weight: 700; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style welcomeSloganDesktopCss() = Style("color: #7B8EAD; font-size: 1.375rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; text-align: center; max-width: 560; align-self: center; margin: 8px 0 0 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style welcomeSloganMobileCss()  = Style("color: #7B8EAD; font-size: 1.125rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; text-align: center; align-self: center; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style welcomeBtnPrimaryDesktopCss()   = Style("outline: none; background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 60; width: 260; border: none; border-radius: 12; font-size: 1.125rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style welcomeBtnSecondaryDesktopCss() = Style("outline: none; background: transparent; color: #00D4FF; height: 60; width: 260; border: 1.5px solid #00D4FF; border-radius: 12; font-size: 1.125rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style welcomeBtnPrimaryMobileCss()    = Style("outline: none; background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 50; width: 100%; border: none; border-radius: 14; font-size: 0.9375rem; font-weight: 700; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style welcomeBtnSecondaryMobileCss()  = Style("outline: none; background: transparent; color: #00D4FF; height: 50; width: 100%; border: 1.5px solid #00D4FF; border-radius: 14; font-size: 0.9375rem; font-weight: 700; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 
 View welcomeScreen(Window w) {
     var desktop = AppState.isDesktop
 
     var markWidth = 180
     if (desktop) {
-        markWidth = 200
+        markWidth = 300
     }
     var mark = brandMark(markWidth, "brand-mark")
 

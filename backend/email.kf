@@ -8,11 +8,239 @@
 //   KOF_APP_BASE_URL   endereco do app, para o link de redefinicao (padrao http://localhost:3000)
 //   KOF_DIGEST_AT      horario local do resumo diario, "HH:MM" (padrao 20:00), no fuso da variavel TZ
 
+import java.util.Base64
+import javax.net.ssl.SSLSocketFactory
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.io.OutputStream
+import java.io.InputStream
+import java.io.Reader
+import java.net.Socket
+import java.security.SecureRandom
+import java.nio.file.Files
+import java.nio.file.Paths
+
 // =========================================================
 // Cliente de e-mail (Resend: POST {from, to, subject, text} com Bearer; aceite = 2xx com "id")
 // =========================================================
 
 record EmailMessage(String from, String to, String subject, String text)
+
+// ---------------------------------------------------------
+// SMTP (ex.: Gmail): SMTPS na porta 465 (TLS desde o início), AUTH LOGIN e mensagem MIME em UTF-8.
+//   KOF_SMTP_HOST      padrão smtp.gmail.com
+//   KOF_SMTP_PORT      padrão 465 (só TLS implícito; 587/STARTTLS não é suportado)
+//   KOF_SMTP_USER      conta, ex.: sua-conta@gmail.com
+//   KOF_SMTP_PASSWORD  senha de app do Google (segredo; nunca vai para log)
+//   KOF_EMAIL_FROM     opcional; padrão "\"Luiza Leblanc, CEO do Organiza\" <KOF_SMTP_USER>"
+// Com SMTP configurado ele tem prioridade sobre o Resend.
+// ---------------------------------------------------------
+
+Bool smtpConfigured() {
+    return configText("KOF_SMTP_USER") != null && configText("KOF_SMTP_PASSWORD") != null
+}
+
+String smtpHost() {
+    var h = configText("KOF_SMTP_HOST")
+    if (h != null) {
+        return h
+    }
+    return "smtp.gmail.com"
+}
+
+Int smtpPort() {
+    var raw = configText("KOF_SMTP_PORT")
+    if (raw != null) {
+        try {
+            return raw.trim().toInt()
+        } catch (String e) {
+            return 465
+        }
+    }
+    return 465
+}
+
+String smtpFrom() {
+    var f = configText("KOF_EMAIL_FROM")
+    if (f != null) {
+        return f
+    }
+    return "\"Luiza Leblanc, CEO do Organiza\" <" + nullToText(configText("KOF_SMTP_USER")) + ">"
+}
+
+String smtpB64(String text) {
+    return Base64.getEncoder().encodeToString(text.getBytes())
+}
+
+// Endereço puro de "Nome <a@b>" (para MAIL FROM).
+String smtpAddress(String from) {
+    var lt = from.indexOf("<")
+    var gt = from.indexOf(">")
+    if (lt >= 0 && gt > lt) {
+        return from.substring(lt + 1, gt).trim()
+    }
+    return from.trim()
+}
+
+// Lê uma resposta SMTP (pode ter várias linhas "250-...") e confere o código.
+smtpExpect(BufferedReader reader, String code) {
+    var line = reader.readLine()
+    while (line != null && line.length() >= 4 && line.substring(3, 4) == "-") {
+        line = reader.readLine()
+    }
+    if (line == null || !line.startsWith(code)) {
+        var got = "sem resposta"
+        if (line != null && line.length() >= 3) {
+            got = line.substring(0, 3)
+        }
+        throw "SMTP esperava " + code + " e recebeu " + got
+    }
+}
+
+smtpSend(OutputStream out, BufferedReader reader, String command, String code) {
+    out.write((command + "\r\n").getBytes())
+    out.flush()
+    smtpExpect(reader, code)
+}
+
+// Corpo em base64 quebrado em linhas de 76 (RFC 2045).
+String smtpBody(String text) {
+    var b = smtpB64(text)
+    var lines = ""
+    var i = 0
+    while (i < b.length()) {
+        var end = i + 76
+        if (end > b.length()) {
+            end = b.length()
+        }
+        lines = lines + b.substring(i, end) + "\r\n"
+        i = end
+    }
+    return lines
+}
+
+// Arquivo de texto da saída do frontend (KOF_WEB_OUT); "" se faltar.
+String readWebFile(String webOut, String name) {
+    try {
+        return Files.readString(Paths.get(webOut, name, ""))
+    } catch (Exception e) {
+        return ""
+    }
+}
+
+// Template HTML do e-mail (frontend/assets/email/*.html, copiado para KOF_WEB_OUT/assets/email).
+// Sem o arquivo, o e-mail sai só em texto.
+String? emailTemplate(String file) {
+    var webOut = config.env("KOF_WEB_OUT")
+    if (webOut == null) {
+        return null
+    }
+    try {
+        return Files.readString(Paths.get(webOut, "assets", "email", file))
+    } catch (Exception e) {
+        return null
+    }
+}
+
+String htmlEscape(String v) {
+    return v.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
+}
+
+// Base64 de bytes quebrado em linhas de 76 (RFC 2045).
+String smtpBytesBody(String b) {
+    var lines = ""
+    var i = 0
+    while (i < b.length()) {
+        var end = i + 76
+        if (end > b.length()) {
+            end = b.length()
+        }
+        lines = lines + b.substring(i, end) + "\r\n"
+        i = end
+    }
+    return lines
+}
+
+// Banner da marca (frontend/assets/email/banner.jpg) em base64; "" se não houver.
+String emailBannerB64() {
+    var webOut = config.env("KOF_WEB_OUT")
+    if (webOut == null) {
+        return ""
+    }
+    try {
+        return Base64.getEncoder().encodeToString(Files.readAllBytes(Paths.get(webOut, "assets", "email", "banner.jpg")))
+    } catch (Exception e) {
+        return ""
+    }
+}
+
+// Corpo MIME: só texto; ou multipart/alternative (texto + HTML); e, com o banner, tudo dentro de
+// multipart/related com a imagem inline (Content-ID <banner>, usada como cid:banner no HTML).
+String smtpMimeBody(String text, String html) {
+    if (html == "") {
+        return "Content-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n" + smtpBody(text)
+    }
+    var alt = "organiza-alt-" + crypto.randomHex(8)
+    var altPart = "Content-Type: multipart/alternative; boundary=\"" + alt + "\"\r\n\r\n" +
+        "--" + alt + "\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n" + smtpBody(text) +
+        "--" + alt + "\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n" + smtpBody(html) +
+        "--" + alt + "--\r\n"
+    var banner = emailBannerB64()
+    if (banner == "" || !html.contains("cid:banner")) {
+        return altPart
+    }
+    var rel = "organiza-rel-" + crypto.randomHex(8)
+    return "Content-Type: multipart/related; boundary=\"" + rel + "\"\r\n\r\n" +
+        "--" + rel + "\r\n" + altPart +
+        "--" + rel + "\r\nContent-Type: image/jpeg; name=\"organiza.jpg\"\r\nContent-Transfer-Encoding: base64\r\nContent-ID: <banner>\r\nContent-Disposition: inline; filename=\"organiza.jpg\"\r\n\r\n" + smtpBytesBody(banner) +
+        "--" + rel + "--\r\n"
+}
+
+Bool sendEmailSmtp(String to, String subject, String text) {
+    return sendEmailSmtpHtml(to, subject, text, "")
+}
+
+Bool sendEmailSmtpHtml(String to, String subject, String text, String html) {
+    var user = nullToText(configText("KOF_SMTP_USER"))
+    var pass = secrets.secret("KOF_SMTP_PASSWORD")
+    var from = smtpFrom()
+    try {
+        var socket: Socket = SSLSocketFactory.getDefault().createSocket(smtpHost(), smtpPort())
+        socket.setSoTimeout(15000)
+        var ins: InputStream = socket.getInputStream()
+        var isr: Reader = new InputStreamReader(ins, "UTF-8")
+        var reader = new BufferedReader(isr)
+        var out: OutputStream = socket.getOutputStream()
+        try {
+            smtpExpect(reader, "220")
+            smtpSend(out, reader, "EHLO organiza.ai", "250")
+            smtpSend(out, reader, "AUTH LOGIN", "334")
+            smtpSend(out, reader, smtpB64(user), "334")
+            smtpSend(out, reader, smtpB64(pass.reveal()), "235")
+            smtpSend(out, reader, "MAIL FROM:<" + smtpAddress(from) + ">", "250")
+            smtpSend(out, reader, "RCPT TO:<" + to + ">", "250")
+            smtpSend(out, reader, "DATA", "354")
+            var msg = "From: " + from + "\r\n" +
+                "To: <" + to + ">\r\n" +
+                "Subject: =?UTF-8?B?" + smtpB64(subject) + "?=\r\n" +
+                "MIME-Version: 1.0\r\n" +
+                smtpMimeBody(text, html) + ".\r\n"
+            out.write(msg.getBytes())
+            out.flush()
+            smtpExpect(reader, "250")
+            smtpSend(out, reader, "QUIT", "221")
+        } finally {
+            socket.close()
+        }
+        return true
+    } catch (String e) {
+        log.warn("e-mail nao enviado por SMTP: " + e)
+        return false
+    } catch (Exception e) {
+        log.warn("e-mail nao enviado por SMTP: falha de conexao ou TLS")
+        return false
+    }
+}
 
 String emailApiUrl() {
     var url = configText("KOF_EMAIL_API_URL")
@@ -23,6 +251,9 @@ String emailApiUrl() {
 }
 
 Bool emailConfigured() {
+    if (smtpConfigured()) {
+        return true
+    }
     if (configText("KOF_EMAIL_API_KEY") != null && configText("KOF_EMAIL_FROM") != null) {
         return outboundUrlAllowed(emailApiUrl())
     }
@@ -31,19 +262,30 @@ Bool emailConfigured() {
 
 // Motivo de o e-mail estar ligado ou desligado (log do boot; nunca cita a chave).
 String emailStatus() {
+    if (smtpConfigured()) {
+        return "e-mail ligado (SMTP " + smtpHost() + ":" + smtpPort() + ")"
+    }
     if (emailConfigured()) {
         return "e-mail ligado (Resend)"
     }
     if (configText("KOF_EMAIL_API_KEY") != null && configText("KOF_EMAIL_FROM") != null) {
         return "e-mail desligado: KOF_EMAIL_API_URL precisa ser https:// (http local so com KOF_OUTBOUND_ALLOW_LOCAL_HTTP=true)"
     }
-    return "e-mail desligado: defina KOF_EMAIL_API_KEY e KOF_EMAIL_FROM"
+    return "e-mail desligado: defina KOF_SMTP_USER e KOF_SMTP_PASSWORD (Gmail) ou KOF_EMAIL_API_KEY e KOF_EMAIL_FROM (Resend)"
 }
 
 // true = o provedor aceitou (2xx). 4xx/5xx/rede = false com o status no log (nunca a chave nem o corpo).
 Bool sendEmail(String to, String subject, String text) {
+    return sendEmailHtml(to, subject, text, "")
+}
+
+// Com SMTP, `html` (não vazio) vira a parte HTML do e-mail; o Resend recebe só o texto.
+Bool sendEmailHtml(String to, String subject, String text, String html) {
     if (!emailConfigured()) {
         return false
+    }
+    if (smtpConfigured()) {
+        return sendEmailSmtpHtml(to, subject, text, html)
     }
     var key = secrets.secret("KOF_EMAIL_API_KEY")
     var payload = json.encode(EmailMessage(nullToText(configText("KOF_EMAIL_FROM")), to, subject, text))
@@ -64,7 +306,7 @@ Bool sendEmail(String to, String subject, String text) {
 // =========================================================
 
 record ForgotPasswordRequest(String email)
-record ResetPasswordRequest(String token, String password)
+record ResetPasswordRequest(String email, String token, String password)
 record MessageResponse(String message)
 
 ForgotPasswordRequest? decodeForgotPasswordRequest(String raw) {
@@ -82,7 +324,7 @@ ForgotPasswordRequest? decodeForgotPasswordRequest(String raw) {
 ResetPasswordRequest? decodeResetPasswordRequest(String raw) {
     try {
         var req = json.decode<ResetPasswordRequest>(raw)
-        if (req.token() == null || req.password() == null) {
+        if (req.email() == null || req.token() == null || req.password() == null) {
             return null
         }
         return req
@@ -97,7 +339,7 @@ Long resetTokenTtlMillis() {
 }
 
 String forgotPasswordAnswer() {
-    return "Se o e-mail estiver cadastrado, enviamos um link para redefinir a senha. Ele vale por 30 minutos."
+    return "Se o e-mail estiver cadastrado, enviamos um código de 6 números para redefinir a senha. Ele vale por 30 minutos."
 }
 
 String appBaseUrl() {
@@ -121,16 +363,41 @@ String clientIpKey(String? forwardedFor) {
     return "local"
 }
 
-// Gera o token (32 bytes aleatorios do crypto.randomHex), grava so o hash e manda o link por e-mail.
+// Código de 6 números (SecureRandom), com zeros à esquerda.
+String sixDigitCode() {
+    var n = new SecureRandom().nextInt(1000000)
+    var code = "" + n
+    while (code.length() < 6) {
+        code = "0" + code
+    }
+    return code
+}
+
+// Hash do código amarrado ao usuário: o mesmo código de outra conta não serve (o reset pede e-mail + código).
+String resetCodeHash(String userId, String code) {
+    return crypto.sha256(userId + ":" + code.trim())
+}
+
+// Gera o código de 6 números, grava só o hash (ligado ao usuário) e manda por e-mail.
 // Usuario inexistente nao recebe nada e a resposta da rota e a mesma (sem enumeracao de conta).
 void startPasswordReset(UserEntity user) {
-    var token = crypto.randomHex(32)
+    var token = sixDigitCode()
     var expiresAt = time.formatInstantIso(time.now() + resetTokenTtlMillis())
-    savePasswordResetToken(user.id, crypto.sha256(token), expiresAt)
+    savePasswordResetToken(user.id, resetCodeHash(user.id, token), expiresAt)
     var link = appBaseUrl() + "/#/redefinir-senha?token=" + token
-    var text = "Olá, " + user.name + "!\n\nRecebemos um pedido para redefinir a senha da sua conta no Organiza AI. " +
-        "Use o link abaixo em até 30 minutos:\n\n" + link + "\n\nSe não foi você, ignore este e-mail: sua senha continua a mesma."
-    if (!sendEmail(user.email, "Organiza AI: redefinir sua senha", text)) {
+    var text = "Olá, " + user.name + "!\n\nRecebemos um pedido para redefinir a senha da sua conta no Organiza AI.\n\n" +
+        "Seu código de redefinição (vale por 30 minutos): " + token + "\n\n" +
+        "No Organiza, toque em \"Esqueci a senha\", depois em \"Já tenho o código\", digite seu e-mail e o código e crie a nova senha.\n\n" +
+        "Link do app: " + link + "\n\nSe não foi você, ignore este e-mail: sua senha continua a mesma.\n\nUm abraço,\nLuiza Leblanc\nCEO do Organiza"
+    var sent = false
+    var tpl = emailTemplate("reset-password.html")
+    if (tpl != null) {
+        var html = tpl.replace("{{name}}", htmlEscape(user.name)).replace("{{code}}", token).replace("{{link}}", htmlEscape(link))
+        sent = sendEmailHtml(user.email, "Organiza AI: redefinir sua senha", text, html)
+    } else {
+        sent = sendEmail(user.email, "Organiza AI: redefinir sua senha", text)
+    }
+    if (!sent) {
         log.warn("link de redefinicao nao enviado")
     }
 }

@@ -1034,3 +1034,77 @@ Alinha `frontend/core/notifications_api.kf`, `frontend/screens/notifications_scr
 | Tela 12: topbar 56px, `"Marcar todas como lidas"` (`204`), `read=true` + transição visual, trilho 56px + SVG (`naturalWidth > 0`), badges/tempo, vazio e erro | PASS | PASS |
 | Tela 13: máx 620px Desktop / 100% Mobile, 6 seções, `PUT /api/users/me/preferences` + reload, modal `PATCH /api/users/me/salary`, `"Sair"` → `welcome` | PASS | PASS |
 | Higiene de UI: 0 rolagem horizontal, `font-family: system-ui` em todos os botões, 0 `UNCAUGHT`, 0 `console.error` | PASS | PASS |
+
+## 24. Janela inteira e topbar no topo (12/11/2026)
+
+- **Causa:** `entryFrameCss`, `shellFrameDesktopCss` e `shellFrameMobileCss` fixavam o root em `top: 61; bottom: 53; left: 33; right: 33` (offsets da moldura "Default / Kof output / terminated" do `index.html` do Kof). No Edge headless em 1920×1080 sobravam faixas de 33 px nas laterais e a barra de título do Kof aparecia por cima do app, então o Desktop não preenchia a tela.
+- **Correção:** os três estilos passam a `position: fixed; top: 0; bottom: 0; left: 0; right: 0; z-index: 5`, cobrindo a moldura. Medido em 1920×1080: o app ocupa 100% da janela, sem faixas.
+- **Topbar:** o controle "Ver como Mobile / Ver como Desktop" deixou de ocupar uma linha própria acima do conteúdo (faixa morta de ~70 px). No Desktop ele fica na sidebar, entre a lista e o rodapé (`buildSidebar(w, extra)`); no Mobile continua no topo. A topbar de cada tela começa em y=0, como no artefato.
+- **Sidebar:** fundo `#0A0D18` (`var(--bg)` do artefato `.ds`), antes `#05060B`.
+- **Limitação conhecida:** a barra de rolagem aparece em Configurações. O artefato a esconde com `::-webkit-scrollbar`, e o `Style("css")` recusa `scrollbar-width` (SEM076).
+- **Validação:** `kof build frontend --target js` no 0.6.6, G-UI no Edge headless 1920×1080 (boas-vindas, login, cadastro, 5 etapas do onboarding, Dashboard, Organiza AI, Caixinhas, Notificações, Configurações e alternância Mobile), 0 `UNCAUGHT`.
+
+## 25. Login e Cadastro sem faixa de topo, regras de senha visíveis e e-mail único (12/11/2026)
+
+- **Faixa do topo:** no Desktop, Login e Cadastro usam `entryFrameFlushCss` (padding 0) e o painel da marca vai de ponta a ponta, sem a linha de separação (`border-top`/`border-right` removidos). O botão "Ver como Mobile / Desktop" das telas de entrada ficou flutuante no canto inferior direito (`viewportBarFloatCss`, `position: absolute`), fora do fluxo, então não existe mais linha de header invisível.
+- **Respiro:** painel da marca com `flex: 0 1 440px` e `padding: 72px 64px`, título com `line-height: 30px` e subtítulo com `24px`. `overflow-wrap: break-word` nos textos para a quebra automática; o painel encolhe até 260 px em janelas estreitas. Sem evento de resize no kof.ui, a troca Desktop/Mobile continua manual pelo botão.
+- **Senha:** o texto "8+ chars · maiúscula · …" foi trocado por uma checklist de 5 regras (8 caracteres, maiúscula, minúscula, número, especial) que mostra "✓" verde ao cumprir e "○" cinza enquanto falta, mais a nota "A senha não pode conter seu nome nem seu e-mail". O medidor continua na paleta do DS (Fraca `#FF4A6E`, Razoável `#FFB800`, Boa `#00D4FF`, Forte `#00E5A0`) com o rótulo "Força da senha".
+- **E-mail único:** a conta já era gravada no banco com `email unique` e checagem prévia. Agora o e-mail é normalizado em minúsculas no cadastro, no login e no "esqueci a senha", então `Dup@X.com` e `dup@x.com` não criam duas contas. Medido contra H2: 1º cadastro 200, 2º igual 409, 3º com outra caixa 409. A mensagem exibida é "Este e-mail já tem uma conta. Entre ou use outro e-mail.". Contas antigas gravadas com maiúsculas precisariam ser migradas para minúsculas.
+- **Validação:** `kof build` backend (jvm, fat) e frontend (js) no 0.6.6; capturas Edge headless em 1920×1080 e 1100×700, Desktop e Mobile.
+
+## 26. Login e Cadastro: fundos escuro e claro e textos do artefato (12/11/2026)
+
+- **Layout dos fundos exportados:** painel esquerdo com 37% da largura (`flex: 0 0 37%`, 710 px em 1920), divisória de 2 px (`rgba(255,255,255,.06)` no escuro, `rgba(0,0,0,.06)` no claro), degradê ciano → azul e três ondas presas dentro do painel (`assets/brand/auth-panel-waves-dark.svg` e `-light.svg`); área direita lisa em `#0A0D18` (escuro) e `#F8F9FC` (claro). As ondas de tela cheia saíram de Login e Cadastro no Desktop (`screenHasWaves`).
+- **Modo claro:** `AppState.lightAuth` e `authLight()` (só vale nas rotas `login` e `signup`) escolhem a paleta clara do design system (`#2563EB`/`#1D4ED8`, texto `#1A1D2E`, secundário `#6B7280`, borda `#E5E7EB`, perigo `#E63946`, sucesso `#10B981`, alerta `#F59E0B`) em campos, rótulos, botões, links, banners, medidor, checklist e logomarca (`organiza-simbolo-light.svg`). O botão "Modo claro / Modo escuro" fica no canto inferior direito, ao lado de "Ver como Mobile". Fora de Login e Cadastro o app continua escuro: o modo claro do restante das telas não foi implementado. O modo não é lembrado ao recarregar (o kof.ui não tem armazenamento).
+- **Textos do artefato:** "Esqueci a senha", subtítulo "Bem-vinda de volta" (sem o nome, que ainda não se conhece antes do login), placeholder "Seu e-mail" no cadastro. Ficam fora do artefato, por decisões anteriores: o campo Idade e a checklist de regras da senha. O sublinhado em "quanto gastar por dia" não existe (o `Label` não aceita trecho estilizado).
+- **Validação:** `kof build frontend --target js` no 0.6.6; Edge headless 1920×1080 em escuro e claro (Login e Cadastro) conferidos contra as imagens exportadas.
+
+## 27. Senha sem regra de identidade, renda PJ, fontes maiores e toggle de tema (12/11/2026)
+
+- **Senha:** a regra "não pode conter nome nem e-mail" saiu do backend (`passwordIdentityError` devolve `null`) e do frontend. Medido: cadastro com a senha `Ana.souza1` para `ana.souza@example.com` → 200.
+- **Onboarding, renda variável:** ao escolher "Variável (freela, PJ, bicos)", aparece o bloco azul "Quanto você ganha como PJ por mês?" (`#pj-income-input`, R$ grande em `#00D4FF`, borda e fundo accent). O valor é validado como o salário (R$ 1 a R$ 1.000.000) e passa a ser a renda usada no modelo.
+- **Fontes:** Login e Cadastro maiores (título 26, campos 16 com altura 46, rótulos 14, botão 16/48, regras 14, painel 22/16).
+- **Painel:** logomarca centralizada; "quanto gastar por dia" sublinhado como no artefato (palavras em `Label` separadas numa linha que quebra; `text-underline-offset` não é aceito pelo `Style`, SEM076).
+- **Toggle de tema:** pílula redonda com 3 posições (Sistema, Claro, Escuro) e a opção ativa no círculo com o gradiente da marca. "Sistema" usa o escuro, porque o kof.ui não lê a preferência do sistema.
+
+- **Toggle no topo (12/11/2026):** a pílula de tema e o botão de viewport ficam no canto superior direito (`top: 16; right: 16`); o "Ver como Mobile" virou um botão redondo com ícone de celular (monitor quando já está no Mobile), `#dev-viewport`.
+
+- **Olho duplicado (12/11/2026):** o Edge mostra o próprio botão de revelar senha (`::-ms-reveal`) junto do olho do app. O `Dockerfile` acrescenta `input::-ms-reveal, input::-ms-clear { display: none; }` ao `index.html` gerado, porque o `Style` do kof.ui não aceita pseudo-elementos.
+
+## 28. Login caía em "Esqueci minha senha" e reset por SMTP do Gmail (12/11/2026)
+
+- **Causa:** "Esqueci a senha" era um `Button` (`<button>`) dentro do `<form>` de login e vinha antes de "Entrar"; o envio do formulário (Enter) acionava esse botão e abria o modo "forgot". Agora é um `View` clicável (`#link-forgot-password`), que não envia o form. Medido: `requestSubmit()` no `#login-form` com conta válida leva ao app e não abre o `#forgot-form`.
+- **SMTP:** `backend/email.kf` envia por SMTPS (TLS implícito, porta 465), `AUTH LOGIN` e mensagem MIME UTF-8 em base64, com interop Java (`SSLSocketFactory`, `Socket`, `BufferedReader`). Variáveis: `KOF_SMTP_USER` (conta Gmail), `KOF_SMTP_PASSWORD` (senha de app do Google; segredo, nunca vai para log), opcionais `KOF_SMTP_HOST` (`smtp.gmail.com`), `KOF_SMTP_PORT` (465) e `KOF_EMAIL_FROM`. Com SMTP configurado ele tem prioridade sobre o Resend. Medido contra `smtp.gmail.com:465` com credencial falsa: TLS, `EHLO` e `AUTH` trocados, resposta 535 registrada como "SMTP esperava 235 e recebeu 535". O envio real depende da senha de app.
+- **E-mail de redefinição:** como o frontend não lê a URL, o e-mail traz o código e o passo a passo ("Esqueci a senha" → "Já tenho o código / token").
+- **Interop Java no Kof 0.6.6:** o despacho de construtores usa o tipo declarado; sem `var x: InputStream`/`Reader` tipados o runtime procura `InputStreamReader(Object, String)` e falha. `String.getBytes` só existe sem argumento (UTF-8 padrão no JDK 25).
+
+## 29. Template de e-mail no design system (12/11/2026)
+
+- **Fonte visual:** artefato do design system (`JVjueTmHeJsnHLsow3LDVb`) e o kit da marca no Drive (wallpaper, ondas, nome isolado e fundos). O banner é o wallpaper oficial (`frontend/assets/email/banner.jpg`) com as ondas e "ORGANIZA IA".
+- **Template:** `frontend/assets/email/reset-password.html` com os tokens do DS: canvas `#05060B`, card `#0A0D18` (raio 16), card do código no padrão pulse-card (`#12162A`, borda `rgba(0,212,255,.15)`, raio 14), legenda 12/600 uppercase `#4A5578`, título 24/600, corpo 14 em `#7B8EAD`, botão primário 44 px (raio 10, `#00D4FF → #0066FF`, texto `#06121C`), passos com círculo accent e assinatura "Luiza, CEO do Organiza AI". Campos `{{name}}`, `{{code}}` e `{{link}}`.
+- **MIME:** `multipart/related` com `multipart/alternative` (texto + HTML) e o banner inline (`Content-ID: <banner>`, usado como `cid:banner`), então a imagem aparece no Gmail sem hospedagem externa. Sem `banner.jpg`, o e-mail sai sem a parte `related`.
+- **Validação:** prévia no Edge e envio real pelo SMTP do Gmail (`forgot-password` → 202, sem erro no log).
+
+## 30. Código numérico de 6 dígitos no "Esqueci a senha" (12/11/2026)
+
+- O token hexadecimal de 64 caracteres virou um código de 6 números (`SecureRandom`, zeros à esquerda), válido por 30 minutos e guardado só como `sha256(userId + ":" + código)`.
+- Com um código curto, o reset agora pede **e-mail + código** (`ResetPasswordRequest(email, token, password)`): o código só vale para aquela conta, e há no máximo 5 tentativas por e-mail a cada 30 minutos (além das 20 por IP por hora). Erro genérico "Código inválido ou expirado. Peça um novo." para e-mail inexistente ou código errado (sem enumeração de conta).
+- Tela "Redefinir senha": campos E-mail (preenchido com o do "Esqueci a senha"), "Código de 6 números" (placeholder `000000`, validado com 6 dígitos), nova senha e confirmação. O link passou a "Já tenho o código".
+- E-mail: código em 36/700 accent com espaçamento largo; passo a passo atualizado. Tokens antigos (hex) deixam de valer.
+- Medido: código errado e e-mail inexistente → 400; envio real pelo Gmail → 202 sem erro no log.
+
+- **Banner menor (12/11/2026):** `banner.jpg` recortado na faixa central do wallpaper (1120×238, ~17 KB); no e-mail de 560 px ele ocupa ~119 px de altura (antes ~294).
+
+- **E-mail sem fundo externo e remetente (12/11/2026):** o fundo `#05060B` fora do cartão saiu; fica só o cartão `#0A0D18` com contorno `rgba(255,255,255,.06)` sobre o fundo do leitor de e-mail. Remetente padrão `"Luiza Leblanc, CEO do Organiza" <KOF_SMTP_USER>` e assinatura "Luiza Leblanc, CEO do Organiza".
+
+## 31. Fim do cache de 1 dia do app (12/11/2026)
+
+- **Causa:** o `serveDir` do runtime do Kof 0.6.6 grava `Cache-Control: public, max-age=86400` fixo (string no `KofRuntime.class`, sem configuração). Depois de cada build o navegador continuava com o `index.html` e o `Default.mjs` antigos por até 1 dia (por isso o login parecia cair no "Esqueci minha senha" antigo).
+- **Correção:** `backend/main.kf` registra `GET /` e `GET /index.html` antes do `serveDir`, com `setHeader("Cache-Control", "no-cache, no-store, must-revalidate")`, e reescreve o `src="Default.mjs"` para `Default.mjs?v=<instante do boot>`; cada boot do servidor gera um bundle com URL nova. Medido: `GET /` → `no-cache, no-store, must-revalidate` e `Default.mjs?v=...`. (`HEAD /` ainda cai no `serveDir`.) Vale abrir issue upstream pedindo `Cache-Control` configurável no `serveDir`.
+
+## 32. Valor do onboarding, tipografia responsiva e CSS do index (12/11/2026)
+
+- **Valor grande:** "R$" entra no próprio campo ("R$ 3.000", placeholder "R$ 0"), centrado sob o título, largura até 480 px e altura em `rem`. Dica "O valor pode ser aproximado…" em 16 px `#7B8EAD` com quebra. Os campos de valor recebem id único (`<id>-<n>`): o Chrome sugeria valores já digitados no mesmo id e mostrava a prévia em fonte pequena (o kof.ui não tem `autocomplete="off"`).
+- **Fontes responsivas:** todos os `font-size` e `line-height` em px dos `Style` viraram `rem` (202 estilos); a raiz é `html { font-size: clamp(17px, calc(0.6vw + 10px), 23px) }`, injetada no `index.html` (o `Style` recusa `clamp`/`calc`, SEM078). Medido: raiz 21,5 px em 1920 e ~18 px em 1366 (antes 16 px fixos).
+- **CSS do index:** com a rota sem cache (seção 31), o runtime aplica a CSP `default-src 'self'` ao `index.html`, que bloqueava o `<style>` inline (moldura `.kof-row` etc. e a fonte raiz). A rota troca o `<style>` por `<link rel="stylesheet" href="kof-index.css?v=…">`, servido por `GET /kof-index.css` (mesmo domínio, permitido pela CSP).
+- **Login:** "Falta de planejamento financeiro / nunca mais." em duas linhas; subtítulo do painel em 19 px. Itens da sidebar com `flex-wrap: nowrap`.

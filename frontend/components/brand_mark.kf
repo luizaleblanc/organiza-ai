@@ -15,7 +15,12 @@ import core.theme
 // width * 231.5 / 240 de largura e mantém a proporção do viewBox.
 // =============================================================================
 
-String brandMarkSrc() = "assets/brand/organiza-simbolo.svg"
+String brandMarkSrc() {
+    if (authLight()) {
+        return "assets/brand/organiza-simbolo-light.svg"
+    }
+    return "assets/brand/organiza-simbolo.svg"
+}
 
 Int brandImageWidth(Int width) = width * 463 / 480
 
