@@ -16,6 +16,7 @@ import core.auth_api
 record EnvelopeItem(String id, String categoryName, String? bucket, Double limitAmount, Double spentThisMonth, Int percent, String status)
 record CreateEnvelopeRequest(String categoryName, Double limitAmount, String bucket)
 record CreateEnvelopeNoBucketRequest(String categoryName, Double limitAmount)
+record UpdateEnvelopeRequest(String categoryName, Double limitAmount)
 // GET /api/budgets/balance: só o nome de cada bucket do modelo é lido (json.decode ignora o resto).
 record EnvBucketName(String name)
 record EnvBalance(String model, List<EnvBucketName> buckets)
@@ -37,6 +38,10 @@ class EnvState {
     static List<String> buckets = listOf()
     // Id da caixinha com confirmação de exclusão aberta ("" = nenhuma).
     static String confirmDelete = ""
+    // Edição do limite mensal da caixinha selecionada.
+    static String editingId = ""
+    static String editingCategory = ""
+    static String editingLimit = ""
 }
 
 resetNewEnvelopeForm() {
@@ -58,6 +63,9 @@ resetEnvelopes() {
     EnvState.loadError = ""
     EnvState.formError = ""
     EnvState.confirmDelete = ""
+    EnvState.editingId = ""
+    EnvState.editingCategory = ""
+    EnvState.editingLimit = ""
     EnvState.buckets = listOf()
 }
 
@@ -155,6 +163,19 @@ deleteEnvelope(String id) {
     var body = ""
     try {
         body = apiDelete("/api/envelopes/" + id)
+    } catch (String e) {
+        throw msgNetwork()
+    }
+    if (isApiError(body)) {
+        throw apiErrorMessage(body)
+    }
+}
+
+// PUT /api/envelopes/:id. O backend mantém os demais atributos da caixinha.
+updateEnvelopeLimit(String id, String category, Double limit) {
+    var body = ""
+    try {
+        body = apiPut("/api/envelopes/" + id, json.encode(UpdateEnvelopeRequest(category, limit)))
     } catch (String e) {
         throw msgNetwork()
     }
