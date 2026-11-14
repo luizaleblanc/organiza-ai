@@ -36,6 +36,22 @@ Style dashPulseHeroCss()      = Style("display: flex; flex-direction: column; al
 Style dashCardCss()           = Style("display: flex; flex-direction: column; gap: 12; height: 100%; padding: 18; box-sizing: border-box; background: #12162A; border: 1px solid rgba(255,255,255,.06); border-radius: 14; min-width: 0")
 Style dashCardMobileCss()     = Style("display: flex; flex-direction: column; gap: 10; padding: 16; box-sizing: border-box; background: #12162A; border: 1px solid rgba(255,255,255,.06); border-radius: 16; min-width: 0")
 Style dashScreenDesktopCss()  = Style("display: flex; flex-direction: column; gap: 16; width: 100%; min-height: 0; flex-grow: 1")
+Style calendarCardCss()       = Style("display: flex; flex-direction: column; gap: 18; width: 100%; padding: 24; box-sizing: border-box; background: #12162A; border: 1px solid rgba(0,212,255,.2); border-radius: 14; min-width: 0")
+Style calendarHeadCss()       = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 16; width: 100%")
+Style calendarIntroCss()      = Style("display: flex; flex-direction: column; gap: 4; min-width: 0")
+Style calendarTitleCss()      = Style("color: #F0F0F0; font-size: 1.25rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style calendarSubCss()        = Style("color: #AAB9D3; font-size: 0.875rem; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style calendarBadgeCss()      = Style("color: #06121C; font-size: 0.8125rem; font-weight: 700; white-space: nowrap; padding: 7px 10px; border-radius: 999; background: #00D4FF; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style calendarWeekdaysCss()   = Style("display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8; width: 100%")
+Style calendarWeekdayCss()    = Style("color: #7B8EAD; font-size: 0.75rem; font-weight: 700; text-align: center; text-transform: uppercase; letter-spacing: .06em; padding: 0 0 4px; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style calendarGridCss()       = Style("display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8; width: 100%")
+Style calendarBlankCss()      = Style("min-height: 76; border-radius: 10; background: transparent")
+Style calendarDayCss()        = Style("display: flex; flex-direction: column; justify-content: space-between; gap: 8; min-height: 76; padding: 10px; box-sizing: border-box; border-radius: 10; background: #0A0D18; border: 1px solid rgba(255,255,255,.06)")
+Style calendarTodayCss()      = Style("display: flex; flex-direction: column; justify-content: space-between; gap: 8; min-height: 76; padding: 10px; box-sizing: border-box; border-radius: 10; background: rgba(0,212,255,.1); border: 1px solid #00D4FF; box-shadow: 0 0 18px rgba(0,212,255,.14)")
+Style calendarPastCss()       = Style("display: flex; flex-direction: column; justify-content: space-between; gap: 8; min-height: 76; padding: 10px; box-sizing: border-box; border-radius: 10; background: rgba(255,255,255,.02); border: 1px solid rgba(255,255,255,.04); opacity: .55")
+Style calendarDayNumCss()     = Style("color: #F0F0F0; font-size: 0.875rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style calendarForecastCss()   = Style("color: #00E5A0; font-size: 0.8125rem; font-weight: 700; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style calendarPastTextCss()   = Style("color: #7B8EAD; font-size: 0.6875rem; font-weight: 600; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 
 // ---- Tipografia dos tiles & cards -------------------------------------------
 Style tileLabelCss()          = Style("color: #AAB9D3; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
@@ -53,6 +69,13 @@ Style tileMobileSuccessCss()  = Style("color: #00E5A0; font-size: 1.25rem; font-
 
 Style cardTitleCss()          = Style("color: #F0F0F0; font-size: 1.125rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 Style cardTitleMobileCss()    = Style("color: #F0F0F0; font-size: 0.875rem; font-weight: 600; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style distributionHeadingCss() = Style("display: flex; flex-direction: column; gap: 2; width: 100%")
+Style distributionModelCss() {
+    if (AppState.isDesktop) {
+        return Style("color: #00D4FF; font-size: 1.125rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+    }
+    return Style("color: #00D4FF; font-size: 0.875rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+}
 
 // ---- Donut & legenda --------------------------------------------------------
 Style distBodyDesktopCss()    = Style("display: flex; flex-direction: column; flex-wrap: nowrap; align-items: center; justify-content: center; gap: 28; width: 100%; flex-grow: 1")
@@ -279,29 +302,182 @@ View tile(String key, String label, String value, Style valueStyle, String sub, 
     return col
 }
 
+// Simulação visual temporária: não cria transação nem altera o histórico.
+// Assim que houver lançamentos reais no mês, o dashboard passa a exibir o total
+// retornado pela API.
+Bool isSpentSimulation(DashboardResponse d) = DashState.period != "year" && d.totalSpent == 0.0
+
+Double displayedSpent(DashboardResponse d) {
+    if (isSpentSimulation(d)) {
+        return 623.66
+    }
+    return d.totalSpent
+}
+
+Double displayedPulse(DashboardResponse d) {
+    if (isSpentSimulation(d) && d.daysRemaining > 0) {
+        return math.roundTo((d.salary - displayedSpent(d)) / (d.daysRemaining * 1.0), 2)
+    }
+    return d.pulse
+}
+
+String displayedSpentSub(DashboardResponse d) {
+    if (isSpentSimulation(d)) {
+        return "Simulação de gastos informados"
+    }
+    return "de " + brl(d.salary)
+}
+
+// A reserva informada é usada apenas enquanto a API não tiver um saldo real.
+Bool isReserveSimulation(DashboardResponse d) = d.reserve.accumulated == 0.0
+
+Double displayedReserve(DashboardResponse d) {
+    if (isReserveSimulation(d)) {
+        return 1491.0
+    }
+    return d.reserve.accumulated
+}
+
 View tiles(DashboardResponse d) {
-    var reserveSub = "Sem meta definida"
+    val currentSpent = displayedSpent(d)
+    val currentPulse = displayedPulse(d)
+    val spentSub = displayedSpentSub(d)
+    var reserveSub = "Reserva informada"
     if (d.reserve.hasGoal) {
         reserveSub = "Meta: " + brlShort(brl(d.reserve.goal)) + " — " + String.valueOf(d.reserve.percent) + "%"
     }
     if (AppState.isDesktop) {
         var row = Row(listOf(
-            tile("pulse", "Pode gastar hoje", brl(d.pulse), tileAccentCss(), daysRemainingText(d.daysRemaining), dashPulseCardCss(), tileLabelCss(), tileSubCss()),
-            tile("spent", spentLabel(DashState.period), brl(d.totalSpent), tileValueCss(), "de " + brl(d.salary), dashPulseCardCss(), tileLabelCss(), tileSubCss()),
-            tile("reserve", "Reserva acumulada", brl(d.reserve.accumulated), tileSuccessCss(), reserveSub, dashPulseCardCss(), tileLabelCss(), tileSubCss())))
+            tile("pulse", "Pode gastar hoje", brl(currentPulse), tileAccentCss(), daysRemainingText(d.daysRemaining), dashPulseCardCss(), tileLabelCss(), tileSubCss()),
+            tile("spent", spentLabel(DashState.period), brl(currentSpent), tileValueCss(), spentSub, dashPulseCardCss(), tileLabelCss(), tileSubCss()),
+            tile("reserve", "Reserva acumulada", brl(displayedReserve(d)), tileSuccessCss(), reserveSub, dashPulseCardCss(), tileLabelCss(), tileSubCss())))
         row.setId("dash-tiles")
         row.setStyle(dashGridG3Css())
         return row
     }
-    var hero = tile("pulse", "Pode gastar hoje", brl(d.pulse), tileHeroValueCss(), daysRemainingText(d.daysRemaining), dashPulseHeroCss(), tileHeroLabelCss(), tileHeroSubCss())
+    var hero = tile("pulse", "Pode gastar hoje", brl(currentPulse), tileHeroValueCss(), daysRemainingText(d.daysRemaining), dashPulseHeroCss(), tileHeroLabelCss(), tileHeroSubCss())
     var pair = Row(listOf(
-        tile("spent", spentLabel(DashState.period), brl(d.totalSpent), tileMobileValueCss(), "de " + brl(d.salary), dashCardMobileCss(), tileMobileLabelCss(), tileSubCss()),
-        tile("reserve", "Reserva acumulada", brl(d.reserve.accumulated), tileMobileSuccessCss(), reserveSub, dashCardMobileCss(), tileMobileLabelCss(), tileSubCss())))
+        tile("spent", spentLabel(DashState.period), brl(currentSpent), tileMobileValueCss(), spentSub, dashCardMobileCss(), tileMobileLabelCss(), tileSubCss()),
+        tile("reserve", "Reserva acumulada", brl(displayedReserve(d)), tileMobileSuccessCss(), reserveSub, dashCardMobileCss(), tileMobileLabelCss(), tileSubCss())))
     pair.setStyle(dashMobileG2Css())
     var col = Column(listOf(hero, pair))
     col.setId("dash-tiles")
     col.setStyle(dashMobileStackCss())
     return col
+}
+
+// ---- Calendário de previsão -------------------------------------------------
+// A previsão parte do saldo diário disponível e aplica uma cadência mais
+// conservadora no fim de semana. É uma estimativa visual: não cria despesas.
+Bool calendarLeapYear(Int year) = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
+
+Int calendarDaysInMonth(Int year, Int month) {
+    if (month == 2) {
+        if (calendarLeapYear(year)) { return 29 }
+        return 28
+    }
+    if (month == 4 || month == 6 || month == 9 || month == 11) {
+        return 30
+    }
+    return 31
+}
+
+// Índice do dia: segunda = 0, domingo = 6. A fórmula usa 1970-01-01 (quinta).
+Int calendarWeekday(Int year, Int month, Int day) {
+    var y = year
+    if (month <= 2) {
+        y = y - 1
+    }
+    var m = month - 3
+    if (month <= 2) {
+        m = month + 9
+    }
+    val era = y / 400
+    val yoe = y - era * 400
+    val doy = (153 * m + 2) / 5 + day - 1
+    val doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
+    val days = era * 146097 + doe - 719468
+    return (days + 3) % 7
+}
+
+Int calendarToday(DashboardResponse d, Int daysInMonth) {
+    var day = daysInMonth - d.daysRemaining + 1
+    if (day < 1) { return 1 }
+    if (day > daysInMonth) { return daysInMonth }
+    return day
+}
+
+Double dailyPrediction(DashboardResponse d, Int weekday) {
+    var multiplier = 1.0
+    if (weekday == 4) { multiplier = 0.95 }
+    if (weekday == 5 || weekday == 6) { multiplier = 0.9 }
+    return math.roundTo(displayedPulse(d) * multiplier, 2)
+}
+
+View calendarDay(DashboardResponse d, Int year, Int month, Int day, Int today) {
+    val weekday = calendarWeekday(year, month, day)
+    var amount = "Encerrado"
+    var amountCss = calendarPastTextCss()
+    if (day >= today) {
+        amount = brl(dailyPrediction(d, weekday))
+        amountCss = calendarForecastCss()
+    }
+    var cell = Column(listOf(
+        idLabel(String.valueOf(day), "calendar-day-number-" + String.valueOf(day), calendarDayNumCss()),
+        idLabel(amount, "calendar-day-forecast-" + String.valueOf(day), amountCss)))
+    cell.setId("calendar-day-" + String.valueOf(day))
+    if (day < today) {
+        cell.setStyle(calendarPastCss())
+    } else if (day == today) {
+        cell.setStyle(calendarTodayCss())
+    } else {
+        cell.setStyle(calendarDayCss())
+    }
+    return cell
+}
+
+View spendingCalendar(DashboardResponse d) {
+    val year = d.from.substring(0, 4).toInt()
+    val month = d.from.substring(5, 7).toInt()
+    val daysInMonth = calendarDaysInMonth(year, month)
+    val today = calendarToday(d, daysInMonth)
+
+    var weekdayLabels: List<View> = listOf()
+    for (var name in "Seg,Ter,Qua,Qui,Sex,Sáb,Dom".split(",")) {
+        weekdayLabels.add(idLabel(name, "calendar-weekday-" + name, calendarWeekdayCss()))
+    }
+    var weekdays = Column(weekdayLabels)
+    weekdays.setStyle(calendarWeekdaysCss())
+
+    var cells: List<View> = listOf()
+    var blank = 0
+    val startsAt = calendarWeekday(year, month, 1)
+    while (blank < startsAt) {
+        var spacer = View(screenStyle())
+        spacer.setStyle(calendarBlankCss())
+        cells.add(spacer)
+        blank = blank + 1
+    }
+    var day = 1
+    while (day <= daysInMonth) {
+        cells.add(calendarDay(d, year, month, day, today))
+        day = day + 1
+    }
+    var grid = Column(cells)
+    grid.setId("spending-calendar-grid")
+    grid.setStyle(calendarGridCss())
+
+    var intro = Column(listOf(
+        idLabel(monthYear(month, year), "spending-calendar-title", calendarTitleCss()),
+        idLabel("Previsão personalizada pelo saldo e ritmo do mês", "spending-calendar-subtitle", calendarSubCss())))
+    intro.setStyle(calendarIntroCss())
+    var badge = idLabel("PREVISÃO INTELIGENTE", "spending-calendar-badge", calendarBadgeCss())
+    var head = Row(listOf(intro, badge))
+    head.setStyle(calendarHeadCss())
+    var card = Column(listOf(head, weekdays, grid))
+    card.setId("card-spending-calendar")
+    card.setStyle(calendarCardCss())
+    return card
 }
 
 // Donut em Canvas 4x (576px com zoom 0.25 -> 144px): setFill + fill apenas.
@@ -475,7 +651,11 @@ View distributionCard(Window w, DashboardResponse d) {
         titleCss = cardTitleCss()
         cardCss = dashCardCss()
     }
-    var card = Column(listOf(idLabel(distributionTitle(d.budgetModel), "dist-title", titleCss), body))
+    var heading = Column(listOf(
+        idLabel("Modelo de Economia", "dist-title", titleCss),
+        idLabel(modelFriendlyName(d.budgetModel), "dist-model", distributionModelCss())))
+    heading.setStyle(distributionHeadingCss())
+    var card = Column(listOf(heading, body))
     card.setId("card-distribution")
     card.setStyle(cardCss)
     card.on("click", () -> clearSliceFromDistributionCard(w))
@@ -570,16 +750,20 @@ View dashboardScreen(Window w) {
         items.add(idLabel("Carregando…", "dash-loading", captionCss()))
     } else {
         items.add(tiles(d))
-        if (AppState.isDesktop) {
-            var cards = Row(listOf(distributionCard(w, d), transactionsCard(d)))
-            cards.setId("dash-cards")
-            cards.setStyle(dashGridG2Css())
-            items.add(cards)
+        if (DashState.period == "week") {
+            items.add(spendingCalendar(d))
         } else {
-            var cards = Column(listOf(distributionCard(w, d), transactionsCard(d)))
-            cards.setId("dash-cards")
-            cards.setStyle(dashMobileStackCss())
-            items.add(cards)
+            if (AppState.isDesktop) {
+                var cards = Row(listOf(distributionCard(w, d), transactionsCard(d)))
+                cards.setId("dash-cards")
+                cards.setStyle(dashGridG2Css())
+                items.add(cards)
+            } else {
+                var cards = Column(listOf(distributionCard(w, d), transactionsCard(d)))
+                cards.setId("dash-cards")
+                cards.setStyle(dashMobileStackCss())
+                items.add(cards)
+            }
         }
     }
     var col = Column(items)
