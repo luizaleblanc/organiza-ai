@@ -20,44 +20,45 @@ import components.icons
 // Switch/toggle fiel ao artefato (trilho 44x24 com indicador deslizante de 20px).
 // Ativas: Notificações (GET/PUT preferências), o modal "Rever meu salário"
 // (PATCH /api/users/me/salary) e "Sair" (resetSession + "welcome").
-// Inativas com "Em breve": Modo escuro, Seguir tema, Refazer configuração e
-// Conectar banco. Conta: inerte com badge "MVP 2".
+// Modo escuro: interruptor funcional (tema do app inteiro). Inativas com "Em breve": Seguir tema, Refazer configuração e
+// Conectar banco. A recuperação de senha já está disponível; e-mail e 2FA
+// continuam planejados para uma etapa futura.
 // Estilos locais só com hex da paleta oficial e font-family explícito em botões.
 // =============================================================================
 
 Style setSectionWrapCss()   = Style("display: flex; flex-direction: column; gap: 8; width: 100%")
-Style setSectionLabelCss()  = Style("color: #7B8EAD; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style setRowCss()           = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 16; width: 100%; min-height: 52; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,.06)")
+Style setSectionLabelCss()  = themed(Style("color: #6B7280; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #7B8EAD; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style setRowCss()           = themed(Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 16; width: 100%; min-height: 52; padding: 12px 0; border-bottom: 1px solid rgba(0,0,0,.06)"), Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 16; width: 100%; min-height: 52; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,.06)"))
 Style setRowTextCss()       = Style("display: flex; flex-direction: column; gap: 4; flex-grow: 1; min-width: 0")
-Style setRowTitleCss()      = Style("color: #F0F0F0; font-size: 0.9375rem; font-weight: 500; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style setRowDescCss()       = Style("color: #7B8EAD; font-size: 0.8125rem; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style setSoonCss()          = Style("color: #4A5578; font-size: 0.75rem; font-style: italic; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style setRowTitleCss()      = themed(Style("color: #1A1D2E; font-size: 0.9375rem; font-weight: 500; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #F0F0F0; font-size: 0.9375rem; font-weight: 500; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style setRowDescCss()       = themed(Style("color: #6B7280; font-size: 0.8125rem; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #7B8EAD; font-size: 0.8125rem; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style setSoonCss()          = themed(Style("color: #6B7280; font-size: 0.75rem; font-style: italic; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #4A5578; font-size: 0.75rem; font-style: italic; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style setSoonColCss()       = Style("display: flex; flex-direction: column; align-items: flex-end; gap: 4; flex-shrink: 0")
 Style setInertCss()         = Style("opacity: 0.6; pointer-events: none")
 
-Style switchTrackOnCss()     = Style("outline: none; display: flex; flex-direction: row; align-items: center; justify-content: flex-end; width: 44; height: 24; border-radius: 12; background: #00D4FF; padding: 2; box-sizing: border-box; cursor: pointer")
-Style switchTrackOffCss()    = Style("outline: none; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; width: 44; height: 24; border-radius: 12; background: #1A1F3A; border: 1px solid rgba(255,255,255,.1); padding: 2; box-sizing: border-box; cursor: pointer")
-Style switchThumbOnCss()     = Style("width: 20; height: 20; border-radius: 10; background: #06121C")
-Style switchThumbOffCss()    = Style("width: 20; height: 20; border-radius: 10; background: #7B8EAD")
+Style switchTrackOnCss()     = themed(Style("outline: none; display: flex; flex-direction: row; align-items: center; justify-content: flex-end; width: 44; height: 24; border-radius: 12; background: #2563EB; padding: 2; box-sizing: border-box; cursor: pointer"), Style("outline: none; display: flex; flex-direction: row; align-items: center; justify-content: flex-end; width: 44; height: 24; border-radius: 12; background: #00D4FF; padding: 2; box-sizing: border-box; cursor: pointer"))
+Style switchTrackOffCss()    = themed(Style("outline: none; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; width: 44; height: 24; border-radius: 12; background: #E5E7EB; border: 1px solid #E5E7EB; padding: 2; box-sizing: border-box; cursor: pointer"), Style("outline: none; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; width: 44; height: 24; border-radius: 12; background: #1A1F3A; border: 1px solid rgba(255,255,255,.1); padding: 2; box-sizing: border-box; cursor: pointer"))
+Style switchThumbOnCss()     = themed(Style("width: 20; height: 20; border-radius: 10; background: #FFFFFF"), Style("width: 20; height: 20; border-radius: 10; background: #06121C"))
+Style switchThumbOffCss()    = themed(Style("width: 20; height: 20; border-radius: 10; background: #6B7280"), Style("width: 20; height: 20; border-radius: 10; background: #7B8EAD"))
 
-Style switchTrackOnDisCss()  = Style("display: flex; flex-direction: row; align-items: center; justify-content: flex-end; width: 44; height: 24; border-radius: 12; background: #00D4FF; opacity: 0.5; padding: 2; box-sizing: border-box; cursor: not-allowed")
-Style switchTrackOffDisCss() = Style("display: flex; flex-direction: row; align-items: center; justify-content: flex-start; width: 44; height: 24; border-radius: 12; background: #1A1F3A; border: 1px solid rgba(255,255,255,.1); opacity: 0.5; padding: 2; box-sizing: border-box; cursor: not-allowed")
-Style switchThumbDisCss()    = Style("width: 20; height: 20; border-radius: 10; background: #4A5578")
+Style switchTrackOnDisCss()  = themed(Style("display: flex; flex-direction: row; align-items: center; justify-content: flex-end; width: 44; height: 24; border-radius: 12; background: #2563EB; opacity: 0.5; padding: 2; box-sizing: border-box; cursor: not-allowed"), Style("display: flex; flex-direction: row; align-items: center; justify-content: flex-end; width: 44; height: 24; border-radius: 12; background: #00D4FF; opacity: 0.5; padding: 2; box-sizing: border-box; cursor: not-allowed"))
+Style switchTrackOffDisCss() = themed(Style("display: flex; flex-direction: row; align-items: center; justify-content: flex-start; width: 44; height: 24; border-radius: 12; background: #E5E7EB; border: 1px solid #E5E7EB; opacity: 0.5; padding: 2; box-sizing: border-box; cursor: not-allowed"), Style("display: flex; flex-direction: row; align-items: center; justify-content: flex-start; width: 44; height: 24; border-radius: 12; background: #1A1F3A; border: 1px solid rgba(255,255,255,.1); opacity: 0.5; padding: 2; box-sizing: border-box; cursor: not-allowed"))
+Style switchThumbDisCss()    = themed(Style("width: 20; height: 20; border-radius: 10; background: #9CA3AF"), Style("width: 20; height: 20; border-radius: 10; background: #4A5578"))
 
-Style setBtnCss()           = Style("outline: none; background: transparent; color: #00D4FF; border: 1.5px solid #00D4FF; border-radius: 8; padding: 8px 16px; font-size: 0.875rem; font-weight: 600; cursor: pointer; flex-shrink: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style setBtnOffCss()        = Style("background: #12162A; color: #4A5578; border: 1px solid rgba(255,255,255,.06); border-radius: 8; padding: 8px 16px; font-size: 0.875rem; font-weight: 600; cursor: not-allowed; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style setBtnGhostCss()      = Style("outline: none; background: transparent; color: #7B8EAD; border: 1px solid rgba(255,255,255,.1); border-radius: 8; padding: 8px 16px; font-size: 0.875rem; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style setLogoutCss()        = Style("outline: none; background: transparent; color: #FF4A6E; border: 1px solid #FF4A6E; border-radius: 8; padding: 10px 16px; font-size: 0.875rem; font-weight: 600; cursor: pointer; align-self: flex-start; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style setCheckCss()         = Style("color: #F0F0F0; font-size: 0.8125rem; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style setBtnCss()           = themed(Style("outline: none; background: transparent; color: #2563EB; border: 1.5px solid #2563EB; border-radius: 8; padding: 8px 16px; font-size: 0.875rem; font-weight: 600; cursor: pointer; flex-shrink: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; background: transparent; color: #00D4FF; border: 1.5px solid #00D4FF; border-radius: 8; padding: 8px 16px; font-size: 0.875rem; font-weight: 600; cursor: pointer; flex-shrink: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style setBtnOffCss()        = themed(Style("background: #FFFFFF; color: #6B7280; border: 1px solid rgba(0,0,0,.06); border-radius: 8; padding: 8px 16px; font-size: 0.875rem; font-weight: 600; cursor: not-allowed; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("background: #12162A; color: #4A5578; border: 1px solid rgba(255,255,255,.06); border-radius: 8; padding: 8px 16px; font-size: 0.875rem; font-weight: 600; cursor: not-allowed; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style setBtnGhostCss()      = themed(Style("outline: none; background: transparent; color: #6B7280; border: 1px solid #E5E7EB; border-radius: 8; padding: 8px 16px; font-size: 0.875rem; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; background: transparent; color: #7B8EAD; border: 1px solid rgba(255,255,255,.1); border-radius: 8; padding: 8px 16px; font-size: 0.875rem; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style setLogoutCss()        = themed(Style("outline: none; background: transparent; color: #E63946; border: 1px solid #E63946; border-radius: 8; padding: 10px 16px; font-size: 0.875rem; font-weight: 600; cursor: pointer; align-self: flex-start; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; background: transparent; color: #FF4A6E; border: 1px solid #FF4A6E; border-radius: 8; padding: 10px 16px; font-size: 0.875rem; font-weight: 600; cursor: pointer; align-self: flex-start; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style setCheckCss()         = themed(Style("color: #1A1D2E; font-size: 0.8125rem; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #F0F0F0; font-size: 0.8125rem; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style setCheckRowCss()      = Style("display: flex; flex-direction: row; align-items: flex-start; gap: 8; width: 100%")
 Style setChecksCss()        = Style("display: flex; flex-direction: column; gap: 8")
-Style setPlanCss()          = Style("display: flex; flex-direction: column; gap: 4; padding: 12; background: #1A1F3A; border-radius: 8")
-Style setModalBoxCss()      = Style("display: flex; flex-direction: column; gap: 16; width: 90%; max-width: 440; padding: 24; box-sizing: border-box; background: #12162A; border: 1px solid rgba(255,255,255,.1); border-radius: 12")
+Style setPlanCss()          = themed(Style("display: flex; flex-direction: column; gap: 4; padding: 12; background: #E5E7EB; border-radius: 8"), Style("display: flex; flex-direction: column; gap: 4; padding: 12; background: #1A1F3A; border-radius: 8"))
+Style setModalBoxCss()      = themed(Style("display: flex; flex-direction: column; gap: 16; width: 90%; max-width: 440; padding: 24; box-sizing: border-box; background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12"), Style("display: flex; flex-direction: column; gap: 16; width: 90%; max-width: 440; padding: 24; box-sizing: border-box; background: #12162A; border: 1px solid rgba(255,255,255,.1); border-radius: 12"))
 Style setModalOverlayCss()  = Style("position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.65); z-index: 50")
-Style setExampleCss()       = Style("display: flex; flex-direction: column; gap: 4; padding: 12; background: rgba(0,212,255,.08); border: 1px solid rgba(0,212,255,.2); border-radius: 8")
-Style setModalActionsCss()  = Style("display: flex; flex-direction: row; justify-content: flex-end; align-items: flex-start; gap: 12; flex-wrap: wrap")
+Style setExampleCss()       = themed(Style("display: flex; flex-direction: column; gap: 4; padding: 12; background: rgba(37,99,235,.08); border: 1px solid rgba(37,99,235,.2); border-radius: 8"), Style("display: flex; flex-direction: column; gap: 4; padding: 12; background: rgba(0,212,255,.08); border: 1px solid rgba(0,212,255,.2); border-radius: 8"))
+Style setModalActionsCss()  = Style("display: flex; flex-direction: row; justify-content: flex-end; align-items: flex-start; gap: 16; flex-wrap: wrap")
 Style setHeadRowCss()       = Style("display: flex; flex-direction: row; align-items: center; gap: 8")
-Style setContentCss()       = Style("display: flex; flex-direction: column; gap: 20; width: 100%; max-width: 620")
+Style setContentCss()       = Style("display: flex; flex-direction: column; gap: 20; width: 100%; max-width: 620; align-self: center")
 Style setContentMobileCss() = Style("display: flex; flex-direction: column; gap: 20; width: 100%")
 
 Label txt(String s, Style st) {
@@ -143,6 +144,37 @@ flipPref(Bool isEmail) {
     }
 }
 
+// Interruptor "Modo escuro" (único controle de tema do app): ligado = escuro. A troca vale para o
+// app inteiro na hora e é enviada ao servidor; se o PUT falhar, a troca fica na sessão com um aviso.
+View appearanceSwitch(Window w) {
+    val dark = AppState.themeMode != "light"
+    var thumb = View(screenStyle())
+    var track = Row(listOf(thumb))
+    track.setId("pref-dark")
+    if (dark) {
+        thumb.setStyle(switchThumbOnCss())
+        track.setStyle(switchTrackOnCss())
+    } else {
+        thumb.setStyle(switchThumbOffCss())
+        track.setStyle(switchTrackOffCss())
+    }
+    track.on("click", () -> {
+        if (dark) {
+            AppState.themeMode = "light"
+        } else {
+            AppState.themeMode = "dark"
+        }
+        mountScreen(w)
+        spawn {
+            if (!savePreferences()) {
+                SettingsState.error = "Não foi possível salvar o tema: ele vale só nesta sessão."
+            }
+            mountScreen(w)
+        }
+    })
+    return track
+}
+
 // Toggle ativo: inverte, salva e re-renderiza; se o PUT falhar, desfaz.
 View prefToggle(Window w, Bool on, String id, Bool isEmail) {
     var thumb = View(screenStyle())
@@ -168,22 +200,44 @@ View prefToggle(Window w, Bool on, String id, Bool isEmail) {
     return track
 }
 
+Style freqRowCss() = Style("display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px; align-items: center")
+Style freqOptCss() = themed(Style("outline: none; cursor: pointer; background: #FFFFFF; color: #1A1D2E; height: 40; box-sizing: border-box; border: 1px solid #E5E7EB; border-radius: 8; padding: 0 14px; font-size: 0.875rem; font-weight: 500; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; cursor: pointer; background: #1A1F3A; color: #F0F0F0; height: 40; box-sizing: border-box; border: 1px solid rgba(255,255,255,.1); border-radius: 8; padding: 0 14px; font-size: 0.875rem; font-weight: 500; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style freqOptOnCss() = themed(Style("outline: none; cursor: pointer; background: #2563EB; color: #FFFFFF; height: 40; box-sizing: border-box; border: 1px solid #2563EB; border-radius: 8; padding: 0 14px; font-size: 0.875rem; font-weight: 700; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; cursor: pointer; background: #00D4FF; color: #06121C; height: 40; box-sizing: border-box; border: 1px solid #00D4FF; border-radius: 8; padding: 0 14px; font-size: 0.875rem; font-weight: 700; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+
+// Seletor de frequência desenhado em Kof (o popup do <select> nativo não é
+// estilizável e saía branco com texto claro). Botões reais: foco e Enter.
 View frequencySelect(Window w) {
-    var sel = Select(frequencyLabels())
-    sel.setId("pref-frequency")
-    sel.setStyle(selectCss())
-    sel.setSelected(frequencyIndex(SettingsState.frequency))
-    sel.on("change", () -> {
-        spawn {
-            val previous = SettingsState.frequency
-            SettingsState.frequency = frequencyCodes().get(sel.selected())
-            if (!savePreferences()) {
-                SettingsState.frequency = previous
+    var labels = frequencyLabels()
+    var codes = frequencyCodes()
+    var current = frequencyIndex(SettingsState.frequency)
+    var opts: List<View> = listOf()
+    var i = 0
+    while (i < labels.size()) {
+        val idx = i
+        var b = Button(labels.get(i), () -> {
+            spawn {
+                val previous = SettingsState.frequency
+                SettingsState.frequency = codes.get(idx)
+                mountScreen(w)
+                if (!savePreferences()) {
+                    SettingsState.frequency = previous
+                }
+                mountScreen(w)
             }
-            mountScreen(w)
+        })
+        b.setId("pref-frequency-" + codes.get(i))
+        if (i == current) {
+            b.setStyle(freqOptOnCss())
+        } else {
+            b.setStyle(freqOptCss())
         }
-    })
-    return sel
+        opts.add(b)
+        i = i + 1
+    }
+    var row = Row(opts)
+    row.setId("pref-frequency")
+    row.setStyle(freqRowCss())
+    return row
 }
 
 View salaryModal(Window w) {
@@ -244,6 +298,18 @@ submitSalaryEdit(Window w, String raw) {
     }
 }
 
+// A recuperação já é um fluxo completo: pede o código por e-mail e permite
+// definir uma nova senha. A sessão atual é encerrada antes de abrir o fluxo.
+openPasswordReset(Window w) {
+    var email = SessionState.userEmail
+    resetSettings()
+    resetSession()
+    clearLoginForm()
+    LoginForm.mode = "forgot"
+    LoginForm.forgotEmail = email
+    navigateTo(w, "login")
+}
+
 View settingsScreen(Window w) {
     if (!SettingsState.loaded) {
         SettingsState.loaded = true
@@ -254,7 +320,7 @@ View settingsScreen(Window w) {
     }
 
     var appearance = section("Aparência", listOf(
-        settingsRow("Modo escuro", "Interface no tema escuro (padrão)", inactiveToggle(true, "pref-dark"), "row-dark"),
+        settingsRow("Modo escuro", "Interface no tema escuro (padrão)", appearanceSwitch(w), "row-dark"),
         settingsRow("Seguir tema do dispositivo", "Sincroniza com a preferência do sistema operacional", inactiveToggle(false, "pref-system-theme"), "row-system-theme")
     ), "sec-appearance")
 
@@ -279,7 +345,7 @@ View settingsScreen(Window w) {
     var pro = Column(listOf(txt("Pro", setRowTitleCss()), txt("Envios ilimitados, sem restrição.", setRowDescCss())))
     pro.setStyle(setPlanCss())
     var invoice = section("Envio de fatura", listOf(
-        txt("Envie sua fatura ou extrato pelo chat (PDF, DOCX, JPG ou PNG) e o Organiza organiza tudo pra você.", setRowDescCss()),
+        txt("Envie sua fatura ou extrato em PDF pelo chat e o Organiza organiza tudo pra você.", setRowDescCss()),
         free, pro,
         checks(listOf("A IA lê e classifica cada gasto em Necessidades, Desejos e Futuro", "Você revisa e confirma os itens antes de qualquer coisa ser salvo", "Seu pulso diário e suas caixinhas são atualizados na hora"))
     ), "sec-invoice")
@@ -293,15 +359,20 @@ View settingsScreen(Window w) {
         inactiveButton("Conectar banco", "bank-connect")
     ), "sec-integrations")
 
-    View accHead = Row(listOf(txt("Conta", setSectionLabelCss()), txt("MVP 2", badgeWarningCss())))
+    View accHead = Row(listOf(txt("Conta", setSectionLabelCss())))
     accHead.setId("sec-account-label")
     accHead.setStyle(setHeadRowCss())
+    var resetPassword = Button("Redefinir", () -> openPasswordReset(w))
+    resetPassword.setId("account-reset-password")
+    resetPassword.setStyle(setBtnCss())
+    var changeEmail = settingsRow("Alterar e-mail", "Trocar o e-mail associado à sua conta", txt("›", setRowDescCss()), "row-change-email")
+    var twoFactor = settingsRow("Autenticação de dois fatores", "Uma segunda camada de segurança no momento do login", txt("›", setRowDescCss()), "row-2fa")
+    var futureAccount = Column(listOf(changeEmail, twoFactor))
+    futureAccount.setStyle(setInertCss())
     View accRows = Column(listOf(
-        settingsRow("Alterar e-mail", "Trocar o e-mail associado à sua conta", txt("›", setRowDescCss()), "row-change-email"),
-        settingsRow("Alterar senha", "Criar uma nova senha de acesso", txt("›", setRowDescCss()), "row-change-password"),
-        settingsRow("Autenticação de dois fatores", "Uma segunda camada de segurança no momento do login", txt("›", setRowDescCss()), "row-2fa")
+        settingsRow("Redefinir senha", "Envia um código para você criar uma nova senha", resetPassword, "row-change-password"),
+        futureAccount
     ))
-    accRows.setStyle(setInertCss())
     var accCard = Column(listOf(accRows))
     accCard.setId("sec-account")
     accCard.setStyle(cardCss())

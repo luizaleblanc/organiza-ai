@@ -13,10 +13,9 @@ package core
 class AppState {
     static String currentScreen = "welcome"
     static Bool isDesktop = true
-    // Modo claro de Login e Cadastro (botão "Modo claro / Modo escuro").
-    static Bool lightAuth = false
-    // Toggle de tema: "system", "light" ou "dark". O kof.ui não lê a preferência do sistema,
-    // então "system" usa o escuro (padrão do app).
+    // Tema do app inteiro: "dark" (padrão) ou "light". Só muda em Configurações > Aparência
+    // e ao ler a preferência do servidor no login.
+    // Ao sair, o tema da sessão fica; o próximo login lê a preferência da conta e aplica.
     static String themeMode = "dark"
     static String activeToast = ""
     static String activeNotificationModel = ""
@@ -102,4 +101,5 @@ resetSession() {
     SessionState.tier = "FREE"
     ChatState.messages = ""
     AppState.currentScreen = "welcome"
+    AppState.themeMode = "dark"
 }

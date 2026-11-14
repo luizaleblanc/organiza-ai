@@ -14,7 +14,13 @@ import core.theme
 // Tons: accent, secondary, muted, primary, onaccent, danger, warning, success.
 // =============================================================================
 
-String iconPath(String name, String tone) = "assets/icons/" + name + "-" + tone + ".svg"
+// Tema claro: arquivos <nome>-l<tom>.svg (scripts/gen-icons.sh).
+String iconPath(String name, String tone) {
+    if (isLight()) {
+        return "assets/icons/" + name + "-l" + tone + ".svg"
+    }
+    return "assets/icons/" + name + "-" + tone + ".svg"
+}
 
 // Image de `size` x `size` px.
 Image icon(String name, Int size, String tone) {

@@ -17,6 +17,15 @@ tone_hex() {
   esac
 }
 
+# Tons do tema claro (arquivos <nome>-l<tom>.svg): tokens claros do design system.
+tone_hex_light() {
+  case "$1" in
+    accent) echo "#2563EB" ;; secondary) echo "#6B7280" ;; muted) echo "#9CA3AF" ;;
+    primary) echo "#1A1D2E" ;; onaccent) echo "#FFFFFF" ;; danger) echo "#E63946" ;;
+    warning) echo "#F59E0B" ;; success) echo "#10B981" ;;
+  esac
+}
+
 # nome|stroke-width|atributos extras do <svg>|corpo
 icons='dash|2||<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="11" width="8" height="10" rx="1.5"/><rect x="3" y="14" width="8" height="7" rx="1.5"/>
 chat|2||<path d="M4 5h16v11H9l-5 4V5z" stroke-linejoin="round"/>
@@ -36,6 +45,14 @@ for tone in accent secondary muted primary onaccent danger warning success; do
   printf '%s\n' "$icons" | while IFS='|' read -r name sw extra body; do
     printf '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%s" stroke-width="%s"%s>%s</svg>\n' \
       "$hex" "$sw" "$extra" "$body" > "$out/$name-$tone.svg"
+  done
+done
+for tone in accent secondary muted primary onaccent danger warning success; do
+  hex="$(tone_hex_light "$tone")"
+  printf '%s
+' "$icons" | while IFS='|' read -r name sw extra body; do
+    printf '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%s" stroke-width="%s"%s>%s</svg>
+'       "$hex" "$sw" "$extra" "$body" > "$out/$name-l$tone.svg"
   done
 done
 echo "ícones gerados em $out: $(ls "$out" | wc -l | tr -d ' ')"

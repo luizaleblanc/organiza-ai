@@ -73,7 +73,7 @@ RUN /opt/kof/bin/kof check backend \
 RUN /opt/kof/bin/kof build frontend --target js --output /out/web \
  && test -f /out/web/index.html && test -f /out/web/Default.mjs \
  && cp -r /src/frontend/assets /out/web/assets \
- && sed -i 's#</style>#    input::-ms-reveal, input::-ms-clear { display: none; }\n    html { font-size: clamp(17px, calc(0.6vw + 10px), 23px); }\n  </style>#' /out/web/index.html \
+ && sed -i 's#<title>[^<]*</title>#<title>Organiza AI</title>#; s#<body>#<body bgcolor="#0A0D18">#; s#<div id="kof-titlebar">#<div id="kof-titlebar" hidden>#; s#<div id="kof-status">#<div id="kof-status" hidden>#; s#</style>#    input::-ms-reveal, input::-ms-clear { display: none; }\n    #kof-titlebar, #kof-status { display: none !important; }\n    html, body, #kof-root { background: #0A0D18; }\n    #kof-root { padding: 0; gap: 0; overflow: hidden; }\n    .kof-window { padding: 0; border: 0; border-radius: 0; min-height: 100%; }\n    html { font-size: clamp(14px, calc(0.6vw + 8.32px), 24px); }\n    @media (max-width: 600px) { html { font-size: 16px; } }\n  </style>#' /out/web/index.html \
  && grep -q 'ms-reveal' /out/web/index.html \
  && test -f /out/web/assets/brand/organiza-simbolo.svg \
  && test -f /out/web/assets/brand/organiza-fundo-ondas.svg \

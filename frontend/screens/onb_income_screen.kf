@@ -14,9 +14,9 @@ import components.form_widgets
 // =============================================================================
 
 // Bloco PJ todo em azul (accent do DS).
-Style pjBoxCss()   = Style("display: flex; flex-direction: column; align-items: center; gap: 8; width: 100%; padding: 20px 16px; box-sizing: border-box; border: 1.5px solid #00D4FF; border-radius: 12; background: rgba(0,212,255,.08); margin: 0 0 24px 0")
-Style pjLabelCss() = Style("color: #00D4FF; font-size: 1rem; font-weight: 600; margin: 0; text-align: center; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style pjHintCss()  = Style("color: #00D4FF; font-size: 0.8125rem; margin: 0; text-align: center; overflow-wrap: break-word; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style pjBoxCss()   = themed(Style("display: flex; flex-direction: column; align-items: center; gap: 8; width: 100%; padding: 20px 16px; box-sizing: border-box; border: 1.5px solid #2563EB; border-radius: 12; background: rgba(37,99,235,.08); margin: 0 0 24px 0"), Style("display: flex; flex-direction: column; align-items: center; gap: 8; width: 100%; padding: 20px 16px; box-sizing: border-box; border: 1.5px solid #00D4FF; border-radius: 12; background: rgba(0,212,255,.08); margin: 0 0 24px 0"))
+Style pjLabelCss() = themed(Style("color: #2563EB; font-size: 1rem; font-weight: 600; margin: 0; text-align: center; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #00D4FF; font-size: 1rem; font-weight: 600; margin: 0; text-align: center; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style pjHintCss()  = themed(Style("color: #2563EB; font-size: 0.8125rem; margin: 0; text-align: center; overflow-wrap: break-word; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #00D4FF; font-size: 0.8125rem; margin: 0; text-align: center; overflow-wrap: break-word; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 
 View onbIncomeScreen(Window w) {
     var title = onbTitle("Sua renda é fixa ou variável?", "onb-title")

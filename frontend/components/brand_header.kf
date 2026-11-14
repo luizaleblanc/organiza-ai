@@ -5,6 +5,13 @@ import core.theme
 import core.app_state
 import core.navigation
 
+// O controle de viewport e exclusivamente de desenvolvimento. O bundle normal
+// mantem este literal falso; a rota /dev troca somente esta inicializacao no
+// modulo JS gerado. Assim, #dev-viewport nem chega a existir no DOM publico.
+class ViewportDev {
+    static Bool enabled = false
+}
+
 // =============================================================================
 // T4 — Logomark (3 ondas paralelas) + cabeçalho com toggle Mobile/Desktop
 // =============================================================================
@@ -41,84 +48,21 @@ View buildBrandHeader(Window w) {
     name.bold = true
     name.color = colorTextPrimary()
 
-    var toggleView = viewportIconButton(w)
-
-    var row = Row(listOf(buildLogomark(), name, toggleView))
+    var row = Row(listOf(buildLogomark(), name))
     var header = View(Style(colorBgPrimary(), colorTextPrimary(), 12, 0))
     header.bind(row)
     return header
 }
 
-// Controles fixos no canto superior direito, fora do fluxo e da rolagem das telas.
-Style viewportBarFloatCss() = Style("position: fixed; top: 16; right: 16; width: auto; display: flex; flex-direction: row; flex-wrap: nowrap; gap: 8; align-items: center; z-index: 100; padding: 0; background: transparent")
+// Botão discreto (sem caixa) no canto superior direito, fora do fluxo e da rolagem das telas.
+// Só o ícone de celular (Desktop) ou de monitor (Mobile): a troca de tema vive em Configurações.
+Style viewportBarFloatCss() = Style("position: fixed; top: 12; right: 12; width: auto; display: flex; flex-direction: row; align-items: center; z-index: 100; padding: 0; background: transparent")
+Style viewportButtonCss() = Style("outline: none; display: flex; align-items: center; justify-content: center; width: 36; height: 36; border-radius: 999; background: transparent; border: none; cursor: pointer; padding: 0; line-height: 0em")
 
-// =============================================================================
-// Toggle de tema (pílula com 3 posições: Sistema, Claro, Escuro). A opção ativa
-// fica no círculo com o gradiente da marca; as outras, ícone em text-secondary.
-// =============================================================================
-Style themePillCss() {
-    if (authLight()) {
-        return Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 4; padding: 4; border-radius: 999; background: #FFFFFF; border: 1px solid #E5E7EB; box-shadow: 0 4px 14px rgba(37,99,235,.12)")
-    }
-    return Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 4; padding: 4; border-radius: 999; background: #12162A; border: 1px solid rgba(255,255,255,.1); box-shadow: 0 8px 24px rgba(0,0,0,.45)")
-}
-Style themeKnobIdleCss() = Style("outline: none; display: flex; align-items: center; justify-content: center; width: 40; height: 40; border-radius: 999; background: transparent; cursor: pointer; padding: 0; line-height: 0em")
-Style themeKnobActiveCss() {
-    if (authLight()) {
-        return Style("outline: none; display: flex; align-items: center; justify-content: center; width: 40; height: 40; border-radius: 999; background: linear-gradient(135deg, #2563EB, #1D4ED8); box-shadow: 0 2px 8px rgba(37,99,235,.35); cursor: pointer; padding: 0; line-height: 0em")
-    }
-    return Style("outline: none; display: flex; align-items: center; justify-content: center; width: 40; height: 40; border-radius: 999; background: linear-gradient(135deg, #00D4FF, #0066FF); box-shadow: 0 0 0 3px rgba(0,212,255,.15), 0 4px 12px rgba(0,102,255,.4); cursor: pointer; padding: 0; line-height: 0em")
-}
-
-setThemeMode(Window w, String mode) {
-    AppState.themeMode = mode
-    AppState.lightAuth = mode == "light"
-    mountScreen(w)
-}
-
-View themeKnob(Window w, String mode, String icon, String label) {
-    val active = AppState.themeMode == mode
-    var color = "secondary"
-    if (authLight()) {
-        color = "lightsecondary"
-    }
-    if (active) {
-        color = "onaccent"
-        if (authLight()) {
-            color = "white"
-        }
-    }
-    var img = Image("assets/icons/theme-" + icon + "-" + color + ".svg")
-    img.setAlt(label)
-    img.setWidth(20)
-    img.setHeight(20)
-    var knob = View(screenStyle())
-    knob.setId("theme-" + mode)
-    if (active) {
-        knob.setStyle(themeKnobActiveCss())
-    } else {
-        knob.setStyle(themeKnobIdleCss())
-    }
-    knob.bind(img)
-    knob.on("click", () -> setThemeMode(w, mode))
-    return knob
-}
-
-View themeToggle(Window w) {
-    var row = Row(listOf(
-        themeKnob(w, "system", "monitor", "Tema do sistema"),
-        themeKnob(w, "light", "sun", "Modo claro"),
-        themeKnob(w, "dark", "moon", "Modo escuro")))
-    row.setId("auth-theme-toggle")
-    row.setStyle(themePillCss())
-    return row
-}
-
-// Botão redondo de viewport (ícone de celular no Desktop, de monitor no Mobile), no mesmo
-// estilo da pílula de tema.
+// Ícone de viewport: celular no Desktop, monitor no Mobile (mesmo botão, mesma posição).
 View viewportIconButton(Window w) {
     var color = "secondary"
-    if (authLight()) {
+    if (isLight()) {
         color = "lightsecondary"
     }
     var icon = "phone"
@@ -133,11 +77,18 @@ View viewportIconButton(Window w) {
     img.setHeight(20)
     var knob = View(screenStyle())
     knob.setId("dev-viewport")
-    knob.setStyle(themeKnobIdleCss())
+    knob.setStyle(viewportButtonCss())
     knob.bind(img)
     knob.on("click", () -> switchViewport(w))
-    var pill = Row(listOf(knob))
-    pill.setId("viewport-pill")
-    pill.setStyle(themePillCss())
-    return pill
+    return knob
+}
+
+// Wrapper sem id no bundle publico. Somente /dev monta o botao interno.
+View viewportControlBar(Window w) {
+    var bar = View(screenStyle())
+    bar.setStyle(viewportBarFloatCss())
+    if (ViewportDev.enabled) {
+        bar.bind(viewportIconButton(w))
+    }
+    return bar
 }

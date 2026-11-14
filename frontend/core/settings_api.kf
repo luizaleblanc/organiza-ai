@@ -11,7 +11,38 @@ import core.api_client
 // Estado próprio da tela (contrato T0): nada em app_state.
 // =============================================================================
 
-record Preferences(Bool emailEnabled, String frequency, Bool pushEnabled)
+// theme: "DARK" ou "LIGHT" (por usuário, no servidor). Ausente na resposta = escuro.
+record Preferences(Bool emailEnabled, String frequency, Bool pushEnabled, String theme)
+
+String themeCode() {
+    if (AppState.themeMode == "light") {
+        return "LIGHT"
+    }
+    return "DARK"
+}
+
+// Só a leitura do login mexe no tema; applyPreferences (GET/PUT das telas) não o sobrescreve,
+// para que um PUT que falhou não desfaça a troca feita na sessão.
+String themeModeFromCode(String? code) {
+    if (code != null && code.toUpperCase() == "LIGHT") {
+        return "light"
+    }
+    return "dark"
+}
+
+// Ao entrar: lê a preferência e aplica o tema ANTES do shell. Qualquer falha = escuro.
+loadThemePreference() {
+    var mode = "dark"
+    try {
+        val body = apiGet("/api/users/me/preferences")
+        if (!isApiError(body)) {
+            mode = themeModeFromCode(json.decode<Preferences>(body).theme())
+        }
+    } catch (String e) {
+        mode = "dark"
+    }
+    AppState.themeMode = mode
+}
 
 class SettingsState {
     static Bool emailEnabled = true
@@ -80,7 +111,7 @@ Bool savePreferences() {
     SettingsState.saving = true
     var ok = false
     try {
-        val payload = json.encode(Preferences(SettingsState.emailEnabled, SettingsState.frequency, SettingsState.pushEnabled))
+        val payload = json.encode(Preferences(SettingsState.emailEnabled, SettingsState.frequency, SettingsState.pushEnabled, themeCode()))
         val body = apiPut("/api/users/me/preferences", payload)
         if (isApiError(body)) {
             SettingsState.error = "Não foi possível salvar: valor inválido."

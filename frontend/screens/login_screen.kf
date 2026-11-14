@@ -5,6 +5,7 @@ import core.theme
 import core.app_state
 import core.navigation
 import core.auth_api
+import core.settings_api
 import core.format
 import components.brand_mark
 import components.form_widgets
@@ -50,92 +51,92 @@ clearLoginForm() {
 
 Style authDesktopShellCss()    = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: stretch; flex-grow: 1; width: 100%; padding: 0; background: transparent")
 Style authBrandPanelCss() {
-    if (authLight()) {
-        return Style("flex: 0 0 37%; min-width: 300; position: relative; overflow: hidden; background: linear-gradient(160deg, rgba(0,212,255,.09), rgba(37,99,235,.05)); border-right: 2px solid rgba(0,0,0,.06); display: flex; flex-direction: column; justify-content: center; align-items: flex-start; padding: 72px 64px; box-sizing: border-box")
+    if (isLight()) {
+        return Style("flex: 0 0 37%; min-width: 300; position: relative; overflow: hidden; background: linear-gradient(160deg, rgba(37,99,235,.07), rgba(29,78,216,.04)); border-right: 2px solid rgba(0,0,0,.06); display: flex; flex-direction: column; justify-content: center; align-items: flex-start; padding: 72px 64px; box-sizing: border-box")
     }
     return Style("flex: 0 0 37%; min-width: 300; position: relative; overflow: hidden; background: linear-gradient(160deg, rgba(0,212,255,.10), rgba(0,102,255,.04)); border-right: 2px solid rgba(255,255,255,.06); display: flex; flex-direction: column; justify-content: center; align-items: flex-start; padding: 72px 64px; box-sizing: border-box")
 }
 Style authPanelContentCss() = Style("position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; width: 100%; padding: 0; background: transparent")
 Style authBrandMarkLeftCss()   = Style("align-self: center; padding: 0; background: transparent; line-height: 0em")
 Style authBrandHeadlineCss() {
-    if (authLight()) {
+    if (isLight()) {
         return Style("color: #6B7280; font-size: 1.375rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; line-height: 2.125rem; margin: 44px 0 18px 0; max-width: 100%; overflow-wrap: break-word; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
     }
     return Style("color: #7B8EAD; font-size: 1.375rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; line-height: 2.125rem; margin: 44px 0 18px 0; max-width: 100%; overflow-wrap: break-word; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 }
 Style authBrandSubCss() {
-    if (authLight()) {
+    if (isLight()) {
         return Style("color: #6B7280; font-size: 1.1875rem; line-height: 1.875rem; margin: 0; max-width: 100%; overflow-wrap: break-word; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
     }
     return Style("color: #7B8EAD; font-size: 1.1875rem; line-height: 1.875rem; margin: 0; max-width: 100%; overflow-wrap: break-word; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 }
 Style authFormPanelCss()       = Style("flex-grow: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 32px; box-sizing: border-box; overflow-y: auto; background: transparent")
-Style authDesktopBoxCss()      = Style("display: flex; flex-direction: column; align-items: stretch; gap: 12; width: 100%; max-width: 440; padding: 0; background: transparent")
-Style authMobileBoxCss()       = Style("display: flex; flex-direction: column; align-items: stretch; gap: 14; width: 100%; max-width: 400; padding: 4px 4px 14px; box-sizing: border-box; background: transparent")
+Style authDesktopBoxCss()      = Style("display: flex; flex-direction: column; align-items: stretch; gap: 16; width: 100%; max-width: 440; padding: 0; background: transparent")
+Style authMobileBoxCss()       = Style("display: flex; flex-direction: column; align-items: stretch; gap: 16; width: 100%; max-width: 400; padding: 4px 4px 14px; box-sizing: border-box; background: transparent")
 Style authMobileHeaderCss()    = Style("display: flex; flex-direction: column; align-items: center; gap: 4; width: 100%; margin-bottom: 4px; padding: 0; background: transparent")
 Style passwordBoxBlockCss()    = Style("position: relative; display: block; width: 100%; padding: 0; background: transparent")
 Style authHeadingDesktopCss() {
-    if (authLight()) {
+    if (isLight()) {
         return Style("color: #1A1D2E; font-size: 1.625rem; font-weight: 600; margin: 0 0 4px 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
     }
     return Style("color: #F0F0F0; font-size: 1.625rem; font-weight: 600; margin: 0 0 4px 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 }
 Style authHeadingMobileCss() {
-    if (authLight()) {
+    if (isLight()) {
         return Style("color: #1A1D2E; font-size: 1.25rem; font-weight: 700; margin: 12px 0 2px 0; text-align: center; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
     }
     return Style("color: #F0F0F0; font-size: 1.25rem; font-weight: 700; margin: 12px 0 2px 0; text-align: center; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 }
 Style authSubheadingCss() {
-    if (authLight()) {
-        return Style("color: #9CA3AF; font-size: 0.9375rem; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+    if (isLight()) {
+        return Style("color: #6B7280; font-size: 0.9375rem; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
     }
     return Style("color: #4A5578; font-size: 0.9375rem; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 }
 Style authSubheadingMobCss() {
-    if (authLight()) {
-        return Style("color: #9CA3AF; font-size: 0.875rem; margin: 0; text-align: center; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+    if (isLight()) {
+        return Style("color: #6B7280; font-size: 0.875rem; margin: 0; text-align: center; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
     }
     return Style("color: #4A5578; font-size: 0.875rem; margin: 0; text-align: center; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 }
 Style authHeaderBlockCss()     = Style("display: flex; flex-direction: column; gap: 2; width: 100%; margin-bottom: 4px; padding: 0; background: transparent")
-Style authFormCss()            = Style("display: flex; flex-direction: column; align-items: stretch; gap: 14; width: 100%; margin: 0")
+Style authFormCss()            = Style("display: flex; flex-direction: column; align-items: stretch; gap: 16; width: 100%; margin: 0")
 Style authRightLinkRowCss()    = Style("display: flex; flex-direction: row; justify-content: flex-end; align-items: center; width: 100%; padding: 0; background: transparent")
-Style authFooterCss()          = Style("display: flex; flex-direction: column; align-items: center; gap: 4; width: 100%; margin-top: 2px")
-Style authLinksCenterCss()     = Style("display: flex; flex-direction: column; align-items: center; gap: 8; width: 100%; margin-top: 4px")
+Style authFooterCss()          = Style("display: flex; flex-direction: column; align-items: center; gap: 8; width: 100%; margin-top: 2px")
+Style authLinksCenterCss()     = Style("display: flex; flex-direction: column; align-items: center; gap: 12; width: 100%; margin-top: 4px")
 Style authLinkCss() {
-    if (authLight()) {
+    if (isLight()) {
         return Style("outline: none; background: transparent; color: #2563EB; border: none; padding: 2px 4px; font-size: 0.9375rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
     }
     return Style("outline: none; background: transparent; color: #00D4FF; border: none; padding: 2px 4px; font-size: 0.9375rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 }
 Style authSubmitDesktopCss() {
-    if (authLight()) {
+    if (isLight()) {
         return Style("outline: none; background: linear-gradient(90deg, #2563EB, #1D4ED8); color: #FFFFFF; height: 48; width: 100%; border: none; border-radius: 10; font-size: 1rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
     }
     return Style("outline: none; background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 48; width: 100%; border: none; border-radius: 10; font-size: 1rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 }
 Style authSubmitMobileCss() {
-    if (authLight()) {
+    if (isLight()) {
         return Style("outline: none; background: linear-gradient(90deg, #2563EB, #1D4ED8); color: #FFFFFF; height: 48; width: 100%; border: none; border-radius: 10; font-size: 0.9375rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
     }
     return Style("outline: none; background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 48; width: 100%; border: none; border-radius: 10; font-size: 0.9375rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 }
 Style authBusyDesktopCss() {
-    if (authLight()) {
+    if (isLight()) {
         return Style("background: linear-gradient(90deg, #2563EB, #1D4ED8); color: #FFFFFF; height: 48; width: 100%; border: none; border-radius: 10; font-size: 1rem; font-weight: 600; opacity: 0.6; cursor: wait; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
     }
     return Style("background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 48; width: 100%; border: none; border-radius: 10; font-size: 1rem; font-weight: 600; opacity: 0.6; cursor: wait; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 }
 Style authBusyMobileCss() {
-    if (authLight()) {
+    if (isLight()) {
         return Style("background: linear-gradient(90deg, #2563EB, #1D4ED8); color: #FFFFFF; height: 48; width: 100%; border: none; border-radius: 10; font-size: 0.9375rem; font-weight: 600; opacity: 0.6; cursor: wait; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
     }
     return Style("background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 48; width: 100%; border: none; border-radius: 10; font-size: 0.9375rem; font-weight: 600; opacity: 0.6; cursor: wait; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 }
 Style infoBannerCss() {
-    if (authLight()) {
-        return Style("color: #10B981; background: rgba(16,185,129,.10); border: 1px solid #10B981; border-radius: 8; padding: 12; font-size: 0.8125rem; line-height: 1.125rem; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+    if (isLight()) {
+        return Style("color: #1A1D2E; background: rgba(16,185,129,.10); border: 1px solid #10B981; border-radius: 8; padding: 12; font-size: 0.8125rem; line-height: 1.125rem; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
     }
     return Style("color: #00E5A0; background: rgba(0,229,160,.12); border: 1px solid #00E5A0; border-radius: 8; padding: 12; font-size: 0.8125rem; line-height: 1.125rem; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 }
@@ -144,31 +145,31 @@ Style infoBannerCss() {
 Style strengthWrapCss()        = Style("display: flex; flex-direction: column; gap: 6; width: 100%; padding: 0; background: transparent")
 Style strengthTrackRowCss()    = Style("display: flex; flex-direction: row; flex-wrap: nowrap; gap: 6; width: 100%; align-items: center")
 Style strengthSegIdleCss() {
-    if (authLight()) {
+    if (isLight()) {
         return Style("flex-grow: 1; height: 4; border-radius: 2; background: rgba(0,0,0,.08); padding: 0")
     }
     return Style("flex-grow: 1; height: 4; border-radius: 2; background: rgba(255,255,255,.08); padding: 0")
 }
 Style strengthSegWeakCss() {
-    if (authLight()) {
+    if (isLight()) {
         return Style("flex-grow: 1; height: 4; border-radius: 2; background: #E63946; padding: 0")
     }
     return Style("flex-grow: 1; height: 4; border-radius: 2; background: #FF4A6E; padding: 0")
 }
 Style strengthSegFairCss() {
-    if (authLight()) {
+    if (isLight()) {
         return Style("flex-grow: 1; height: 4; border-radius: 2; background: #F59E0B; padding: 0")
     }
     return Style("flex-grow: 1; height: 4; border-radius: 2; background: #FFB800; padding: 0")
 }
 Style strengthSegGoodCss() {
-    if (authLight()) {
+    if (isLight()) {
         return Style("flex-grow: 1; height: 4; border-radius: 2; background: #2563EB; padding: 0")
     }
     return Style("flex-grow: 1; height: 4; border-radius: 2; background: #00D4FF; padding: 0")
 }
 Style strengthSegStrongCss() {
-    if (authLight()) {
+    if (isLight()) {
         return Style("flex-grow: 1; height: 4; border-radius: 2; background: #10B981; padding: 0")
     }
     return Style("flex-grow: 1; height: 4; border-radius: 2; background: #00E5A0; padding: 0")
@@ -176,50 +177,50 @@ Style strengthSegStrongCss() {
 Style strengthMetaRowCss()     = Style("display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: space-between; align-items: center; gap: 8; width: 100%")
 Style strengthRulesGridCss()  = Style("display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; width: 100%; padding: 0; background: transparent")
 Style strengthRuleIdleCss() {
-    if (authLight()) {
+    if (isLight()) {
         return Style("color: #6B7280; font-size: 0.875rem; line-height: 1.25rem; margin: 0; overflow-wrap: break-word; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
     }
     return Style("color: #7B8EAD; font-size: 0.875rem; line-height: 1.25rem; margin: 0; overflow-wrap: break-word; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 }
 Style strengthRuleMetCss() {
-    if (authLight()) {
-        return Style("color: #10B981; font-size: 0.875rem; line-height: 1.25rem; margin: 0; overflow-wrap: break-word; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+    if (isLight()) {
+        return Style("color: #1A1D2E; font-size: 0.875rem; line-height: 1.25rem; margin: 0; overflow-wrap: break-word; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
     }
     return Style("color: #00E5A0; font-size: 0.875rem; line-height: 1.25rem; margin: 0; overflow-wrap: break-word; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 }
 Style strengthHintCss() {
-    if (authLight()) {
+    if (isLight()) {
         return Style("color: #6B7280; font-size: 0.875rem; line-height: 1.25rem; margin: 0; overflow-wrap: break-word; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
     }
     return Style("color: #7B8EAD; font-size: 0.875rem; line-height: 1.25rem; margin: 0; overflow-wrap: break-word; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 }
 Style strengthLblIdleCss() {
-    if (authLight()) {
+    if (isLight()) {
         return Style("color: #6B7280; font-size: 0.875rem; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
     }
     return Style("color: #7B8EAD; font-size: 0.875rem; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 }
 Style strengthLblWeakCss() {
-    if (authLight()) {
+    if (isLight()) {
         return Style("color: #E63946; font-size: 0.875rem; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
     }
     return Style("color: #FF4A6E; font-size: 0.875rem; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 }
 Style strengthLblFairCss() {
-    if (authLight()) {
-        return Style("color: #F59E0B; font-size: 0.875rem; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+    if (isLight()) {
+        return Style("color: #1A1D2E; font-size: 0.875rem; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
     }
     return Style("color: #FFB800; font-size: 0.875rem; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 }
 Style strengthLblGoodCss() {
-    if (authLight()) {
+    if (isLight()) {
         return Style("color: #2563EB; font-size: 0.875rem; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
     }
     return Style("color: #00D4FF; font-size: 0.875rem; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 }
 Style strengthLblStrongCss() {
-    if (authLight()) {
-        return Style("color: #10B981; font-size: 0.875rem; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+    if (isLight()) {
+        return Style("color: #1A1D2E; font-size: 0.875rem; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
     }
     return Style("color: #00E5A0; font-size: 0.875rem; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 }
@@ -289,7 +290,7 @@ Label infoBanner(String message) {
 
 // Três ondas presas dentro do painel (fundos exportados pela usuária, escuro e claro).
 String authPanelWavesSrc() {
-    if (authLight()) {
+    if (isLight()) {
         return "assets/brand/auth-panel-waves-light.svg"
     }
     return "assets/brand/auth-panel-waves-dark.svg"
@@ -301,13 +302,13 @@ String authPanelWavesSrc() {
 // dentro do trecho para o sublinhado ficar contínuo.
 Style headlineWrapCss() = Style("display: flex; flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 0; margin: 44px 0 18px 0; padding: 0; background: transparent; max-width: 100%")
 Style headlineWordCss() {
-    if (authLight()) {
+    if (isLight()) {
         return Style("color: #6B7280; font-size: 1.375rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; line-height: 2.125rem; margin: 0; white-space: pre; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
     }
     return Style("color: #7B8EAD; font-size: 1.375rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; line-height: 2.125rem; margin: 0; white-space: pre; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 }
 Style headlineUnderCss() {
-    if (authLight()) {
+    if (isLight()) {
         return Style("color: #6B7280; font-size: 1.375rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; line-height: 2.125rem; margin: 0 9px 0 0; white-space: pre; text-decoration: underline; text-decoration-color: #6B7280; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
     }
     return Style("color: #7B8EAD; font-size: 1.375rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; line-height: 2.125rem; margin: 0 9px 0 0; white-space: pre; text-decoration: underline; text-decoration-color: #7B8EAD; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
@@ -533,6 +534,7 @@ submitLogin(Window w, Input emailField, Input passwordField) {
     try {
         login(LoginForm.email, LoginForm.password)
         val profile = me()
+        loadThemePreference()
         clearLoginForm()
         if (profile.onboardingCompleted()) {
             navigateTo(w, "dashboard")

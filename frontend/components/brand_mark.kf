@@ -16,7 +16,7 @@ import core.theme
 // =============================================================================
 
 String brandMarkSrc() {
-    if (authLight()) {
+    if (isLight()) {
         return "assets/brand/organiza-simbolo-light.svg"
     }
     return "assets/brand/organiza-simbolo.svg"
@@ -39,12 +39,14 @@ View brandMark(Int width, String id) {
     return holder
 }
 
-// Versão monocromática para ações sobre o gradiente da marca.
-View brandMarkOnAccent(Int width, String id) {
-    var img = Image("assets/brand/organiza-simbolo-onaccent.svg")
-    img.setAlt("Enviar mensagem")
-    img.setWidth(brandImageWidth(width))
-    img.setHeight(brandImageHeight(width))
+// Ícone do botão de enviar: símbolo oficial azul (3 ondas, vetor), sem texto
+// alternativo para nunca vazar texto se o arquivo falhar (o nome acessível
+// fica no View do botão).
+View sendSymbol(String id) {
+    var img = Image("assets/brand/organiza-simbolo.svg")
+    img.setAlt("")
+    img.setWidth(30)
+    img.setHeight(13)
     var holder = View(screenStyle())
     holder.setId(id)
     holder.setStyle(markCss())

@@ -12,25 +12,41 @@ import core.app_state
 // Tamanhos (Int) também são funções, para manter um único idioma.
 // =============================================================================
 
+// Tema: AppState.themeMode "dark" (padrão) ou "light". O Style("css") só aceita literal
+// (SEM077/078: sem var()), então cada token/Style é um par escolhido na hora de desenhar.
+Bool isLight() = AppState.themeMode == "light"
+Color pickColor(Color light, Color dark) {
+    if (isLight()) {
+        return light
+    }
+    return dark
+}
+Style themed(Style light, Style dark) {
+    if (isLight()) {
+        return light
+    }
+    return dark
+}
+
 // ---- Base (dark) -----------------------------------------------------------
-Color colorBgPrimary()     = Color(10, 13, 24)     // #0A0D18
-Color colorCard()          = Color(18, 22, 42)     // #12162A
-Color colorCardSecondary() = Color(26, 31, 58)     // #1A1F3A
+Color colorBgPrimary()     = pickColor(Color(248, 249, 252), Color(10, 13, 24))     // #0A0D18
+Color colorCard()          = pickColor(Color(255, 255, 255), Color(18, 22, 42))     // #12162A
+Color colorCardSecondary() = pickColor(Color(255, 255, 255), Color(26, 31, 58))     // #1A1F3A
 
 // ---- Accent ----------------------------------------------------------------
-Color colorAccent()        = Color(0, 212, 255)    // #00D4FF (cyan)
-Color colorAccent2()       = Color(0, 102, 255)    // #0066FF (blue)
-Color colorAccentContrast() = Color(6, 18, 28)     // #06121C (texto sobre cyan)
+Color colorAccent()        = pickColor(Color(37, 99, 235), Color(0, 212, 255))    // #00D4FF (cyan)
+Color colorAccent2()       = pickColor(Color(29, 78, 216), Color(0, 102, 255))    // #0066FF (blue)
+Color colorAccentContrast() = pickColor(Color(255, 255, 255), Color(6, 18, 28))     // #06121C (texto sobre cyan)
 
 // ---- Texto -----------------------------------------------------------------
-Color colorTextPrimary()   = Color(240, 240, 240)  // #F0F0F0
-Color colorTextSecondary() = Color(123, 142, 173)  // #7B8EAD
-Color colorTextMuted()     = Color(74, 85, 120)    // #4A5578
+Color colorTextPrimary()   = pickColor(Color(26, 29, 46), Color(240, 240, 240))  // #F0F0F0
+Color colorTextSecondary() = pickColor(Color(107, 114, 128), Color(123, 142, 173))  // #7B8EAD
+Color colorTextMuted()     = pickColor(Color(156, 163, 175), Color(74, 85, 120))    // #4A5578
 
 // ---- Estado ----------------------------------------------------------------
-Color colorSuccess()       = Color(0, 229, 160)    // #00E5A0
-Color colorWarning()       = Color(255, 184, 0)    // #FFB800
-Color colorDanger()        = Color(255, 74, 110)   // #FF4A6E
+Color colorSuccess()       = pickColor(Color(16, 185, 129), Color(0, 229, 160))    // #00E5A0
+Color colorWarning()       = pickColor(Color(245, 158, 11), Color(255, 184, 0))    // #FFB800
+Color colorDanger()        = pickColor(Color(230, 57, 70), Color(255, 74, 110))   // #FF4A6E
 
 // ---- Categorias (ícones das Caixinhas) -------------------------------------
 // Só cores da paleta (docs/DESIGN_SYSTEM.md §2: nenhum hex fora da lista).
@@ -46,12 +62,12 @@ Color colorWave2()         = colorAccent2()
 Color colorWave3()         = colorTextSecondary()
 
 // ---- Tokens do DS (canvas, chart-des, border-soft) ---------------------------
-Color colorCanvas()        = Color(5, 6, 11)       // #05060B
-Color colorChartDes()      = Color(0, 102, 255)    // #0066FF (fatia Desejos)
+Color colorCanvas()        = pickColor(Color(231, 234, 242), Color(5, 6, 11))       // #05060B
+Color colorChartDes()      = pickColor(Color(124, 58, 237), Color(0, 102, 255))    // #0066FF (fatia Desejos)
 // border-soft = rgba(255,255,255,.1). Color não carrega alfa de forma confiável
 // no KofJS, então a versão Color é a mesma borda já composta sobre colorCard;
 // dentro de Style("css") use sempre o literal rgba(255,255,255,.1).
-Color borderSoft()         = Color(42, 45, 63)     // rgba(255,255,255,.1) sobre #12162A
+Color borderSoft()         = pickColor(Color(229, 231, 235), Color(42, 45, 63))     // rgba(255,255,255,.1) sobre #12162A
 
 // ---- Tipografia (system-ui, px; escala em docs/DESIGN_SYSTEM.md §3) ---------------------------------
 Int sizeTitle()    = 24
@@ -93,68 +109,63 @@ Style dangerStyle()        = Style(colorDanger(), colorTextPrimary(), 12, 8)
 // O View raiz recebe o fundo; a Column filha é que organiza o conteúdo (o
 // layout flex vale para os filhos diretos). A altura vem do viewport canônico
 // (640 / 800): `min-height: 100%` não tem referência no root do runtime.
-Style entryScreenMobileCss()  = Style("background: #0A0D18; position: relative; overflow: hidden; color: #F0F0F0; min-height: 640; box-sizing: border-box; padding: 16; display: flex; flex-direction: column; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style entryScreenDesktopCss() = Style("background: #0A0D18; position: relative; overflow: hidden; color: #F0F0F0; min-height: 800; box-sizing: border-box; padding: 16; display: flex; flex-direction: column; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style entryScreenMobileCss()  = themed(Style("background: #F8F9FC; position: relative; overflow: hidden; color: #1A1D2E; min-height: 640; box-sizing: border-box; padding: 16; display: flex; flex-direction: column; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("background: #0A0D18; position: relative; overflow: hidden; color: #F0F0F0; min-height: 640; box-sizing: border-box; padding: 16; display: flex; flex-direction: column; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style entryScreenDesktopCss() = themed(Style("background: #F8F9FC; position: relative; overflow: hidden; color: #1A1D2E; min-height: 800; box-sizing: border-box; padding: 16; display: flex; flex-direction: column; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("background: #0A0D18; position: relative; overflow: hidden; color: #F0F0F0; min-height: 800; box-sizing: border-box; padding: 16; display: flex; flex-direction: column; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style entryStackCss()         = Style("display: flex; flex-direction: column; flex-grow: 1; gap: 0; width: 100%")
 // Corpo da tela: ocupa o resto da altura e centraliza na vertical.
 Style entryBodyCss()          = Style("display: flex; flex-direction: column; justify-content: center; align-items: center; flex-grow: 1; width: 100%; padding: 0; background: transparent")
 // Coluna de conteúdo: largura total no Mobile, até 480px no Desktop (§2.2).
 Style entryColumnMobileCss()  = Style("display: flex; flex-direction: column; align-items: stretch; gap: 32; width: 100%")
 Style entryColumnDesktopCss() = Style("display: flex; flex-direction: column; align-items: center; gap: 32; width: 100%; max-width: 480")
-// Barra de dev (toggle de viewport) no topo das telas de entrada.
-Style devBarCss()             = Style("display: flex; flex-direction: row; justify-content: flex-end; width: 100%; padding: 0; background: transparent")
-Style devToggleCss()          = Style("background: transparent; color: #4A5578; border: 1px solid rgba(255,255,255,.06); border-radius: 8; padding: 4px 8px; font-size: 0.75rem; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 
 // ---- Tela 1 ----------------------------------------------------------------
-// Login e Cadastro têm modo claro (fundos do design system); o resto do app segue escuro.
-Bool authLight() = AppState.lightAuth && (AppState.currentScreen == "login" || AppState.currentScreen == "signup")
 
 Style markCss()               = Style("align-self: center; padding: 0; background: transparent; line-height: 0em")
 // Slogan: captionCss em caixa alta, 600, letter-spacing .08em, max-width 240 (§5).
-Style sloganMobileCss()       = Style("color: #7B8EAD; font-size: 0.875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; text-align: center; max-width: 240; align-self: center; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style sloganMobileCss()       = themed(Style("color: #6B7280; font-size: 0.875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; text-align: center; max-width: 240; align-self: center; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #7B8EAD; font-size: 0.875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; text-align: center; max-width: 240; align-self: center; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 // Desktop (artefato 64FYjX5UiveVxTtRGYurQP, WelcomeWin): 16px, max-width 320.
-Style sloganDesktopCss()      = Style("color: #7B8EAD; font-size: 1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; text-align: center; max-width: 320; align-self: center; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style actionsMobileCss()      = Style("display: flex; flex-direction: column; align-items: stretch; gap: 12; width: 100%")
-Style actionsDesktopCss()     = Style("display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 16")
+Style sloganDesktopCss()      = themed(Style("color: #6B7280; font-size: 1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; text-align: center; max-width: 320; align-self: center; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #7B8EAD; font-size: 1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; text-align: center; max-width: 320; align-self: center; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style actionsMobileCss()      = Style("display: flex; flex-direction: column; align-items: stretch; gap: 16; width: 100%")
+Style actionsDesktopCss()     = Style("display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 24")
 
 // ---- Botões (spec B2-01 AC4) -----------------------------------------------
-Style primaryButtonCss()      = Style("outline: none; background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 48; width: 100%; border: none; border-radius: 10; font-size: 1rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style secondaryButtonCss()    = Style("outline: none; background: transparent; color: #00D4FF; height: 48; width: 100%; border: 1.5px solid #00D4FF; border-radius: 10; font-size: 1rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style disabledButtonCss()     = Style("background: #12162A; color: #4A5578; height: 48; width: 100%; border: 1px solid rgba(255,255,255,.06); border-radius: 10; font-size: 1rem; font-weight: 600; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style primaryButtonCss()      = themed(Style("outline: none; background: linear-gradient(90deg, #2563EB, #1D4ED8); color: #FFFFFF; height: 48; width: 100%; border: none; border-radius: 10; font-size: 1rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 48; width: 100%; border: none; border-radius: 10; font-size: 1rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style secondaryButtonCss()    = themed(Style("outline: none; background: transparent; color: #2563EB; height: 48; width: 100%; border: 1.5px solid #2563EB; border-radius: 10; font-size: 1rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; background: transparent; color: #00D4FF; height: 48; width: 100%; border: 1.5px solid #00D4FF; border-radius: 10; font-size: 1rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style disabledButtonCss()     = themed(Style("background: #FFFFFF; color: #6B7280; height: 48; width: 100%; border: 1px solid rgba(0,0,0,.06); border-radius: 10; font-size: 1rem; font-weight: 600; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("background: #12162A; color: #4A5578; height: 48; width: 100%; border: 1px solid rgba(255,255,255,.06); border-radius: 10; font-size: 1rem; font-weight: 600; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 // Desktop: botões lado a lado com 200px (artefato Desktop).
-Style primaryButtonWideCss()  = Style("outline: none; background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 48; width: 200; border: none; border-radius: 10; font-size: 1rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style secondaryButtonWideCss() = Style("outline: none; background: transparent; color: #00D4FF; height: 48; width: 200; border: 1.5px solid #00D4FF; border-radius: 10; font-size: 1rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style primaryButtonWideCss()  = themed(Style("outline: none; background: linear-gradient(90deg, #2563EB, #1D4ED8); color: #FFFFFF; height: 48; width: 200; border: none; border-radius: 10; font-size: 1rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; height: 48; width: 200; border: none; border-radius: 10; font-size: 1rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style secondaryButtonWideCss() = themed(Style("outline: none; background: transparent; color: #2563EB; height: 48; width: 200; border: 1.5px solid #2563EB; border-radius: 10; font-size: 1rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; background: transparent; color: #00D4FF; height: 48; width: 200; border: 1.5px solid #00D4FF; border-radius: 10; font-size: 1rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 
 // ---- Formulário (Telas 2–7) -------------------------------------------------
-Style inputCss()              = Style("outline: none; background: #12162A; color: #F0F0F0; height: 48; width: 100%; box-sizing: border-box; border: 1px solid rgba(255,255,255,.06); border-radius: 8; padding: 0 16px; font-size: 1rem; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style moneyCss()              = Style("background: transparent; color: #00D4FF; height: 56; width: 100%; min-width: 0; flex-grow: 1; box-sizing: border-box; border: none; text-align: center; font-size: 2rem; font-weight: 600; font-variant: tabular-nums; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style choiceCss()             = Style("outline: none; color: #F0F0F0; height: 72; width: 100%; box-sizing: border-box; border-radius: 12; padding: 0 16px; background: #12162A; border: 1px solid rgba(255,255,255,.06); font-size: 1rem; text-align: left; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style choiceSelectedCss()     = Style("outline: none; color: #F0F0F0; height: 72; width: 100%; box-sizing: border-box; border-radius: 12; padding: 0 16px; background: rgba(0,212,255,.08); border: 1px solid #00D4FF; font-size: 1rem; text-align: left; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style titleCss()              = Style("color: #F0F0F0; font-size: 1.5rem; font-weight: 500; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style inputCss()              = themed(Style("outline: none; background: #FFFFFF; color: #1A1D2E; height: 48; width: 100%; box-sizing: border-box; border: 1px solid rgba(0,0,0,.06); border-radius: 8; padding: 0 16px; font-size: 1rem; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; background: #12162A; color: #F0F0F0; height: 48; width: 100%; box-sizing: border-box; border: 1px solid rgba(255,255,255,.06); border-radius: 8; padding: 0 16px; font-size: 1rem; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style moneyCss()              = themed(Style("background: transparent; color: #2563EB; height: 56; width: 100%; min-width: 0; flex-grow: 1; box-sizing: border-box; border: none; text-align: center; font-size: 2rem; font-weight: 600; font-variant: tabular-nums; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("background: transparent; color: #00D4FF; height: 56; width: 100%; min-width: 0; flex-grow: 1; box-sizing: border-box; border: none; text-align: center; font-size: 2rem; font-weight: 600; font-variant: tabular-nums; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style choiceCss()             = themed(Style("outline: none; color: #1A1D2E; height: 72; width: 100%; box-sizing: border-box; border-radius: 12; padding: 0 16px; background: #FFFFFF; border: 1px solid rgba(0,0,0,.06); font-size: 1rem; text-align: left; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; color: #F0F0F0; height: 72; width: 100%; box-sizing: border-box; border-radius: 12; padding: 0 16px; background: #12162A; border: 1px solid rgba(255,255,255,.06); font-size: 1rem; text-align: left; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style choiceSelectedCss()     = themed(Style("outline: none; color: #1A1D2E; height: 72; width: 100%; box-sizing: border-box; border-radius: 12; padding: 0 16px; background: rgba(37,99,235,.08); border: 1px solid #2563EB; font-size: 1rem; text-align: left; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; color: #F0F0F0; height: 72; width: 100%; box-sizing: border-box; border-radius: 12; padding: 0 16px; background: rgba(0,212,255,.08); border: 1px solid #00D4FF; font-size: 1rem; text-align: left; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style titleCss()              = themed(Style("color: #1A1D2E; font-size: 1.5rem; font-weight: 500; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #F0F0F0; font-size: 1.5rem; font-weight: 500; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style captionCss() {
-    if (authLight()) {
+    if (isLight()) {
         return Style("color: #6B7280; font-size: 0.9375rem; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
     }
     return Style("color: #7B8EAD; font-size: 0.9375rem; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 }
 Style errorBannerCss() {
-    if (authLight()) {
+    if (isLight()) {
         return Style("color: #E63946; background: rgba(230,57,70,.08); border: 1px solid #E63946; border-radius: 8; padding: 12; font-size: 0.875rem; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
     }
     return Style("color: #FF4A6E; background: rgba(255,74,110,.12); border: 1px solid #FF4A6E; border-radius: 8; padding: 12; font-size: 0.875rem; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 }
 Style dotsCss()               = Style("display: flex; flex-direction: row; gap: 12; justify-content: center")
-Style dotActiveCss()          = Style("width: 8; height: 8; border-radius: 4; background: #00D4FF")
-Style dotVisitedCss()         = Style("width: 8; height: 8; border-radius: 4; background: rgba(0,212,255,.4)")
-Style dotInactiveCss()        = Style("width: 8; height: 8; border-radius: 4; background: rgba(255,255,255,.15)")
+Style dotActiveCss()          = themed(Style("width: 8; height: 8; border-radius: 4; background: #2563EB"), Style("width: 8; height: 8; border-radius: 4; background: #00D4FF"))
+Style dotVisitedCss()         = themed(Style("width: 8; height: 8; border-radius: 4; background: rgba(37,99,235,.4)"), Style("width: 8; height: 8; border-radius: 4; background: rgba(0,212,255,.4)"))
+Style dotInactiveCss()        = themed(Style("width: 8; height: 8; border-radius: 4; background: rgba(0,0,0,.15)"), Style("width: 8; height: 8; border-radius: 4; background: rgba(255,255,255,.15)"))
 // Telas 4 e 5 (F8a): coluna do onboarding, linha "R$ + valor" e lista de cards.
 Style onbColumnCss()          = Style("display: flex; flex-direction: column; align-items: stretch; gap: 24; width: 100%; max-width: 480")
 Style moneyRowCss()           = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: center; gap: 8; width: 100%")
-Style moneyPrefixCss()        = Style("color: #00D4FF; font-size: 2rem; font-weight: 600; margin: 0; white-space: nowrap; flex-shrink: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style moneyPrefixCss()        = themed(Style("color: #2563EB; font-size: 2rem; font-weight: 600; margin: 0; white-space: nowrap; flex-shrink: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #00D4FF; font-size: 2rem; font-weight: 600; margin: 0; white-space: nowrap; flex-shrink: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style choiceListCss()         = Style("display: flex; flex-direction: column; gap: 12; width: 100%")
 // Barra de bucket: preenchimento + resto com flex-basis proporcionais (ver bucketBar).
-Style trackCss()              = Style("display: flex; height: 8; width: 100%; border-radius: 4; background: #12162A; overflow: hidden")
-Style fillCss()               = Style("height: 8; border-radius: 4; background: #00D4FF; min-width: 0")
+Style trackCss()              = themed(Style("display: flex; height: 8; width: 100%; border-radius: 4; background: #E5E7EB; overflow: hidden"), Style("display: flex; height: 8; width: 100%; border-radius: 4; background: #12162A; overflow: hidden"))
+Style fillCss()               = themed(Style("height: 8; border-radius: 4; background: #2563EB; min-width: 0"), Style("height: 8; border-radius: 4; background: #00D4FF; min-width: 0"))
 Style fillRowCss()            = Style("display: flex; flex-direction: row; flex-wrap: nowrap; width: 100%; height: 8; gap: 0")
 Style fillRestCss()           = Style("height: 8; background: transparent; padding: 0; min-width: 0")
 
@@ -164,76 +175,79 @@ Style fillRestCss()           = Style("height: 8; background: transparent; paddi
 // Style("css") só aceita literal (o compilador valida o texto: SEM076/077/078),
 // então os hex do DS se repetem aqui em vez de virem de constantes.
 // Shell: sidebar Desktop 190 + topbar + conteúdo.
-Style shellRowCss()        = Style("display: flex; flex-direction: row; flex-wrap: nowrap; width: 100%; min-height: 800; background: #0A0D18; color: #F0F0F0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style shellRowCss()        = themed(Style("display: flex; flex-direction: row; flex-wrap: nowrap; width: 100%; min-height: 800; background: #F8F9FC; color: #1A1D2E; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("display: flex; flex-direction: row; flex-wrap: nowrap; width: 100%; min-height: 800; background: #0A0D18; color: #F0F0F0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style shellMainCss()       = Style("display: flex; flex-direction: column; flex-grow: 1; min-width: 0; gap: 24; padding: 24; box-sizing: border-box")
-Style sidebarCss()         = Style("display: flex; flex-direction: column; align-self: stretch; width: 224; flex-shrink: 0; gap: 8; padding: 28px 16px; box-sizing: border-box; background: #05060B; border-right: 1px solid rgba(255,255,255,.1)")
-Style sidebarItemCss()     = Style("outline: none; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 14; width: 100%; height: 54; padding: 0 18px; border: none; border-radius: 10; background: transparent; color: #AAB9D3; font-size: 1.125rem; font-weight: 600; text-align: left; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style sidebarItemActiveCss() = Style("outline: none; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 14; width: 100%; height: 54; padding: 0 18px; border: none; border-radius: 10; background: rgba(0,212,255,.08); color: #00D4FF; font-size: 1.125rem; font-weight: 700; text-align: left; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style sidebarCss()         = themed(Style("display: flex; flex-direction: column; align-self: stretch; width: 224; flex-shrink: 0; gap: 8; padding: 28px 16px; box-sizing: border-box; background: #F8F9FC; border-right: 1px solid #E5E7EB"), Style("display: flex; flex-direction: column; align-self: stretch; width: 224; flex-shrink: 0; gap: 8; padding: 28px 16px; box-sizing: border-box; background: #05060B; border-right: 1px solid rgba(255,255,255,.1)"))
+Style sidebarItemCss()     = themed(Style("outline: none; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 14; width: 100%; height: 54; padding: 0 18px; border: none; border-radius: 10; background: transparent; color: #6B7280; font-size: 1.125rem; font-weight: 600; text-align: left; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 14; width: 100%; height: 54; padding: 0 18px; border: none; border-radius: 10; background: transparent; color: #7B8EAD; font-size: 1.125rem; font-weight: 600; text-align: left; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style sidebarItemActiveCss() = themed(Style("outline: none; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 14; width: 100%; height: 54; padding: 0 18px; border: none; border-radius: 10; background: rgba(37,99,235,.08); color: #2563EB; font-size: 1.125rem; font-weight: 700; text-align: left; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 14; width: 100%; height: 54; padding: 0 18px; border: none; border-radius: 10; background: rgba(0,212,255,.08); color: #00D4FF; font-size: 1.125rem; font-weight: 700; text-align: left; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style topbarCss() {
     if (AppState.isDesktop) {
-        return Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 16; width: 100%; height: 72; min-height: 72; flex-shrink: 0; box-sizing: border-box; padding-right: 200; border-bottom: 1px solid rgba(255,255,255,.1)")
+        if (AppState.currentScreen == "dashboard" || AppState.currentScreen == "envelopes") {
+            return themed(Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 16; width: 100%; height: 72; min-height: 72; flex-shrink: 0; box-sizing: border-box; border-bottom: 1px solid #E5E7EB"), Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 16; width: 100%; height: 72; min-height: 72; flex-shrink: 0; box-sizing: border-box; border-bottom: 1px solid rgba(255,255,255,.1)"))
+        }
+        return themed(Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 16; width: 100%; height: 72; min-height: 72; flex-shrink: 0; box-sizing: border-box; padding-right: 48; border-bottom: 1px solid #E5E7EB"), Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 16; width: 100%; height: 72; min-height: 72; flex-shrink: 0; box-sizing: border-box; padding-right: 48; border-bottom: 1px solid rgba(255,255,255,.1)"))
     }
-    return Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 16; width: 100%; height: 72; min-height: 72; flex-shrink: 0; box-sizing: border-box; border-bottom: 1px solid rgba(255,255,255,.1)")
+    return themed(Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 16; width: 100%; height: 72; min-height: 72; flex-shrink: 0; box-sizing: border-box; padding-right: 44; border-bottom: 1px solid #E5E7EB"), Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 16; width: 100%; height: 72; min-height: 72; flex-shrink: 0; box-sizing: border-box; padding-right: 44; border-bottom: 1px solid rgba(255,255,255,.1)"))
 }
-Style topbarTitleCss()     = Style("color: #F0F0F0; font-size: 1.5rem; font-weight: 700; line-height: 1.1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style topbarSubtitleCss()  = Style("color: #AAB9D3; font-size: 0.9375rem; font-weight: 500; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style topbarTitleCss()     = themed(Style("color: #1A1D2E; font-size: 1.5rem; font-weight: 700; line-height: 1.1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #F0F0F0; font-size: 1.5rem; font-weight: 700; line-height: 1.1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style topbarSubtitleCss()  = themed(Style("color: #6B7280; font-size: 0.9375rem; font-weight: 500; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #7B8EAD; font-size: 0.9375rem; font-weight: 500; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 // Cards e grades.
-Style cardCss()            = Style("display: flex; flex-direction: column; gap: 12; padding: 20; box-sizing: border-box; background: #12162A; border: 1px solid rgba(255,255,255,.1); border-radius: 12; min-width: 0")
-Style pulseCardCss()       = Style("display: flex; flex-direction: column; gap: 8; padding: 20; box-sizing: border-box; background: linear-gradient(135deg, #00D4FF, #0066FF); color: #06121C; border: none; border-radius: 12; min-width: 0")
+Style cardCss()            = themed(Style("display: flex; flex-direction: column; gap: 12; padding: 20; box-sizing: border-box; background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12; min-width: 0; box-shadow: 0 1px 3px rgba(0,0,0,.04)"), Style("display: flex; flex-direction: column; gap: 12; padding: 20; box-sizing: border-box; background: #12162A; border: 1px solid rgba(255,255,255,.1); border-radius: 12; min-width: 0"))
+Style pulseCardCss()       = themed(Style("display: flex; flex-direction: column; gap: 8; padding: 20; box-sizing: border-box; background: linear-gradient(135deg, #2563EB, #1D4ED8); color: #FFFFFF; border: none; border-radius: 12; min-width: 0"), Style("display: flex; flex-direction: column; gap: 8; padding: 20; box-sizing: border-box; background: linear-gradient(135deg, #00D4FF, #0066FF); color: #06121C; border: none; border-radius: 12; min-width: 0"))
 Style gridG2Css()          = Style("display: grid; grid-template-columns: 1fr 1fr; gap: 16; width: 100%")
 Style gridG3Css()          = Style("display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16; width: 100%")
 Style stackCss()           = Style("display: flex; flex-direction: column; gap: 16; width: 100%")
 // Tabs (Semana/Mês/Ano).
-Style tabsCss()            = Style("display: flex; flex-direction: row; gap: 4; padding: 4; background: #12162A; border-radius: 8")
-Style tabCss()             = Style("outline: none; background: transparent; color: #7B8EAD; border: none; border-radius: 6; padding: 6px 14px; font-size: 0.875rem; font-weight: 500; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style tabActiveCss()       = Style("outline: none; background: #1A1F3A; color: #00D4FF; border: none; border-radius: 6; padding: 6px 14px; font-size: 0.875rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style tabsCss()            = themed(Style("display: flex; flex-direction: row; gap: 4; padding: 4; background: #FFFFFF; border-radius: 8; border: 1px solid #E5E7EB"), Style("display: flex; flex-direction: row; gap: 4; padding: 4; background: #12162A; border-radius: 8"))
+Style tabCss()             = themed(Style("outline: none; background: transparent; color: #6B7280; border: none; border-radius: 6; padding: 6px 14px; font-size: 0.875rem; font-weight: 500; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; background: transparent; color: #7B8EAD; border: none; border-radius: 6; padding: 6px 14px; font-size: 0.875rem; font-weight: 500; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style tabActiveCss()       = themed(Style("outline: none; background: #2563EB; color: #FFFFFF; border: none; border-radius: 6; padding: 6px 14px; font-size: 0.875rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; background: #1A1F3A; color: #00D4FF; border: none; border-radius: 6; padding: 6px 14px; font-size: 0.875rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 // Badges por tom.
-Style badgeSuccessCss()    = Style("color: #00E5A0; background: rgba(0,229,160,.12); border-radius: 999; padding: 2px 10px; font-size: 0.75rem; font-weight: 600; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style badgeWarningCss()    = Style("color: #FFB800; background: rgba(255,184,0,.12); border-radius: 999; padding: 2px 10px; font-size: 0.75rem; font-weight: 600; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style badgeDangerCss()     = Style("color: #FF4A6E; background: rgba(255,74,110,.12); border-radius: 999; padding: 2px 10px; font-size: 0.75rem; font-weight: 600; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style badgeAccentCss()     = Style("color: #00D4FF; background: rgba(0,212,255,.12); border-radius: 999; padding: 2px 10px; font-size: 0.75rem; font-weight: 600; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style badgeSuccessCss()    = themed(Style("color: #1A1D2E; background: rgba(16,185,129,.12); border-radius: 999; padding: 2px 10px; font-size: 0.75rem; font-weight: 600; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #00E5A0; background: rgba(0,229,160,.12); border-radius: 999; padding: 2px 10px; font-size: 0.75rem; font-weight: 600; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style badgeWarningCss()    = themed(Style("color: #1A1D2E; background: rgba(245,158,11,.12); border-radius: 999; padding: 2px 10px; font-size: 0.75rem; font-weight: 600; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #FFB800; background: rgba(255,184,0,.12); border-radius: 999; padding: 2px 10px; font-size: 0.75rem; font-weight: 600; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style badgeDangerCss()     = themed(Style("color: #1A1D2E; background: rgba(230,57,70,.08); border-radius: 999; padding: 2px 10px; font-size: 0.75rem; font-weight: 600; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #FF4A6E; background: rgba(255,74,110,.12); border-radius: 999; padding: 2px 10px; font-size: 0.75rem; font-weight: 600; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style badgeAccentCss()     = themed(Style("color: #2563EB; background: rgba(37,99,235,.12); border-radius: 999; padding: 2px 10px; font-size: 0.75rem; font-weight: 600; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #00D4FF; background: rgba(0,212,255,.12); border-radius: 999; padding: 2px 10px; font-size: 0.75rem; font-weight: 600; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 // Trilho de 56 px do card de notificação, por tom.
-Style railSuccessCss()     = Style("display: flex; align-items: center; justify-content: center; width: 56; flex-shrink: 0; background: rgba(0,229,160,.12); border-radius: 12")
-Style railWarningCss()     = Style("display: flex; align-items: center; justify-content: center; width: 56; flex-shrink: 0; background: rgba(255,184,0,.12); border-radius: 12")
-Style railDangerCss()      = Style("display: flex; align-items: center; justify-content: center; width: 56; flex-shrink: 0; background: rgba(255,74,110,.12); border-radius: 12")
-Style railAccentCss()      = Style("display: flex; align-items: center; justify-content: center; width: 56; flex-shrink: 0; background: rgba(0,212,255,.12); border-radius: 12")
+Style railSuccessCss()     = themed(Style("display: flex; align-items: center; justify-content: center; width: 56; flex-shrink: 0; background: rgba(16,185,129,.12); border-radius: 12"), Style("display: flex; align-items: center; justify-content: center; width: 56; flex-shrink: 0; background: rgba(0,229,160,.12); border-radius: 12"))
+Style railWarningCss()     = themed(Style("display: flex; align-items: center; justify-content: center; width: 56; flex-shrink: 0; background: rgba(245,158,11,.12); border-radius: 12"), Style("display: flex; align-items: center; justify-content: center; width: 56; flex-shrink: 0; background: rgba(255,184,0,.12); border-radius: 12"))
+Style railDangerCss()      = themed(Style("display: flex; align-items: center; justify-content: center; width: 56; flex-shrink: 0; background: rgba(230,57,70,.08); border-radius: 12"), Style("display: flex; align-items: center; justify-content: center; width: 56; flex-shrink: 0; background: rgba(255,74,110,.12); border-radius: 12"))
+Style railAccentCss()      = themed(Style("display: flex; align-items: center; justify-content: center; width: 56; flex-shrink: 0; background: rgba(37,99,235,.12); border-radius: 12"), Style("display: flex; align-items: center; justify-content: center; width: 56; flex-shrink: 0; background: rgba(0,212,255,.12); border-radius: 12"))
 // Toggle, select e modal (Configurações).
-Style toggleOnCss()        = Style("outline: none; width: 44; height: 24; border-radius: 12; border: none; background: #00D4FF; cursor: pointer")
-Style toggleOffCss()       = Style("outline: none; width: 44; height: 24; border-radius: 12; border: 1px solid rgba(255,255,255,.1); background: #1A1F3A; cursor: pointer")
-Style selectCss()          = Style("outline: none; background: #12162A; color: #F0F0F0; height: 40; box-sizing: border-box; border: 1px solid rgba(255,255,255,.1); border-radius: 8; padding: 0 12px; font-size: 0.875rem; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style modalOverlayCss()    = Style("position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: rgba(5,6,11,.8)")
+Style toggleOnCss()        = themed(Style("outline: none; width: 44; height: 24; border-radius: 12; border: none; background: #2563EB; cursor: pointer"), Style("outline: none; width: 44; height: 24; border-radius: 12; border: none; background: #00D4FF; cursor: pointer"))
+Style toggleOffCss()       = themed(Style("outline: none; width: 44; height: 24; border-radius: 12; border: 1px solid #E5E7EB; background: #E5E7EB; cursor: pointer"), Style("outline: none; width: 44; height: 24; border-radius: 12; border: 1px solid rgba(255,255,255,.1); background: #1A1F3A; cursor: pointer"))
+Style selectCss()          = themed(Style("outline: none; background: #FFFFFF; color: #1A1D2E; height: 40; box-sizing: border-box; border: 1px solid #E5E7EB; border-radius: 8; padding: 0 12px; font-size: 0.875rem; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; background: #12162A; color: #F0F0F0; height: 40; box-sizing: border-box; border: 1px solid rgba(255,255,255,.1); border-radius: 8; padding: 0 12px; font-size: 0.875rem; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style modalOverlayCss()    = themed(Style("position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.65)"), Style("position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: rgba(5,6,11,.8)"))
 // Bolhas do chat.
-Style bubbleAiCss()        = Style("align-self: flex-start; max-width: 80%; background: #12162A; color: #F0F0F0; border: 1px solid rgba(255,255,255,.1); border-radius: 12; padding: 12px 16px; font-size: 0.875rem; white-space: pre-wrap; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style bubbleUserCss()      = Style("align-self: flex-end; max-width: 80%; background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; border-radius: 12; padding: 12px 16px; font-size: 0.875rem; white-space: pre-wrap; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style bubbleAiCss()        = themed(Style("align-self: flex-start; max-width: 80%; background: #FFFFFF; color: #1A1D2E; border: 1px solid #E5E7EB; border-radius: 12; padding: 12px 16px; font-size: 0.875rem; white-space: pre-wrap; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("align-self: flex-start; max-width: 80%; background: #12162A; color: #F0F0F0; border: 1px solid rgba(255,255,255,.1); border-radius: 12; padding: 12px 16px; font-size: 0.875rem; white-space: pre-wrap; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style bubbleUserCss()      = themed(Style("align-self: flex-end; max-width: 80%; background: linear-gradient(90deg, #2563EB, #1D4ED8); color: #FFFFFF; border-radius: 12; padding: 12px 16px; font-size: 0.875rem; white-space: pre-wrap; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("align-self: flex-end; max-width: 80%; background: linear-gradient(90deg, #00D4FF, #0066FF); color: #06121C; border-radius: 12; padding: 12px 16px; font-size: 0.875rem; white-space: pre-wrap; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 // Barra de progresso (track + fill por cor; o fill usa a mesma técnica de bucketBar).
-Style progressTrackCss()   = Style("display: flex; height: 8; width: 100%; border-radius: 4; background: #1A1F3A; overflow: hidden")
-Style progressFillSuccessCss() = Style("height: 8; border-radius: 4; background: #00E5A0; min-width: 0")
-Style progressFillWarningCss() = Style("height: 8; border-radius: 4; background: #FFB800; min-width: 0")
-Style progressFillDangerCss()  = Style("height: 8; border-radius: 4; background: #FF4A6E; min-width: 0")
-Style progressFillAccentCss()  = Style("height: 8; border-radius: 4; background: #00D4FF; min-width: 0")
-Style progressFillDesCss()     = Style("height: 8; border-radius: 4; background: #0066FF; min-width: 0")
+Style progressTrackCss()   = themed(Style("display: flex; height: 8; width: 100%; border-radius: 4; background: #E5E7EB; overflow: hidden"), Style("display: flex; height: 8; width: 100%; border-radius: 4; background: #1A1F3A; overflow: hidden"))
+Style progressFillSuccessCss() = themed(Style("height: 8; border-radius: 4; background: #10B981; min-width: 0"), Style("height: 8; border-radius: 4; background: #00E5A0; min-width: 0"))
+Style progressFillWarningCss() = themed(Style("height: 8; border-radius: 4; background: #F59E0B; min-width: 0"), Style("height: 8; border-radius: 4; background: #FFB800; min-width: 0"))
+Style progressFillDangerCss()  = themed(Style("height: 8; border-radius: 4; background: #E63946; min-width: 0"), Style("height: 8; border-radius: 4; background: #FF4A6E; min-width: 0"))
+Style progressFillAccentCss()  = themed(Style("height: 8; border-radius: 4; background: #2563EB; min-width: 0"), Style("height: 8; border-radius: 4; background: #00D4FF; min-width: 0"))
+Style progressFillDesCss()     = themed(Style("height: 8; border-radius: 4; background: #7C3AED; min-width: 0"), Style("height: 8; border-radius: 4; background: #0066FF; min-width: 0"))
 
 // ---- Batch 3 (T0) — itens do shell (sidebar, barra inferior, usuário) ------
 // Item da nav = View(sidebarItemCss) + Row(ícone Canvas, Button): o View não
 // tem onClick, então o rótulo é um Button transparente que herda o tom do item.
-Style navLabelCss()        = Style("outline: none; flex-grow: 1; background: transparent; color: #AAB9D3; border: none; padding: 0; font-size: 1.125rem; font-weight: 600; text-align: left; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style navLabelActiveCss()  = Style("outline: none; flex-grow: 1; background: transparent; color: #00D4FF; border: none; padding: 0; font-size: 1.125rem; font-weight: 700; text-align: left; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style navLabelCss()        = themed(Style("outline: none; flex-grow: 1; background: transparent; color: #6B7280; border: none; padding: 0; font-size: 1.125rem; font-weight: 600; text-align: left; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; flex-grow: 1; background: transparent; color: #7B8EAD; border: none; padding: 0; font-size: 1.125rem; font-weight: 600; text-align: left; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style navLabelActiveCss()  = themed(Style("outline: none; flex-grow: 1; background: transparent; color: #2563EB; border: none; padding: 0; font-size: 1.125rem; font-weight: 700; text-align: left; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; flex-grow: 1; background: transparent; color: #00D4FF; border: none; padding: 0; font-size: 1.125rem; font-weight: 700; text-align: left; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style navIconCss()         = Style("display: flex; align-items: center; padding: 0; background: transparent; line-height: 0em; flex-shrink: 0")
 Style sidebarLogoCss()     = Style("display: flex; justify-content: center; align-items: center; width: 100%; padding: 8px 0 22px; background: transparent; line-height: 0em")
 Style sidebarNavCss()      = Style("display: flex; flex-direction: column; align-items: center; gap: 6; flex-grow: 1; width: 100%")
-Style sidebarFooterCss()   = Style("display: flex; flex-direction: column; align-items: center; gap: 14; width: 100%; padding-top: 16; border-top: 1px solid rgba(255,255,255,.06)")
+Style sidebarFooterCss()   = themed(Style("display: flex; flex-direction: column; align-items: center; gap: 14; width: 100%; padding-top: 16; border-top: 1px solid rgba(0,0,0,.06)"), Style("display: flex; flex-direction: column; align-items: center; gap: 14; width: 100%; padding-top: 16; border-top: 1px solid rgba(255,255,255,.06)"))
 Style userBlockCss()       = Style("display: flex; flex-direction: column; align-items: center; gap: 8; padding: 0 10px; min-width: 0; text-align: center")
-Style avatarCss()          = Style("display: flex; align-items: center; justify-content: center; width: 42; height: 42; flex-shrink: 0; border-radius: 21; background: linear-gradient(135deg, #00D4FF, #0066FF); color: #06121C; font-size: 1rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style avatarCss()          = themed(Style("display: flex; align-items: center; justify-content: center; width: 42; height: 42; flex-shrink: 0; border-radius: 21; background: linear-gradient(135deg, #2563EB, #1D4ED8); color: #FFFFFF; font-size: 1rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("display: flex; align-items: center; justify-content: center; width: 42; height: 42; flex-shrink: 0; border-radius: 21; background: linear-gradient(135deg, #00D4FF, #0066FF); color: #06121C; font-size: 1rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style userTextCss()        = Style("display: flex; flex-direction: column; align-items: center; gap: 2; min-width: 0; width: 100%; text-align: center")
-Style userNameCss()        = Style("color: #F0F0F0; font-size: 1rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style userEmailCss()       = Style("color: #AAB9D3; font-size: 0.8125rem; font-weight: 500; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style userNameCss()        = themed(Style("color: #1A1D2E; font-size: 1rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #F0F0F0; font-size: 1rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style userEmailCss()       = themed(Style("color: #6B7280; font-size: 0.8125rem; font-weight: 500; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #7B8EAD; font-size: 0.8125rem; font-weight: 500; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 // Mobile 360 (artefato Mobile, BottomTab): 5 abas, ativa em #F0F0F0, demais #4A5578.
-Style shellMobileCss()     = Style("display: flex; flex-direction: column; width: 100%; min-height: 640; background: #0A0D18; color: #F0F0F0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style shellMobileCss()     = themed(Style("display: flex; flex-direction: column; width: 100%; min-height: 640; background: #F8F9FC; color: #1A1D2E; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("display: flex; flex-direction: column; width: 100%; min-height: 640; background: #0A0D18; color: #F0F0F0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style shellMobileMainCss() = Style("display: flex; flex-direction: column; flex-grow: 1; gap: 16; padding: 16; box-sizing: border-box; min-width: 0")
-Style bottomTabCss()       = Style("display: flex; flex-direction: row; justify-content: space-around; align-items: flex-start; width: 100%; height: 74; padding-top: 10; box-sizing: border-box; background: #12162A; border-top: 1px solid rgba(255,255,255,.06)")
+Style bottomTabCss()       = themed(Style("display: flex; flex-direction: row; justify-content: space-around; align-items: flex-start; width: 100%; height: 74; padding-top: 10; box-sizing: border-box; background: #FFFFFF; border-top: 1px solid rgba(0,0,0,.06)"), Style("display: flex; flex-direction: row; justify-content: space-around; align-items: flex-start; width: 100%; height: 74; padding-top: 10; box-sizing: border-box; background: #12162A; border-top: 1px solid rgba(255,255,255,.06)"))
 Style bottomTabItemCss()   = Style("display: flex; flex-direction: column; align-items: center; gap: 4; padding: 0; background: transparent")
-Style bottomTabLabelCss()  = Style("outline: none; background: transparent; color: #4A5578; border: none; padding: 0; font-size: 0.625rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style bottomTabLabelActiveCss() = Style("outline: none; background: transparent; color: #F0F0F0; border: none; padding: 0; font-size: 0.625rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style bottomTabLabelCss()  = themed(Style("outline: none; background: transparent; color: #6B7280; border: none; padding: 0; font-size: 0.625rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; background: transparent; color: #4A5578; border: none; padding: 0; font-size: 0.625rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style bottomTabLabelActiveCss() = themed(Style("outline: none; background: transparent; color: #1A1D2E; border: none; padding: 0; font-size: 0.625rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; background: transparent; color: #F0F0F0; border: none; padding: 0; font-size: 0.625rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style topbarTextCss()      = Style("display: flex; flex-direction: column; gap: 2; min-width: 0")
 
 // =============================================================================
@@ -241,7 +255,7 @@ Style topbarTextCss()      = Style("display: flex; flex-direction: column; gap: 
 // =============================================================================
 // Topbar: subtítulo com ponto verde de 6 px quando "Assistente online".
 Style topbarSubRowCss()    = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 5; margin-top: 1")
-Style onlineDotCss()       = Style("width: 6; height: 6; min-width: 6; border-radius: 3; background: #00E5A0; flex-shrink: 0")
+Style onlineDotCss()       = themed(Style("width: 6; height: 6; min-width: 6; border-radius: 3; background: #10B981; flex-shrink: 0"), Style("width: 6; height: 6; min-width: 6; border-radius: 3; background: #00E5A0; flex-shrink: 0"))
 Style topbarActionCss()    = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: 8; margin-left: auto; flex-shrink: 0; background: transparent; padding: 0")
 // Ícones (components/icons.kf): holder sem altura de linha extra.
 Style iconHolderCss()      = Style("display: flex; align-items: center; justify-content: center; padding: 0; background: transparent; line-height: 0em; flex-shrink: 0")
@@ -253,19 +267,19 @@ Style wavesImageCss()      = Style("display: block; width: 100%; height: 100%; o
 Style overWavesCss()       = Style("position: relative; z-index: 1; display: flex; flex-direction: column; flex-grow: 1; width: 100%; background: transparent")
 // Campo de 38 px (login e cadastro do Desktop) e label 12/600 com 6 px.
 Style inputSmCss() {
-    if (authLight()) {
+    if (isLight()) {
         return Style("outline: none; background: #FFFFFF; color: #1A1D2E; height: 46; width: 100%; box-sizing: border-box; border: 1px solid #E5E7EB; border-radius: 8; padding: 0 14px; font-size: 1rem; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
     }
     return Style("outline: none; background: rgba(255,255,255,.04); color: #F0F0F0; height: 46; width: 100%; box-sizing: border-box; border: 1px solid rgba(255,255,255,.1); border-radius: 8; padding: 0 14px; font-size: 1rem; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 }
 Style inputSmPasswordCss() {
-    if (authLight()) {
+    if (isLight()) {
         return Style("outline: none; background: #FFFFFF; color: #1A1D2E; height: 46; width: 100%; box-sizing: border-box; border: 1px solid #E5E7EB; border-radius: 8; padding: 0 38px 0 14px; font-size: 1rem; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
     }
     return Style("outline: none; background: rgba(255,255,255,.04); color: #F0F0F0; height: 46; width: 100%; box-sizing: border-box; border: 1px solid rgba(255,255,255,.1); border-radius: 8; padding: 0 38px 0 14px; font-size: 1rem; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
 }
 Style fieldLabelCss() {
-    if (authLight()) {
+    if (isLight()) {
         return Style("color: #6B7280; font-size: 0.875rem; font-weight: 600; letter-spacing: 0.04em; margin: 0 0 6px 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
     }
     return Style("color: #7B8EAD; font-size: 0.875rem; font-weight: 600; letter-spacing: 0.04em; margin: 0 0 6px 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
@@ -274,19 +288,19 @@ Style labeledCss()         = Style("display: flex; flex-direction: column; gap: 
 Style passwordBoxCss()     = Style("position: relative; display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; width: 100%; padding: 0; background: transparent")
 Style eyeButtonCss()       = Style("outline: none; position: absolute; right: 14; top: 15; padding: 0; background: transparent; line-height: 0em; cursor: pointer")
 // Radio de 18 px (ponto de 9) dentro do choice card.
-Style radioCardCss()       = Style("outline: none; display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 12; width: 100%; box-sizing: border-box; padding: 14px 16px; border-radius: 12; background: #12162A; border: 1px solid rgba(255,255,255,.06); cursor: pointer")
-Style radioCardSelectedCss() = Style("outline: none; display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 12; width: 100%; box-sizing: border-box; padding: 14px 16px; border-radius: 12; background: rgba(0,212,255,.08); border: 1px solid #00D4FF; cursor: pointer")
-Style radioLabelCss()      = Style("color: #F0F0F0; font-size: 0.875rem; font-weight: 500; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style radioCss()           = Style("display: flex; align-items: center; justify-content: center; width: 18; height: 18; min-width: 18; box-sizing: border-box; border-radius: 9; border: 1.5px solid #4A5578; background: transparent; padding: 0; flex-shrink: 0")
-Style radioOnCss()         = Style("display: flex; align-items: center; justify-content: center; width: 18; height: 18; min-width: 18; box-sizing: border-box; border-radius: 9; border: 1.5px solid #00D4FF; background: transparent; padding: 0; flex-shrink: 0")
-Style radioDotCss()        = Style("width: 9; height: 9; border-radius: 5; background: #00D4FF; padding: 0")
+Style radioCardCss()       = themed(Style("outline: none; display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 12; width: 100%; box-sizing: border-box; padding: 14px 16px; border-radius: 12; background: #FFFFFF; border: 1px solid rgba(0,0,0,.06); cursor: pointer"), Style("outline: none; display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 12; width: 100%; box-sizing: border-box; padding: 14px 16px; border-radius: 12; background: #12162A; border: 1px solid rgba(255,255,255,.06); cursor: pointer"))
+Style radioCardSelectedCss() = themed(Style("outline: none; display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 12; width: 100%; box-sizing: border-box; padding: 14px 16px; border-radius: 12; background: rgba(37,99,235,.08); border: 1px solid #2563EB; cursor: pointer"), Style("outline: none; display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 12; width: 100%; box-sizing: border-box; padding: 14px 16px; border-radius: 12; background: rgba(0,212,255,.08); border: 1px solid #00D4FF; cursor: pointer"))
+Style radioLabelCss()      = themed(Style("color: #1A1D2E; font-size: 0.875rem; font-weight: 500; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #F0F0F0; font-size: 0.875rem; font-weight: 500; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style radioCss()           = themed(Style("display: flex; align-items: center; justify-content: center; width: 18; height: 18; min-width: 18; box-sizing: border-box; border-radius: 9; border: 1.5px solid #9CA3AF; background: transparent; padding: 0; flex-shrink: 0"), Style("display: flex; align-items: center; justify-content: center; width: 18; height: 18; min-width: 18; box-sizing: border-box; border-radius: 9; border: 1.5px solid #4A5578; background: transparent; padding: 0; flex-shrink: 0"))
+Style radioOnCss()         = themed(Style("display: flex; align-items: center; justify-content: center; width: 18; height: 18; min-width: 18; box-sizing: border-box; border-radius: 9; border: 1.5px solid #2563EB; background: transparent; padding: 0; flex-shrink: 0"), Style("display: flex; align-items: center; justify-content: center; width: 18; height: 18; min-width: 18; box-sizing: border-box; border-radius: 9; border: 1.5px solid #00D4FF; background: transparent; padding: 0; flex-shrink: 0"))
+Style radioDotCss()        = themed(Style("width: 9; height: 9; border-radius: 5; background: #2563EB; padding: 0"), Style("width: 9; height: 9; border-radius: 5; background: #00D4FF; padding: 0"))
 // Valor grande do salário: 52/700 accent, com prefixo "R$".
 Style bigMoneyRowCss()     = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: baseline; justify-content: center; gap: 4; width: 100%")
-Style bigMoneyPrefixCss()  = Style("color: #00D4FF; font-size: 3.25rem; font-weight: 700; margin: 0 6px 0 0; white-space: nowrap; flex-shrink: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style bigMoneyInputCss()   = Style("outline: none; background: transparent; color: #00D4FF; height: 4rem; width: 100%; max-width: 480; min-width: 0; box-sizing: border-box; border: none; text-align: center; font-size: 3.25rem; font-weight: 700; padding: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style moneyHintCss()       = Style("color: #7B8EAD; font-size: 1rem; line-height: 1.5rem; text-align: center; margin: 16px 0 0 0; overflow-wrap: break-word; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style bigMoneyPrefixCss()  = themed(Style("color: #2563EB; font-size: 3.25rem; font-weight: 700; margin: 0 6px 0 0; white-space: nowrap; flex-shrink: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #00D4FF; font-size: 3.25rem; font-weight: 700; margin: 0 6px 0 0; white-space: nowrap; flex-shrink: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style bigMoneyInputCss()   = themed(Style("outline: none; background: transparent; color: #2563EB; height: 4rem; width: 100%; max-width: 480; min-width: 0; box-sizing: border-box; border: none; text-align: center; font-size: 3.25rem; font-weight: 700; padding: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; background: transparent; color: #00D4FF; height: 4rem; width: 100%; max-width: 480; min-width: 0; box-sizing: border-box; border: none; text-align: center; font-size: 3.25rem; font-weight: 700; padding: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style moneyHintCss()       = themed(Style("color: #6B7280; font-size: 1rem; line-height: 1.5rem; text-align: center; margin: 16px 0 0 0; overflow-wrap: break-word; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #7B8EAD; font-size: 1rem; line-height: 1.5rem; text-align: center; margin: 16px 0 0 0; overflow-wrap: break-word; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 // Chips (gastos fixos e variáveis): raio 20, borda 1,5.
-Style chipCss()            = Style("outline: none; background: transparent; color: #7B8EAD; border: 1.5px solid rgba(255,255,255,.1); border-radius: 20; padding: 6px 12px; font-size: 0.8125rem; font-weight: 400; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
-Style chipSelectedCss()    = Style("outline: none; background: rgba(0,212,255,.08); color: #00D4FF; border: 1.5px solid #00D4FF; border-radius: 20; padding: 6px 12px; font-size: 0.8125rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style chipCss()            = themed(Style("outline: none; background: transparent; color: #6B7280; border: 1.5px solid #E5E7EB; border-radius: 20; padding: 6px 12px; font-size: 0.8125rem; font-weight: 400; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; background: transparent; color: #7B8EAD; border: 1.5px solid rgba(255,255,255,.1); border-radius: 20; padding: 6px 12px; font-size: 0.8125rem; font-weight: 400; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style chipSelectedCss()    = themed(Style("outline: none; background: rgba(37,99,235,.08); color: #2563EB; border: 1.5px solid #2563EB; border-radius: 20; padding: 6px 12px; font-size: 0.8125rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; background: rgba(0,212,255,.08); color: #00D4FF; border: 1.5px solid #00D4FF; border-radius: 20; padding: 6px 12px; font-size: 0.8125rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style chipGroupCss()       = Style("display: flex; flex-direction: row; flex-wrap: wrap; gap: 8; width: 100%")
-Style chipGroupTitleCss()  = Style("color: #4A5578; font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 12px 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")
+Style chipGroupTitleCss()  = themed(Style("color: #6B7280; font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 12px 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #4A5578; font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 12px 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))

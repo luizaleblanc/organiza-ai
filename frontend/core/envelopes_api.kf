@@ -31,7 +31,7 @@ class EnvState {
     static String loadError = ""
     static String formError = ""
     // Modal "Nova caixinha": a escolha sobrevive ao re-render (erro, troca de grupo).
-    static Int newCategoryIdx = 0
+    static String newName = ""
     static String newLimit = ""
     static String newBucket = ""
     // Buckets reais do modelo do usuário (GET /api/budgets/balance).
@@ -40,15 +40,34 @@ class EnvState {
     static String confirmDelete = ""
     // Edição do limite mensal da caixinha selecionada.
     static String editingId = ""
-    static String editingCategory = ""
+    static String editingName = ""
+    static String editingNameDraft = ""
     static String editingLimit = ""
 }
 
 resetNewEnvelopeForm() {
-    EnvState.newCategoryIdx = 0
+    EnvState.newName = ""
     EnvState.newLimit = ""
     EnvState.newBucket = ""
     EnvState.formError = ""
+}
+
+String msgEnvelopeName() = "Dê um nome de até 40 caracteres para a caixinha."
+String msgEnvelopeDuplicate() = "Você já tem uma caixinha com esse nome."
+String msgEnvelopeAuto() = "Esta caixinha é automática e não pode ser renomeada."
+
+// Mensagens do backend para nome de caixinha (400/409); o resto cai em apiErrorMessage (auth_api.kf).
+String envelopeErrorMessage(String body) {
+    if (body.contains("já tem uma caixinha")) {
+        return msgEnvelopeDuplicate()
+    }
+    if (body.contains("automática")) {
+        return msgEnvelopeAuto()
+    }
+    if (body.contains("nome de até 40")) {
+        return msgEnvelopeName()
+    }
+    return apiErrorMessage(body)
 }
 
 String msgEnvelopeBucket() = "Esse grupo não existe no seu modelo de orçamento. Escolha um dos grupos sugeridos."
@@ -64,7 +83,8 @@ resetEnvelopes() {
     EnvState.formError = ""
     EnvState.confirmDelete = ""
     EnvState.editingId = ""
-    EnvState.editingCategory = ""
+    EnvState.editingName = ""
+    EnvState.editingNameDraft = ""
     EnvState.editingLimit = ""
     EnvState.buckets = listOf()
 }
@@ -135,14 +155,14 @@ List<EnvelopeItem> envelopeItems() {
     }
 }
 
-// POST /api/envelopes {categoryName, limitAmount, bucket}. Bucket fora do
+// POST /api/envelopes {categoryName (nome livre, 1 a 40), limitAmount, bucket}. 400/409 trazem a mensagem pronta em PT. Bucket fora do
 // modelo = 400 "Bucket inválido..." -> mensagem fixa; "" omite bucket (Base Zero).
-createEnvelope(String category, Double limit, String bucket) {
+createEnvelope(String name, Double limit, String bucket) {
     var payload = ""
     if (bucket != "") {
-        payload = json.encode(CreateEnvelopeRequest(category, limit, bucket))
+        payload = json.encode(CreateEnvelopeRequest(name, limit, bucket))
     } else {
-        payload = json.encode(CreateEnvelopeNoBucketRequest(category, limit))
+        payload = json.encode(CreateEnvelopeNoBucketRequest(name, limit))
     }
     var body = ""
     try {
@@ -154,7 +174,7 @@ createEnvelope(String category, Double limit, String bucket) {
         if (body.contains("Bucket")) {
             throw msgEnvelopeBucket()
         }
-        throw apiErrorMessage(body)
+        throw envelopeErrorMessage(body)
     }
 }
 
@@ -171,15 +191,15 @@ deleteEnvelope(String id) {
     }
 }
 
-// PUT /api/envelopes/:id. O backend mantém os demais atributos da caixinha.
-updateEnvelopeLimit(String id, String category, Double limit) {
+// PUT /api/envelopes/:id. Renomeia só caixinhas livres (categoria = 400 "automática"); o backend mantém o resto.
+updateEnvelope(String id, String name, Double limit) {
     var body = ""
     try {
-        body = apiPut("/api/envelopes/" + id, json.encode(UpdateEnvelopeRequest(category, limit)))
+        body = apiPut("/api/envelopes/" + id, json.encode(UpdateEnvelopeRequest(name, limit)))
     } catch (String e) {
         throw msgNetwork()
     }
     if (isApiError(body)) {
-        throw apiErrorMessage(body)
+        throw envelopeErrorMessage(body)
     }
 }

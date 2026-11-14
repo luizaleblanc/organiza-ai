@@ -172,6 +172,27 @@ String categoryLabel(String category) {
     return "Outros"
 }
 
+List<String> categoryCodes() = listOf("HOUSING", "GROCERIES", "TRANSPORT", "FOOD", "SUBSCRIPTIONS", "LEISURE", "HEALTH", "PHARMA", "AUTO", "EDUCATION", "SHOPPING", "OTHER")
+
+// Nome de caixinha igual ao de uma Category = caixinha automática.
+Bool isCategoryName(String name) = categoryCodes().contains(name)
+
+// Rótulo da caixinha: Category -> português; nome livre -> o texto digitado, como veio.
+String envelopeLabel(String name) {
+    if (isCategoryName(name)) {
+        return categoryLabel(name)
+    }
+    return name
+}
+
+// Validação local do nome digitado (já com trim); "" = válido.
+String envelopeNameError(String name) {
+    if (name.length() == 0 || name.length() > 40) {
+        return "Dê um nome de até 40 caracteres para a caixinha."
+    }
+    return ""
+}
+
 // Category -> cor do ponto (paleta de categorias do theme.kf).
 Color categoryColor(String category) {
     if (category == "HOUSING") { return colorCatMoradia() }

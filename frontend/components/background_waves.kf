@@ -16,7 +16,12 @@ import core.theme
 // cadastro; Mobile = boas-vindas e todo o onboarding.
 // =============================================================================
 
-String wavesSrc() = "assets/brand/organiza-fundo-ondas.svg"
+String wavesSrc() {
+    if (isLight()) {
+        return "assets/brand/organiza-fundo-ondas-light.svg"
+    }
+    return "assets/brand/organiza-fundo-ondas.svg"
+}
 
 Bool screenHasWaves(String screen, Bool desktop) {
     if (screen == "welcome") {
