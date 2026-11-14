@@ -20,6 +20,9 @@ import core.api_client
 // qualquer outro {"error"} mostra a mensagem do backend e mantém o rascunho.
 // =============================================================================
 
+// Contrato tipado do chat. A ponte de voz do navegador transcreve para texto
+// antes do envio, portanto a mesma requisição KOF valida tanto texto digitado
+// quanto fala (STT); a resposta tipada alimenta a leitura TTS no cliente.
 record ChatMessageRequest(String message)
 record ChatReplyResponse(String reply, Int messagesUsed, Int messagesLimit)
 record ChatHistoryItem(String role, String content, String createdAt)
@@ -30,9 +33,14 @@ record ChatTierStatus(String tier, Int messagesUsed, Int messagesLimit, Bool voi
 class ChatUi {
     static String draft = ""
     static Bool sending = false
+    // Várias mensagens podem estar aguardando resposta ao mesmo tempo.
+    static Int activeRequests = 0
     static Bool blocked = false
     // Mensagem do usuário em envio (bolha provisória até a resposta chegar).
     static String pending = ""
+    // Uma mensagem codificada por linha, usada para renderizar os envios que
+    // ainda não receberam resposta.
+    static String pendingQueue = ""
     // Token para o qual o histórico já foi pedido ("" = nunca).
     static String loadedFor = ""
     static Bool loading = false
@@ -41,6 +49,8 @@ class ChatUi {
     static Bool usageKnown = false
     static Int used = 0
     static Int limit = 0
+    static Bool voiceEnabled = false
+    static Bool pro = false
 }
 
 String chatLimitText() = "Você chegou ao limite de " + String.valueOf(ChatUi.limit) + " mensagens do plano Gratuito neste mês. Assine o Pro para continuar conversando."
@@ -54,17 +64,53 @@ Bool isChatLimitError(String message) = message.contains("limite de") && message
 String chatEncode(String text) = text.replace('\n', '¶')
 String chatDecode(String text) = text.replace('¶', '\n')
 
+String pendingChatKey(String text) = chatEncode(text)
+
+queueChatMessage(String text) {
+    ChatUi.pendingQueue = ChatUi.pendingQueue + pendingChatKey(text) + "\n"
+    ChatUi.pending = text
+    ChatUi.activeRequests = ChatUi.activeRequests + 1
+    ChatUi.sending = true
+}
+
+removePendingChatMessage(String text) {
+    val key = pendingChatKey(text)
+    var removed = false
+    var out = ""
+    for (var line in ChatUi.pendingQueue.split("\n")) {
+        if (line != "") {
+            if (!removed && line == key) {
+                removed = true
+            } else {
+                out = out + line + "\n"
+            }
+        }
+    }
+    ChatUi.pendingQueue = out
+    if (ChatUi.activeRequests > 0) {
+        ChatUi.activeRequests = ChatUi.activeRequests - 1
+    }
+    ChatUi.sending = ChatUi.activeRequests > 0
+    if (ChatUi.activeRequests == 0) {
+        ChatUi.pending = ""
+    }
+}
+
 // Carrega contador + página 1 do histórico (uma vez por sessão/token).
 loadChat() {
     ChatUi.loading = true
     ChatUi.error = ""
     ChatUi.draft = ""
     ChatUi.pending = ""
+    ChatUi.pendingQueue = ""
     ChatUi.sending = false
+    ChatUi.activeRequests = 0
     ChatUi.blocked = false
     ChatUi.usageKnown = false
     ChatUi.used = 0
     ChatUi.limit = 0
+    ChatUi.voiceEnabled = false
+    ChatUi.pro = false
     try {
         val tierBody = apiGet("/api/users/tier-status")
         if (isApiError(tierBody)) {
@@ -75,6 +121,8 @@ loadChat() {
         val tier = json.decode<ChatTierStatus>(tierBody)
         ChatUi.used = tier.messagesUsed()
         ChatUi.limit = tier.messagesLimit()
+        ChatUi.voiceEnabled = tier.voiceEnabled()
+        ChatUi.pro = tier.tier() == "PREMIUM"
         ChatUi.usageKnown = true
         ChatUi.blocked = !tier.canSendMessage()
         val body = apiGet("/api/chat/messages?page=1&limit=50")
@@ -97,8 +145,6 @@ loadChat() {
 // limite): bloqueia o envio. Outro {"error"}: mostra a mensagem do backend.
 // 503/rede: mensagem fixa. Nos erros o rascunho fica para tentar de novo.
 sendChatMessage(String text) {
-    ChatUi.sending = true
-    ChatUi.pending = text
     ChatUi.error = ""
     try {
         val body = apiPost("/api/chat/message", json.encode(ChatMessageRequest(text)))
@@ -132,6 +178,5 @@ sendChatMessage(String text) {
         ChatUi.draft = text
         ChatUi.error = chatOfflineText()
     }
-    ChatUi.pending = ""
-    ChatUi.sending = false
+    removePendingChatMessage(text)
 }

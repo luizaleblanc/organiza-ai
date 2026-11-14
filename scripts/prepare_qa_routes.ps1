@@ -10,10 +10,24 @@ if (-not (Test-Path -LiteralPath $indexPath) -or -not (Test-Path -LiteralPath $m
     throw "Frontend compilado não encontrado em '$WebDir'. Rode 'kof build frontend --target js' primeiro."
 }
 
+# O compilador copia assets declarados por widgets KOF, mas não módulos JS
+# auxiliares. A ponte Web Speech é estática e precisa seguir com o bundle.
+$voiceBridgeSource = Join-Path (Split-Path -Parent $PSScriptRoot) "frontend\assets\voice_bridge.js"
+$voiceBridgeTarget = Join-Path $WebDir "assets\voice_bridge.js"
+if (-not (Test-Path -LiteralPath $voiceBridgeSource)) {
+    throw "Ponte de voz ausente: '$voiceBridgeSource'."
+}
+New-Item -ItemType Directory -Path (Split-Path -Parent $voiceBridgeTarget) -Force | Out-Null
+Copy-Item -LiteralPath $voiceBridgeSource -Destination $voiceBridgeTarget -Force
+
 $index = [IO.File]::ReadAllText($indexPath)
 $module = [IO.File]::ReadAllText($modulePath)
 $version = [IO.File]::GetLastWriteTimeUtc($modulePath).Ticks
 $index = $index.Replace('src="Default.mjs"', "src=`"Default.mjs?v=$version`"")
+$voiceBridge = '<script src="assets/voice_bridge.js"></script>'
+if (-not $index.Contains($voiceBridge)) {
+    $index = $index.Replace('</body>', "  $voiceBridge`r`n</body>")
+}
 [IO.File]::WriteAllText($indexPath, $index, [Text.UTF8Encoding]::new($false))
 $startup = '(core_AppState.currentScreen = "welcome");' + "`n" + '    applyViewport(window);'
 if (-not $module.Contains($startup)) {

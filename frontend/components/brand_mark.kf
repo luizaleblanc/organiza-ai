@@ -38,3 +38,16 @@ View brandMark(Int width, String id) {
     holder.bind(img)
     return holder
 }
+
+// Versão monocromática para ações sobre o gradiente da marca.
+View brandMarkOnAccent(Int width, String id) {
+    var img = Image("assets/brand/organiza-simbolo-onaccent.svg")
+    img.setAlt("Enviar mensagem")
+    img.setWidth(brandImageWidth(width))
+    img.setHeight(brandImageHeight(width))
+    var holder = View(screenStyle())
+    holder.setId(id)
+    holder.setStyle(markCss())
+    holder.bind(img)
+    return holder
+}
