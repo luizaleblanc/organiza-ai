@@ -58,7 +58,8 @@ PersistTransactionInput? decodePersistTransactionInput(String raw) {
 
 // mod_transaction/dto/TransactionOutput.java
 // createdAt (instante UTC) a mais que o legado: as telas filtram por periodo (Semana/Mes/Ano).
-record TransactionOutput(String id, String description, String category, Double value, String currency, String? envelopeId, String? createdAt)
+record TransactionOutput(String id, String description, String category, Double value, String currency, String? envelopeId, String? createdAt,
+    String? documentId, Int? sourcePage, Int? sourceLine, String? externalRef)
 
 // mod_transaction/dto/GetTotalByCategoryInput.java
 record GetTotalByCategoryInput(Category category)
@@ -137,13 +138,19 @@ Long sumAmountByUserIdAndCreatedAtAfter(String userId, String from) {
     return sumAmountCents(findTransactionsByUserIdAndCreatedAtAfter(userId, from))
 }
 
-TransactionOutput transactionEntityToOutput(TransactionEntity t) {
+TransactionOutput transactionWithProvenanceToOutput(TransactionWithProvenance p) {
+    var t = p.transaction
     var category = t.category
     var categoryName = "OTHER"
     if (category != null) {
         categoryName = category.name()
     }
-    return TransactionOutput(t.id, t.description, categoryName, centsToReais(t.amountCents), t.currency, t.envelopeId, t.createdAt)
+    return TransactionOutput(t.id, t.description, categoryName, centsToReais(t.amountCents), t.currency, t.envelopeId, t.createdAt,
+        p.documentId, p.sourcePage, p.sourceLine, p.externalRef)
+}
+
+TransactionOutput transactionEntityToOutput(TransactionEntity t) {
+    return transactionWithProvenanceToOutput(TransactionWithProvenance(t, textOrNull(""), intOrNull(0), intOrNull(0), textOrNull("")))
 }
 
 // Enums saem como texto ("FIXED"), nao como {"kofName","kofOrdinal"}: json.encode serializa enum como objeto.
@@ -210,7 +217,7 @@ Double simple8020Threshold() {
 // 3. 80/20: sem divida, ja guarda todo mes e renda >= 5 SM.
 // 4. Kakeibo: so por escolha do usuario, sem divida e renda >= 3 SM (ver budgetModelEligibilityError).
 // 5. 50/30/20: sem divida e renda >= 2 SM.
-// Base Zero (renda variavel) nao entra na selecao automatica.
+// Renda variavel nao muda a selecao: so os 5 modelos oficiais da tabela de docs/DATA_MODEL.md.
 BudgetModelType suggestBudgetModel(Double salary, IncomeType incomeType, Bool hasDebt, Bool savesMonthly) {
     if (hasDebt && salary >= antiDebtThreshold()) {
         return BudgetModelType.ANTI_DEBT_701020
@@ -391,7 +398,7 @@ VariableIncomeEntity saveVariableIncome(VariableIncomeEntity income) {
 // =========================================================
 
 // Envelope da transacao: o informado no corpo so vale se for do proprio usuario (PERS-11);
-// senao, o envelope do usuario com o nome da categoria; nenhum = null.
+// senao, o envelope do usuario com o nome da categoria; nenhum = auto-cria caixinha da categoria.
 String? resolveEnvelopeId(String userId, String? given, Category category) {
     if (given != null) {
         var owned = findEnvelopeById(userId, given)
@@ -403,18 +410,376 @@ String? resolveEnvelopeId(String userId, String? given, Category category) {
     if (env != null) {
         return env.id
     }
+    var labeled = findEnvelopeByName(userId, categoryLabel(category), "")
+    if (labeled != null) {
+        return labeled.id
+    }
+    var created = autoCreateCategoryEnvelope(userId, category)
+    if (created != null) {
+        return created.id
+    }
     return null
+}
+
+// A categoria ja tem caixinha (pelo codigo antigo ou pelo nome em portugues)?
+Bool categoryHasEnvelope(String userId, Category category) {
+    return findEnvelopeByUserIdAndCategoryName(userId, category.name()) != null || findEnvelopeByName(userId, categoryLabel(category), "") != null
+}
+
+// =========================================================
+// Controle estrito do onboarding (OnboardingExpenseControlRow + OnboardingChipAllocationRow)
+// =========================================================
+
+record TransactionResult(TransactionOutput transaction, Bool envelopeCreated, Bool rebalanced, String? bucket, String? controlStatus)
+
+String onboardingControlStatus(Long spentCents, Long plannedCents) {
+    if (spentCents <= 0) {
+        return "PENDENTE"
+    }
+    if (plannedCents <= 0 || spentCents > plannedCents) {
+        return "ESTOURADO"
+    }
+    if (spentCents * 100 >= plannedCents * 80) {
+        return "ALERTA"
+    }
+    return "ATIVO"
+}
+
+Category? categoryEnumOrNull(String name) {
+    for (var c in Category.values()) {
+        if (c.name() == name) {
+            return c
+        }
+    }
+    return null
+}
+
+Category? categoryByPortugueseLabel(String name) {
+    var key = envelopeNameKey(name)
+    for (var c in Category.values()) {
+        if (envelopeNameKey(categoryLabel(c)) == key) {
+            return c
+        }
+    }
+    return null
+}
+
+Category? resolveCategoryForEnvelopeName(String name) {
+    var byCode = categoryEnumOrNull(name)
+    if (byCode != null) {
+        return byCode
+    }
+    return categoryByPortugueseLabel(name)
+}
+
+String envelopePlanBucket(EnvelopeEntity e, BudgetModelType model, List<BucketSummaryDTO> plan) {
+    if (e.bucket != null && e.bucket != "") {
+        return nullToText(e.bucket)
+    }
+    if (isReserveEnvelopeName(e.categoryName)) {
+        return planReserveBucket(model)
+    }
+    var cat = resolveCategoryForEnvelopeName(e.categoryName)
+    if (cat != null) {
+        return nullToText(planBucketFor(model, plan, cat))
+    }
+    return ""
+}
+
+Long bucketCeilingCents(List<BucketSummaryDTO> plan, String bucketName) {
+    var matches = plan.filter((b: BucketSummaryDTO) -> b.name == bucketName)
+    if (matches.isEmpty()) {
+        return 0
+    }
+    return toCents(matches.get(0).amount)
+}
+
+Bool isAutoCreatedCategoryEnvelope(EnvelopeEntity e, List<OnboardingChipAllocationRow> chips) {
+    if (e.bucket == null || e.bucket == "" || e.movingAverageMonths != 0 || e.limitType != EnvelopeLimitType.FIXED) {
+        return false
+    }
+    var byLabel = categoryByPortugueseLabel(e.categoryName)
+    if (byLabel == null) {
+        return false
+    }
+    var chipCats = chips.map((c: OnboardingChipAllocationRow) -> c.category())
+    return !chipCats.contains(byLabel.name())
+}
+
+// Rebalanceia apenas as caixinhas auto-criadas no bucket para respeitar o teto do bucket
+// sem tocar em caixinhas manuais nem nas criadas por chips do onboarding.
+Bool rebalanceAutoEnvelopesInBucket(UserEntity user, String bucketName, String? skipCategoryLabel) {
+    if (!onboardingCompleted(user) || bucketName == "") {
+        return false
+    }
+    var model = user.budgetModel
+    var plan = buildBudgetBuckets(model, userSalary(user))
+    var ceilingCents = bucketCeilingCents(plan, bucketName)
+    var chips = listOnboardingChipsByUser(user.id)
+    var inBucket = findEnvelopesByUserId(user.id).filter((e: EnvelopeEntity) -> envelopePlanBucket(e, model, plan) == bucketName)
+    var autoEnvs: List<EnvelopeEntity> = listOf()
+    var fixedCents: Long = 0
+    for (var e in inBucket) {
+        if (isAutoCreatedCategoryEnvelope(e, chips)) {
+            autoEnvs.add(e)
+        } else {
+            fixedCents = fixedCents + toCents(e.limitAmount)
+        }
+    }
+    if (autoEnvs.isEmpty()) {
+        return false
+    }
+    var availableCents = ceilingCents - fixedCents
+    if (availableCents < 0) {
+        availableCents = 0
+    }
+    var perAutoCents = availableCents / autoEnvs.size
+    var perAutoReais = centsToReais(perAutoCents)
+    var changed = false
+    for (var ae in autoEnvs) {
+        if ((skipCategoryLabel == null || ae.categoryName != skipCategoryLabel) && toCents(ae.limitAmount) != perAutoCents) {
+            saveEnvelope(EnvelopeEntity(ae.id, ae.userId, ae.categoryName, perAutoReais, ae.currentSpent, ae.limitType, ae.movingAverageMonths, ae.createdAt, ae.bucket))
+            changed = true
+        }
+    }
+    return changed
+}
+
+// Reconstroi as linhas de controle do onboarding preservando os gastos reais do mes em TransactionRow.
+List<OnboardingExpenseControlRow> saveOnboardingControlForUser(UserEntity user) {
+    if (!onboardingCompleted(user)) {
+        deleteOnboardingControlForUser(user.id)
+        return listOf()
+    }
+    var model = user.budgetModel
+    var plan = buildBudgetBuckets(model, userSalary(user))
+    for (var b in plan) {
+        rebalanceAutoEnvelopesInBucket(user, b.name, null)
+    }
+    var monthTxs = findTransactionsByUserIdAndCreatedAtAfter(user.id, monthStartIso())
+    var envelopes = findEnvelopesByUserId(user.id)
+    var chips = listOnboardingChipsByUser(user.id)
+    var now = nowIso()
+    var zero: Long = 0
+
+    var catOrder: List<String> = listOf()
+    var catPlanned: Map<String, Long> = mapOf()
+    for (var chip in chips) {
+        var cCode = chip.category()
+        if (!catOrder.contains(cCode)) {
+            catOrder.add(cCode)
+        }
+        var prev = catPlanned.getOrDefault(cCode, zero)
+        catPlanned.put(cCode, prev + chip.plannedCents())
+    }
+    for (var env in envelopes) {
+        var cat = resolveCategoryForEnvelopeName(env.categoryName)
+        if (cat != null) {
+            var code = cat.name()
+            if (!catOrder.contains(code)) {
+                catOrder.add(code)
+            }
+            catPlanned.put(code, toCents(env.limitAmount))
+        }
+    }
+    for (var t in monthTxs) {
+        var tc = t.category
+        if (tc != null) {
+            var tCode = tc.name()
+            if (!catOrder.contains(tCode)) {
+                catOrder.add(tCode)
+                catPlanned.put(tCode, zero)
+            }
+        }
+    }
+
+    deleteOnboardingControlForUser(user.id)
+    var bucketsWithCategories: List<String> = listOf()
+    var savedRows: List<OnboardingExpenseControlRow> = listOf()
+    for (var code in catOrder) {
+        var cat = categoryEnumOrNull(code)
+        var bucketName = nullToText(planBucketFor(model, plan, cat))
+        var planned = catPlanned.getOrDefault(code, zero)
+        var spent = sumAmountCents(monthTxs.filter((t: TransactionEntity) -> categoryText(t.category) == code))
+        var st = onboardingControlStatus(spent, planned)
+        savedRows.add(upsertOnboardingControlRow(OnboardingExpenseControlRow(0, user.id, code, bucketName, planned, spent, st, now)))
+        if (bucketName != "" && !bucketsWithCategories.contains(bucketName)) {
+            bucketsWithCategories.add(bucketName)
+        }
+    }
+    for (var b in plan) {
+        if (!bucketsWithCategories.contains(b.name)) {
+            var bPlanned = toCents(b.amount)
+            var bSpent = sumAmountCents(monthTxs.filter((t: TransactionEntity) -> planBucketForTx(model, plan, t.category, t.bucket) == b.name))
+            var bStatus = onboardingControlStatus(bSpent, bPlanned)
+            savedRows.add(upsertOnboardingControlRow(OnboardingExpenseControlRow(0, user.id, b.name, b.name, bPlanned, bSpent, bStatus, now)))
+        }
+    }
+    return savedRows
+}
+
+void saveChipListAllocationsForUser(UserEntity user, List<String> chips) {
+    var uniqueChips = chips.distinct()
+    var model = user.budgetModel
+    var plan = buildBudgetBuckets(model, userSalary(user))
+    var catMap = chipCategories()
+    var categories = uniqueChips.map((c: String) -> catMap.getOrDefault(c, "OTHER")).distinct()
+    var byBucket = categories.groupBy((c: String) -> nullToText(planBucketFor(model, plan, categoryOrNull(c))))
+
+    var chipsByCategory: Map<String, Int> = mapOf()
+    for (var chip in uniqueChips) {
+        var catCode = catMap.getOrDefault(chip, "OTHER")
+        chipsByCategory.put(catCode, chipsByCategory.getOrDefault(catCode, 0) + 1)
+    }
+
+    var seenPerCat: Map<String, Int> = mapOf()
+    var now = nowIso()
+    var rows: List<OnboardingChipAllocationRow> = listOf()
+    for (var chip in uniqueChips) {
+        var catCode = catMap.getOrDefault(chip, "OTHER")
+        var bucketName = nullToText(planBucketFor(model, plan, categoryOrNull(catCode)))
+        var share = byBucket.getOrDefault(bucketName, listOf()).size
+        var totalCatCents = toCents(chipLimit(plan, bucketName, share))
+        var chipCountInCat = chipsByCategory.getOrDefault(catCode, 1)
+        var idx = seenPerCat.getOrDefault(catCode, 0)
+        seenPerCat.put(catCode, idx + 1)
+        var base = totalCatCents / chipCountInCat
+        var rem = totalCatCents - base * chipCountInCat
+        var chipCents = base
+        if (idx == 0) {
+            chipCents = base + rem
+        }
+        rows.add(OnboardingChipAllocationRow(0, user.id, chip, catCode, chipCents, now))
+    }
+    replaceOnboardingChipsForUser(user.id, rows)
+    saveOnboardingControlForUser(user)
+}
+
+void saveChipAllocationsForUser(UserEntity user, ChipsInput chips) {
+    var allChips: List<String> = listOf()
+    allChips.addAll(chips.fixed())
+    allChips.addAll(chips.variable())
+    saveChipListAllocationsForUser(user, allChips)
+}
+
+// Sincroniza spentCents e status na mesma conexao da transacao (sem try {}, COMP002).
+OnboardingExpenseControlRow? syncOnboardingControlSpentOn(String conn, TransactionEntity savedTx, UserEntity user) {
+    if (!onboardingCompleted(user)) {
+        return null
+    }
+    var model = user.budgetModel
+    var plan = buildBudgetBuckets(model, userSalary(user))
+    var cat = savedTx.category
+    var catKey = categoryText(cat)
+    var bucketName = nullToText(planBucketForTx(model, plan, cat, savedTx.bucket))
+    var targetKey = catKey
+    if (targetKey == "") {
+        targetKey = bucketName
+    }
+    if (targetKey == "") {
+        return null
+    }
+
+    var monthTxs = findTransactionsByUserIdAndCreatedAtAfterOn(conn, user.id, monthStartIso())
+    var spentCents: Long = 0
+    if (cat != null) {
+        spentCents = sumAmountCents(monthTxs.filter((t: TransactionEntity) -> t.category == cat))
+    } else {
+        spentCents = sumAmountCents(monthTxs.filter((t: TransactionEntity) -> planBucketForTx(model, plan, t.category, t.bucket) == bucketName))
+    }
+
+    var controls = listOnboardingControlsByUserOn(conn, user.id)
+    if (targetKey != bucketName && bucketName != "") {
+        var placeholders = controls.filter((r: OnboardingExpenseControlRow) -> r.category() == bucketName)
+        for (var p in placeholders) {
+            deleteOnboardingControlRowOn(conn, p.id())
+        }
+    }
+
+    var existingMatches = controls.filter((r: OnboardingExpenseControlRow) -> r.category() == targetKey)
+    var existingId: Long = 0
+    var plannedCents: Long = 0
+    if (!existingMatches.isEmpty()) {
+        existingId = existingMatches.get(0).id()
+        plannedCents = existingMatches.get(0).plannedCents()
+    }
+    var envId = savedTx.envelopeId
+    if (envId != null && cat != null) {
+        var envRow = findOwnedEnvelopeRowOn(conn, user.id, envId)
+        if (envRow != null) {
+            if (envRow.categoryName() == cat.name() || envelopeNameKey(envRow.categoryName()) == envelopeNameKey(categoryLabel(cat))) {
+                plannedCents = envRow.limitCents()
+            }
+        }
+    }
+
+    var status = onboardingControlStatus(spentCents, plannedCents)
+    return upsertOnboardingControlRowOn(conn, OnboardingExpenseControlRow(existingId, user.id, targetKey, bucketName, plannedCents, spentCents, status, nowIso()))
+}
+
+OnboardingExpenseControlRow? syncOnboardingControlSpentOn(TransactionRow txRow, UserEntity user) {
+    return syncOnboardingControlSpentOn(DbConn.handle, transactionFromRow(txRow), user)
+}
+
+// Gasto numa categoria sem caixinha: cria a caixinha automaticamente com o nome em portugues
+// (categoryLabel, ex.: "Transporte"), no bucket do modelo do usuario e rebalanceando caixinhas
+// auto-criadas para nao ultrapassar o teto do bucket quando o onboarding esta concluido.
+EnvelopeEntity? autoCreateCategoryEnvelope(String userId, Category category) {
+    var user = findUserById(userId)
+    if (user == null) {
+        return null
+    }
+    var model = user.budgetModel
+    var plan = buildBudgetBuckets(model, userSalary(user))
+    var bucket = nullToText(planBucketFor(model, plan, category))
+    if (!onboardingCompleted(user)) {
+        var share = 1 + findEnvelopesByUserId(userId).filter((e: EnvelopeEntity) -> nullToText(e.bucket) == bucket).size
+        var limit = chipLimit(plan, bucket, share)
+        return createEnvelope(EnvelopeEntity("", userId, categoryLabel(category), limit, 0.0, EnvelopeLimitType.FIXED, 0, nowIso(), textOrNull(bucket)))
+    }
+
+    var ceilingCents = bucketCeilingCents(plan, bucket)
+    var chips = listOnboardingChipsByUser(userId)
+    var inBucket = findEnvelopesByUserId(userId).filter((e: EnvelopeEntity) -> envelopePlanBucket(e, model, plan) == bucket)
+    var autoEnvs: List<EnvelopeEntity> = listOf()
+    var fixedCents: Long = 0
+    for (var e in inBucket) {
+        if (isAutoCreatedCategoryEnvelope(e, chips)) {
+            autoEnvs.add(e)
+        } else {
+            fixedCents = fixedCents + toCents(e.limitAmount)
+        }
+    }
+    var availableCents = ceilingCents - fixedCents
+    if (availableCents < 0) {
+        availableCents = 0
+    }
+    var perAutoCents = availableCents / (autoEnvs.size + 1)
+    var perAutoReais = centsToReais(perAutoCents)
+    for (var ae in autoEnvs) {
+        if (toCents(ae.limitAmount) != perAutoCents) {
+            saveEnvelope(EnvelopeEntity(ae.id, ae.userId, ae.categoryName, perAutoReais, ae.currentSpent, ae.limitType, ae.movingAverageMonths, ae.createdAt, ae.bucket))
+        }
+    }
+    var created = createEnvelope(EnvelopeEntity("", userId, categoryLabel(category), perAutoReais, 0.0, EnvelopeLimitType.FIXED, 0, nowIso(), textOrNull(bucket)))
+    saveOnboardingControlForUser(user)
+    return created
 }
 
 // O transaction {} fica numa funcao propria: dentro de um try, o kof 0.6.3 para com "Internal compiler
 // error: null [COMP002]" (medido nesta mudanca). O bloco nao devolve valor, entao a linha gravada sai
 // por uma lista. Desconto do envelope lido e gravado na mesma conexao da transacao (soma em centavos).
 TransactionEntity insertTransactionAndSpend(String tx, TransactionEntity transaction, String userId, String? envId, Long amountCents) {
+    var user = findUserById(userId)
     var saved: List<TransactionEntity> = listOf()
     transaction {
-        saved.add(insertTransactionOn(tx, transaction))
+        var row = insertTransactionOn(tx, transaction)
+        saved.add(row)
         if (envId != null) {
             addEnvelopeSpentCentsOn(tx, userId, envId, amountCents)
+        }
+        if (user != null) {
+            syncOnboardingControlSpentOn(tx, row, user)
         }
     }
     return saved.get(0)
@@ -424,25 +789,47 @@ TransactionOutput persistTransaction(PersistTransactionInput input, Category cat
     return persistTransactionAmount(input.description(), input.amount() * 1.0, category, input.currency(), input.envelopeId(), userId)
 }
 
-// Mesmo caminho com valor em reais com centavos (tool persistTransaction do coach: "R$ 35,50").
-TransactionOutput persistTransactionAmount(String description, Double amount, Category category, String currency, String? envelopeId, String userId) {
+TransactionResult persistTransactionWithSource(String description, Double amount, Category category, String currency, String? envelopeId, String userId, Source source) {
     if (amount <= 0.0) {
         throw "Operação negada: O valor da transação deve ser maior que zero."
+    }
+
+    var user = findUserById(userId)
+    var hadEnvelope = false
+    if (envelopeId != null) {
+        if (findEnvelopeById(userId, envelopeId) != null) {
+            hadEnvelope = true
+        }
+    }
+    if (!hadEnvelope) {
+        hadEnvelope = categoryHasEnvelope(userId, category)
+    }
+
+    var bucketName: String? = textOrNull("")
+    var autoCountBefore = 0
+    if (user != null) {
+        var plan = buildBudgetBuckets(user.budgetModel, userSalary(user))
+        bucketName = planBucketFor(user.budgetModel, plan, category)
+        if (!hadEnvelope && onboardingCompleted(user) && bucketName != null) {
+            var chips = listOnboardingChipsByUser(userId)
+            autoCountBefore = findEnvelopesByUserId(userId)
+                .filter((e: EnvelopeEntity) -> envelopePlanBucket(e, user.budgetModel, plan) == nullToText(bucketName) && isAutoCreatedCategoryEnvelope(e, chips))
+                .size
+        }
     }
 
     var envId = resolveEnvelopeId(userId, envelopeId, category)
     var amountCents = toCents(amount)
 
-    // Transacao + desconto do envelope numa unica transacao do banco, isolada das outras requisicoes:
-    // com a ficha do DbConn.lock (uma transacao por vez) e numa conexao so dela (txConnection, a ultima
-    // aberta, que e a que o transaction {} do kof.db usa). Qualquer erro desfaz as duas gravacoes.
+    // Transacao + desconto do envelope + controle do onboarding numa unica transacao do banco,
+    // isolada das outras requisicoes: com a ficha do DbConn.lock e em txConnection().
     var saved: List<TransactionEntity> = listOf()
     var token = DbConn.lock.receive()
     try {
         var tx = txConnection()
         try {
             // createdAt = instante real (issue #44); descricao gravada literal via binds (PERS-15)
-            saved.add(insertTransactionAndSpend(tx, TransactionEntity("", description, amountCents, category, currency, userId, null, Source.MANUAL, nowIso(), envId), userId, envId, amountCents))
+            saved.add(insertTransactionAndSpend(tx, TransactionEntity("", description, amountCents, category, currency, userId, null, source, nowIso(), envId), userId, envId, amountCents))
         } catch (String e) {
             // Rollback ja feito pelo runtime; a conexao e descartada (pode ser ela que caiu) e o detalhe
             // do banco nao vai para a resposta.
@@ -454,7 +841,22 @@ TransactionOutput persistTransactionAmount(String description, Double amount, Ca
         DbConn.lock.send(token)
     }
 
-    return transactionEntityToOutput(saved.get(0))
+    var txOut = transactionEntityToOutput(saved.get(0))
+    var envelopeCreated = !hadEnvelope && envId != null
+    var rebalanced = envelopeCreated && autoCountBefore > 0 && user != null && onboardingCompleted(user)
+    var controlStatus: String? = textOrNull("")
+    if (user != null && onboardingCompleted(user)) {
+        var matches = listOnboardingControlsByUser(userId).filter((r: OnboardingExpenseControlRow) -> r.category() == category.name())
+        if (!matches.isEmpty()) {
+            controlStatus = matches.get(0).status()
+        }
+    }
+    return TransactionResult(txOut, envelopeCreated, rebalanced, bucketName, controlStatus)
+}
+
+// Mesmo caminho com valor em reais com centavos (tool persistTransaction do coach: "R$ 35,50").
+TransactionOutput persistTransactionAmount(String description, Double amount, Category category, String currency, String? envelopeId, String userId) {
+    return persistTransactionWithSource(description, amount, category, currency, envelopeId, userId, Source.MANUAL).transaction
 }
 
 // =========================================================
@@ -568,21 +970,31 @@ InvoiceConfirmRequest? decodeInvoiceConfirmRequest(String raw) {
 }
 
 // null = item valido; senao a mensagem (com o indice, base 0) para o 400. Nada e gravado se um falhar.
-String? invoiceItemError(InvoiceConfirmItem item, Int index) {
+String? validateInvoiceItemFields(String? description, Double amount, String? category, Int index) {
     var prefix = "Item " + index + ": "
-    if (item == null || item.description() == null || item.amount() == null || item.category() == null) {
+    if (description == null) {
         return prefix + "campos obrigatórios: description, amount, category."
     }
-    if (isBlank(item.description()) || item.description().length() > maxTextLength()) {
+    if (category == null) {
+        return prefix + "campos obrigatórios: description, amount, category."
+    }
+    if (isBlank(description) || description.length() > maxTextLength()) {
         return prefix + "descrição inválida."
     }
-    if (item.amount() <= 0.0 || item.amount() > 1000000000.0) {
+    if (amount <= 0.0 || amount > 1000000000.0) {
         return prefix + "o valor deve ser maior que zero."
     }
-    if (Category.valueOf(item.category()) == null) {
-        return prefix + "categoria inválida: " + item.category()
+    if (Category.valueOf(category) == null) {
+        return prefix + "categoria inválida: " + category
     }
     return null
+}
+
+String? invoiceItemError(InvoiceConfirmItem item, Int index) {
+    if (item == null || item.amount() == null) {
+        return "Item " + index + ": campos obrigatórios: description, amount, category."
+    }
+    return validateInvoiceItemFields(item.description(), item.amount(), item.category(), index)
 }
 
 String? invoiceItemsError(List<InvoiceConfirmItem> items) {
@@ -603,16 +1015,34 @@ String? invoiceItemsError(List<InvoiceConfirmItem> items) {
     return null
 }
 
-// O transaction {} fica numa funcao propria, fora de qualquer try (COMP002). Grava as linhas e os
-// descontos das caixinhas na conexao da transacao; qualquer erro desfaz o lote inteiro.
+void notifyBatchEnvelopeCrossings(String userId, List<TransactionEntity> newlySaved) {
+    var envIds: List<String> = listOf()
+    for (var t in newlySaved) {
+        var id = nullToText(t.envelopeId)
+        if (id != "" && !envIds.contains(id)) {
+            envIds.add(id)
+        }
+    }
+    for (var envId in envIds) {
+        notifyEnvelopeCrossing(userId, envId, sumAmountCents(newlySaved.filter((t: TransactionEntity) -> t.envelopeId == envId)))
+    }
+}
+
+// O transaction {} fica numa funcao propria, fora de qualquer try (COMP002). Grava as linhas, os
+// descontos das caixinhas e o controle do onboarding na conexao da transacao; qualquer erro desfaz o lote inteiro.
 List<TransactionEntity> insertInvoiceBatch(String tx, List<TransactionEntity> rows, String userId) {
+    var user = findUserById(userId)
     var saved: List<TransactionEntity> = listOf()
     transaction {
         for (var t in rows) {
-            saved.add(insertTransactionOn(tx, t))
+            var row = insertTransactionOn(tx, t)
+            saved.add(row)
             var envId = t.envelopeId
             if (envId != null) {
                 addEnvelopeSpentCentsOn(tx, userId, envId, t.amountCents)
+            }
+            if (user != null) {
+                syncOnboardingControlSpentOn(tx, row, user)
             }
         }
     }
@@ -636,17 +1066,7 @@ List<TransactionOutput> confirmInvoiceItems(String userId, List<InvoiceConfirmIt
     } finally {
         DbConn.lock.send(token)
     }
-    // Avisos depois do commit: um por caixinha, com o total do lote nela.
-    var envIds: List<String> = listOf()
-    for (var t in saved) {
-        var id = nullToText(t.envelopeId)
-        if (id != "" && !envIds.contains(id)) {
-            envIds.add(id)
-        }
-    }
-    for (var envId in envIds) {
-        notifyEnvelopeCrossing(userId, envId, sumAmountCents(saved.filter((t: TransactionEntity) -> t.envelopeId == envId)))
-    }
+    notifyBatchEnvelopeCrossings(userId, saved)
     return saved.map((t: TransactionEntity) -> transactionEntityToOutput(t))
 }
 
@@ -654,4 +1074,179 @@ TransactionEntity invoiceItemToEntity(String userId, InvoiceConfirmItem item) {
     var category = Category.valueOf(item.category())
     var envId = resolveEnvelopeId(userId, null, category)
     return TransactionEntity("", item.description().trim(), toCents(item.amount()), category, "BRL", userId, null, Source.INVOICE, nowIso(), envId)
+}
+
+// =========================================================
+// Confirmacao rastreavel da fatura (proveniencia + deduplicacao por externalRef no banco)
+// =========================================================
+
+record InvoiceConfirmTraceItem(String description, Double amount, String category, String documentId, Int sourcePage, Int sourceLine, String externalRef)
+record InvoiceTraceRowInput(TransactionEntity txEntity, String? documentId, Int? sourcePage, Int? sourceLine, String? externalRef)
+record InvoiceTraceBatchEntry(TransactionWithProvenance item, Bool inserted)
+
+String? invoiceTraceItemError(InvoiceConfirmTraceItem item, Int index) {
+    if (item == null || item.amount() == null) {
+        return "Item " + index + ": campos obrigatórios: description, amount, category."
+    }
+    return validateInvoiceItemFields(item.description(), item.amount(), item.category(), index)
+}
+
+String? invoiceTraceItemsError(List<InvoiceConfirmTraceItem> items) {
+    if (items.size == 0) {
+        return "Nenhum item para gravar."
+    }
+    if (items.size > invoiceConfirmMaxItems()) {
+        return "Itens demais (máximo de " + invoiceConfirmMaxItems() + " por chamada)."
+    }
+    var i = 0
+    while (i < items.size) {
+        var err = invoiceTraceItemError(items.get(i), i)
+        if (err != null) {
+            return err
+        }
+        i = i + 1
+    }
+    return null
+}
+
+InvoiceTraceRowInput invoiceTraceItemToInput(String userId, InvoiceConfirmTraceItem item) {
+    var category = Category.valueOf(item.category())
+    var envId = resolveEnvelopeId(userId, null, category)
+    var txObj = TransactionEntity("", item.description().trim(), toCents(item.amount()), category, "BRL", userId, null, Source.INVOICE, nowIso(), envId)
+    return InvoiceTraceRowInput(txObj, cleanOptionalText(item.documentId()), intOrNull(item.sourcePage()), intOrNull(item.sourceLine()), cleanOptionalText(item.externalRef()))
+}
+
+List<InvoiceTraceBatchEntry> insertInvoiceTraceBatch(String tx, List<InvoiceTraceRowInput> rows, String userId) {
+    var user = findUserById(userId)
+    var result: List<InvoiceTraceBatchEntry> = listOf()
+    transaction {
+        for (var item in rows) {
+            var extRef = nullToText(item.externalRef)
+            var existing = findTransactionWithProvenanceByUserAndExternalRefOn(tx, userId, extRef)
+            if (existing != null) {
+                result.add(InvoiceTraceBatchEntry(existing, false))
+            } else {
+                var savedEntity = insertTransactionWithProvenanceOn(tx, item.txEntity, item.documentId, item.sourcePage, item.sourceLine, item.externalRef)
+                var savedProv = TransactionWithProvenance(savedEntity, item.documentId, item.sourcePage, item.sourceLine, item.externalRef)
+                result.add(InvoiceTraceBatchEntry(savedProv, true))
+                var envId = item.txEntity.envelopeId
+                if (envId != null) {
+                    addEnvelopeSpentCentsOn(tx, userId, envId, item.txEntity.amountCents)
+                }
+                if (user != null) {
+                    syncOnboardingControlSpentOn(tx, savedEntity, user)
+                }
+            }
+        }
+    }
+    return result
+}
+
+List<TransactionOutput> confirmInvoiceItemsWithTraceability(String userId, List<InvoiceConfirmTraceItem> items) {
+    var err = invoiceTraceItemsError(items)
+    if (err != null) {
+        throw "Validação da fatura: " + err
+    }
+    var rows = items.map((it: InvoiceConfirmTraceItem) -> invoiceTraceItemToInput(userId, it))
+    var entries: List<InvoiceTraceBatchEntry> = listOf()
+    var token = DbConn.lock.receive()
+    try {
+        var tx = txConnection()
+        try {
+            entries = insertInvoiceTraceBatch(tx, rows, userId)
+        } catch (String e) {
+            dropTxConnection()
+            log.warn("lote rastreavel da fatura desfeito (rollback)")
+            throw "Não foi possível gravar os itens da fatura."
+        }
+    } finally {
+        DbConn.lock.send(token)
+    }
+    var newlyInserted = entries.filter((e: InvoiceTraceBatchEntry) -> e.inserted).map((e: InvoiceTraceBatchEntry) -> e.item.transaction)
+    if (!newlyInserted.isEmpty()) {
+        notifyBatchEnvelopeCrossings(userId, newlyInserted)
+    }
+    return entries.map((e: InvoiceTraceBatchEntry) -> transactionWithProvenanceToOutput(e.item))
+}
+
+// =========================================================
+// Reset seguro por usuario e registro inicial de "Reserva acumulada"
+// =========================================================
+
+void runResetUserFinancialDataTx(String tx, String userId) {
+    transaction {
+        deleteUserFinancialDataOn(tx, userId)
+    }
+}
+
+void resetUserFinancialData(String userId) {
+    var user = findUserById(userId)
+    if (user == null) {
+        throw "User not found."
+    }
+    var token = DbConn.lock.receive()
+    try {
+        var tx = txConnection()
+        try {
+            runResetUserFinancialDataTx(tx, userId)
+        } catch (String e) {
+            dropTxConnection()
+            log.warn("limpeza de dados do usuario desfeita (rollback)")
+            throw "Não foi possível limpar os dados financeiros."
+        }
+    } finally {
+        DbConn.lock.send(token)
+    }
+}
+
+record InitialSavingsResult(VariableIncomeOutput income, EnvelopeOutput envelope)
+
+InitialSavingsResult insertInitialSavingsTx(String tx, UserEntity user, Double amount) {
+    var amountCents = toCents(amount)
+    var normalizedAmount = centsToReais(amountCents)
+    var reserveBucket = planReserveBucket(user.budgetModel)
+    var now = nowIso()
+    var savedIncomes: List<VariableIncomeEntity> = listOf()
+    var savedEnvelopes: List<EnvelopeEntity> = listOf()
+    transaction {
+        var inc = saveVariableIncomeEntityOn(tx, VariableIncomeEntity("", user.id, normalizedAmount, "Reserva acumulada inicial", VariableIncomeDestination.EMERGENCY_FUND, now))
+        savedIncomes.add(inc)
+        var existing = findEnvelopeByNameOn(tx, user.id, "Reserva acumulada")
+        if (existing != null) {
+            var newLimit = centsToReais(toCents(existing.limitAmount) + amountCents)
+            var bucket = existing.bucket
+            if (bucket == null || bucket == "") {
+                bucket = textOrNull(reserveBucket)
+            }
+            var updated = saveEnvelopeOn(tx, EnvelopeEntity(existing.id, existing.userId, existing.categoryName, newLimit, existing.currentSpent, existing.limitType, existing.movingAverageMonths, existing.createdAt, bucket))
+            savedEnvelopes.add(updated)
+        } else {
+            var created = saveEnvelopeOn(tx, EnvelopeEntity("", user.id, "Reserva acumulada", normalizedAmount, 0.0, EnvelopeLimitType.FIXED, 0, now, textOrNull(reserveBucket)))
+            savedEnvelopes.add(created)
+        }
+    }
+    return InitialSavingsResult(variableIncomeEntityToOutput(savedIncomes.get(0)), envelopeEntityToOutput(savedEnvelopes.get(0)))
+}
+
+InitialSavingsResult recordInitialSavings(String userId, Double amount) {
+    if (amount <= 0.0 || amount > 1000000000.0) {
+        throw "O valor da reserva deve ser maior que zero."
+    }
+    var user = findUserById(userId)
+    if (user == null) {
+        throw "User not found."
+    }
+    var token = DbConn.lock.receive()
+    try {
+        var tx = txConnection()
+        try {
+            return insertInitialSavingsTx(tx, user, amount)
+        } catch (String e) {
+            dropTxConnection()
+            log.warn("registro de reserva inicial desfeito (rollback)")
+            throw "Não foi possível registrar a reserva acumulada."
+        }
+    } finally {
+        DbConn.lock.send(token)
+    }
 }

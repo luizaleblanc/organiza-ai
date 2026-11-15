@@ -35,12 +35,13 @@ String formatBrl(Long cents) {
 
 record EnvelopeOverview(String id, String categoryName, String? bucket, Double limitAmount, Double spentThisMonth, Int percent, String status)
 
-// Status da caixinha pelo gasto do mes (design da Tela 11: 80% = Em dia, 90% = Alerta, 120% = Estourada).
+// Status da caixinha pelo gasto do mes (docs/AI_FINANCIAL_COACH_GUIDELINE.md, secao 3):
+// abaixo de 80% = Em dia; de 80% a 100% = Alerta; acima de 100% = Estourada.
 String envelopeStatus(Long spentCents, Long limitCents) {
     if (spentCents > limitCents) {
         return "ESTOURADA"
     }
-    if (spentCents * 100 > limitCents * 80) {
+    if (limitCents > 0 && spentCents * 100 >= limitCents * 80) {
         return "ALERTA"
     }
     return "EM_DIA"
@@ -53,13 +54,32 @@ Int percentOf(Long spentCents, Long limitCents) {
     return math.roundTo(spentCents * 100.0 / limitCents, 0) as Int
 }
 
+String planReserveBucket(BudgetModelType model) {
+    return switch (model) {
+        case STANDARD_503020 -> "Futuro"
+        case SURVIVAL_702010 -> "Poupança"
+        case ANTI_DEBT_701020 -> "Quitação de Dívida"
+        case SIMPLE_8020 -> "Guardar"
+        case KAKEIBO -> "Poupança"
+    }
+}
+
+Bool isReserveEnvelopeName(String name) {
+    var key = envelopeNameKey(name)
+    return key == "reserva acumulada" || key == "reserva" || key == "reserva de emergencia"
+}
+
 EnvelopeOverview overviewOf(EnvelopeEntity e, BudgetModelType model, List<BucketSummaryDTO> plan, List<TransactionEntity> month) {
     var spent = sumAmountCents(month.filter((t: TransactionEntity) -> t.envelopeId == e.id))
     var limit = toCents(e.limitAmount)
     var bucket = e.bucket
-    if (bucket == null) {
-        if (!isFreeEnvelopeName(e.categoryName)) {
-            bucket = planBucketFor(model, plan, categoryOrNull(e.categoryName))
+    if (bucket == null || bucket == "") {
+        if (isReserveEnvelopeName(e.categoryName)) {
+            bucket = planReserveBucket(model)
+        } else {
+            if (!isFreeEnvelopeName(e.categoryName)) {
+                bucket = planBucketFor(model, plan, categoryOrNull(e.categoryName))
+            }
         }
     }
     return EnvelopeOverview(e.id, e.categoryName, bucket,
@@ -123,7 +143,7 @@ String? chipsError(List<String> chips) {
 }
 
 // Limite = valor do bucket do plano dividido igualmente entre as categorias escolhidas que caem nele
-// (Base Zero nao tem buckets: limite 0). Categoria que ja tem caixinha nao ganha outra.
+// (fora dos modelos com buckets: limite 0). Categoria que ja tem caixinha nao ganha outra.
 Double chipLimit(List<BucketSummaryDTO> plan, String bucketName, Int share) {
     // filter + get(0), nao find: no kof 0.6.6, ler campo do record devolvido por List.find gera bytecode
     // invalido (VerifyError "Method owner: expected LBucketSummaryDTO;", repro p23/repro/find).
@@ -140,8 +160,10 @@ List<EnvelopeEntity> createEnvelopesFromChips(UserEntity user, List<String> chip
     var categories = chips.map((c: String) -> chipCategories().getOrDefault(c, "OTHER")).distinct()
     var byBucket = categories.groupBy((c: String) -> nullToText(planBucketFor(model, plan, categoryOrNull(c))))
     var existing = findEnvelopesByUserId(user.id).map((e: EnvelopeEntity) -> e.categoryName)
-    return categories.filter((c: String) -> !existing.contains(c))
+    var created = categories.filter((c: String) -> !existing.contains(c))
         .map((c: String) -> createChipEnvelope(user, plan, byBucket, c))
+    saveChipListAllocationsForUser(user, chips)
+    return created
 }
 
 EnvelopeEntity createChipEnvelope(UserEntity user, List<BucketSummaryDTO> plan, Map<String, List<String>> byBucket, String category) {
@@ -157,7 +179,7 @@ EnvelopeEntity createChipEnvelope(UserEntity user, List<BucketSummaryDTO> plan, 
 record CategoryTotal(String category, Double total, Int count, Double percentage)
 record ReserveSummary(Double accumulated, Double goal, Bool hasGoal, Int percent)
 record DashboardResponse(String period, String from, Double totalSpent, String currency, Double salary,
-    Double pulse, Int daysRemaining, String budgetModel, List<BucketBalanceDTO> buckets, ReserveSummary reserve,
+    Double pulse, Double economicPulse, Int daysRemaining, String budgetModel, List<BucketBalanceDTO> buckets, ReserveSummary reserve,
     List<CategoryTotal> categories, List<TransactionOutput> recentTransactions)
 
 // ?period= da Tela 9 (Semana/Mes/Ano); ausente = mes. null = periodo invalido (400).
@@ -225,7 +247,7 @@ DashboardResponse dashboardOf(UserEntity user, String period, String unit) {
     var balance = calculateBalance(user.id, monthStart)
     var recent = findRecentTransactions(user.id, from, 5).map((t: TransactionEntity) -> transactionEntityToOutput(t))
     return DashboardResponse(period, from, centsToReais(sumAmountCents(transactions)), "BRL", userSalary(user),
-        pulse.pulse, pulse.daysRemaining, user.budgetModel.name(), balance.buckets, reserveOf(user),
+        pulse.pulse, pulse.economicPulse, pulse.daysRemaining, user.budgetModel.name(), balance.buckets, reserveOf(user),
         categoryTotals(transactions), recent)
 }
 
@@ -332,4 +354,115 @@ List<String> openFinanceDemoBanks() {
 
 String openFinanceNotice() {
     return "Demonstração do MVP 1: nenhuma conta é conectada e nenhum dado bancário é lido."
+}
+
+// =========================================================
+// Controle do Onboarding (/api/onboarding/control): planejado vs gasto vs status
+// =========================================================
+
+record OnboardingBucketControlItem(
+    String bucket,
+    Int percentage,
+    Double plannedAmount,
+    Double spentAmount,
+    Double remainingAmount,
+    Long plannedCents,
+    Long spentCents,
+    Int percent,
+    String status
+)
+
+record OnboardingCategoryControlItem(
+    String category,
+    String categoryLabel,
+    String bucket,
+    Double plannedAmount,
+    Double spentAmount,
+    Double remainingAmount,
+    Long plannedCents,
+    Long spentCents,
+    Int percent,
+    String status,
+    String updatedAt
+)
+
+record OnboardingChipAllocationItem(
+    String chipKey,
+    String category,
+    String categoryLabel,
+    Double plannedAmount,
+    Long plannedCents,
+    String createdAt
+)
+
+record OnboardingControlOverview(
+    Bool onboardingCompleted,
+    String budgetModel,
+    Double salary,
+    Double totalPlanned,
+    Double totalSpent,
+    String overallStatus,
+    List<OnboardingBucketControlItem> buckets,
+    List<OnboardingCategoryControlItem> categories,
+    List<OnboardingChipAllocationItem> chips
+)
+
+OnboardingControlOverview onboardingControlOverview(UserEntity user) {
+    var monthTxs = findTransactionsByUserIdAndCreatedAtAfter(user.id, monthStartIso())
+    var totalSpentCents = sumAmountCents(monthTxs)
+    if (!onboardingCompleted(user)) {
+        return OnboardingControlOverview(false, user.budgetModel.name(), 0.0, 0.0,
+            centsToReais(totalSpentCents), "PENDENTE", listOf(), listOf(), listOf())
+    }
+
+    var controlRows = listOnboardingControlsByUser(user.id)
+    if (controlRows.isEmpty()) {
+        controlRows = saveOnboardingControlForUser(user)
+    }
+    var chipRows = listOnboardingChipsByUser(user.id)
+    var salary = userSalary(user)
+    var model = user.budgetModel
+    var plan = buildBudgetBuckets(model, salary)
+
+    var bucketItems: List<OnboardingBucketControlItem> = listOf()
+    for (var b in plan) {
+        var bPlanned = toCents(b.amount)
+        var bSpent = sumAmountCents(monthTxs.filter((t: TransactionEntity) -> planBucketForTx(model, plan, t.category, t.bucket) == b.name))
+        var bRem = bPlanned - bSpent
+        bucketItems.add(OnboardingBucketControlItem(
+            b.name, b.percentage, b.amount, centsToReais(bSpent), centsToReais(bRem),
+            bPlanned, bSpent, percentOf(bSpent, bPlanned), onboardingControlStatus(bSpent, bPlanned)
+        ))
+    }
+
+    var catItems: List<OnboardingCategoryControlItem> = listOf()
+    for (var r in controlRows) {
+        var cat = categoryEnumOrNull(r.category())
+        if (cat != null) {
+            var cPlanned = r.plannedCents()
+            var cSpent = r.spentCents()
+            var cRem = cPlanned - cSpent
+            catItems.add(OnboardingCategoryControlItem(
+                r.category(), categoryLabel(cat), r.bucket(),
+                centsToReais(cPlanned), centsToReais(cSpent), centsToReais(cRem),
+                cPlanned, cSpent, percentOf(cSpent, cPlanned),
+                onboardingControlStatus(cSpent, cPlanned), r.updatedAt()
+            ))
+        }
+    }
+
+    var chipItems: List<OnboardingChipAllocationItem> = listOf()
+    for (var ch in chipRows) {
+        var chCat = categoryEnumOrNull(ch.category())
+        chipItems.add(OnboardingChipAllocationItem(
+            ch.chipKey(), ch.category(), categoryLabel(chCat),
+            centsToReais(ch.plannedCents()), ch.plannedCents(), ch.createdAt()
+        ))
+    }
+
+    var totalPlannedCents = toCents(salary)
+    return OnboardingControlOverview(
+        true, model.name(), salary, centsToReais(totalPlannedCents), centsToReais(totalSpentCents),
+        onboardingControlStatus(totalSpentCents, totalPlannedCents), bucketItems, catItems, chipItems
+    )
 }

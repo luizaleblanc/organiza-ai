@@ -34,7 +34,7 @@ enum Source { MANUAL, VOICE, BANK_NOTIFICATION, INVOICE }
 // Os 5 modelos oficiais (educacao financeira), na ordem de selecao de suggestBudgetModel:
 // ANTI_DEBT_701020 (divida, >= 1 SM), SURVIVAL_702010 (< 2 SM), SIMPLE_8020 (sem divida, guarda, >= 5 SM),
 // KAKEIBO (sem divida, escolha do usuario, >= 3 SM) e STANDARD_503020 (sem divida, >= 2 SM).
-// FREELANCER_BASE_ZERO foi removido: contas antigas sao convertidas em userFromRow (store.kf).
+// Valores fora destes 5 sao convertidos em userFromRow (store.kf).
 enum BudgetModelType {
     STANDARD_503020, SURVIVAL_702010, ANTI_DEBT_701020,
     SIMPLE_8020, KAKEIBO

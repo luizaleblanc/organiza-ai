@@ -5,6 +5,47 @@
 
 import kof.web
 
+Source parseChatSource(String rawBody) {
+    var compact = rawBody.replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "").toUpperCase()
+    if (compact.contains("\"SOURCE\":\"VOICE\"")) {
+        return Source.VOICE
+    }
+    return Source.MANUAL
+}
+
+Double extractJsonDoubleField(String raw, String field) {
+    var key = "\"" + field + "\""
+    var idx = raw.indexOf(key)
+    if (idx < 0) { return -1.0 }
+    var colon = raw.indexOf(":", idx + key.length())
+    if (colon < 0) { return -1.0 }
+    var i = colon + 1
+    while (i < raw.length()) {
+        var ch = raw.substring(i, i + 1)
+        if (ch == " " || ch == "\t" || ch == "\n" || ch == "\r" || ch == "\"") {
+            i = i + 1
+        } else {
+            break
+        }
+    }
+    var buf = ""
+    while (i < raw.length()) {
+        var ch = raw.substring(i, i + 1)
+        if ("0123456789.-".contains(ch)) {
+            buf = buf + ch
+            i = i + 1
+        } else {
+            break
+        }
+    }
+    if (buf == "" || buf == "-") { return -1.0 }
+    try {
+        return buf.toDouble()
+    } catch (Exception e) {
+        return -1.0
+    }
+}
+
 // Porta HTTP: variavel PORT (o Render injeta), padrao 3000. app.listen aceita so Int (SEM025);
 // um PORT que nao e numero derruba o boot com a excecao da conversao (nunca sobe na porta errada).
 // Resposta do chat em JSON (L3): texto + uso do plano ja contando a mensagem recem-gravada.
@@ -324,6 +365,7 @@ main() {
             }
             user.budgetModel = suggested
             updateUser(user)
+            saveOnboardingControlForUser(user)
 
             var desc = describeBudgetModel(suggested)
             var buckets = buildBudgetBuckets(suggested, req.salary)
@@ -375,6 +417,29 @@ main() {
         return json.encode(list.map((v: VariableIncomeEntity) -> variableIncomeEntityToOutput(v)))
     }
 
+    app.post("/api/users/me/initial-savings") {
+        var amt = extractJsonDoubleField(body(), "amount")
+        if (amt <= 0.0 || amt > 1000000000.0) {
+            return status(400, json.encode(ApiError("Informe um valor positivo de poupança.")))
+        }
+        try {
+            var res = recordInitialSavings(currentUserId(), amt)
+            return json.encode(res)
+        } catch (String e) {
+            return status(400, json.encode(ApiError(e)))
+        }
+    }
+
+    app.post("/api/users/me/reset-onboarding") {
+        var userId = currentUserId()
+        var user = findUserById(userId)
+        if (user == null) {
+            return status(404, json.encode(ApiError("Usuário não encontrado")))
+        }
+        resetUserFinancialData(userId)
+        return "{\"reset\":true}"
+    }
+
     // =========================================================
     // Pulso Diário e Coach Cognitivo
     // =========================================================
@@ -405,6 +470,12 @@ main() {
         try {
             return json.encode(parseInvoiceForUser(currentUserId(), req.fileBase64(), req.filename()))
         } catch (String e) {
+            if (e.startsWith("OCR_UNAVAILABLE:")) {
+                return status(422, json.encode(ApiTypedError(e, "OCR_UNAVAILABLE")))
+            }
+            if (e.startsWith("EXTRACTION_TIMEOUT:")) {
+                return status(408, json.encode(ApiTypedError(e, "EXTRACTION_TIMEOUT")))
+            }
             return status(400, json.encode(ApiError("Arquivo inválido: " + e)))
         }
     }
@@ -465,6 +536,9 @@ main() {
             if (e.startsWith("EXTRACTION_TIMEOUT:")) {
                 return status(408, json.encode(ApiTypedError(e, "EXTRACTION_TIMEOUT")))
             }
+            if (e.startsWith("OCR_UNAVAILABLE:")) {
+                return status(422, json.encode(ApiTypedError(e, "OCR_UNAVAILABLE")))
+            }
             return status(400, json.encode(ApiTypedError(e, "INVALID_FILE")))
         }
     }
@@ -505,8 +579,10 @@ main() {
 
     app.post("/api/chat/message") {
         var userId = currentUserId()
-        var msgReq = decodeChatMessageRequest(body())
+        var chatRaw = body()
+        var msgReq = decodeChatMessageRequest(chatRaw)
         if (msgReq != null) {
+            var chatSource = parseChatSource(chatRaw)
             // Limite do plano antes de gravar (legado: enforceCanSendMessage -> 402 {"error": ...});
             // a mensagem recusada nao e gravada e nao conta no mes.
             var monthStart = monthStartIso()
@@ -514,6 +590,14 @@ main() {
                 enforceCanSendMessage(userId, monthStart)
             } catch (String e) {
                 return status(402, json.encode(ApiError(e)))
+            }
+            // Fatura/extrato: resposta deterministica (ANALISAR_FATURA, backend/invoice.kf) ANTES do ramo LLM.
+            // documentId opcional no corpo; sem ele, usa o ultimo documento EM_REVISAO se a mensagem for sobre fatura.
+            var invoiceReply = invoiceChatReplyFor(userId, msgReq.message, chatRaw)
+            if (invoiceReply != null) {
+                saveChatMessage(ChatMessageEntity("", userId, ChatRole.USER, msgReq.message, nowIso()))
+                saveChatMessage(ChatMessageEntity("", userId, ChatRole.ASSISTANT, clipForHistory(invoiceReply), nowIso()))
+                return chatReplyJson(userId, invoiceReply, monthStart)
             }
             // Coach com OpenAI (coach_llm.kf): a memoria e lida ANTES de gravar a mensagem nova. Se o
             // provedor falhar (rede, timeout, 4xx/5xx), 503 honesto e nada e gravado: a mensagem nao conta
@@ -525,7 +609,7 @@ main() {
                 }
                 var answer = ""
                 try {
-                    answer = askCoach(user, msgReq.message)
+                    answer = askCoachWithSource(user, msgReq.message, chatSource)
                 } catch (String e) {
                     return status(503, json.encode(ApiError("O coach está indisponível no momento. Tente de novo em instantes.")))
                 }
@@ -537,7 +621,7 @@ main() {
             // ids gerados pelo banco (PERS-06/07); createdAt = instante real (issue #44)
             saveChatMessage(ChatMessageEntity("", userId, ChatRole.USER, msgReq.message, nowIso()))
 
-            var reply = coachReplyOffline(userId, msgReq.message, monthStart)
+            var reply = coachReplyOfflineWithSource(userId, msgReq.message, monthStart, chatSource)
             saveChatMessage(ChatMessageEntity("", userId, ChatRole.ASSISTANT, reply, nowIso()))
 
             return chatReplyJson(userId, reply, monthStart)
@@ -794,6 +878,14 @@ main() {
         return json.encode(meOf(user))
     }
 
+    app.get("/api/onboarding/control") {
+        var user = findUserById(currentUserId())
+        if (user == null) {
+            return status(404, json.encode(ApiError("Usuário não encontrado")))
+        }
+        return json.encode(onboardingControlOverview(user))
+    }
+
     // Legado: PATCH /api/users/me/salary. Grava o salario e migra o modelo (BudgetModelMigrationService);
     // "Rever meu salario" (Tela 13) tambem pode refazer o onboarding inteiro.
     app.patch("/api/users/me/salary") {
@@ -813,6 +905,7 @@ main() {
         user.hasSalary = true
         user.budgetModel = migrateBudgetModelIfNeeded(user)
         updateUser(user)
+        saveOnboardingControlForUser(user)
         var salary = userSalary(user)
         return json.encode(SalaryUpdateResponse(salary, previous.name(), user.budgetModel.name(), previous != user.budgetModel,
             describeBudgetModel(user.budgetModel), buildBudgetBuckets(user.budgetModel, salary)))
@@ -838,6 +931,7 @@ main() {
         }
         user.budgetModel = model
         updateUser(user)
+        saveOnboardingControlForUser(user)
         return json.encode(OnboardingResponse(model.name(), describeBudgetModel(model), buildBudgetBuckets(model, userSalary(user))))
     }
 
@@ -1006,9 +1100,14 @@ String indexHtmlWithBundle(String webOut, String tag, String bundle) {
     var titleStart = html.indexOf("<title>")
     var titleEnd = html.indexOf("</title>")
     if (titleStart >= 0 && titleEnd > titleStart) {
-        html = html.substring(0, titleStart) + "<title>Organiza AI</title>" + html.substring(titleEnd + 8)
+        html = html.substring(0, titleStart) + "<title>Organiza AI</title><link rel=\"icon\" type=\"image/svg+xml\" href=\"assets/brand/organiza-simbolo.svg\">" + html.substring(titleEnd + 8)
     }
     html = html.replace("<body>", "<body bgcolor=\"#0A0D18\">")
+    // Ponte do anexo (+) e da voz: sem ela os dois botoes do chat ficam mortos. Garante a tag
+    // mesmo quando o build local nao passou por scripts/prepare_qa_routes.ps1.
+    if (html.indexOf("assets/voice_bridge.js") < 0) {
+        html = html.replace("</body>", "<script src=\"assets/voice_bridge.js\"></script></body>")
+    }
     html = html.replace("<div id=\"kof-titlebar\">", "<div id=\"kof-titlebar\" hidden>")
     html = html.replace("<div id=\"kof-status\">", "<div id=\"kof-status\" hidden>")
     return replaceDefaultBundle(html, bundle + "?v=" + tag)

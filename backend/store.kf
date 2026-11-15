@@ -52,6 +52,10 @@ entity TransactionRow {
     source: String
     createdAt: String
     envelopeId: Long
+    documentId: String?
+    sourcePage: Int?
+    sourceLine: Int?
+    externalRef: String?
 }
 
 entity EnvelopeRow {
@@ -133,6 +137,28 @@ entity PreferenceRow {
     theme: String
 }
 
+// Controle estrito de gastos do onboarding por bucket/categoria e usuario.
+entity OnboardingExpenseControlRow {
+    id: Long generated
+    userId: String
+    category: String
+    bucket: String
+    plannedCents: Long
+    spentCents: Long
+    status: String
+    updatedAt: String
+}
+
+// Alocacao duravel dos chips selecionados na Tela 7 do onboarding.
+entity OnboardingChipAllocationRow {
+    id: Long generated
+    userId: String
+    chipKey: String
+    category: String
+    plannedCents: Long
+    createdAt: String
+}
+
 // Limpeza isolada do modo QA. A funcao fica neste arquivo porque o analisador do
 // Kof associa as operacoes orm<T> ao arquivo que declara as entities.
 void deleteQaRows(String userId) {
@@ -156,6 +182,10 @@ void deleteQaRows(String userId) {
     for (var row in resets) { orm.delete<PasswordResetRow>(DbConn.handle, row.id()) }
     var emails = orm.where<EmailLogRow>(DbConn.handle, "userId", uid)
     for (var row in emails) { orm.delete<EmailLogRow>(DbConn.handle, row.id()) }
+    var onboardingControls = orm.where<OnboardingExpenseControlRow>(DbConn.handle, "userId", userId)
+    for (var row in onboardingControls) { orm.delete<OnboardingExpenseControlRow>(DbConn.handle, row.id()) }
+    var onboardingChips = orm.where<OnboardingChipAllocationRow>(DbConn.handle, "userId", userId)
+    for (var row in onboardingChips) { orm.delete<OnboardingChipAllocationRow>(DbConn.handle, row.id()) }
 }
 
 // Conexao principal do processo, compartilhada pelas requisicoes (o servidor do kof.web atende cada
@@ -366,6 +396,38 @@ void migrateEnvelopeBucketColumn(String conn) {
     log.info("migracao: coluna enveloperow.bucket adicionada")
 }
 
+Bool transactionColumnExists(String conn, String column) {
+    var rows = db.query(conn, "SELECT COUNT(*) AS n FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = SCHEMA() AND LOWER(TABLE_NAME) = 'transactionrow' AND LOWER(COLUMN_NAME) = '" + column + "'")
+    if (rows.size == 1) {
+        var row = rows.get(0).toLowerCase()
+        if (row == "{\"n\":1}") {
+            return true
+        }
+        if (row == "{\"n\":0}") {
+            return false
+        }
+    }
+    throw "migracao: resposta inesperada ao procurar a coluna transactionrow." + column
+}
+
+void addTransactionColumn(String conn, String column, String ddl) {
+    if (transactionColumnExists(conn, column.toLowerCase())) {
+        return
+    }
+    db.execute(conn, ddl)
+    if (!transactionColumnExists(conn, column.toLowerCase())) {
+        throw "migracao: a coluna transactionrow." + column + " nao foi criada"
+    }
+    log.info("migracao: coluna transactionrow." + column + " adicionada")
+}
+
+void migrateTransactionProvenanceColumns(String conn) {
+    addTransactionColumn(conn, "documentId", "ALTER TABLE \"transactionrow\" ADD COLUMN \"documentId\" VARCHAR(255) NULL")
+    addTransactionColumn(conn, "sourcePage", "ALTER TABLE \"transactionrow\" ADD COLUMN \"sourcePage\" INT NULL")
+    addTransactionColumn(conn, "sourceLine", "ALTER TABLE \"transactionrow\" ADD COLUMN \"sourceLine\" INT NULL")
+    addTransactionColumn(conn, "externalRef", "ALTER TABLE \"transactionrow\" ADD COLUMN \"externalRef\" VARCHAR(255) NULL")
+}
+
 // O kof.orm cria todo campo String como VARCHAR(255) (JvmOrmRuntime.kof_orm_sql_type, 0.6.6 e 0.6.7) e
 // nao tem anotacao de tamanho. A resposta do coach com LLM passa disso facilmente, entao a coluna
 // chatmessagerow.content ganha espaco no boot: TEXT no MySQL (65.535 bytes) e VARCHAR(16000) no H2.
@@ -538,6 +600,7 @@ void ensureSchema(String db) {
     migrateUserNameColumn(db)
     migrateUserProfileColumns(db)
     orm.create<TransactionRow>(db)
+    migrateTransactionProvenanceColumns(db)
     orm.create<EnvelopeRow>(db)
     migrateEnvelopeBucketColumn(db)
     orm.create<ChatMessageRow>(db)
@@ -552,6 +615,8 @@ void ensureSchema(String db) {
     orm.create<FinancialDocumentRow>(db)
     orm.create<ExtractedTransactionRow>(db)
     migrateFinanceDocumentColumns(db)
+    orm.create<OnboardingExpenseControlRow>(db)
+    orm.create<OnboardingChipAllocationRow>(db)
     cleanupStaleHallucinatedChat(db)
 }
 
@@ -713,7 +778,7 @@ BudgetModelType budgetModelFromText(String text) {
     return BudgetModelType.STANDARD_503020
 }
 
-// Texto gravado que nao e mais um dos 5 modelos oficiais (ex.: o antigo FREELANCER_BASE_ZERO).
+// Texto gravado que nao e um dos 5 modelos oficiais.
 Bool isRetiredBudgetModel(String text) {
     return BudgetModelType.valueOf(text) == null
 }
@@ -898,17 +963,39 @@ EnvelopeEntity? findEnvelopeById(String userId, String id) {
     return null
 }
 
+EnvelopeEntity? findEnvelopeByNameOn(String conn, String userId, String name) {
+    if (!strings.isNumeric(userId)) {
+        return null
+    }
+    var uid = userId.toLong()
+    var rows = EnvelopeRow.query(conn) {
+        where userId == uid
+        orderBy id asc
+    }
+    var key = envelopeNameKey(name)
+    for (var r in rows) {
+        if (envelopeNameKey(r.categoryName()) == key) {
+            return envelopeFromRow(r)
+        }
+    }
+    return null
+}
+
 // id "" = envelope novo (id gerado pelo banco, PERS-06); senao atualiza o envelope do proprio dono
 // (row nova com o mesmo id, upsert por PK). Envelope de outro usuario = "Envelope not found." (PERS-11).
-EnvelopeEntity saveEnvelope(EnvelopeEntity envelope) {
+EnvelopeEntity saveEnvelopeOn(String conn, EnvelopeEntity envelope) {
     if (envelope.id == "") {
-        return envelopeFromRow(orm.save(DbConn.handle, envelopeToRow(0, envelope)))
+        return envelopeFromRow(orm.save(conn, envelopeToRow(0, envelope)))
     }
-    var existing = findOwnedEnvelopeRow(envelope.userId, envelope.id)
+    var existing = findOwnedEnvelopeRowOn(conn, envelope.userId, envelope.id)
     if (existing == null) {
         throw "Envelope not found."
     }
-    return envelopeFromRow(orm.save(DbConn.handle, envelopeToRow(envelope.id.toLong(), envelope)))
+    return envelopeFromRow(orm.save(conn, envelopeToRow(envelope.id.toLong(), envelope)))
+}
+
+EnvelopeEntity saveEnvelope(EnvelopeEntity envelope) {
+    return saveEnvelopeOn(DbConn.handle, envelope)
 }
 
 // Gasto somado em centavos direto na row (soma Long exata) e gravado no banco.
@@ -976,15 +1063,45 @@ Long idOrZero(String? id) {
     return 0
 }
 
+Int? intOrNull(Int value) {
+    if (value <= 0) {
+        return null
+    }
+    return value
+}
+
+String? cleanOptionalText(String? text) {
+    if (text == null) {
+        return null
+    }
+    return textOrNull(text.trim())
+}
+
+record TransactionProvenance(String transactionId, String? documentId, Int? sourcePage, Int? sourceLine, String? externalRef)
+record TransactionWithProvenance(TransactionEntity transaction, String? documentId, Int? sourcePage, Int? sourceLine, String? externalRef)
+
+TransactionProvenance provenanceFromRow(TransactionRow row) {
+    return TransactionProvenance(String.valueOf(row.id()), row.documentId(), row.sourcePage(), row.sourceLine(), row.externalRef())
+}
+
+TransactionWithProvenance transactionWithProvenanceFromRow(TransactionRow row) {
+    return TransactionWithProvenance(transactionFromRow(row), row.documentId(), row.sourcePage(), row.sourceLine(), row.externalRef())
+}
+
 TransactionEntity transactionFromRow(TransactionRow row) {
     return TransactionEntity(String.valueOf(row.id()), row.description(), row.amountCents(),
         Category.valueOf(row.category()), row.currency(), String.valueOf(row.userId()), Bucket.valueOf(row.bucket()),
         sourceFromText(row.source()), textOrNull(row.createdAt()), idOrNull(row.envelopeId()))
 }
 
-TransactionRow transactionToRow(Long id, TransactionEntity t) {
+TransactionRow transactionToRowWithProvenance(Long id, TransactionEntity t, String? documentId, Int? sourcePage, Int? sourceLine, String? externalRef) {
     return TransactionRow(id, t.userId.toLong(), t.description, t.amountCents, categoryText(t.category), t.currency,
-        bucketText(t.bucket), t.source.name(), nullToText(t.createdAt), idOrZero(t.envelopeId))
+        bucketText(t.bucket), t.source.name(), nullToText(t.createdAt), idOrZero(t.envelopeId),
+        cleanOptionalText(documentId), sourcePage, sourceLine, cleanOptionalText(externalRef))
+}
+
+TransactionRow transactionToRow(Long id, TransactionEntity t) {
+    return transactionToRowWithProvenance(id, t, textOrNull(""), intOrNull(0), intOrNull(0), textOrNull(""))
 }
 
 List<TransactionEntity> findTransactionsByCategoryAndUserId(Category category, String userId) {
@@ -1004,11 +1121,15 @@ List<TransactionEntity> findTransactionsByCategoryAndUserId(Category category, S
 // Dono e corte por data no banco (DSL). createdAt e instante UTC ISO-8601 (nowIso), entao ">=" de texto
 // ordena no tempo; linha sem data ("", anterior a issue #44) fica fora de qualquer periodo.
 List<TransactionEntity> findTransactionsByUserIdAndCreatedAtAfter(String userId, String from) {
+    return findTransactionsByUserIdAndCreatedAtAfterOn(DbConn.handle, userId, from)
+}
+
+List<TransactionEntity> findTransactionsByUserIdAndCreatedAtAfterOn(String conn, String userId, String from) {
     if (!strings.isNumeric(userId)) {
         return listOf()
     }
     var uid = userId.toLong()
-    var rows = TransactionRow.query(DbConn.handle) {
+    var rows = TransactionRow.query(conn) {
         where userId == uid
         where createdAt >= from
         orderBy id asc
@@ -1058,7 +1179,71 @@ TransactionEntity insertTransaction(TransactionEntity transaction) {
 }
 
 TransactionEntity insertTransactionOn(String conn, TransactionEntity transaction) {
-    return transactionFromRow(orm.save(conn, transactionToRow(0, transaction)))
+    return insertTransactionWithProvenanceOn(conn, transaction, textOrNull(""), intOrNull(0), intOrNull(0), textOrNull(""))
+}
+
+TransactionEntity insertTransactionWithProvenance(TransactionEntity transaction, String? documentId, Int? sourcePage, Int? sourceLine, String? externalRef) {
+    return insertTransactionWithProvenanceOn(DbConn.handle, transaction, documentId, sourcePage, sourceLine, externalRef)
+}
+
+TransactionEntity insertTransactionWithProvenanceOn(String conn, TransactionEntity transaction, String? documentId, Int? sourcePage, Int? sourceLine, String? externalRef) {
+    return transactionFromRow(orm.save(conn, transactionToRowWithProvenance(0, transaction, documentId, sourcePage, sourceLine, externalRef)))
+}
+
+TransactionWithProvenance? findTransactionWithProvenanceByUserAndExternalRefOn(String conn, String userId, String externalRef) {
+    var cleanRef = externalRef.trim()
+    if (!strings.isNumeric(userId) || cleanRef == "") {
+        return null
+    }
+    var uid = userId.toLong()
+    var rows = TransactionRow.query(conn) {
+        where userId == uid
+        where externalRef == cleanRef
+        orderBy id asc
+        limit 1
+    }
+    if (rows.isEmpty()) {
+        return null
+    }
+    return transactionWithProvenanceFromRow(rows.get(0))
+}
+
+TransactionEntity? findTransactionByUserAndExternalRefOn(String conn, String userId, String externalRef) {
+    var found = findTransactionWithProvenanceByUserAndExternalRefOn(conn, userId, externalRef)
+    if (found != null) {
+        return found.transaction
+    }
+    return null
+}
+
+TransactionEntity? findTransactionByUserAndExternalRef(String userId, String externalRef) {
+    return findTransactionByUserAndExternalRefOn(DbConn.handle, userId, externalRef)
+}
+
+List<TransactionWithProvenance> listTransactionsWithProvenanceByUser(String userId) {
+    if (!strings.isNumeric(userId)) {
+        return listOf()
+    }
+    var uid = userId.toLong()
+    var rows = TransactionRow.query(DbConn.handle) {
+        where userId == uid
+        orderBy id asc
+    }
+    return rows.map((r: TransactionRow) -> transactionWithProvenanceFromRow(r))
+}
+
+List<TransactionProvenance> listProvenanceForDocument(String userId, String documentId) {
+    var cleanDoc = documentId.trim()
+    if (!strings.isNumeric(userId) || cleanDoc == "") {
+        return listOf()
+    }
+    var uid = userId.toLong()
+    var rows = TransactionRow.query(DbConn.handle) {
+        where userId == uid
+        where documentId == cleanDoc
+        orderBy id asc
+    }
+    return rows.map((r: TransactionRow) -> provenanceFromRow(r))
 }
 
 // =========================================================
@@ -1175,13 +1360,17 @@ List<VariableIncomeEntity> findVariableIncomesByUserId(String userId) {
     return rows.map((r: VariableIncomeRow) -> variableIncomeFromRow(r))
 }
 
-VariableIncomeEntity saveVariableIncomeEntity(VariableIncomeEntity income) {
+VariableIncomeEntity saveVariableIncomeEntityOn(String conn, VariableIncomeEntity income) {
     if (income.id != "") {
         throw "Renda variavel ja gravada: o registro nao e alterado."
     }
     var row = VariableIncomeRow(0, income.userId.toLong(), toCents(income.amount), income.source,
         income.destination.name(), nullToText(income.date))
-    return variableIncomeFromRow(orm.save(DbConn.handle, row))
+    return variableIncomeFromRow(orm.save(conn, row))
+}
+
+VariableIncomeEntity saveVariableIncomeEntity(VariableIncomeEntity income) {
+    return saveVariableIncomeEntityOn(DbConn.handle, income)
 }
 
 KakeiboReflectionEntity kakeiboFromRow(KakeiboReflectionRow row) {
@@ -1540,5 +1729,173 @@ void deleteFinancialDocumentDataByUser(String userId) {
     }
     for (var dr in docRows) {
         orm.delete<FinancialDocumentRow>(DbConn.handle, dr.id())
+    }
+}
+
+// =========================================================
+// Controle de Gastos do Onboarding e Alocacoes de Chips (KofDB / kof.orm)
+// =========================================================
+
+List<OnboardingExpenseControlRow> listOnboardingControlsByUserOn(String conn, String userId) {
+    var wantedUser = userId.trim()
+    if (wantedUser == "") {
+        return listOf()
+    }
+    return OnboardingExpenseControlRow.query(conn) {
+        where userId == wantedUser
+        orderBy id asc
+    }
+}
+
+List<OnboardingExpenseControlRow> listOnboardingControlsByUser(String userId) {
+    return listOnboardingControlsByUserOn(DbConn.handle, userId)
+}
+
+List<OnboardingChipAllocationRow> listOnboardingChipsByUserOn(String conn, String userId) {
+    var wantedUser = userId.trim()
+    if (wantedUser == "") {
+        return listOf()
+    }
+    return OnboardingChipAllocationRow.query(conn) {
+        where userId == wantedUser
+        orderBy id asc
+    }
+}
+
+List<OnboardingChipAllocationRow> listOnboardingChipsByUser(String userId) {
+    return listOnboardingChipsByUserOn(DbConn.handle, userId)
+}
+
+void deleteOnboardingControlRowOn(String conn, Long rowId) {
+    if (rowId > 0) {
+        orm.delete<OnboardingExpenseControlRow>(conn, rowId)
+    }
+}
+
+void deleteOnboardingControlForUserOn(String conn, String userId) {
+    var rows = listOnboardingControlsByUserOn(conn, userId)
+    for (var row in rows) {
+        orm.delete<OnboardingExpenseControlRow>(conn, row.id())
+    }
+}
+
+void deleteOnboardingControlForUser(String userId) {
+    deleteOnboardingControlForUserOn(DbConn.handle, userId)
+}
+
+OnboardingExpenseControlRow upsertOnboardingControlRowOn(String conn, OnboardingExpenseControlRow row) {
+    var saveId = row.id()
+    if (saveId == 0) {
+        var wantedUser = row.userId()
+        var wantedCat = row.category()
+        var existing = OnboardingExpenseControlRow.query(conn) {
+            where userId == wantedUser
+            where category == wantedCat
+            orderBy id asc
+        }
+        if (existing.size > 0) {
+            saveId = existing.get(0).id()
+        }
+    }
+    return orm.save(conn, OnboardingExpenseControlRow(
+        saveId, row.userId(), row.category(), row.bucket(),
+        row.plannedCents(), row.spentCents(), row.status(), row.updatedAt()
+    ))
+}
+
+OnboardingExpenseControlRow upsertOnboardingControlRow(OnboardingExpenseControlRow row) {
+    return upsertOnboardingControlRowOn(DbConn.handle, row)
+}
+
+void replaceOnboardingChipsForUserOn(String conn, String userId, List<OnboardingChipAllocationRow> chips) {
+    var existing = listOnboardingChipsByUserOn(conn, userId)
+    for (var oldRow in existing) {
+        orm.delete<OnboardingChipAllocationRow>(conn, oldRow.id())
+    }
+    for (var chip in chips) {
+        orm.save(conn, OnboardingChipAllocationRow(
+            0, userId, chip.chipKey(), chip.category(), chip.plannedCents(), chip.createdAt()
+        ))
+    }
+}
+
+void replaceOnboardingChipsForUser(String userId, List<OnboardingChipAllocationRow> chips) {
+    replaceOnboardingChipsForUserOn(DbConn.handle, userId, chips)
+}
+
+// =========================================================
+// Reset seguro dos dados financeiros e de onboarding por usuario
+// =========================================================
+
+void deleteUserFinancialDataOn(String conn, String userId) {
+    if (!strings.isNumeric(userId)) {
+        return
+    }
+    var uid = userId.toLong()
+    var transactions = orm.where<TransactionRow>(conn, "userId", uid)
+    for (var row in transactions) {
+        orm.delete<TransactionRow>(conn, row.id())
+    }
+    var envelopes = orm.where<EnvelopeRow>(conn, "userId", uid)
+    for (var row in envelopes) {
+        orm.delete<EnvelopeRow>(conn, row.id())
+    }
+    var messages = orm.where<ChatMessageRow>(conn, "userId", uid)
+    for (var row in messages) {
+        orm.delete<ChatMessageRow>(conn, row.id())
+    }
+    var variableIncome = orm.where<VariableIncomeRow>(conn, "userId", uid)
+    for (var row in variableIncome) {
+        orm.delete<VariableIncomeRow>(conn, row.id())
+    }
+    var reflections = orm.where<KakeiboReflectionRow>(conn, "userId", uid)
+    for (var row in reflections) {
+        orm.delete<KakeiboReflectionRow>(conn, row.id())
+    }
+    var notifications = orm.where<NotificationRow>(conn, "userId", uid)
+    for (var row in notifications) {
+        orm.delete<NotificationRow>(conn, row.id())
+    }
+    var extractedRows = orm.where<ExtractedTransactionRow>(conn, "userId", uid)
+    for (var row in extractedRows) {
+        orm.delete<ExtractedTransactionRow>(conn, row.id())
+    }
+    var docRows = orm.where<FinancialDocumentRow>(conn, "userId", uid)
+    for (var row in docRows) {
+        orm.delete<FinancialDocumentRow>(conn, row.id())
+    }
+    var onboardingControls = listOnboardingControlsByUserOn(conn, userId)
+    for (var row in onboardingControls) {
+        orm.delete<OnboardingExpenseControlRow>(conn, row.id())
+    }
+    var onboardingChips = listOnboardingChipsByUserOn(conn, userId)
+    for (var row in onboardingChips) {
+        orm.delete<OnboardingChipAllocationRow>(conn, row.id())
+    }
+
+    var userRow = orm.find<UserRow>(conn, uid)
+    if (userRow != null) {
+        var zeroLong: Long = 0
+        orm.save(conn, UserRow(
+            userRow.id(),
+            userRow.email(),
+            userRow.passwordHash(),
+            userRow.role(),
+            zeroLong,
+            false,
+            userRow.tier(),
+            false,
+            zeroLong,
+            false,
+            BudgetModelType.STANDARD_503020.name(),
+            IncomeType.FIXED.name(),
+            false,
+            zeroLong,
+            userRow.name(),
+            userRow.firstName(),
+            userRow.lastName(),
+            userRow.age(),
+            false
+        ))
     }
 }
