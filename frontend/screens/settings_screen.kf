@@ -58,7 +58,7 @@ Style setModalOverlayCss()  = Style("position: fixed; top: 0; left: 0; width: 10
 Style setExampleCss()       = themed(Style("display: flex; flex-direction: column; gap: 4; padding: 12; background: rgba(37,99,235,.08); border: 1px solid rgba(37,99,235,.2); border-radius: 8"), Style("display: flex; flex-direction: column; gap: 4; padding: 12; background: rgba(0,212,255,.08); border: 1px solid rgba(0,212,255,.2); border-radius: 8"))
 Style setModalActionsCss()  = Style("display: flex; flex-direction: row; justify-content: flex-end; align-items: flex-start; gap: 16; flex-wrap: wrap")
 Style setHeadRowCss()       = Style("display: flex; flex-direction: row; align-items: center; gap: 8")
-Style setContentCss()       = Style("display: flex; flex-direction: column; gap: 20; width: 100%; max-width: 620; align-self: center")
+Style setContentCss()       = Style("display: flex; flex-direction: column; gap: 20; width: 100%; max-width: 680; align-self: center; margin: 0 auto")
 Style setContentMobileCss() = Style("display: flex; flex-direction: column; gap: 20; width: 100%")
 
 Label txt(String s, Style st) {
@@ -76,11 +76,8 @@ View settingsRow(String title, String desc, View control, String id) {
     return row
 }
 
-// Controle inativo (decisão pendente): controle esmaecido + dica "Em breve".
 View soonControl(View control) {
-    var col = Column(listOf(control, txt("Em breve", setSoonCss())))
-    col.setStyle(setSoonColCss())
-    return col
+    return control
 }
 
 View inactiveToggle(Bool on, String id) {
