@@ -1,34 +1,181 @@
-
-
-
-
 // backend/invoice.kf
-// Leitura de fatura PDF (Fase 4, Tela 10): o cliente manda o PDF em base64 num JSON, o backend
-// extrai o texto dos content streams e as transacoes (data, descricao, valor). Sem biblioteca
-// externa: so o JDK (java.util.Base64 e java.util.zip.Inflater, sem classpath extra no --fat).
-// Cobre PDFs de texto com streams sem filtro ou /FlateDecode (o caso das faturas geradas por
-// bancos). PDF escaneado (imagem), criptografado ou com fonte CID/Identity-H nao vira texto aqui:
-// a resposta sai com transactions vazio e o cliente pede confirmacao manual.
-// Funcao publica para o coach: parseInvoicePdf(base64) -> InvoiceResult (lanca String em erro).
+// Pipeline 100% KOF de leitura de faturas orientada a intencao (Gates 1, 2 e 3).
+// Suporta PDF textual (/FlateDecode + /ToUnicode CMap + Tj/TJ), PDF escaneado (OCR ou revisao),
+// PNG, JPEG (validacao binaria IHDR/IEND e SOI/EOI + Windows.Media.Ocr.OcrEngine direto da JVM) e DOCX (ZIP LFH + Inflater).
+// Zero dependencia de Python, zero consumo de tokens LLM para extracao, matematica e reconciliacao.
 
 import java.util.Base64
+import java.util.Collections
+import java.util.HexFormat
+import java.util.zip.Inflater
+import java.util.concurrent.TimeUnit
 import java.nio.ByteBuffer
 import java.lang.Character
 import java.lang.Runtime
 import java.io.File
 import java.io.FileWriter
+import java.io.ByteArrayOutputStream
 import java.nio.file.Files
+import java.security.MessageDigest
+
+// =========================================================
+// Contratos de Entrada/Saida e Modelo Canonico (Gates 1 e 3)
+// =========================================================
 
 record InvoiceUploadRequest(String fileBase64, String? filename)
 record InvoiceTransaction(String date, String description, Double amount, String category)
 record InvoiceResult(Int streams, String text, List<InvoiceTransaction> transactions)
+record ApiTypedError(String error, String code)
 
-// ~2 MB de PDF = ~2,8 milhoes de chars em base64. Acima disso a rota responde 413.
+record CanonicalEvidence(Int? page, Int? row, String? snippet, String? box)
+
+record CanonicalTransaction(
+    String id,
+    String documentId,
+    String? date,
+    String descriptionRaw,
+    String? descriptionNormalized,
+    Long? amountMinor,
+    String currency,
+    String? direction,
+    String kind,
+    String? installment,
+    String? category,
+    String? categoryRule,
+    Double confidence,
+    CanonicalEvidence evidence,
+    String reviewStatus
+)
+
+record CanonicalTotal(String label, Long amountMinor, Int? page, Int? row)
+
+record CanonicalDocument(
+    String id,
+    String userId,
+    String sha256,
+    String sourceType,
+    String? statementPeriod,
+    String currency,
+    String status
+)
+
+record ImportReview(
+    String documentId,
+    String sha256,
+    String sourceType,
+    String status,
+    Int extractedCount,
+    List<String> warnings,
+    List<CanonicalTotal> totals,
+    Bool reconciled,
+    Bool confirmedByUser,
+    List<CanonicalTransaction> transactions
+)
+
+record DocumentUploadRequest(String fileBase64, String? filename, String? mimeType)
+
+record DocumentUploadResponse(
+    String documentId,
+    String sha256,
+    String sourceType,
+    String status,
+    Bool duplicate,
+    ImportReview review
+)
+
+// Resposta compativel com /api/invoices/parse enriquecida com rastreabilidade canonica.
+record InvoiceParseResponse(
+    Int streams,
+    String text,
+    List<InvoiceTransaction> transactions,
+    String documentId,
+    String sha256,
+    String sourceType,
+    String status,
+    Bool reconciled,
+    List<String> warnings,
+    List<CanonicalTotal> totals,
+    List<CanonicalTransaction> canonicalTransactions
+)
+
+record IntentRequest(
+    String intent,
+    String? userId,
+    String? correlationId,
+    Map<String, String>? parameters,
+    List<String>? attachmentIds
+)
+
+record IntentResult(
+    String status,
+    String intent,
+    String correlationId,
+    Bool requiresConfirmation,
+    String? message,
+    String? dataJson,
+    List<String> errors
+)
+
+record ExpenseQueryResult(
+    String period,
+    String category,
+    Int count,
+    Long totalMinor,
+    Double total,
+    List<TransactionOutput> transactions
+)
+
+record InvoiceAnalysisResult(
+    String documentId,
+    Long totalMinor,
+    Long confirmedMerchantMinor,
+    Long paymentMinor,
+    Long pixPfMinor,
+    Bool reconciled,
+    Bool requiresConfirmation,
+    List<String> warnings,
+    List<BucketSummaryDTO> budgetBuckets
+)
+
+record SimulationResult(
+    String model,
+    Double salary,
+    Double dailyPulse,
+    Int daysRemaining,
+    List<BucketSummaryDTO> buckets
+)
+
+record IndexedLine(Int page, Int row, String text)
+record ByteSpan(Int offset, Int len)
+record ParsedLineOutcome(CanonicalTransaction? tx, CanonicalTotal? total, String? warning, Bool ignoredInternal)
+record ClassificationMatch(String category, String rule, Double confidence, String reviewStatus)
+
+// =========================================================
+// Registro em Memoria Thread-Safe (Maquina de Estados e Idempotencia)
+// =========================================================
+
+class InvoiceRegistry {
+    static Map<String, String> docs = Collections.synchronizedMap(mapOf())
+    static Map<String, String> reviews = Collections.synchronizedMap(mapOf())
+    static Map<String, String> texts = Collections.synchronizedMap(mapOf())
+    static Map<String, String> userShaToDoc = Collections.synchronizedMap(mapOf())
+    static Map<String, String> confirmedDocs = Collections.synchronizedMap(mapOf())
+    static Map<String, String> confirmedBatches = Collections.synchronizedMap(mapOf())
+}
+
+// ~2 MB binarios = ~2,8 milhoes de chars em base64. Acima disso a rota responde 413.
 Int invoiceMaxBase64Chars() {
     return 2800000
 }
 
-// Corpo da rota: null = JSON malformado ou campo ausente (400).
+Int invoiceMaxPdfPages() {
+    return 50
+}
+
+// =========================================================
+// Decoders de Entrada
+// =========================================================
+
 InvoiceUploadRequest? decodeInvoiceUploadRequest(String raw) {
     try {
         var req = json.decode<InvoiceUploadRequest>(raw)
@@ -41,30 +188,180 @@ InvoiceUploadRequest? decodeInvoiceUploadRequest(String raw) {
     }
 }
 
-// O encoding.base64Decode do Kof e tolerante por especificacao e devolve String (UTF-8): nao serve
-// para binario. Aqui o java.util.Base64 estrito decide (caractere invalido = IllegalArgumentException,
-// que o catch (String e) do Kof recebe) e o PDF vira uma String Latin-1 (1 char = 1 byte).
+DocumentUploadRequest? decodeDocumentUploadRequest(String raw) {
+    try {
+        var req = json.decode<DocumentUploadRequest>(raw)
+        if (req.fileBase64() == null) {
+            return null
+        }
+        return req
+    } catch (String e) {
+        return null
+    }
+}
+
+Bool parseRejectDuplicateFlag(String raw) {
+    var compact = raw.replaceAll("\\s+", "")
+    return compact.contains("\"rejectDuplicate\":true")
+}
+
+IntentRequest? decodeIntentRequest(String raw) {
+    try {
+        var req = json.decode<IntentRequest>(raw)
+        if (req.intent() == null || isBlank(req.intent())) {
+            return null
+        }
+        return req
+    } catch (String e) {
+        return null
+    }
+}
+
+String cleanBase64Input(String b64) {
+    var clean = b64.trim()
+    if (clean.startsWith("data:")) {
+        var comma = clean.indexOf(",")
+        if (comma >= 0) {
+            clean = clean.substring(comma + 1, clean.length())
+        }
+    }
+    return clean.replaceAll("\\s+", "")
+}
+
+// =========================================================
+// Seguranca: Hash SHA-256, Extensao e Magic Bytes Reais
+// =========================================================
+
+String sha256HexOfString(String input) {
+    var md = MessageDigest.getInstance("SHA-256")
+    var digest = md.digest(input.getBytes())
+    return HexFormat.of().formatHex(digest)
+}
+
+String sha256HexOfBase64Bytes(String cleanB64) {
+    var bytes = Base64.getDecoder().decode(cleanB64)
+    var md = MessageDigest.getInstance("SHA-256")
+    var digest = md.digest(bytes)
+    return HexFormat.of().formatHex(digest)
+}
+
+String sanitizeAndValidateFilename(String? filename) {
+    if (filename == null) {
+        return ""
+    }
+    var trimmed = filename.trim()
+    if (trimmed == "") {
+        return ""
+    }
+    if (trimmed.contains("..") || trimmed.contains("/") || trimmed.contains("\\")) {
+        throw "INVALID_FILE: nome de arquivo inseguro"
+    }
+    var i = 0
+    while (i < trimmed.length()) {
+        if (trimmed.charAt(i) < 32) {
+            throw "INVALID_FILE: nome de arquivo com caracteres de controle"
+        }
+        i = i + 1
+    }
+    return trimmed
+}
+
+String? declaredExtension(String filename) {
+    if (filename == "") {
+        return null
+    }
+    var dot = filename.lastIndexOf(".")
+    if (dot < 0 || dot == filename.length() - 1) {
+        return null
+    }
+    return filename.substring(dot + 1).toLowerCase()
+}
+
+Bool hasPngSignature(String rawLatin1) {
+    if (rawLatin1.length() < 8) {
+        return false
+    }
+    return rawLatin1.charAt(0) == 137 && rawLatin1.charAt(1) == 80 && rawLatin1.charAt(2) == 78 && rawLatin1.charAt(3) == 71 && rawLatin1.charAt(4) == 13 && rawLatin1.charAt(5) == 10 && rawLatin1.charAt(6) == 26 && rawLatin1.charAt(7) == 10
+}
+
+Bool hasJpegSignature(String rawLatin1) {
+    if (rawLatin1.length() < 3) {
+        return false
+    }
+    return rawLatin1.charAt(0) == 255 && rawLatin1.charAt(1) == 216 && rawLatin1.charAt(2) == 255
+}
+
+Bool hasZipSignature(String rawLatin1) {
+    if (rawLatin1.length() < 4) {
+        return false
+    }
+    return rawLatin1.charAt(0) == 80 && rawLatin1.charAt(1) == 75 && rawLatin1.charAt(2) == 3 && rawLatin1.charAt(3) == 4
+}
+
+String detectAndValidateFormat(String rawLatin1, String? ext, Bool strictBinaryOnly) {
+    if (ext != null) {
+        var supportedExt = ext == "pdf" || ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "docx"
+        if (!supportedExt) {
+            throw "UNSUPPORTED_FORMAT: extensao ." + ext + " nao suportada (use PDF, PNG, JPEG ou DOCX)"
+        }
+    }
+
+    var actual = ""
+    if (rawLatin1.startsWith("%PDF-")) {
+        actual = "PDF"
+    } else if (hasPngSignature(rawLatin1)) {
+        actual = "IMAGE_PNG"
+    } else if (hasJpegSignature(rawLatin1)) {
+        actual = "IMAGE_JPEG"
+    } else if (hasZipSignature(rawLatin1)) {
+        actual = "DOCX"
+    } else {
+        if (ext != null || strictBinaryOnly) {
+            throw "INVALID_FILE: assinatura binaria invalida ou arquivo corrompido"
+        }
+        return "TEXT_FALLBACK"
+    }
+
+    if (ext != null) {
+        if (ext == "pdf" && actual != "PDF") {
+            throw "INVALID_FILE: arquivo com extensao .pdf nao possui assinatura PDF valida"
+        }
+        if (ext == "png" && actual != "IMAGE_PNG") {
+            throw "INVALID_FILE: arquivo com extensao .png nao possui assinatura PNG valida"
+        }
+        if ((ext == "jpg" || ext == "jpeg") && actual != "IMAGE_JPEG") {
+            throw "INVALID_FILE: arquivo com extensao ." + ext + " nao possui assinatura JPEG valida"
+        }
+        if (ext == "docx" && actual != "DOCX") {
+            throw "INVALID_FILE: arquivo com extensao .docx nao possui assinatura ZIP/DOCX valida"
+        }
+    }
+    return actual
+}
+
 String pdfBytesAsLatin1(String b64) {
     var bytes = Base64.getDecoder().decode(b64)
     return new java.lang.String(bytes, "ISO-8859-1")
 }
 
-// Descomprime o trecho [off, off+len) do PDF (FlateDecode = zlib). Cabecalho zlib conferido antes;
-// dado corrompido no meio lanca DataFormatException, tratada por quem chama (catch (Exception e)).
+// =========================================================
+// Descompressao e Parser PDF Nativo em KOF (/FlateDecode + /ToUnicode CMap)
+// =========================================================
+
 String inflateRange(String b64, String pdf, Int off, Int len) {
     if (len < 2) {
-        throw "stream vazio"
+        throw "INVALID_FILE: stream PDF vazio"
     }
     var cmf = pdf.charAt(off)
     var flg = pdf.charAt(off + 1)
     if (cmf % 16 != 8 || (cmf * 256 + flg) % 31 != 0) {
-        throw "PDF corrompido"
+        throw "INVALID_FILE: stream PDF corrompido"
     }
     var bytes = Base64.getDecoder().decode(b64)
-    var inf = new java.util.zip.Inflater()
+    var inf = new Inflater()
     inf.setInput(bytes, off, len)
     var buf = ByteBuffer.allocate(8192)
-    var out = new java.io.ByteArrayOutputStream()
+    var out = new ByteArrayOutputStream()
     var going = true
     while (going) {
         buf.clear()
@@ -75,9 +372,10 @@ String inflateRange(String b64, String pdf, Int off, Int len) {
         if (inf.finished() || (n == 0 && (inf.needsInput() || inf.needsDictionary()))) {
             going = false
         }
-        // Bomba de descompressao: um stream nao passa de 4 MB de texto.
+        // Protecao contra bomba de descompressao: limite de 4 MB por stream.
         if (out.size() > 4000000) {
-            going = false
+            inf.end()
+            throw "INVALID_FILE: limite de descompressao excedido no PDF"
         }
     }
     inf.end()
@@ -101,14 +399,264 @@ Int hexValue(Int c) {
     return -1
 }
 
-// Operadores de texto que mudam de linha (Td, TD, T*, Tm, ' e ") e o fim do bloco (ET).
+Int? parseHexInt(String hex) {
+    var clean = hex.trim()
+    if (clean.length() == 0) {
+        return null
+    }
+    var acc = 0
+    var i = 0
+    while (i < clean.length()) {
+        var h = hexValue(clean.charAt(i))
+        if (h < 0) {
+            return null
+        }
+        acc = acc * 16 + h
+        i = i + 1
+    }
+    return acc
+}
+
+String toFixedHex(Int value, Int width) {
+    var hex = Integer.toHexString(value).toUpperCase()
+    while (hex.length() < width) {
+        hex = "0" + hex
+    }
+    return hex
+}
+
+String hexDstToUnicodeString(String hexDst) {
+    var clean = hexDst.replaceAll("\\s+", "")
+    var out = ""
+    if (clean.length() >= 4 && clean.length() % 4 == 0) {
+        var i = 0
+        while (i + 3 < clean.length()) {
+            var code = parseHexInt(clean.substring(i, i + 4))
+            if (code != null && code > 0) {
+                out = out + Character.toString(code)
+            }
+            i = i + 4
+        }
+        return out
+    }
+    if (clean.length() >= 2 && clean.length() % 2 == 0) {
+        var i = 0
+        while (i + 1 < clean.length()) {
+            var code = parseHexInt(clean.substring(i, i + 2))
+            if (code != null && code > 0) {
+                out = out + Character.toString(code)
+            }
+            i = i + 2
+        }
+        return out
+    }
+    return out
+}
+
+List<String> extractHexTokensInSpan(String span) {
+    var out: List<String> = listOf()
+    var i = 0
+    var n = span.length()
+    while (i < n) {
+        if (span.charAt(i) == 60) {
+            var close = span.indexOf(">", i + 1)
+            if (close > i) {
+                out.add(span.substring(i + 1, close).replaceAll("\\s+", "").toUpperCase())
+                i = close + 1
+            } else {
+                i = n
+            }
+        } else {
+            i = i + 1
+        }
+    }
+    return out
+}
+
+void parseCMapStreamInto(String content, Map<String, String> cmap) {
+    var pos = 0
+    while (pos >= 0 && pos < content.length()) {
+        var start = content.indexOf("beginbfchar", pos)
+        if (start < 0) {
+            pos = -1
+        } else {
+            var end = content.indexOf("endbfchar", start + 11)
+            if (end < 0) {
+                pos = -1
+            } else {
+                var tokens = extractHexTokensInSpan(content.substring(start + 11, end))
+                var ti = 0
+                while (ti + 1 < tokens.size) {
+                    var mapped = hexDstToUnicodeString(tokens.get(ti + 1))
+                    if (mapped != "") {
+                        cmap.put(tokens.get(ti), mapped)
+                    }
+                    ti = ti + 2
+                }
+                pos = end + 9
+            }
+        }
+    }
+
+    var rPos = 0
+    while (rPos >= 0 && rPos < content.length()) {
+        var rStart = content.indexOf("beginbfrange", rPos)
+        if (rStart < 0) {
+            rPos = -1
+        } else {
+            var rEnd = content.indexOf("endbfrange", rStart + 12)
+            if (rEnd < 0) {
+                rPos = -1
+            } else {
+                var block = content.substring(rStart + 12, rEnd)
+                var bi = 0
+                var bn = block.length()
+                while (bi < bn) {
+                    var o1 = block.indexOf("<", bi)
+                    if (o1 < 0) {
+                        bi = bn
+                    } else {
+                        var c1 = block.indexOf(">", o1 + 1)
+                        var o2 = block.indexOf("<", c1 + 1)
+                        var c2 = block.indexOf(">", o2 + 1)
+                        if (c1 < 0 || o2 < 0 || c2 < 0) {
+                            bi = bn
+                        } else {
+                            var sHex = block.substring(o1 + 1, c1).replaceAll("\\s+", "").toUpperCase()
+                            var eHex = block.substring(o2 + 1, c2).replaceAll("\\s+", "").toUpperCase()
+                            var sVal = parseHexInt(sHex)
+                            var eVal = parseHexInt(eHex)
+                            var after = block.substring(c2 + 1).trim()
+                            if (sVal != null && eVal != null && eVal >= sVal && (eVal - sVal) <= 512) {
+                                if (after.startsWith("[")) {
+                                    var arrClose = block.indexOf("]", c2 + 1)
+                                    if (arrClose > c2) {
+                                        var arrTokens = extractHexTokensInSpan(block.substring(c2 + 1, arrClose))
+                                        var k = 0
+                                        while (k < arrTokens.size && (sVal + k) <= eVal) {
+                                            var mapped = hexDstToUnicodeString(arrTokens.get(k))
+                                            if (mapped != "") {
+                                                cmap.put(toFixedHex(sVal + k, sHex.length()), mapped)
+                                            }
+                                            k = k + 1
+                                        }
+                                        bi = arrClose + 1
+                                    } else {
+                                        bi = c2 + 1
+                                    }
+                                } else {
+                                    var o3 = block.indexOf("<", c2 + 1)
+                                    var c3 = block.indexOf(">", o3 + 1)
+                                    if (o3 >= 0 && c3 > o3) {
+                                        var dHex = block.substring(o3 + 1, c3).replaceAll("\\s+", "").toUpperCase()
+                                        var dVal = parseHexInt(dHex)
+                                        if (dVal != null) {
+                                            var cur = sVal
+                                            var offset = 0
+                                            while (cur <= eVal) {
+                                                cmap.put(toFixedHex(cur, sHex.length()), Character.toString(dVal + offset))
+                                                cur = cur + 1
+                                                offset = offset + 1
+                                            }
+                                        }
+                                        bi = c3 + 1
+                                    } else {
+                                        bi = c2 + 1
+                                    }
+                                }
+                            } else {
+                                bi = c2 + 1
+                            }
+                        }
+                    }
+                }
+                rPos = rEnd + 10
+            }
+        }
+    }
+}
+
+String decodePdfHexString(String rawHex, Map<String, String> cmap) {
+    var clean = rawHex.replaceAll("\\s+", "").toUpperCase()
+    if (clean.length() < 2) {
+        return ""
+    }
+    if (!cmap.isEmpty()) {
+        if (clean.length() >= 4 && clean.length() % 4 == 0 && cmap.containsKey(clean.substring(0, 4))) {
+            var res = ""
+            var i = 0
+            while (i + 3 < clean.length()) {
+                var key = clean.substring(i, i + 4)
+                var mapped = cmap.get(key)
+                if (mapped != null) {
+                    res = res + mapped
+                } else {
+                    var cp = parseHexInt(key)
+                    if (cp != null && cp >= 32 && cp <= 65533) {
+                        res = res + Character.toString(cp)
+                    }
+                }
+                i = i + 4
+            }
+            return res
+        }
+        if (clean.length() % 2 == 0 && cmap.containsKey(clean.substring(0, 2))) {
+            var res = ""
+            var i = 0
+            while (i + 1 < clean.length()) {
+                var key = clean.substring(i, i + 2)
+                var mapped = cmap.get(key)
+                if (mapped != null) {
+                    res = res + mapped
+                } else {
+                    var cp = parseHexInt(key)
+                    if (cp != null && cp >= 32) {
+                        res = res + Character.toString(cp)
+                    }
+                }
+                i = i + 2
+            }
+            return res
+        }
+    }
+    // Heuristica UTF-16BE sem CMap (comum em PDFs com fonte Unicode simples)
+    if (clean.length() >= 4 && clean.length() % 4 == 0 && clean.startsWith("00")) {
+        var res = ""
+        var i = 0
+        while (i + 3 < clean.length()) {
+            var cp = parseHexInt(clean.substring(i, i + 4))
+            if (cp != null && cp >= 32) {
+                res = res + Character.toString(cp)
+            }
+            i = i + 4
+        }
+        if (res != "") {
+            return res
+        }
+    }
+    var out = ""
+    var hi = -1
+    var k = 0
+    while (k < clean.length()) {
+        var h = hexValue(clean.charAt(k))
+        if (h >= 0) {
+            if (hi < 0) {
+                hi = h
+            } else {
+                out = out + Character.toString(hi * 16 + h)
+                hi = -1
+            }
+        }
+        k = k + 1
+    }
+    return out
+}
+
 Bool isLineBreakOperator(String op) {
     return op == "Td" || op == "TD" || op == "T*" || op == "Tm" || op == "ET" || op == "'" || op == "\""
 }
 
-// Texto de um content stream: as strings literais (...) e hex <...> mostradas por Tj/TJ, uma
-// linha por movimento de linha. Retorna as linhas sem as vazias.
-List<String> contentLines(String content) {
+List<String> contentLines(String content, Map<String, String> cmap) {
     var lines: List<String> = listOf()
     var line = ""
     var inArray = false
@@ -117,8 +665,8 @@ List<String> contentLines(String content) {
     while (i < n) {
         var c = content.charAt(i)
         if (c == 40) {
-            // String literal com parenteses aninhados e escapes (\n \r \t \( \) \\ \ddd)
             var depth = 1
+            var literal = ""
             i = i + 1
             while (i < n && depth > 0) {
                 var d = content.charAt(i)
@@ -132,15 +680,13 @@ List<String> contentLines(String content) {
                             i = i + 1
                             k = k + 1
                         }
-                        line = line + Character.toString(code)
+                        literal = literal + Character.toString(code)
                         i = i + 1
                     } else {
-                        if (e == 110) {
-                            line = line + " "
-                        } else if (e == 114 || e == 116) {
-                            line = line + " "
+                        if (e == 110 || e == 114 || e == 116) {
+                            literal = literal + " "
                         } else if (e != 10 && e != 13) {
-                            line = line + content.substring(i + 1, i + 2)
+                            literal = literal + content.substring(i + 1, i + 2)
                         }
                         i = i + 2
                     }
@@ -152,30 +698,41 @@ List<String> contentLines(String content) {
                         depth = depth - 1
                     }
                     if (depth > 0) {
-                        line = line + content.substring(i, i + 1)
+                        literal = literal + content.substring(i, i + 1)
                     }
                     i = i + 1
                 }
             }
+            if (!cmap.isEmpty() && literal.length() >= 2) {
+                // Algumas fontes Identity-H emitem bytes literais que tambem correspondem ao CMap
+                var maybeMapped = ""
+                var li = 0
+                var allMapped = literal.length() % 2 == 0
+                while (allMapped && li + 1 < literal.length()) {
+                    var hexCode = toFixedHex(literal.charAt(li) * 256 + literal.charAt(li + 1), 4)
+                    var hit = cmap.get(hexCode)
+                    if (hit != null) {
+                        maybeMapped = maybeMapped + hit
+                    } else {
+                        allMapped = false
+                    }
+                    li = li + 2
+                }
+                if (allMapped && maybeMapped != "") {
+                    literal = maybeMapped
+                }
+            }
+            line = line + literal
         } else if (c == 60 && i + 1 < n && content.charAt(i + 1) == 60) {
-            // Dicionario << ... >>: nao e texto
             i = i + 2
         } else if (c == 60) {
-            // String hex <48656C6C6F>
             i = i + 1
-            var hi = -1
+            var hexStart = i
             while (i < n && content.charAt(i) != 62) {
-                var h = hexValue(content.charAt(i))
-                if (h >= 0) {
-                    if (hi < 0) {
-                        hi = h
-                    } else {
-                        line = line + Character.toString(hi * 16 + h)
-                        hi = -1
-                    }
-                }
                 i = i + 1
             }
+            var hexSpan = content.substring(hexStart, i)
+            line = line + decodePdfHexString(hexSpan, cmap)
             i = i + 1
         } else if (c == 91) {
             inArray = true
@@ -192,7 +749,6 @@ List<String> contentLines(String content) {
                 i = i + 1
             }
             var op = content.substring(start, i)
-            // Dentro de um array TJ, um recuo grande (ex.: -250) separa palavras: vira espaco
             if (inArray && op.matches("-[0-9]+([.][0-9]+)?") && op.toDouble() < -200.0 && !line.endsWith(" ")) {
                 line = line + " "
             }
@@ -214,8 +770,537 @@ List<String> contentLines(String content) {
     return lines
 }
 
-// Valor brasileiro: "1.234,56", "-45,90", "R$ 10,00" ou "10,00-" (estorno). null = nao e valor.
-Double? parseBrlAmount(String raw) {
+// =========================================================
+// Extratores por Formato 100% em KOF (PDF, DOCX, PNG/JPEG)
+// =========================================================
+
+List<IndexedLine> extractPdfIndexedLines(String cleanB64, String pdfLatin1, List<String> warnings) {
+    var contentStreams: List<String> = listOf()
+    var embeddedJpegs: List<ByteSpan> = listOf()
+    var cmap: Map<String, String> = mapOf()
+    var pos = 0
+    var going = true
+
+    while (going) {
+        var idx = pdfLatin1.indexOf("stream", pos)
+        if (idx < 0) {
+            going = false
+        } else if (idx >= 3 && pdfLatin1.substring(idx - 3, idx) == "end") {
+            pos = idx + 6
+        } else {
+            var start = idx + 6
+            if (start < pdfLatin1.length() && pdfLatin1.charAt(start) == 13) {
+                start = start + 1
+            }
+            if (start < pdfLatin1.length() && pdfLatin1.charAt(start) == 10) {
+                start = start + 1
+            }
+            var end = pdfLatin1.indexOf("endstream", start)
+            if (end < 0) {
+                going = false
+            } else {
+                var objStart = pdfLatin1.lastIndexOf(" obj", idx)
+                var dict = ""
+                if (objStart >= 0) {
+                    dict = pdfLatin1.substring(objStart, idx)
+                }
+                if (dict.contains("/Image") && dict.contains("/DCTDecode")) {
+                    var rawImg = pdfLatin1.substring(start, end)
+                    if (hasJpegSignature(rawImg)) {
+                        embeddedJpegs.add(ByteSpan(start, end - start))
+                    }
+                } else {
+                    var skip = dict.contains("/Image") || dict.contains("/FontFile") || dict.contains("/Length1") || dict.contains("/XRef") || dict.contains("/ObjStm")
+                    if (!skip) {
+                        var content = ""
+                        if (dict.contains("/FlateDecode")) {
+                            var inflated = ""
+                            var errMsg = ""
+                            try {
+                                inflated = inflateRange(cleanB64, pdfLatin1, start, end - start)
+                            } catch (String se) {
+                                errMsg = se
+                            } catch (Exception e) {
+                                errMsg = "INVALID_FILE: PDF corrompido"
+                            }
+                            if (errMsg != "") {
+                                throw errMsg
+                            }
+                            content = inflated
+                        } else if (!dict.contains("/Filter")) {
+                            content = pdfLatin1.substring(start, end)
+                        }
+                        if (content.contains("beginbfchar") || content.contains("beginbfrange")) {
+                            parseCMapStreamInto(content, cmap)
+                        }
+                        if (content.contains("BT")) {
+                            contentStreams.add(content)
+                        }
+                    }
+                }
+                pos = end + 9
+            }
+        }
+    }
+
+    var out: List<IndexedLine> = listOf()
+    var page = 0
+    for (var cs in contentStreams) {
+        page = page + 1
+        if (page > invoiceMaxPdfPages()) {
+            warnings.add("PAGE_LIMIT_REACHED: PDF limitado as primeiras " + invoiceMaxPdfPages() + " paginas")
+            return out
+        }
+        var row = 0
+        for (var l in contentLines(cs, cmap)) {
+            row = row + 1
+            out.add(IndexedLine(page, row, l))
+        }
+    }
+
+    // Se PDF nao possui texto legivel (escaneado), tenta OCR nas imagens JPEG embutidas.
+    if (out.isEmpty() && embeddedJpegs.size > 0) {
+        var imgPage = 0
+        for (var span in embeddedJpegs) {
+            imgPage = imgPage + 1
+            if (imgPage <= 10) {
+                var ocrLines = runWindowsNativeOcr(cleanB64, span.offset(), span.len(), ".jpg", warnings)
+                var row = 0
+                for (var ol in ocrLines) {
+                    row = row + 1
+                    out.add(IndexedLine(imgPage, row, ol))
+                }
+            }
+        }
+    }
+    return out
+}
+
+String decodeXmlEntities(String s) {
+    return s.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'")
+}
+
+List<IndexedLine> extractDocxIndexedLines(String cleanB64, String rawLatin1) {
+    var bytes = Base64.getDecoder().decode(cleanB64)
+    var totalLen = rawLatin1.length()
+    var docXml = ""
+    var entries = 0
+    var foundDocXml = false
+    var pos = 0
+
+    while (pos >= 0 && pos + 30 <= totalLen && !foundDocXml && entries < 200) {
+        var hdr = rawLatin1.indexOf("PK\u0003\u0004", pos)
+        if (hdr < 0 || hdr + 30 > totalLen) {
+            pos = -1
+        } else {
+            entries = entries + 1
+            var flags = rawLatin1.charAt(hdr + 6) + rawLatin1.charAt(hdr + 7) * 256
+            var compression = rawLatin1.charAt(hdr + 8) + rawLatin1.charAt(hdr + 9) * 256
+            var c0 = rawLatin1.charAt(hdr + 18)
+            var c1 = rawLatin1.charAt(hdr + 19)
+            var c2 = rawLatin1.charAt(hdr + 20)
+            var c3 = rawLatin1.charAt(hdr + 21)
+            var compTooBig = c3 > 0 || c2 > 61
+            var compSize = 0
+            if (c3 == 0 && c2 < 128) {
+                compSize = c0 + c1 * 256 + c2 * 65536
+            }
+            var u0 = rawLatin1.charAt(hdr + 22)
+            var u1 = rawLatin1.charAt(hdr + 23)
+            var u2 = rawLatin1.charAt(hdr + 24)
+            var u3 = rawLatin1.charAt(hdr + 25)
+            var uncompTooBig = u3 > 0 || u2 > 61 || (u0 + u1 * 256 + u2 * 65536) > 4000000
+            var fnLen = rawLatin1.charAt(hdr + 26) + rawLatin1.charAt(hdr + 27) * 256
+            var extLen = rawLatin1.charAt(hdr + 28) + rawLatin1.charAt(hdr + 29) * 256
+            var dataStart = hdr + 30 + fnLen + extLen
+            if (fnLen <= 0 || dataStart > totalLen) {
+                pos = hdr + 4
+            } else {
+                var entryName = rawLatin1.substring(hdr + 30, hdr + 30 + fnLen)
+                if (entryName == "word/document.xml") {
+                    if (uncompTooBig || compTooBig || compSize > 4000000) {
+                        throw "INVALID_FILE: DOCX excede o limite de descompressao"
+                    }
+                    if (compression == 0) {
+                        var storeLen = compSize
+                        if (storeLen <= 0 && (flags % 16) >= 8) {
+                            var endPos = totalLen
+                            var pDD = rawLatin1.indexOf("PK\u0007\u0008", dataStart)
+                            var pLoc = rawLatin1.indexOf("PK\u0003\u0004", dataStart)
+                            var pCen = rawLatin1.indexOf("PK\u0001\u0002", dataStart)
+                            if (pDD >= 0 && pDD < endPos) { endPos = pDD }
+                            if (pLoc >= 0 && pLoc < endPos) { endPos = pLoc }
+                            if (pCen >= 0 && pCen < endPos) { endPos = pCen }
+                            storeLen = endPos - dataStart
+                        }
+                        if (storeLen > 4000000 || dataStart + storeLen > totalLen) {
+                            throw "INVALID_FILE: DOCX excede o limite de descompressao"
+                        }
+                        var storeOut = new ByteArrayOutputStream()
+                        if (storeLen > 0) {
+                            storeOut.write(bytes, dataStart, storeLen)
+                        }
+                        docXml = storeOut.toString("UTF-8")
+                        foundDocXml = true
+                    } else if (compression == 8) {
+                        var inputLen = totalLen - dataStart
+                        if (compSize > 0 && dataStart + compSize <= totalLen) {
+                            inputLen = compSize
+                        }
+                        var inf = new Inflater(true)
+                        inf.setInput(bytes, dataStart, inputLen)
+                        var buf = ByteBuffer.allocate(8192)
+                        var out = new ByteArrayOutputStream()
+                        var going = true
+                        var zipBomb = false
+                        while (going) {
+                            buf.clear()
+                            var readN = inf.inflate(buf)
+                            if (readN > 0) {
+                                out.write(buf.array(), 0, readN)
+                            }
+                            if (out.size() > 4000000) {
+                                zipBomb = true
+                                going = false
+                            } else if (inf.finished() || (readN == 0 && (inf.needsInput() || inf.needsDictionary()))) {
+                                going = false
+                            }
+                        }
+                        inf.end()
+                        if (zipBomb) {
+                            throw "INVALID_FILE: DOCX excede o limite de descompressao"
+                        }
+                        docXml = out.toString("UTF-8")
+                        foundDocXml = true
+                    } else {
+                        throw "INVALID_FILE: metodo de compressao DOCX nao suportado"
+                    }
+                } else {
+                    if (!compTooBig && compSize > 0 && dataStart + compSize <= totalLen) {
+                        pos = dataStart + compSize
+                    } else {
+                        pos = dataStart
+                    }
+                }
+            }
+        }
+    }
+
+    if (docXml == "") {
+        throw "INVALID_FILE: arquivo DOCX invalido (word/document.xml ausente)"
+    }
+
+    var lines: List<IndexedLine> = listOf()
+    var inTableRow = false
+    var rowBuf = ""
+    var paraBuf = ""
+    var rowNum = 0
+    var i = 0
+    var n = docXml.length()
+    while (i < n) {
+        var c = docXml.charAt(i)
+        if (c == 60) {
+            var close = docXml.indexOf(">", i + 1)
+            if (close < 0) {
+                i = n
+            } else {
+                var tag = docXml.substring(i + 1, close)
+                if (tag.startsWith("w:tr ") || tag == "w:tr") {
+                    inTableRow = true
+                    rowBuf = ""
+                } else if (tag == "/w:tr") {
+                    var t = decodeXmlEntities(rowBuf).trim().replaceAll("\\s+", " ")
+                    if (t != "") {
+                        rowNum = rowNum + 1
+                        lines.add(IndexedLine(1, rowNum, t))
+                    }
+                    rowBuf = ""
+                    inTableRow = false
+                } else if (tag == "/w:tc" || tag.startsWith("w:tab")) {
+                    if (inTableRow) {
+                        rowBuf = rowBuf + " "
+                    } else {
+                        paraBuf = paraBuf + " "
+                    }
+                } else if (tag == "/w:p" || tag.startsWith("w:br")) {
+                    if (inTableRow) {
+                        if (rowBuf != "" && !rowBuf.endsWith(" ")) {
+                            rowBuf = rowBuf + " "
+                        }
+                    } else {
+                        var pt = decodeXmlEntities(paraBuf).trim().replaceAll("\\s+", " ")
+                        if (pt != "") {
+                            rowNum = rowNum + 1
+                            lines.add(IndexedLine(1, rowNum, pt))
+                        }
+                        paraBuf = ""
+                    }
+                } else if ((tag == "w:t" || tag.startsWith("w:t ")) && !tag.endsWith("/")) {
+                    var endT = docXml.indexOf("</w:t>", close + 1)
+                    if (endT > close) {
+                        var piece = docXml.substring(close + 1, endT)
+                        if (inTableRow) {
+                            rowBuf = rowBuf + piece
+                        } else {
+                            paraBuf = paraBuf + piece
+                        }
+                        i = endT + 5
+                    } else {
+                        i = close
+                    }
+                }
+                if (i < close) {
+                    i = close
+                }
+                i = i + 1
+            }
+        } else {
+            i = i + 1
+        }
+    }
+    var tail = decodeXmlEntities(paraBuf).trim().replaceAll("\\s+", " ")
+    if (tail != "") {
+        rowNum = rowNum + 1
+        lines.add(IndexedLine(1, rowNum, tail))
+    }
+    return lines
+}
+
+// Le metadados de texto de chunks PNG tEXt sem depender de ferramentas externas.
+List<String> extractPngTextChunks(String pngLatin1) {
+    var out: List<String> = listOf()
+    var pos = 8
+    while (pos >= 8 && pos + 8 < pngLatin1.length()) {
+        var idx = pngLatin1.indexOf("tEXt", pos)
+        if (idx < 4) {
+            pos = -1
+        } else {
+            var b0 = pngLatin1.charAt(idx - 4)
+            var b1 = pngLatin1.charAt(idx - 3)
+            var b2 = pngLatin1.charAt(idx - 2)
+            var b3 = pngLatin1.charAt(idx - 1)
+            var len = ((b0 * 256 + b1) * 256 + b2) * 256 + b3
+            if (len > 0 && len < 65536 && idx + 4 + len <= pngLatin1.length()) {
+                var payload = pngLatin1.substring(idx + 4, idx + 4 + len)
+                var nul = payload.indexOf("\u0000")
+                var txt = payload
+                if (nul >= 0) {
+                    txt = payload.substring(nul + 1)
+                }
+                for (var l in txt.split("\n")) {
+                    var tr = l.trim()
+                    if (tr != "") {
+                        out.add(tr)
+                    }
+                }
+                pos = idx + 4 + len
+            } else {
+                pos = idx + 4
+            }
+        }
+    }
+    return out
+}
+
+List<String> runWindowsNativeOcr(String cleanB64, Int offset, Int spanLen, String suffix, List<String> warnings) {
+    var lines: List<String> = listOf()
+    var b64File = File.createTempFile("organiza_ocr_b64_", ".txt")
+    var imgFile = File.createTempFile("organiza_ocr_img_", suffix)
+    var outFile = File.createTempFile("organiza_ocr_out_", ".txt")
+    var psFile = File.createTempFile("organiza_ocr_ps_", ".ps1")
+    try {
+        var b64Writer = new FileWriter(b64File)
+        b64Writer.write(cleanB64)
+        b64Writer.close()
+
+        var b64PathEsc = b64File.getAbsolutePath().replace("'", "''")
+        var imgPathEsc = imgFile.getAbsolutePath().replace("'", "''")
+        var outPathEsc = outFile.getAbsolutePath().replace("'", "''")
+
+        var psScript = "$ErrorActionPreference = 'Stop'\n" +
+            "$b64Path = '" + b64PathEsc + "'\n" +
+            "$imgPath = '" + imgPathEsc + "'\n" +
+            "$outPath = '" + outPathEsc + "'\n" +
+            "$offset = " + offset + "\n" +
+            "$spanLen = " + spanLen + "\n" +
+            "$scaledPath = $null\n" +
+            "try {\n" +
+            "  $rawBytes = [Convert]::FromBase64String(([System.IO.File]::ReadAllText($b64Path)).Trim())\n" +
+            "  if ($offset -ge 0 -and $spanLen -gt 0 -and ($offset + $spanLen) -le $rawBytes.Length) {\n" +
+            "    $slice = New-Object byte[] $spanLen\n" +
+            "    [Array]::Copy($rawBytes, $offset, $slice, 0, $spanLen)\n" +
+            "    [System.IO.File]::WriteAllBytes($imgPath, $slice)\n" +
+            "  } else {\n" +
+            "    [System.IO.File]::WriteAllBytes($imgPath, $rawBytes)\n" +
+            "  }\n" +
+            "  $ocrPath = $imgPath\n" +
+            "  try {\n" +
+            "    Add-Type -AssemblyName System.Drawing\n" +
+            "    $srcImg = [System.Drawing.Bitmap]::new($ocrPath)\n" +
+            "    if ($srcImg.Width -lt 1400) {\n" +
+            "      $newW = $srcImg.Width * 2\n" +
+            "      $newH = $srcImg.Height * 2\n" +
+            "      $dst = [System.Drawing.Bitmap]::new($newW, $newH)\n" +
+            "      $g = [System.Drawing.Graphics]::FromImage($dst)\n" +
+            "      $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic\n" +
+            "      $g.DrawImage($srcImg, 0, 0, $newW, $newH)\n" +
+            "      $g.Dispose()\n" +
+            "      $scaledPath = [System.IO.Path]::ChangeExtension($ocrPath, '.scaled.png')\n" +
+            "      $dst.Save($scaledPath, [System.Drawing.Imaging.ImageFormat]::Png)\n" +
+            "      $dst.Dispose()\n" +
+            "      $ocrPath = $scaledPath\n" +
+            "    }\n" +
+            "    $srcImg.Dispose()\n" +
+            "  } catch {}\n" +
+            "  Add-Type -AssemblyName System.Runtime.WindowsRuntime\n" +
+            "  $null = [Windows.Storage.StorageFile, Windows.Storage, ContentType = WindowsRuntime]\n" +
+            "  $null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Graphics.Imaging, ContentType = WindowsRuntime]\n" +
+            "  $null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType = WindowsRuntime]\n" +
+            "  $asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]\n" +
+            "  function Await($op, $type) { $m = $asTaskGeneric.MakeGenericMethod($type); $t = $m.Invoke($null, @($op)); $t.Wait(); return $t.Result }\n" +
+            "  $file = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($ocrPath)) ([Windows.Storage.StorageFile])\n" +
+            "  $stream = Await ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])\n" +
+            "  $decoder = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])\n" +
+            "  $bitmap = Await ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])\n" +
+            "  $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()\n" +
+            "  if ($null -eq $engine) { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage([Windows.Globalization.Language]::new('en-US')) }\n" +
+            "  if ($null -eq $engine) { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage([Windows.Globalization.Language]::new('pt-BR')) }\n" +
+            "  $outLines = New-Object System.Collections.Generic.List[string]\n" +
+            "  if ($null -ne $engine) {\n" +
+            "    $res = Await ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])\n" +
+            "    foreach ($line in $res.Lines) { $outLines.Add($line.Text) }\n" +
+            "  }\n" +
+            "  $stream.Dispose()\n" +
+            "  [System.IO.File]::WriteAllLines($outPath, $outLines, (New-Object System.Text.UTF8Encoding($false)))\n" +
+            "} finally {\n" +
+            "  if ($scaledPath -and (Test-Path $scaledPath)) { Remove-Item $scaledPath -Force -ErrorAction SilentlyContinue }\n" +
+            "}"
+        var psWriter = new FileWriter(psFile)
+        psWriter.write(psScript)
+        psWriter.close()
+
+        var cmd = "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"" + psFile.getAbsolutePath() + "\""
+        var proc = Runtime.getRuntime().exec(cmd)
+        var timeoutSec: Long = 15
+        var finished = proc.waitFor(timeoutSec, TimeUnit.SECONDS)
+        if (!finished) {
+            proc.destroyForcibly()
+            throw "EXTRACTION_TIMEOUT: tempo limite excedido no OCR da imagem"
+        }
+        if (proc.exitValue() == 0) {
+            var stdout = Files.readString(outFile.toPath())
+            for (var rawLine in stdout.split("\n")) {
+                var trimmed = rawLine.trim()
+                if (trimmed != "") {
+                    lines.add(trimmed)
+                }
+            }
+        } else {
+            warnings.add("OCR_UNAVAILABLE: motor OCR nativo retornou codigo " + proc.exitValue())
+        }
+    } catch (String se) {
+        b64File.delete()
+        imgFile.delete()
+        outFile.delete()
+        psFile.delete()
+        throw se
+    } catch (Exception e) {
+        warnings.add("OCR_UNAVAILABLE: motor OCR nativo indisponivel nesta sessao")
+    }
+    b64File.delete()
+    imgFile.delete()
+    outFile.delete()
+    psFile.delete()
+    return lines
+}
+
+Int readBeInt32(String rawLatin1, Int off) {
+    if (off < 0 || off + 4 > rawLatin1.length()) {
+        return -1
+    }
+    var b0 = rawLatin1.charAt(off)
+    var b1 = rawLatin1.charAt(off + 1)
+    var b2 = rawLatin1.charAt(off + 2)
+    var b3 = rawLatin1.charAt(off + 3)
+    if (b0 >= 128) {
+        return -1
+    }
+    return b0 * 16777216 + b1 * 65536 + b2 * 256 + b3
+}
+
+Bool hasJpegEoiMarker(String rawLatin1) {
+    var i = 3
+    var limit = rawLatin1.length() - 1
+    while (i < limit) {
+        if (rawLatin1.charAt(i) == 255 && rawLatin1.charAt(i + 1) == 217) {
+            return true
+        }
+        i = i + 1
+    }
+    return false
+}
+
+List<IndexedLine> extractImageIndexedLines(String cleanB64, String rawLatin1, Bool isPng, List<String> warnings) {
+    var validImage = false
+    if (isPng) {
+        if (rawLatin1.length() >= 33 && hasPngSignature(rawLatin1) && rawLatin1.substring(12, 16) == "IHDR") {
+            var w = readBeInt32(rawLatin1, 16)
+            var h = readBeInt32(rawLatin1, 20)
+            if (w > 0 && h > 0 && rawLatin1.contains("IEND")) {
+                validImage = true
+            }
+        }
+    } else {
+        if (rawLatin1.length() >= 20 && hasJpegSignature(rawLatin1) && hasJpegEoiMarker(rawLatin1)) {
+            validImage = true
+        }
+    }
+    if (!validImage) {
+        throw "INVALID_FILE: imagem corrompida ou ilegivel"
+    }
+
+    var allLines: List<String> = listOf()
+    if (isPng) {
+        for (var cl in extractPngTextChunks(rawLatin1)) {
+            allLines.add(cl)
+        }
+    }
+    var ext = ".jpg"
+    if (isPng) {
+        ext = ".png"
+    }
+    var ocrLines = runWindowsNativeOcr(cleanB64, -1, -1, ext, warnings)
+    for (var ol in ocrLines) {
+        if (!allLines.contains(ol)) {
+            allLines.add(ol)
+        }
+    }
+
+    var out: List<IndexedLine> = listOf()
+    var row = 0
+    for (var l in allLines) {
+        row = row + 1
+        out.add(IndexedLine(1, row, l))
+    }
+    return out
+}
+
+// =========================================================
+// Normalizacao BR, Dinheiro em Centavos, Parcelas e Classificacao
+// =========================================================
+
+String normalizeOcrText(String line) {
+    var norm = line.trim().replaceAll("\\s+", " ")
+    // Corrige datas quebradas pelo OCR: "12/1 1" -> "12/11", "1 4/11" -> "14/11"
+    norm = norm.replaceAll("\\b([0-3])\\s+([0-9])\\s*/\\s*([0-1]?[0-9])\\b", "$1$2/$3")
+    norm = norm.replaceAll("\\b([0-3]?[0-9])\\s*/\\s*([0-1])\\s+([0-9])\\b", "$1/$2$3")
+    // Corrige espacos em decimais/milhares: "841 ,70" -> "841,70", "2. 579,10" -> "2.579,10"
+    norm = norm.replaceAll("([0-9])\\s+([,.])\\s*([0-9])", "$1$2$3")
+    norm = norm.replaceAll("([0-9])([,.])\\s+([0-9])", "$1$2$3")
+    return norm
+}
+
+Long? parseBrlMinor(String raw) {
     var s = raw.trim().replace("R$", "").replace(" ", "")
     var negative = false
     if (s.endsWith("-")) {
@@ -225,15 +1310,35 @@ Double? parseBrlAmount(String raw) {
     if (s.startsWith("-")) {
         negative = true
         s = s.substring(1, s.length())
+    } else if (s.startsWith("+")) {
+        s = s.substring(1, s.length())
     }
     if (!s.matches("[0-9]{1,3}(\\.[0-9]{3})*,[0-9]{2}|[0-9]+,[0-9]{2}")) {
         return null
     }
-    var v = s.replace(".", "").replace(",", ".").toDouble()
-    if (negative) {
-        return 0.0 - v
+    var noDots = s.replace(".", "")
+    var comma = noDots.indexOf(",")
+    if (comma < 0) {
+        return null
     }
-    return v
+    var wholeStr = noDots.substring(0, comma)
+    var fracStr = noDots.substring(comma + 1)
+    var whole = wholeStr.toLong()
+    var frac = fracStr.toLong()
+    var totalMinor = whole * 100 + frac
+    if (negative) {
+        return 0 - totalMinor
+    }
+    return totalMinor
+}
+
+// Wrapper Double? para manter compatibilidade com assinaturas antigas.
+Double? parseBrlAmount(String raw) {
+    var minor = parseBrlMinor(raw)
+    if (minor == null) {
+        return null
+    }
+    return centsToReais(minor)
 }
 
 Bool isInvoiceDate(String s) {
@@ -250,276 +1355,840 @@ Bool isInvoiceDate(String s) {
     return false
 }
 
+String? extractLeadingDate(String line) {
+    var t = line.trim()
+    var sp = t.indexOf(" ")
+    if (sp > 0) {
+        var first = t.substring(0, sp)
+        if (isInvoiceDate(first)) {
+            return first
+        }
+    }
+    return null
+}
+
+String? extractInstallmentToken(String desc) {
+    for (var tok in desc.split(" ")) {
+        var clean = tok.trim().replace("(", "").replace(")", "")
+        if (clean.matches("[0-9]{1,2}/[0-9]{1,2}")) {
+            var slash = clean.indexOf("/")
+            var cur = clean.substring(0, slash).toInt()
+            var total = clean.substring(slash + 1).toInt()
+            if (cur >= 1 && total >= cur && total >= 2 && total <= 48) {
+                return clean
+            }
+        }
+    }
+    return null
+}
+
 Bool isIgnoredInvoiceLine(String line) {
     var lower = line.toLowerCase()
-    return lower.contains("total da fatura") || lower.contains("pagamento recebido") || lower.contains("limite de credito") || lower.contains("limite de crédito") || lower.contains("vencimento") || lower.contains("saldo anterior") || lower.contains("pagina ") || lower.contains("página ") || lower.contains("subtotal") || lower.contains("fechamento") || lower.contains("data de fechamento") || lower.contains("melhor dia") || lower.contains("resumo da fatura") || lower.contains("extrato de")
+    return lower.contains("limite de credito") || lower.contains("limite de crédito") || lower.contains("vencimento") || lower.contains("saldo anterior") || lower.contains("saldo final") || lower.contains("pagina ") || lower.contains("página ") || lower.contains("data de fechamento") || lower.contains("melhor dia") || lower.contains("resumo da fatura") || lower.contains("extrato de") || lower.contains("renda profissional") || lower.contains("entradas") || lower.contains("necessidades e despesas") || lower.contains("poupanca ou dividas") || lower.contains("poupança ou dívidas") || lower.contains("lazer e desejos")
+}
+
+Bool isTotalHeaderLine(String line) {
+    var lower = line.toLowerCase()
+    return lower.contains("total da fatura") || lower.contains("total a pagar") || lower.contains("total de saidas") || lower.contains("total de saídas") || lower.contains("total dos gastos") || lower.contains("total geral") || lower.startsWith("total ") || lower.startsWith("total:") || lower.contains("subtotal")
+}
+
+Bool isInternalTransferLine(String line) {
+    var lower = line.toLowerCase()
+    return lower.contains("viracrédito") || lower.contains("viracredito") || lower.contains("resgate") || lower.contains("aplicacao") || lower.contains("aplicação") || lower.contains("crédito para pix") || lower.contains("credito para pix") || lower.contains("movimentacao interna") || lower.contains("movimentação interna")
+}
+
+Bool isBillPaymentLine(String desc) {
+    var lower = desc.toLowerCase()
+    return lower.contains("pagamento de fatura") || lower.contains("pagamento fatura") || lower.contains("pagto fatura") || lower.contains("fatura cartao") || lower.contains("fatura cartão") || lower.contains("fatura neon") || lower == "fatura" || lower.contains("pagamento recebido")
+}
+
+Bool isFeeOrInterestLine(String desc) {
+    var lower = desc.toLowerCase()
+    return lower.contains("iof ") || lower == "iof" || lower.contains("anuidade") || lower.contains("juros") || lower.contains("encargos") || lower.contains("tarifa") || lower.contains("multa")
+}
+
+Bool isKnownMerchantOrUtility(String lower) {
+    var words = listOf(
+        "uber", "99", "taxi", "táxi", "onibus", "ônibus", "metro", "metrô",
+        "g4 bebidas", "bebidas", "restaurante", "food", "ifood", "lanche", "padaria", "almoco", "almoço", "jantar", "cafe", "café", "pizza", "burger", "denfer",
+        "mercado", "supermercado", "hortifruti", "distribuidora", "sendas", "atacad", "assai", "assaí", "acougue", "açougue", "sacolao", "sacolão", "parada 97",
+        "farmacia", "farmácia", "drogaria", "drogasil", "raia", "remedio", "remédio",
+        "aluguel", "condominio", "condomínio", "energia", "luz", "agua", "água", "internet", "iptu",
+        "faculdade", "curso", "escola", "mensalidade", "livro",
+        "netflix", "spotify", "amazon", "disney", "youtube", "streaming",
+        "gasolina", "combustivel", "combustível", "posto", "ipva", "estacionamento"
+    )
+    for (var w in words) {
+        if (lower.contains(w)) {
+            return true
+        }
+    }
+    return false
+}
+
+ClassificationMatch classifyTransactionEvidence(String descRaw, String kind) {
+    var lower = descRaw.toLowerCase()
+    if (kind == "PAYMENT") {
+        return ClassificationMatch("OTHER", "BILL_PAYMENT_NEEDS_REVIEW", 0.55, "NEEDS_REVIEW")
+    }
+    if (kind == "FEE" || kind == "INTEREST") {
+        return ClassificationMatch("OTHER", "FEE_OR_INTEREST", 0.85, "CONFIRMED")
+    }
+    if (kind == "REFUND") {
+        return ClassificationMatch("OTHER", "CREDIT_OR_REFUND", 0.85, "CONFIRMED")
+    }
+    // Regra explicita anti-alucinacao: Pix para pessoa fisica sem estabelecimento nao deve ser adivinhado.
+    if ((lower.contains("pix enviado") || lower.contains("pix para") || lower.startsWith("pix ")) && !isKnownMerchantOrUtility(lower)) {
+        return ClassificationMatch("OTHER", "PIX_PF_NEEDS_REVIEW", 0.50, "NEEDS_REVIEW")
+    }
+
+    if (lower.contains("aluguel") || lower.contains("condominio") || lower.contains("condomínio") || lower.contains("energia") || lower.contains("luz") || lower.contains("agua") || lower.contains("água") || lower.contains("internet") || lower.contains("iptu")) {
+        return ClassificationMatch("HOUSING", "MERCHANT_KEYWORD", 0.92, "CONFIRMED")
+    }
+    if (lower.contains("faculdade") || lower.contains("curso") || lower.contains("escola") || lower.contains("livro") || lower.contains("educa") || lower.contains("mensalidade")) {
+        return ClassificationMatch("EDUCATION", "MERCHANT_KEYWORD", 0.92, "CONFIRMED")
+    }
+    if (lower.contains("distribuidora") || lower.contains("supermercado") || lower.contains("mercado") || lower.contains("hortifruti") || lower.contains("feira") || lower.contains("acougue") || lower.contains("açougue") || lower.contains("sacolao") || lower.contains("sacolão") || lower.contains("sendas") || lower.contains("parada 97") || lower.contains("atacad") || lower.contains("assaí") || lower.contains("assai")) {
+        return ClassificationMatch("GROCERIES", "MERCHANT_KEYWORD", 0.92, "CONFIRMED")
+    }
+    if (lower.contains("padaria") || lower.contains("almoco") || lower.contains("almoço") || lower.contains("restaurante") || lower.contains("lanche") || lower.contains("ifood") || lower.contains("jantar") || lower.contains("cafe") || lower.contains("café") || lower.contains("comida") || lower.contains("food") || lower.contains("burger") || lower.contains("pizza") || lower.contains("denfer")) {
+        return ClassificationMatch("FOOD", "MERCHANT_KEYWORD", 0.92, "CONFIRMED")
+    }
+    if (lower.contains("farmacia") || lower.contains("farmácia") || lower.contains("drogaria") || lower.contains("drogasil") || lower.contains("remedio") || lower.contains("remédio") || lower.contains("medicamento") || lower.contains("raia")) {
+        return ClassificationMatch("PHARMA", "MERCHANT_KEYWORD", 0.92, "CONFIRMED")
+    }
+    if (lower.contains("medico") || lower.contains("médico") || lower.contains("consulta") || lower.contains("exame") || lower.contains("hospital") || lower.contains("dentista") || lower.contains("saude") || lower.contains("saúde") || lower.contains("terapia") || lower.contains("psicolog")) {
+        return ClassificationMatch("HEALTH", "MERCHANT_KEYWORD", 0.90, "CONFIRMED")
+    }
+    if (lower.contains("uber") || lower.contains("99") || lower.contains("taxi") || lower.contains("táxi") || lower.contains("onibus") || lower.contains("ônibus") || lower.contains("metro") || lower.contains("metrô") || lower.contains("passagem") || lower.contains("transporte")) {
+        return ClassificationMatch("TRANSPORT", "MERCHANT_KEYWORD", 0.95, "CONFIRMED")
+    }
+    if (lower.contains("gasolina") || lower.contains("combustivel") || lower.contains("combustível") || lower.contains("posto") || lower.contains("ipva") || lower.contains("oficina") || lower.contains("mecanico") || lower.contains("mecânico") || lower.contains("carro") || lower.contains("estacionamento") || lower.contains("pedagio") || lower.contains("pedágio")) {
+        return ClassificationMatch("AUTO", "MERCHANT_KEYWORD", 0.90, "CONFIRMED")
+    }
+    if (lower.contains("g4 bebidas") || lower.contains("bebidas") || lower.contains("cerveja") || lower.contains("cinema") || lower.contains("show") || lower.contains("ingresso") || lower.contains("bar") || lower.contains("balada") || lower.contains("festa") || lower.contains("lazer") || lower.contains("viagem") || lower.contains("hotel") || lower.contains("passeio")) {
+        return ClassificationMatch("LEISURE", "MERCHANT_KEYWORD", 0.90, "CONFIRMED")
+    }
+    if (lower.contains("netflix") || lower.contains("spotify") || lower.contains("amazon") || lower.contains("streaming") || lower.contains("assinatura") || lower.contains("apple") || lower.contains("disney") || lower.contains("hbo") || lower.contains("youtube")) {
+        return ClassificationMatch("SUBSCRIPTIONS", "MERCHANT_KEYWORD", 0.92, "CONFIRMED")
+    }
+    if (lower.contains("shopping") || lower.contains("roupa") || lower.contains("loja") || lower.contains("zara") || lower.contains("shopee") || lower.contains("shein") || lower.contains("calcado") || lower.contains("calçado")) {
+        return ClassificationMatch("SHOPPING", "MERCHANT_KEYWORD", 0.88, "CONFIRMED")
+    }
+    return ClassificationMatch("OTHER", "UNCLASSIFIED_NEEDS_REVIEW", 0.45, "NEEDS_REVIEW")
 }
 
 String inferCategory(String desc) {
-    var lower = desc.toLowerCase()
-    if (lower.contains("aluguel") || lower.contains("condominio") || lower.contains("condomínio") || lower.contains("moradia") || lower.contains("energia") || lower.contains("luz") || lower.contains("agua") || lower.contains("água") || lower.contains("internet") || lower.contains("iptu")) {
-        return "HOUSING"
-    }
-    if (lower.contains("faculdade") || lower.contains("curso") || lower.contains("escola") || lower.contains("livro") || lower.contains("educa") || lower.contains("mensalidade")) {
-        return "EDUCATION"
-    }
-    if (lower.contains("mercado") || lower.contains("supermercado") || lower.contains("hortifruti") || lower.contains("feira") || lower.contains("acougue") || lower.contains("açougue") || lower.contains("sacolao") || lower.contains("sacolão")) {
-        return "GROCERIES"
-    }
-    if (lower.contains("padaria") || lower.contains("almoco") || lower.contains("almoço") || lower.contains("restaurante") || lower.contains("lanche") || lower.contains("ifood") || lower.contains("jantar") || lower.contains("cafe") || lower.contains("café") || lower.contains("comida") || lower.contains("food") || lower.contains("burger") || lower.contains("pizza")) {
-        return "FOOD"
-    }
-    if (lower.contains("farmacia") || lower.contains("farmácia") || lower.contains("drogaria") || lower.contains("drogasil") || lower.contains("remedio") || lower.contains("remédio") || lower.contains("medicamento") || lower.contains("raia")) {
-        return "PHARMA"
-    }
-    if (lower.contains("medico") || lower.contains("médico") || lower.contains("consulta") || lower.contains("exame") || lower.contains("hospital") || lower.contains("dentista") || lower.contains("saude") || lower.contains("saúde") || lower.contains("terapia") || lower.contains("psicolog")) {
-        return "HEALTH"
-    }
-    if (lower.contains("uber") || lower.contains("99") || lower.contains("taxi") || lower.contains("táxi") || lower.contains("onibus") || lower.contains("ônibus") || lower.contains("metro") || lower.contains("metrô") || lower.contains("passagem") || lower.contains("transporte")) {
-        return "TRANSPORT"
-    }
-    if (lower.contains("gasolina") || lower.contains("combustivel") || lower.contains("combustível") || lower.contains("posto") || lower.contains("ipva") || lower.contains("oficina") || lower.contains("mecanico") || lower.contains("mecânico") || lower.contains("carro") || lower.contains("auto")) {
-        return "AUTO"
-    }
-    if (lower.contains("cinema") || lower.contains("show") || lower.contains("ingresso") || lower.contains("bar") || lower.contains("balada") || lower.contains("festa") || lower.contains("lazer") || lower.contains("viagem") || lower.contains("hotel") || lower.contains("passeio")) {
-        return "LEISURE"
-    }
-    if (lower.contains("netflix") || lower.contains("spotify") || lower.contains("amazon") || lower.contains("streaming") || lower.contains("assinatura") || lower.contains("apple") || lower.contains("disney") || lower.contains("hbo") || lower.contains("youtube")) {
-        return "SUBSCRIPTIONS"
-    }
-    if (lower.contains("shopping") || lower.contains("roupa") || lower.contains("loja") || lower.contains("zara") || lower.contains("shopee") || lower.contains("shein") || lower.contains("livre") || lower.contains("calcado") || lower.contains("calçado")) {
-        return "SHOPPING"
-    }
-    return "OTHER"
+    return classifyTransactionEvidence(desc, "TRANSACTION").category()
 }
 
-List<InvoiceTransaction> canonicalInvoiceTransactions() {
-    var list: List<InvoiceTransaction> = listOf()
-    list.add(InvoiceTransaction("10/11", "Aluguel", 1245.98, "HOUSING"))
-    list.add(InvoiceTransaction("10/11", "Faculdade", 420.50, "EDUCATION"))
-    list.add(InvoiceTransaction("10/11", "Hortifruti", 100.00, "GROCERIES"))
-    list.add(InvoiceTransaction("10/11", "Padaria", 80.72, "FOOD"))
-    return list
-}
-
-// Uma linha "DD/MM[/AAAA] DESCRICAO VALOR" vira transacao; null = nao e linha de lancamento.
-InvoiceTransaction? parseTransactionLine(String line) {
-    var t = line.trim().replaceAll("\\s+", " ")
-    var firstSpace = t.indexOf(" ")
-    var lastSpace = t.lastIndexOf(" ")
-    if (firstSpace <= 0 || lastSpace <= firstSpace) {
-        return null
-    }
-    var date = t.substring(0, firstSpace)
-    if (!isInvoiceDate(date)) {
-        return null
-    }
-    var valueText = t.substring(lastSpace + 1, t.length())
-    var desc = t.substring(firstSpace + 1, lastSpace).trim()
-    // "R$ 12,34": o valor ficou em dois tokens
-    if (desc.endsWith("R$")) {
-        desc = desc.substring(0, desc.length() - 2).trim()
-    }
-    var amount = parseBrlAmount(valueText)
-    if (desc.length() == 0) {
-        return null
-    }
-    if (amount != null) {
-        return InvoiceTransaction(date, desc, amount, inferCategory(desc))
-    }
-    return null
-}
-
-InvoiceTransaction? parseFlexibleLine(String line) {
-    if (isIgnoredInvoiceLine(line)) {
-        return null
-    }
-    var tx = parseTransactionLine(line)
-    if (tx != null) {
-        return tx
-    }
-    var t = line.trim()
-    if (t.length() == 0) {
-        return null
-    }
-    var colon = t.indexOf(":")
-    if (colon > 0) {
-        var d = t.substring(0, colon).trim()
-        var valStr = t.substring(colon + 1).trim()
-        var amt = parseBrlAmount(valStr)
-        if (amt != null && amt > 0.0 && d.length() > 0 && !isIgnoredInvoiceLine(d)) {
-            return InvoiceTransaction("14/11", d, amt, inferCategory(d))
+String normalizeDescriptionText(String raw) {
+    var s = raw.trim()
+    var prefixes = listOf("PIX enviado para ", "Pix enviado para ", "Pix crédito ", "Pix credito ", "PIX ", "Pix ")
+    for (var p in prefixes) {
+        if (s.startsWith(p)) {
+            s = s.substring(p.length()).trim()
         }
     }
-    var lastSpace = t.lastIndexOf(" ")
-    if (lastSpace > 0) {
-        var d = t.substring(0, lastSpace).trim()
-        if (d.endsWith("R$")) {
-            d = d.substring(0, d.length() - 2).trim()
-        }
-        var valStr = t.substring(lastSpace + 1).trim()
-        var amt = parseBrlAmount(valStr)
-        if (amt != null && amt > 0.0 && d.length() > 0 && !isIgnoredInvoiceLine(d) && !isInvoiceDate(d)) {
-            return InvoiceTransaction("14/11", d, amt, inferCategory(d))
-        }
+    if (s.length() > 60) {
+        return s.substring(0, 60).trim()
     }
-    return null
+    return s
 }
 
-// Linhas -> transacoes. Quando o PDF posiciona cada coluna com Td (data, descricao e valor em
-// linhas separadas), junta 3 linhas consecutivas que comecam por uma data.
-List<InvoiceTransaction> transactionsFromLines(List<String> lines) {
-    var out: List<InvoiceTransaction> = listOf()
+String clipSnippet(String s) {
+    var tr = s.trim()
+    if (tr.length() > 160) {
+        return tr.substring(0, 160)
+    }
+    return tr
+}
+
+ParsedLineOutcome analyzeIndexedLine(IndexedLine line, String documentId, Int txSeq, String fallbackDate) {
+    var norm = normalizeOcrText(line.text())
+    if (norm == "") {
+        return ParsedLineOutcome(null, null, null, false)
+    }
+    if (isInternalTransferLine(norm)) {
+        return ParsedLineOutcome(null, null, "Movimentacao interna ignorada: " + clipSnippet(norm), true)
+    }
+
+    var lastSpace = norm.lastIndexOf(" ")
+    if (lastSpace <= 0) {
+        return ParsedLineOutcome(null, null, null, false)
+    }
+    var valToken = norm.substring(lastSpace + 1).trim()
+    var minor = parseBrlMinor(valToken)
+    if (minor == null) {
+        return ParsedLineOutcome(null, null, null, false)
+    }
+
+    var left = norm.substring(0, lastSpace).trim()
+    if (left.endsWith("R$")) {
+        left = left.substring(0, left.length() - 2).trim()
+    }
+    if (left.endsWith(":") || left.endsWith("-")) {
+        left = left.substring(0, left.length() - 1).trim()
+    }
+
+    // Linha de Total / Subtotal: capturada como CanonicalTotal para reconciliacao (nunca duplicada como gasto)
+    if (isTotalHeaderLine(left) || isTotalHeaderLine(norm)) {
+        if (minor > 0) {
+            return ParsedLineOutcome(null, CanonicalTotal(left, minor, line.page(), line.row()), null, false)
+        }
+        return ParsedLineOutcome(null, null, null, false)
+    }
+
+    if (isIgnoredInvoiceLine(left) || isIgnoredInvoiceLine(norm)) {
+        return ParsedLineOutcome(null, null, null, false)
+    }
+
+    var txDate = fallbackDate
+    var descRaw = left
+    var leadDate = extractLeadingDate(left)
+    if (leadDate != null) {
+        txDate = leadDate
+        descRaw = left.substring(leadDate.length()).trim()
+    }
+    if (descRaw == "" || isInvoiceDate(descRaw)) {
+        return ParsedLineOutcome(null, null, null, false)
+    }
+    if (minor == 0) {
+        return ParsedLineOutcome(null, null, null, false)
+    }
+
+    var kind = "TRANSACTION"
+    var direction = "DEBIT"
+    if (minor < 0 || descRaw.toLowerCase().contains("estorno")) {
+        kind = "REFUND"
+        direction = "CREDIT"
+    } else if (isBillPaymentLine(descRaw)) {
+        kind = "PAYMENT"
+    } else if (isFeeOrInterestLine(descRaw)) {
+        kind = "FEE"
+    }
+
+    var match = classifyTransactionEvidence(descRaw, kind)
+    var absMinor = minor
+    if (absMinor < 0) {
+        absMinor = 0 - absMinor
+    }
+    var descNorm = normalizeDescriptionText(descRaw)
+    if (descNorm == "") {
+        descNorm = descRaw
+    }
+    var installment = extractInstallmentToken(descRaw)
+    var txId = documentId + "_tx_" + txSeq
+    var evidence = CanonicalEvidence(line.page(), line.row(), clipSnippet(norm), null)
+    var cTx = CanonicalTransaction(
+        txId,
+        documentId,
+        txDate,
+        descRaw,
+        descNorm,
+        absMinor,
+        "BRL",
+        direction,
+        kind,
+        installment,
+        match.category(),
+        match.rule(),
+        match.confidence(),
+        evidence,
+        match.reviewStatus()
+    )
+    return ParsedLineOutcome(cTx, null, null, false)
+}
+
+// =========================================================
+// Engine Principal do Pipeline (Validacao -> Extracao -> Reconciliacao -> Estado)
+// =========================================================
+
+ImportReview buildImportReview(String documentId, String sha256, String sourceType, List<IndexedLine> rawLines, List<String> warnings) {
+    var canonicalTxs: List<CanonicalTransaction> = listOf()
+    var totals: List<CanonicalTotal> = listOf()
+    var pendingDate = "14/11"
+    var seq = 0
+    var internalCount = 0
+
     var i = 0
-    while (i < lines.size()) {
-        var tx = parseFlexibleLine(lines.get(i))
-        if (tx != null) {
-            out.add(tx)
+    while (i < rawLines.size) {
+        var line = rawLines.get(i)
+        var norm = normalizeOcrText(line.text())
+        if (isInvoiceDate(norm)) {
+            if (norm.length() >= 5) {
+                pendingDate = norm.substring(0, 5)
+            } else {
+                pendingDate = norm
+            }
             i = i + 1
-        } else if (i + 2 < lines.size() && isInvoiceDate(lines.get(i).trim())) {
-            var joined = parseFlexibleLine(lines.get(i) + " " + lines.get(i + 1) + " " + lines.get(i + 2))
-            if (joined != null) {
-                out.add(joined)
-                i = i + 3
+        } else {
+            var outcome = analyzeIndexedLine(line, documentId, seq + 1, pendingDate)
+            if (outcome.ignoredInternal()) {
+                internalCount = internalCount + 1
+                i = i + 1
+            } else if (outcome.total() != null) {
+                var tot = outcome.total()
+                if (tot != null) {
+                    totals.add(tot)
+                }
+                i = i + 1
+            } else if (outcome.tx() != null) {
+                var ctx = outcome.tx()
+                if (ctx != null) {
+                    seq = seq + 1
+                    canonicalTxs.add(ctx)
+                }
+                i = i + 1
+            } else if (i + 2 < rawLines.size && isInvoiceDate(normalizeOcrText(rawLines.get(i).text()))) {
+                var joinedText = normalizeOcrText(rawLines.get(i).text()) + " " + normalizeOcrText(rawLines.get(i + 1).text()) + " " + normalizeOcrText(rawLines.get(i + 2).text())
+                var joinedOutcome = analyzeIndexedLine(IndexedLine(line.page(), line.row(), joinedText), documentId, seq + 1, pendingDate)
+                if (joinedOutcome.tx() != null) {
+                    var jtx = joinedOutcome.tx()
+                    if (jtx != null) {
+                        seq = seq + 1
+                        canonicalTxs.add(jtx)
+                    }
+                    i = i + 3
+                } else {
+                    i = i + 1
+                }
+            } else if (i + 1 < rawLines.size && normalizeOcrText(rawLines.get(i + 1).text()).matches("[-+]?\\s*(R\\$\\s*)?[0-9.,]+\\s*-?")) {
+                var joined2 = norm + " " + normalizeOcrText(rawLines.get(i + 1).text())
+                var joinedOutcome2 = analyzeIndexedLine(IndexedLine(line.page(), line.row(), joined2), documentId, seq + 1, pendingDate)
+                if (joinedOutcome2.tx() != null) {
+                    var jtx2 = joinedOutcome2.tx()
+                    if (jtx2 != null) {
+                        seq = seq + 1
+                        canonicalTxs.add(jtx2)
+                    }
+                    i = i + 2
+                } else {
+                    i = i + 1
+                }
             } else {
                 i = i + 1
             }
+        }
+    }
+
+    if (internalCount > 0) {
+        warnings.add("INTERNAL_TRANSFERS_FILTERED: " + internalCount + " movimentacao(oes) interna(s) desconsiderada(s)")
+    }
+
+    // Reconciliacao matematica exata em centavos (Long)
+    var debitSumMinor: Long = 0
+    var needsReviewCount = 0
+    for (var tx in canonicalTxs) {
+        var m = tx.amountMinor()
+        if (m != null) {
+            if (tx.direction() == "CREDIT") {
+                debitSumMinor = debitSumMinor - m
+            } else {
+                debitSumMinor = debitSumMinor + m
+            }
+        }
+        if (tx.reviewStatus() == "NEEDS_REVIEW") {
+            needsReviewCount = needsReviewCount + 1
+        }
+    }
+    if (needsReviewCount > 0) {
+        warnings.add("NEEDS_REVIEW: " + needsReviewCount + " lancamento(s) precisam da sua confirmacao antes de categorizar")
+    }
+
+    var reconciled = false
+    if (totals.size > 0) {
+        var declared = totals.get(totals.size - 1)
+        if (debitSumMinor == declared.amountMinor()) {
+            reconciled = true
         } else {
-            i = i + 1
+            reconciled = false
+            warnings.add("RECONCILIATION_FAILED: soma extraida (" + formatBrl(debitSumMinor) + ") diverge do total declarado (" + formatBrl(declared.amountMinor()) + ")")
+        }
+    } else if (canonicalTxs.size > 0) {
+        reconciled = true
+        warnings.add("TOTAL_LINE_ABSENT: total apurado pela soma dos " + canonicalTxs.size + " lancamentos (" + formatBrl(debitSumMinor) + ")")
+    }
+
+    var finalSource = sourceType
+    var status = "EM_REVISAO"
+    if (canonicalTxs.size == 0) {
+        if (sourceType == "PDF" && rawLines.isEmpty()) {
+            finalSource = "PDF_SCANNED"
+            warnings.add("PARSE_AMBIGUOUS: PDF sem camada de texto legivel (escaneado)")
+        } else {
+            warnings.add("PARSE_AMBIGUOUS: nenhum lancamento estruturado identificado com seguranca")
+        }
+    } else if (sourceType == "PDF") {
+        finalSource = "PDF_TEXT"
+    }
+
+    return ImportReview(
+        documentId,
+        sha256,
+        finalSource,
+        status,
+        canonicalTxs.size,
+        warnings,
+        totals,
+        reconciled,
+        false,
+        canonicalTxs
+    )
+}
+
+String detectStatementPeriod(List<CanonicalTransaction> txs) {
+    for (var tx in txs) {
+        var d = tx.date()
+        if (d != null && d.contains("/")) {
+            var parts = d.split("/")
+            if (parts.size >= 2) {
+                var mm = parts[1].trim()
+                if (mm.length() == 1) {
+                    mm = "0" + mm
+                }
+                if (parts.size >= 3 && parts[2].trim().length() == 4) {
+                    return parts[2].trim() + "-" + mm
+                }
+                return localTodayIso().substring(0, 4) + "-" + mm
+            }
+        }
+    }
+    return localTodayIso().substring(0, 7)
+}
+
+DocumentUploadResponse ingestFinancialDocument(String userId, String fileBase64, String? rawFilename, Bool strictBinaryOnly, Bool rejectDuplicate) {
+    var filename = sanitizeAndValidateFilename(rawFilename)
+    var ext = declaredExtension(filename)
+    var clean = cleanBase64Input(fileBase64)
+    if (clean == "") {
+        throw "INVALID_FILE: arquivo vazio"
+    }
+
+    var rawLatin1 = ""
+    try {
+        rawLatin1 = pdfBytesAsLatin1(clean)
+    } catch (String e) {
+        throw "INVALID_FILE: base64 invalido"
+    } catch (Exception e) {
+        throw "INVALID_FILE: base64 invalido"
+    }
+
+    var detected = detectAndValidateFormat(rawLatin1, ext, strictBinaryOnly)
+    var sha256 = sha256HexOfBase64Bytes(clean)
+    var dupKey = userId + ":" + sha256
+    var existingDocId = InvoiceRegistry.userShaToDoc.get(dupKey)
+    if (existingDocId != null && rejectDuplicate) {
+        throw "DUPLICATE_DOCUMENT: este documento ja foi enviado antes (" + existingDocId + ")"
+    }
+
+    var documentId = "doc_" + sha256.substring(0, 16)
+    if (existingDocId != null) {
+        documentId = existingDocId
+    }
+
+    // Estado 1 e 2: RECEBIDO -> EM_PROCESSAMENTO
+    InvoiceRegistry.docs.put(documentId, json.encode(CanonicalDocument(documentId, userId, sha256, detected, null, "BRL", "EM_PROCESSAMENTO")))
+
+    var warnings: List<String> = listOf()
+    var indexedLines: List<IndexedLine> = listOf()
+    var streamsCount = 1
+
+    try {
+        if (detected == "PDF") {
+            indexedLines = extractPdfIndexedLines(clean, rawLatin1, warnings)
+        } else if (detected == "DOCX") {
+            indexedLines = extractDocxIndexedLines(clean, rawLatin1)
+        } else if (detected == "IMAGE_PNG") {
+            indexedLines = extractImageIndexedLines(clean, rawLatin1, true, warnings)
+        } else if (detected == "IMAGE_JPEG") {
+            indexedLines = extractImageIndexedLines(clean, rawLatin1, false, warnings)
+        } else {
+            var row = 0
+            for (var l in rawLatin1.split("\n")) {
+                var tr = l.trim()
+                if (tr != "" && !tr.contains("\u0000")) {
+                    row = row + 1
+                    indexedLines.add(IndexedLine(1, row, tr))
+                }
+            }
+        }
+    } catch (String se) {
+        InvoiceRegistry.docs.put(documentId, json.encode(CanonicalDocument(documentId, userId, sha256, detected, null, "BRL", "FALHA_EXTRACAO")))
+        throw se
+    }
+
+    var review = buildImportReview(documentId, sha256, detected, indexedLines, warnings)
+    var period = detectStatementPeriod(review.transactions())
+    var finalDoc = CanonicalDocument(documentId, userId, sha256, review.sourceType(), period, "BRL", review.status())
+
+    InvoiceRegistry.docs.put(documentId, json.encode(finalDoc))
+    InvoiceRegistry.reviews.put(documentId, json.encode(review))
+    InvoiceRegistry.userShaToDoc.put(dupKey, documentId)
+
+    var fullText = ""
+    for (var il in indexedLines) {
+        fullText = fullText + il.text() + "\n"
+    }
+    InvoiceRegistry.texts.put(documentId, fullText)
+
+    return DocumentUploadResponse(documentId, sha256, review.sourceType(), review.status(), existingDocId != null, review)
+}
+
+List<InvoiceTransaction> canonicalListToInvoiceTxs(List<CanonicalTransaction> canonical) {
+    var out: List<InvoiceTransaction> = listOf()
+    for (var ctx in canonical) {
+        var minor = ctx.amountMinor()
+        if (minor != null && minor > 0 && ctx.direction() != "CREDIT") {
+            var finalDate = "14/11"
+            var rawDate = ctx.date()
+            if (rawDate != null && rawDate != "") {
+                finalDate = rawDate
+            }
+            var finalDesc = ctx.descriptionRaw()
+            var normDesc = ctx.descriptionNormalized()
+            if (normDesc != null && normDesc != "") {
+                finalDesc = normDesc
+            }
+            var finalCat = "OTHER"
+            var rawCat = ctx.category()
+            if (rawCat != null && rawCat != "") {
+                finalCat = rawCat
+            }
+            out.add(InvoiceTransaction(finalDate, finalDesc, centsToReais(minor), finalCat))
         }
     }
     return out
 }
 
-InvoiceResult parsePdfContent(String clean, String pdf) {
-    var lines: List<String> = listOf()
-    var streams = 0
-    var pos = 0
-    var going = true
-    while (going) {
-        var idx = pdf.indexOf("stream", pos)
-        if (idx < 0) {
-            going = false
-        } else if (idx >= 3 && pdf.substring(idx - 3, idx) == "end") {
-            pos = idx + 6
-        } else {
-            var start = idx + 6
-            if (start < pdf.length() && pdf.charAt(start) == 13) {
-                start = start + 1
-            }
-            if (start < pdf.length() && pdf.charAt(start) == 10) {
-                start = start + 1
-            }
-            var end = pdf.indexOf("endstream", start)
-            if (end < 0) {
-                going = false
-            } else {
-                var objStart = pdf.lastIndexOf(" obj", idx)
-                var dict = ""
-                if (objStart >= 0) {
-                    dict = pdf.substring(objStart, idx)
-                }
-                var skip = dict.contains("/Image") || dict.contains("/FontFile") || dict.contains("/Length1") || dict.contains("/XRef") || dict.contains("/ObjStm")
-                if (!skip) {
-                    var content = ""
-                    if (dict.contains("/FlateDecode")) {
-                        var inflated = ""
-                        var corrupt = false
-                        try {
-                            inflated = inflateRange(clean, pdf, start, end - start)
-                        } catch (Exception e) {
-                            corrupt = true
-                        }
-                        if (corrupt) {
-                            throw "PDF corrompido"
-                        }
-                        content = inflated
-                    } else if (!dict.contains("/Filter")) {
-                        content = pdf.substring(start, end)
-                    }
-                    if (content.contains("BT")) {
-                        streams = streams + 1
-                        for (var l in contentLines(content)) {
-                            lines.add(l)
-                        }
-                    }
-                }
-                pos = end + 9
-            }
-        }
-    }
-    var text = ""
-    for (var l in lines) {
-        text = text + l + "\n"
-    }
-    var txs = transactionsFromLines(lines)
-    if (txs.size == 0) {
-        var fallbackTxs: List<InvoiceTransaction> = listOf()
-        var fi = 0
-        while (fi < lines.size()) {
-            var l = lines.get(fi).trim()
-            var amt = parseBrlAmount(l)
-            if (amt != null && amt > 0.0 && fi > 0) {
-                var prev = lines.get(fi - 1).trim()
-                if (prev.length() > 2 && !isIgnoredInvoiceLine(prev)) {
-                    fallbackTxs.add(InvoiceTransaction("14/11", prev, amt, inferCategory(prev)))
-                }
-            }
-            fi = fi + 1
-        }
-        if (fallbackTxs.size > 0) {
-            txs = fallbackTxs
-        }
-    }
-    return InvoiceResult(streams, text, txs)
-}
-
-InvoiceResult? parsePdfViaAgent(String clean) {
-    try {
-        var tmpIn = File.createTempFile("neon_in_", ".b64")
-        var tmpOut = File.createTempFile("neon_out_", ".json")
-        var fw = new FileWriter(tmpIn)
-        fw.write(clean)
-        fw.close()
-        var cmd = "python scripts/parse_pdf.py \"" + tmpIn.getAbsolutePath() + "\" \"" + tmpOut.getAbsolutePath() + "\""
-        var proc = Runtime.getRuntime().exec(cmd)
-        proc.waitFor()
-        var out = Files.readString(tmpOut.toPath())
-        tmpIn.delete()
-        tmpOut.delete()
-        if (out != null && out.length() > 0 && out.contains("\"transactions\":")) {
-            return json.decode<InvoiceResult>(out)
-        }
-    } catch (Exception e) {}
-    return null
-}
-
-// API publica (rota e coach): base64 de PDF, DOCX, JPEG ou outro arquivo -> texto + transacoes categorizadas.
+// API publica legada: mantém compatibilidade total com chamadores existentes (100% em KOF).
 InvoiceResult parseInvoicePdf(String b64) {
-    var clean = b64.trim()
-    if (clean.startsWith("data:")) {
-        clean = clean.substring(clean.indexOf(",") + 1, clean.length())
+    var uploaded = ingestFinancialDocument("_legacy_", b64, null, false, false)
+    var rev = uploaded.review()
+    var rawText = InvoiceRegistry.texts.getOrDefault(uploaded.documentId(), "")
+    if (rawText == "") {
+        rawText = "Arquivo de fatura processado"
     }
-    var agentRes = parsePdfViaAgent(clean)
-    if (agentRes != null && agentRes.transactions.size > 0) {
-        return agentRes
+    return InvoiceResult(1, rawText, canonicalListToInvoiceTxs(rev.transactions()))
+}
+
+InvoiceParseResponse parseInvoiceForUser(String userId, String b64, String? filename) {
+    var uploaded = ingestFinancialDocument(userId, b64, filename, false, false)
+    var rev = uploaded.review()
+    var rawText = InvoiceRegistry.texts.getOrDefault(uploaded.documentId(), "")
+    if (rawText == "") {
+        rawText = "Arquivo de fatura processado"
     }
-    var pdf = ""
-    try {
-        pdf = pdfBytesAsLatin1(clean)
-    } catch (String e) {
-        throw "base64 invalido"
-    }
-    if (pdf.startsWith("%PDF-")) {
-        return parsePdfContent(clean, pdf)
-    }
-    var textLines: List<String> = listOf()
-    for (var l in pdf.split("\n")) {
-        var tr = l.trim()
-        if (tr.length() > 0 && !tr.contains("\u0000")) {
-            textLines.add(tr)
+    return InvoiceParseResponse(
+        1,
+        rawText,
+        canonicalListToInvoiceTxs(rev.transactions()),
+        uploaded.documentId(),
+        uploaded.sha256(),
+        uploaded.sourceType(),
+        uploaded.status(),
+        rev.reconciled(),
+        rev.warnings(),
+        rev.totals(),
+        rev.transactions()
+    )
+}
+
+// =========================================================
+// Confirmacao Idempotente em Lote e por Documento
+// =========================================================
+
+List<TransactionOutput> confirmInvoiceItemsWithIdempotency(String userId, List<InvoiceConfirmItem> items, String? documentId) {
+    if (documentId != null && documentId.trim() != "") {
+        var docJson = InvoiceRegistry.docs.get(documentId.trim())
+        if (docJson == null) {
+            throw "PARSE_AMBIGUOUS: documento nao encontrado"
+        }
+        var doc = json.decode<CanonicalDocument>(docJson)
+        if (doc.userId() != userId) {
+            throw "UNAUTHORIZED: voce nao tem permissao para confirmar este documento"
+        }
+        var docKey = userId + ":doc:" + documentId.trim()
+        var alreadyConfirmed = InvoiceRegistry.confirmedDocs.get(docKey)
+        if (alreadyConfirmed != null) {
+            return json.decode<List<TransactionOutput>>(alreadyConfirmed)
         }
     }
-    var txs = transactionsFromLines(textLines)
-    return InvoiceResult(1, "Arquivo de fatura processado", txs)
+
+    var batchKey = userId + ":batch:" + sha256HexOfString(json.encode(items))
+    var alreadyBatch = InvoiceRegistry.confirmedBatches.get(batchKey)
+    if (alreadyBatch != null) {
+        return json.decode<List<TransactionOutput>>(alreadyBatch)
+    }
+
+    var saved = confirmInvoiceItems(userId, items)
+    var savedJson = json.encode(saved)
+    InvoiceRegistry.confirmedBatches.put(batchKey, savedJson)
+
+    if (documentId != null && documentId.trim() != "") {
+        var cleanDocId = documentId.trim()
+        InvoiceRegistry.confirmedDocs.put(userId + ":doc:" + cleanDocId, savedJson)
+        var docJson2 = InvoiceRegistry.docs.get(cleanDocId)
+        var revJson2 = InvoiceRegistry.reviews.get(cleanDocId)
+        if (docJson2 != null && revJson2 != null) {
+            var doc2 = json.decode<CanonicalDocument>(docJson2)
+            var rev2 = json.decode<ImportReview>(revJson2)
+            InvoiceRegistry.docs.put(cleanDocId, json.encode(CanonicalDocument(doc2.id(), doc2.userId(), doc2.sha256(), doc2.sourceType(), doc2.statementPeriod(), doc2.currency(), "IMPORTADO")))
+            InvoiceRegistry.reviews.put(cleanDocId, json.encode(ImportReview(rev2.documentId(), rev2.sha256(), rev2.sourceType(), "IMPORTADO", rev2.extractedCount(), rev2.warnings(), rev2.totals(), rev2.reconciled(), true, rev2.transactions())))
+        }
+    }
+    return saved
+}
+
+// =========================================================
+// GATE 1: Despachante Deterministico de Intencoes (Zero Tokens)
+// =========================================================
+
+String intentParam(IntentRequest req, String key) {
+    var params = req.parameters()
+    if (params != null && params.containsKey(key)) {
+        var paramVal = params.get(key)
+        if (paramVal != null) {
+            return paramVal.trim()
+        }
+    }
+    return ""
+}
+
+String resolveIntentDocumentId(IntentRequest req) {
+    var id = intentParam(req, "documentId")
+    if (id != "") {
+        return id
+    }
+    var atts = req.attachmentIds()
+    if (atts != null && atts.size > 0) {
+        return atts.get(0).trim()
+    }
+    return ""
+}
+
+String resolvePeriodFromIso(String period) {
+    var p = period.trim().toLowerCase()
+    if (p == "week") {
+        return periodStartIso("week")
+    }
+    if (p == "year") {
+        return periodStartIso("year")
+    }
+    if (p == "all") {
+        return "2000-01-01"
+    }
+    if (p.matches("[0-9]{4}-[0-9]{2}")) {
+        return p + "-01T00:00:00Z"
+    }
+    return monthStartIso()
+}
+
+ExpenseQueryResult queryConfirmedExpenses(String userId, String periodRaw, String categoryRaw) {
+    var period = periodRaw.trim()
+    if (period == "") {
+        period = "month"
+    }
+    var categoryName = categoryRaw.trim().toUpperCase()
+    if (categoryName == "") {
+        categoryName = "ALL"
+    }
+    var fromIso = resolvePeriodFromIso(period)
+    var allTxs = findTransactionsByUserIdAndCreatedAtAfter(userId, fromIso)
+    var filtered: List<TransactionEntity> = listOf()
+    var filterMonthPrefix = ""
+    if (period.matches("[0-9]{4}-[0-9]{2}")) {
+        filterMonthPrefix = period
+    }
+
+    for (var tx in allTxs) {
+        var dateMatches = true
+        if (filterMonthPrefix != "") {
+            var ca = tx.createdAt
+            if (ca != null && !ca.startsWith(filterMonthPrefix)) {
+                dateMatches = false
+            }
+        }
+        var catMatches = true
+        if (categoryName != "ALL") {
+            catMatches = categoryText(tx.category) == categoryName
+        }
+        if (dateMatches && catMatches) {
+            filtered.add(tx)
+        }
+    }
+
+    var totalMinor = sumAmountCents(filtered)
+    var outList = filtered.map((t: TransactionEntity) -> transactionEntityToOutput(t))
+    return ExpenseQueryResult(period, categoryName, outList.size, totalMinor, centsToReais(totalMinor), outList)
+}
+
+IntentResult dispatchFinanceIntent(String authUserId, IntentRequest req) {
+    var intent = req.intent().trim().toUpperCase()
+    var corrId = ""
+    var rawCorr = req.correlationId()
+    if (rawCorr != null && rawCorr != "") {
+        corrId = rawCorr
+    }
+    if (corrId == "") {
+        corrId = "corr_" + time.now()
+    }
+
+    // Nunca confiar em userId vindo do body se divergir das claims JWT.
+    var bodyUser = req.userId()
+    if (bodyUser != null && bodyUser.trim() != "" && bodyUser.trim() != authUserId) {
+        return IntentResult("UNAUTHORIZED", intent, corrId, false, "Acesso negado: usuario do token diverge do payload.", null, listOf("UNAUTHORIZED"))
+    }
+
+    if (intent == "IMPORTAR_DOCUMENTO_FINANCEIRO") {
+        var docId = resolveIntentDocumentId(req)
+        if (docId == "") {
+            return IntentResult("ERROR", intent, corrId, false, "Informe o documentId do arquivo enviado.", null, listOf("PARSE_AMBIGUOUS"))
+        }
+        var docJson = InvoiceRegistry.docs.get(docId)
+        var revJson = InvoiceRegistry.reviews.get(docId)
+        if (docJson == null || revJson == null) {
+            return IntentResult("ERROR", intent, corrId, false, "Documento nao encontrado.", null, listOf("PARSE_AMBIGUOUS"))
+        }
+        var doc = json.decode<CanonicalDocument>(docJson)
+        if (doc.userId() != authUserId) {
+            return IntentResult("UNAUTHORIZED", intent, corrId, false, "Acesso negado ao documento.", null, listOf("UNAUTHORIZED"))
+        }
+        var rev = json.decode<ImportReview>(revJson)
+        var sumMinor: Long = 0
+        for (var tx in rev.transactions()) {
+            var m = tx.amountMinor()
+            if (m != null && tx.direction() != "CREDIT") {
+                sumMinor = sumMinor + m
+            }
+        }
+        var msg = "Li o documento e identifiquei " + rev.extractedCount() + " lancamentos somando " + formatBrl(sumMinor) + ". Esse valor total confere antes de detalharmos seus gastos?"
+        return IntentResult(rev.status(), intent, corrId, true, msg, revJson, listOf())
+    }
+
+    if (intent == "CONFIRMAR_IMPORTACAO") {
+        var docId = resolveIntentDocumentId(req)
+        if (docId == "") {
+            return IntentResult("ERROR", intent, corrId, false, "Informe o documentId para confirmar a importacao.", null, listOf("PARSE_AMBIGUOUS"))
+        }
+        var docJson = InvoiceRegistry.docs.get(docId)
+        var revJson = InvoiceRegistry.reviews.get(docId)
+        if (docJson == null || revJson == null) {
+            return IntentResult("ERROR", intent, corrId, false, "Documento nao encontrado.", null, listOf("PARSE_AMBIGUOUS"))
+        }
+        var doc = json.decode<CanonicalDocument>(docJson)
+        if (doc.userId() != authUserId) {
+            return IntentResult("UNAUTHORIZED", intent, corrId, false, "Acesso negado ao documento.", null, listOf("UNAUTHORIZED"))
+        }
+        var rev = json.decode<ImportReview>(revJson)
+        var items: List<InvoiceConfirmItem> = listOf()
+        for (var ctx in rev.transactions()) {
+            var m = ctx.amountMinor()
+            if (m != null && m > 0 && ctx.direction() != "CREDIT") {
+                var finalDesc = ctx.descriptionRaw()
+                var normDesc = ctx.descriptionNormalized()
+                if (normDesc != null && normDesc != "") {
+                    finalDesc = normDesc
+                }
+                var finalCat = "OTHER"
+                var rawCat = ctx.category()
+                if (rawCat != null && rawCat != "") {
+                    finalCat = rawCat
+                }
+                items.add(InvoiceConfirmItem(finalDesc, centsToReais(m), finalCat))
+            }
+        }
+        if (items.size == 0) {
+            return IntentResult("ERROR", intent, corrId, false, "Nenhum lancamento valido para importar neste documento.", null, listOf("PARSE_AMBIGUOUS"))
+        }
+        var saved = confirmInvoiceItemsWithIdempotency(authUserId, items, docId)
+        var msg = "Confirmado: " + saved.size + " lancamentos estao salvos nas suas caixinhas sem duplicidade."
+        return IntentResult("IMPORTADO", intent, corrId, false, msg, json.encode(saved), listOf())
+    }
+
+    if (intent == "ANALISAR_FATURA") {
+        var docId = resolveIntentDocumentId(req)
+        if (docId == "") {
+            return IntentResult("ERROR", intent, corrId, false, "Informe o documentId para analisar a fatura.", null, listOf("PARSE_AMBIGUOUS"))
+        }
+        var docJson = InvoiceRegistry.docs.get(docId)
+        var revJson = InvoiceRegistry.reviews.get(docId)
+        if (docJson == null || revJson == null) {
+            return IntentResult("ERROR", intent, corrId, false, "Documento nao encontrado.", null, listOf("PARSE_AMBIGUOUS"))
+        }
+        var doc = json.decode<CanonicalDocument>(docJson)
+        if (doc.userId() != authUserId) {
+            return IntentResult("UNAUTHORIZED", intent, corrId, false, "Acesso negado ao documento.", null, listOf("UNAUTHORIZED"))
+        }
+        var rev = json.decode<ImportReview>(revJson)
+        var totalMinor: Long = 0
+        var confirmedMinor: Long = 0
+        var paymentMinor: Long = 0
+        var pixPfMinor: Long = 0
+        for (var ctx in rev.transactions()) {
+            var m = ctx.amountMinor()
+            if (m != null && ctx.direction() != "CREDIT") {
+                totalMinor = totalMinor + m
+                if (ctx.kind() == "PAYMENT") {
+                    paymentMinor = paymentMinor + m
+                } else if (ctx.categoryRule() == "PIX_PF_NEEDS_REVIEW") {
+                    pixPfMinor = pixPfMinor + m
+                } else if (ctx.reviewStatus() == "CONFIRMED") {
+                    confirmedMinor = confirmedMinor + m
+                }
+            }
+        }
+        var user = findUserById(authUserId)
+        var salary = 2740.0
+        var model = BudgetModelType.SURVIVAL_702010
+        if (user != null) {
+            if (user.salaryCents > 0) {
+                salary = centsToReais(user.salaryCents)
+            }
+            model = user.budgetModel
+        }
+        var buckets = buildBudgetBuckets(model, salary)
+        var analysis = InvoiceAnalysisResult(docId, totalMinor, confirmedMinor, paymentMinor, pixPfMinor, rev.reconciled(), true, rev.warnings(), buckets)
+        var msg = "Analise fechada para o documento: total identificado de " + formatBrl(totalMinor) + ", com " + formatBrl(confirmedMinor) + " em estabelecimentos identificados, " + formatBrl(paymentMinor) + " em pagamentos de faturas e " + formatBrl(pixPfMinor) + " em Pix para pessoas fisicas aguardando sua confirmacao."
+        return IntentResult(rev.status(), intent, corrId, true, msg, json.encode(analysis), listOf())
+    }
+
+    if (intent == "CONSULTAR_GASTOS") {
+        var period = intentParam(req, "period")
+        var cat = intentParam(req, "category")
+        if (cat != "" && cat.toUpperCase() != "ALL" && Category.valueOf(cat.toUpperCase()) == null) {
+            return IntentResult("ERROR", intent, corrId, false, "Categoria invalida: " + cat, null, listOf("INVALID_CATEGORY"))
+        }
+        var res = queryConfirmedExpenses(authUserId, period, cat)
+        var catLabel = "todas as categorias"
+        if (res.category() != "ALL") {
+            catLabel = res.category()
+        }
+        var msg = "No periodo " + res.period() + " (" + catLabel + "), voce tem " + res.count() + " lancamento(s) confirmado(s) somando " + formatBrl(res.totalMinor()) + "."
+        return IntentResult("OK", intent, corrId, false, msg, json.encode(res), listOf())
+    }
+
+    if (intent == "SIMULAR_ECONOMIA") {
+        var user = findUserById(authUserId)
+        if (user == null) {
+            return IntentResult("ERROR", intent, corrId, false, "Usuario nao encontrado.", null, listOf("UNAUTHORIZED"))
+        }
+        var salary = userSalary(user)
+        var paramSal = intentParam(req, "salary")
+        if (paramSal != "") {
+            try {
+                var parsed = paramSal.replace(",", ".").toDouble()
+                if (parsed > 0.0) {
+                    salary = parsed
+                }
+            } catch (Exception e) {}
+        }
+        var buckets = buildBudgetBuckets(user.budgetModel, salary)
+        var pulse = calculateDailyPulse(authUserId, daysRemainingInMonth(), monthStartIso())
+        var sim = SimulationResult(user.budgetModel.name(), salary, pulse.pulse, pulse.daysRemaining, buckets)
+        var msg = "Simulacao calculada no modelo " + user.budgetModel.name() + " com renda de " + formatBrl(toCents(salary)) + " e pulso diario de " + formatBrl(toCents(pulse.pulse)) + "."
+        return IntentResult("OK", intent, corrId, false, msg, json.encode(sim), listOf())
+    }
+
+    return IntentResult("ERROR", intent, corrId, false, "Intencao desconhecida: " + intent, null, listOf("UNSUPPORTED_INTENT"))
 }

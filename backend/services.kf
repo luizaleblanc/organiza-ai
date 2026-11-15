@@ -515,7 +515,7 @@ String? envelopeBucketError(UserEntity user, String? bucket) {
 // =========================================================
 
 record InvoiceConfirmItem(String description, Double amount, String category)
-record InvoiceConfirmRequest(List<InvoiceConfirmItem> items)
+record InvoiceConfirmRequest(List<InvoiceConfirmItem> items, String? documentId)
 record InvoiceConfirmResponse(Int saved, List<TransactionOutput> transactions)
 
 Int invoiceConfirmMaxItems() {

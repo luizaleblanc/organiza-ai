@@ -386,11 +386,11 @@ main() {
         return json.encode(calculateDailyPulse(currentUserId(), daysRemainingInMonth(), monthStartIso()))
     }
 
-    // Leitura de fatura PDF (backend/invoice.kf): {"fileBase64": "..."} -> texto + transacoes.
-    // Exige token (middleware); corpo acima do limite = 413; JSON/base64/PDF invalido = 400.
+    // Leitura de fatura (backend/invoice.kf, 100% em KOF): {"fileBase64": "..."} -> texto + transacoes + documento canonico.
+    // Exige token (middleware); corpo acima do limite = 413; JSON/base64/arquivo invalido = 400.
     app.post("/api/invoices/parse") {
         var raw = body()
-        if (raw.length() > invoiceMaxBase64Chars() + 1024) {
+        if (raw.length() > invoiceMaxBase64Chars() + 4096) {
             return status(413, json.encode(ApiError("Arquivo grande demais (máximo de 2 MB).")))
         }
         var req = decodeInvoiceUploadRequest(raw)
@@ -401,13 +401,13 @@ main() {
             return status(413, json.encode(ApiError("Arquivo grande demais (máximo de 2 MB).")))
         }
         try {
-            return json.encode(parseInvoicePdf(req.fileBase64()))
+            return json.encode(parseInvoiceForUser(currentUserId(), req.fileBase64(), req.filename()))
         } catch (String e) {
-            return status(400, json.encode(ApiError("PDF inválido: " + e)))
+            return status(400, json.encode(ApiError("Arquivo inválido: " + e)))
         }
     }
 
-    // B3 (L6): confirma e grava em lote os itens da fatura. {"items":[{description, amount, category}]}
+    // B3 (L6): confirma e grava em lote os itens da fatura com idempotencia por documentId e hash do lote.
     // Exige token; ate 100 itens; um item invalido = 400 e nada gravado; tudo num transaction {}.
     app.post("/api/invoices/confirm") {
         var raw = body()
@@ -423,11 +423,80 @@ main() {
             return status(400, json.encode(ApiError(err)))
         }
         try {
-            var saved = confirmInvoiceItems(currentUserId(), req.items())
+            var saved = confirmInvoiceItemsWithIdempotency(currentUserId(), req.items(), req.documentId())
             return status(201, json.encode(InvoiceConfirmResponse(saved.size, saved)))
         } catch (String e) {
+            if (e.startsWith("UNAUTHORIZED:")) {
+                return status(403, json.encode(ApiTypedError(e, "UNAUTHORIZED")))
+            }
+            if (e.startsWith("PARSE_AMBIGUOUS:")) {
+                return status(404, json.encode(ApiTypedError(e, "PARSE_AMBIGUOUS")))
+            }
             return status(500, json.encode(ApiError(e)))
         }
+    }
+
+    // GATE 2: upload autenticado estrito com validacao de extensao vs magic bytes, SHA-256 e deteccao de duplicata.
+    app.post("/api/documents/upload") {
+        var raw = body()
+        if (raw.length() > invoiceMaxBase64Chars() + 4096) {
+            return status(413, json.encode(ApiTypedError("Arquivo grande demais (máximo de 2 MB).", "INVALID_FILE")))
+        }
+        var req = decodeDocumentUploadRequest(raw)
+        if (req == null) {
+            return status(400, json.encode(ApiTypedError("Dados inválidos.", "INVALID_FILE")))
+        }
+        if (req.fileBase64().length() > invoiceMaxBase64Chars()) {
+            return status(413, json.encode(ApiTypedError("Arquivo grande demais (máximo de 2 MB).", "INVALID_FILE")))
+        }
+        var rejectDup = parseRejectDuplicateFlag(raw)
+        try {
+            var uploaded = ingestFinancialDocument(currentUserId(), req.fileBase64(), req.filename(), true, rejectDup)
+            return json.encode(uploaded)
+        } catch (String e) {
+            if (e.startsWith("DUPLICATE_DOCUMENT:")) {
+                return status(409, json.encode(ApiTypedError(e, "DUPLICATE_DOCUMENT")))
+            }
+            if (e.startsWith("UNSUPPORTED_FORMAT:")) {
+                return status(400, json.encode(ApiTypedError(e, "UNSUPPORTED_FORMAT")))
+            }
+            if (e.startsWith("EXTRACTION_TIMEOUT:")) {
+                return status(408, json.encode(ApiTypedError(e, "EXTRACTION_TIMEOUT")))
+            }
+            return status(400, json.encode(ApiTypedError(e, "INVALID_FILE")))
+        }
+    }
+
+    // GATE 2/3: consulta de preview/revisao por documentId com bloqueio anti-IDOR entre usuarios.
+    app.get("/api/documents/:id/review") {
+        var docId = param("id").trim()
+        var docJson = InvoiceRegistry.docs.get(docId)
+        var revJson = InvoiceRegistry.reviews.get(docId)
+        if (docJson == null || revJson == null) {
+            return status(404, json.encode(ApiTypedError("Documento não encontrado.", "PARSE_AMBIGUOUS")))
+        }
+        var doc = json.decode<CanonicalDocument>(docJson)
+        if (doc.userId() != currentUserId()) {
+            return status(403, json.encode(ApiTypedError("Acesso negado ao documento.", "UNAUTHORIZED")))
+        }
+        setHeader("Content-Type", "application/json; charset=utf-8")
+        return revJson
+    }
+
+    // GATE 1: roteador tipado de intencoes financeiras (zero tokens LLM).
+    app.post("/api/intents/dispatch") {
+        var req = decodeIntentRequest(body())
+        if (req == null) {
+            return status(400, invalidBody())
+        }
+        var res = dispatchFinanceIntent(currentUserId(), req)
+        if (res.status() == "UNAUTHORIZED") {
+            return status(403, json.encode(res))
+        }
+        if (res.status() == "ERROR") {
+            return status(400, json.encode(res))
+        }
+        return json.encode(res)
     }
 
     app.post("/api/chat/message") {
