@@ -414,7 +414,7 @@ try {
         Expect ($r.Status -eq 200 -and $j.suggestedModel -eq "ANTI_DEBT_701020" -and $b.Count -eq 3 -and $b[2].name -ceq "Quitação de Dívida" -and $b[2].amount -eq 600.0 -and $me.onboardingCompleted -eq $true -and $me.name -ceq "Caio Dívida") "$($r.Status) $($r.Body) | me: $($me | ConvertTo-Json -Compress)"
     }
 
-    Test-Step "Onboarding VARIABLE sem divida (4000 >= 2 SM) sugere STANDARD_503020; Base Zero fora da selecao" {
+    Test-Step "Onboarding VARIABLE sem divida (4000 >= 2 SM) sugere STANDARD_503020" {
         $tv = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Vera"; email = "var_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaDaV123!" } | ConvertTo-Json -Compress)).Body
         $r = Invoke-Api "POST" "/api/users/onboarding" $tv (@{ salary = 4000.0; incomeType = "VARIABLE"; hasDebt = $false } | ConvertTo-Json -Compress)
         $j = $r.Body | ConvertFrom-Json
@@ -545,6 +545,45 @@ try {
         $when = [DateTime]::Parse($t[0].createdAt, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::AdjustToUniversal)
         $diff = [Math]::Abs(([DateTime]::UtcNow - $when).TotalMinutes)
         Expect ($t[0].createdAt -match '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$' -and $diff -lt 10) "createdAt=$($t[0].createdAt) diferença=$diff min"
+    }
+
+    Test-Step "Coach (diretriz 4.1/4.2): saudação exata; gasto em categoria nova cria 1 caixinha em PT-BR com o gasto debitado; 2º gasto não duplica; sem códigos internos" {
+        $tc = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Carla Coach"; email = "coach_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaDaC123!" } | ConvertTo-Json -Compress)).Body
+        $codes = '\b(GROCERIES|LEISURE|FOOD|PHARMA|HEALTH|AUTO|TRANSPORT|HOUSING|EDUCATION|SHOPPING|SUBSCRIPTIONS|OTHER|NEEDS|WANTS|STANDARD_503020|SURVIVAL_702010|ANTI_DEBT_701020|SIMPLE_8020|KAKEIBO)\b'
+        $g = ((Invoke-Api "POST" "/api/chat/message" $tc (@{ message = "oi" } | ConvertTo-Json -Compress)).Body | ConvertFrom-Json).reply
+        $before = @((ConvertFrom-JsonList (Invoke-Api "GET" "/api/envelopes" $tc).Body) | Where-Object { $_.categoryName -ceq "Farmácia" -or $_.categoryName -ceq "PHARMA" }).Count
+        $r1 = ((Invoke-Api "POST" "/api/chat/message" $tc (@{ message = "gastei R$ 12,50 na farmácia" } | ConvertTo-Json -Compress)).Body | ConvertFrom-Json).reply
+        $e1 = @((ConvertFrom-JsonList (Invoke-Api "GET" "/api/envelopes" $tc).Body) | Where-Object { $_.categoryName -ceq "Farmácia" })
+        $r2 = ((Invoke-Api "POST" "/api/chat/message" $tc (@{ message = "gastei 7,50 na farmácia" } | ConvertTo-Json -Compress)).Body | ConvertFrom-Json).reply
+        $all = @(ConvertFrom-JsonList (Invoke-Api "GET" "/api/envelopes" $tc).Body)
+        $e2 = @($all | Where-Object { $_.categoryName -ceq "Farmácia" })
+        $codeBox = @($all | Where-Object { $_.categoryName -ceq "PHARMA" }).Count
+        Expect ($g -ceq "Oi, Carla! Me fala seus gastos aí. Você pode digitar, falar por voz ou enviar sua fatura por aqui que eu leio e organizo tudo pra você." -and $before -eq 0 -and $r1 -clike "Beleza! Seus gastos (farmácia) foram registrados. Criei a caixinha Farmácia para acompanhar esse gasto. Seu pulso atual para terminar o mês no azul é de R$ *. Se quiser dar uma economizada, seu pulso é de R$ */dia." -and $e1.Count -eq 1 -and $e1[0].currentSpent -eq 12.5 -and $r2 -clike "Beleza! Seus gastos (farmácia) foram registrados. Seu pulso*" -and $r2 -notlike "*Criei a caixinha*" -and $e2.Count -eq 1 -and $e2[0].currentSpent -eq 20.0 -and $codeBox -eq 0 -and $g -cnotmatch $codes -and $r1 -cnotmatch $codes -and $r2 -cnotmatch $codes) "g=$g | antes=$before | r1=$r1 | e1=$($e1 | ConvertTo-Json -Compress) | r2=$r2 | e2=$($e2 | ConvertTo-Json -Compress)"
+    }
+
+    Test-Step "Coach: pedidos de caixinha pelo chat (offline) criam, renomeiam, mudam limite, consultam e apagam com confirmação; ambíguo pergunta" {
+        $te = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Eva Envelope"; email = "env_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaDaE123!" } | ConvertTo-Json -Compress)).Body
+        function Say([string]$m) { ((Invoke-Api "POST" "/api/chat/message" $te (@{ message = $m } | ConvertTo-Json -Compress)).Body | ConvertFrom-Json).reply }
+        function Boxes() { @(ConvertFrom-JsonList (Invoke-Api "GET" "/api/envelopes" $te).Body) }
+        $c1 = Say "cria uma caixinha de Viagem com R$ 300"
+        $b1 = @(Boxes | Where-Object { $_.categoryName -ceq "Viagem" })
+        $c2 = Say "cria uma caixinha de Presentes"
+        $b2 = @(Boxes | Where-Object { $_.categoryName -ceq "Presentes" }).Count
+        $rn = Say "muda o nome da caixinha Viagem para Férias"
+        $b3 = @(Boxes | Where-Object { $_.categoryName -ceq "Férias" })
+        $lm = Say "aumenta o limite da caixinha Férias para R$ 450,50"
+        $b4 = @(Boxes | Where-Object { $_.categoryName -ceq "Férias" })
+        Say "gastei 20 de uber" | Out-Null
+        $lt = Say "aumenta o limite de Transporte para R$ 200"
+        $q = Say "quanto sobra na caixinha Transporte?"
+        $nf = Say "quanto sobra na caixinha Inexistente?"
+        $d1 = Say "apaga a caixinha Férias"
+        $b5 = @(Boxes | Where-Object { $_.categoryName -ceq "Férias" }).Count
+        $d2 = Say "sim"
+        $b6 = @(Boxes | Where-Object { $_.categoryName -ceq "Férias" }).Count
+        $src = Get-Content -Raw -Encoding UTF8 (Join-Path (Split-Path (Split-Path $ClassesDir)) "backend\coach_llm.kf")
+        $tools = @("createEnvelope", "renameEnvelope", "setEnvelopeLimit", "deleteEnvelope", "getEnvelopeStatus") | Where-Object { $src -notmatch ('toolDef\("' + $_ + '"') }
+        Expect ($c1 -ceq "Pronto! Criei a caixinha Viagem com limite de R$ 300,00." -and $b1.Count -eq 1 -and $b1[0].limitAmount -eq 300.0 -and $c2 -ceq "Qual limite você quer para a caixinha Presentes?" -and $b2 -eq 0 -and $rn -ceq "Pronto! A caixinha Viagem agora se chama Férias." -and $b3.Count -eq 1 -and $lm -ceq "Pronto! O limite da caixinha Férias agora é R$ 450,50." -and $b4[0].limitAmount -eq 450.5 -and $lt -ceq "Pronto! O limite da caixinha Transporte agora é R$ 200,00." -and $q -ceq "Na caixinha Transporte você gastou R$ 20,00 de R$ 200,00 neste mês. Sobram R$ 180,00 (Em dia)." -and $nf -clike "Não achei a caixinha Inexistente.*" -and $d1 -clike "Confirma que quer apagar a caixinha Férias?*" -and $b5 -eq 1 -and $d2 -ceq "Pronto! Apaguei a caixinha Férias." -and $b6 -eq 0 -and @($tools).Count -eq 0) "c1=$c1 | b1=$($b1 | ConvertTo-Json -Compress) | c2=$c2 | b2=$b2 | rn=$rn | lm=$lm | lt=$lt | q=$q | nf=$nf | d1=$d1 | b5=$b5 | d2=$d2 | b6=$b6 | toolsFaltando=$($tools -join ',')"
     }
 
     Test-Step "Freemium: 30 mensagens no mês = 200; a 31ª = 402 com a mensagem do legado e não é gravada" {

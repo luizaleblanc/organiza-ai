@@ -1,4 +1,4 @@
-﻿# scripts/test_gate5_finance_import.ps1
+# scripts/test_gate5_finance_import.ps1
 # GATE 5: Validacao completa fim a fim do Protocolo Anti-Alucinacao 100% em KOF.
 # Testa: PDF textual, PDF /ToUnicode CMap, PDF escaneado, DOCX com tabelas, PNG OCR, JPEG OCR,
 # magic bytes mismatch, extensoes proibidas, path traversal, PDF corrompido, duplicata, IDOR (403),
@@ -6,7 +6,10 @@
 # todas as 5 intencoes (/api/intents/dispatch) e consulta de linguagem natural no chat.
 
 param(
-    [string]$BaseUrl = "http://localhost:8000"
+    [string]$BaseUrl = "http://localhost:8000",
+    # Opcional: servidor com OPENAI_API_KEY configurada apontando para um provedor inalcancavel.
+    # Prova que a resposta sobre fatura nao passa pelo ramo LLM (o LLM daria 503 nesse servidor).
+    [string]$LlmBaseUrl = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -346,7 +349,8 @@ Assert-Check "Intent 3 (CONFIRMAR_IMPORTACAO) is atomic and 100% idempotent when
     $c1 = Invoke-Http "POST" "/api/intents/dispatch" $tokenA (@{ intent = "CONFIRMAR_IMPORTACAO"; parameters = @{ documentId = $script:docA } } | ConvertTo-Json)
     $c2 = Invoke-Http "POST" "/api/intents/dispatch" $tokenA (@{ intent = "CONFIRMAR_IMPORTACAO"; parameters = @{ documentId = $script:docA } } | ConvertTo-Json)
     $txs = (Invoke-Http "GET" "/api/transactions" $tokenA).Body | ConvertFrom-Json
-    return ($c1.Status -eq 200) -and ($c2.Status -eq 200) -and ($txs.Count -eq 6)
+    $withProv = @($txs | Where-Object { $_.documentId -eq $script:docA -and $null -ne $_.sourcePage -and $null -ne $_.sourceLine -and -not [string]::IsNullOrWhiteSpace($_.externalRef) }).Count
+    return ($c1.Status -eq 200) -and ($c2.Status -eq 200) -and ($txs.Count -eq 4) -and ($withProv -eq 4)
 }
 
 Assert-Check "Intent 4 (CONSULTAR_GASTOS) returns exact minor cents (20960) for FOOD in 2026-11" {
@@ -368,6 +372,85 @@ Assert-Check "GATE 4 Natural language query in Chat answers with confirmed DB to
     $chat = Invoke-Http "POST" "/api/chat/message" $tokenA (@{ message = "Quanto gastei em delivery em novembro?" } | ConvertTo-Json)
     $j = $chat.Body | ConvertFrom-Json
     return ($chat.Status -eq 200) -and ($j.reply.Contains("209,60")) -and (-not $j.reply.Contains("📄")) -and (-not $j.reply.Contains("JSON"))
+}
+
+# 13. Natureza de fluxo sem dupla contagem: receita PJ, despesa, Viracredito ida e volta, Pix via cartao,
+#     pagamento de fatura e linha ambigua (fixture sintetica). Totais em centavos vindos do backend.
+$flowLines = @(
+    "Extrato sintetico 01/11 a 14/11",
+    "02/11 Pix recebido Acme Tecnologia Ltda 3.000,00",
+    "03/11 Supermercado Sendas 150,00",
+    "04/11 Viracredito aplicacao 200,00",
+    "05/11 Viracredito resgate 200,00",
+    "06/11 Credito para Pix via cartao de credito 80,00",
+    "06/11 Pix credito Maria Souza 80,00",
+    "07/11 Pagamento de fatura 500,00",
+    "08/11 Fulano Beltrano 45,00"
+)
+$flowB64 = New-SyntheticPdfBase64 $flowLines
+$flowRes = Invoke-Http "POST" "/api/invoices/parse" $tokenB (@{ fileBase64 = $flowB64; filename = "fluxo-sintetico.pdf" } | ConvertTo-Json)
+$script:flowDoc = ""
+
+Assert-Check "Flow summary: count, separated totals (cents), no double count, ambiguous line pending" {
+    if ($flowRes.Status -ne 200) { return "status=$($flowRes.Status) body=$($flowRes.Body)" }
+    $j = $flowRes.Body | ConvertFrom-Json
+    $script:flowDoc = $j.documentId
+    $s = $j.summary
+    if ($null -eq $s) { return "summary ausente" }
+    $amb = $s.lines | Where-Object { $_.snippet -like "*Fulano*" }
+    $noEv = $s.lines | Where-Object { $null -eq $_.page -or $null -eq $_.row -or [string]::IsNullOrWhiteSpace($_.snippet) }
+    $ok = ($s.extractedCount -eq 5) -and ($s.incomeMinor -eq 300000) -and ($s.incomeCount -eq 1) -and
+        ($s.expenseMinor -eq 15000) -and ($s.expenseCount -eq 1) -and
+        ($s.creditOperationMinor -eq 8000) -and ($s.creditOperationCount -eq 1) -and
+        ($s.billPaymentMinor -eq 50000) -and ($s.billPaymentCount -eq 1) -and
+        ($s.pendingMinor -eq 4500) -and ($s.pendingCount -eq 1) -and
+        ($s.internalTransferCount -eq 3) -and ($s.internalTransferMinor -eq 48000) -and
+        ($amb.flowClass -eq "PENDENTE_REVISAO") -and ($noEv.Count -eq 0)
+    if (-not $ok) { return ($s | ConvertTo-Json -Depth 4 -Compress) }
+    return $true
+}
+
+Assert-Check "Chat with documentId answers via ANALISAR_FATURA, cites the document and never asks to retype" {
+    $c = Invoke-Http "POST" "/api/chat/message" $tokenB (@{ message = "Fatura fluxo-sintetico.pdf enviada: 5 registros extraidos. Analise o documento."; documentId = $script:flowDoc } | ConvertTo-Json)
+    if ($c.Status -ne 200) { return "status=$($c.Status) body=$($c.Body)" }
+    $r = ($c.Body | ConvertFrom-Json).reply
+    $ok = $r.Contains($script:flowDoc) -and $r.Contains("R$ 3.000,00") -and $r.Contains("R$ 150,00") -and $r.Contains("Pendentes de revisao") -and
+        (-not $r.ToLower().Contains("digite")) -and (-not $r.ToLower().Contains("informe os gastos"))
+    if (-not $ok) { return $r }
+    return $true
+}
+
+Assert-Check "Chat about 'fatura' without documentId uses the latest EM_REVISAO document" {
+    $c = Invoke-Http "POST" "/api/chat/message" $tokenB (@{ message = "O que tem na minha fatura?" } | ConvertTo-Json)
+    if ($c.Status -ne 200) { return "status=$($c.Status)" }
+    return (($c.Body | ConvertFrom-Json).reply).Contains($script:flowDoc)
+}
+
+Assert-Check "Anti-IDOR in chat: documentId of another user is refused" {
+    $c = Invoke-Http "POST" "/api/chat/message" $tokenA (@{ message = "Analise"; documentId = $script:flowDoc } | ConvertTo-Json)
+    $r = ($c.Body | ConvertFrom-Json).reply
+    return ($c.Status -eq 200) -and $r.Contains("Acesso negado") -and (-not $r.Contains("3.000,00"))
+}
+
+if ($LlmBaseUrl -ne "") {
+    $mainBase = $BaseUrl
+    $BaseUrl = $LlmBaseUrl
+    $regL = Invoke-Http "POST" "/api/auth/register" "" (@{ firstName = "Lia"; lastName = "GateL"; age = 30; email = "gate5l-$suffix@test.local"; password = "Str0ng#Password" } | ConvertTo-Json)
+    $tokenL = $regL.Body.Trim()
+    Invoke-Http "POST" "/api/users/onboarding" $tokenL (@{ salary = 3000.0; incomeType = "FIXED"; hasDebt = $false } | ConvertTo-Json) | Out-Null
+    Assert-Check "LLM server: a generic chat goes to the (unreachable) LLM and fails with 503" {
+        $c = Invoke-Http "POST" "/api/chat/message" $tokenL (@{ message = "Oi, tudo bem?" } | ConvertTo-Json)
+        return ($c.Status -eq 503)
+    }
+    Assert-Check "LLM server: invoice chat with documentId is answered deterministically (200, LLM branch not used)" {
+        $p = Invoke-Http "POST" "/api/invoices/parse" $tokenL (@{ fileBase64 = $flowB64; filename = "fluxo-sintetico.pdf" } | ConvertTo-Json)
+        $doc = ($p.Body | ConvertFrom-Json).documentId
+        $c = Invoke-Http "POST" "/api/chat/message" $tokenL (@{ message = "Fatura enviada"; documentId = $doc } | ConvertTo-Json)
+        if ($c.Status -ne 200) { return "status=$($c.Status) body=$($c.Body)" }
+        $r = ($c.Body | ConvertFrom-Json).reply
+        return $r.Contains($doc) -and $r.Contains("R$ 3.000,00")
+    }
+    $BaseUrl = $mainBase
 }
 
 Write-Host "`n=========================================" -ForegroundColor Cyan
