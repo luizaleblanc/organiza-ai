@@ -136,7 +136,7 @@ flowchart TD
 
 ## Modelos de orçamento adaptativos
 
-SM = salário mínimo (R$ 1.621,00). A coluna `budget_model` só aceita estes 5 valores; contas antigas gravadas com `FREELANCER_BASE_ZERO` são convertidas ao carregar (`userFromRow` em `backend/store.kf`).
+SM = salário mínimo (R$ 1.621,00). A coluna `budget_model` só aceita estes 5 valores; valores fora desses 5 são convertidos ao carregar (`userFromRow` em `backend/store.kf`).
 
 | Ordem | Modelo | Renda mínima | Condição | Por quê |
 |---|---|---|---|---|

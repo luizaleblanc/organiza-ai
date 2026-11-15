@@ -2,7 +2,7 @@
 
 Este documento consolida a orquestração simultânea das duas frentes estruturais no **Organiza AI**:
 - **Frente A (Extração Anti-Alucinação 100% em KOF + KofDB):** substituição de `import java.*` e do registro em memória por código 100% KOF (`kof.io`, `kof.process`, `kof.security.crypto`, `kof.orm`/`kof.db`), extração PDF por fonte (`/ToUnicode`), consolidação de células 6-por-linha da Neon, trava `EXTRACAO_FALHOU` (`0` transações bloqueia análise) e respostas rastreadas por documento/página/registro.
-- **Frente B (Correção dos 3 Modelos de Orçamento e Motor de 5 Perfis):** correção do modelo `FREELANCER_BASE_ZERO` (*Profit First*: 50% Pró-labore, 15% Impostos, 30% Operação, 5% Reserva), adição do bucket explícito `Poupança` (20%) no `KAKEIBO`, suporte a `savesMonthly` no onboarding e seleção adaptativa pelos 5 perfis (`endividado -> renda variável -> baixa renda -> poupador -> renda estável`).
+- **Frente B (Modelos de Orçamento e Motor de 5 Modelos):** bucket explícito `Poupança` (20%) no `KAKEIBO`, suporte a `savesMonthly` no onboarding e seleção adaptativa pelos 5 modelos oficiais (Anti-Dívida, Sobrevivência, 80/20, Kakeibo e 50/30/20).
 
 ---
 
@@ -190,11 +190,11 @@ git commit -m "feat(invoice): extracao 100% KOF com KofDB, trava EXTRACAO_FALHOU
 ### Bloco 7: Modelos de Orçamento, 5 Perfis e Alinhamento de Testes (Frente B)
 ```powershell
 git add backend/models.kf backend/services.kf tests/parity_test.kf scripts/test_e2e_flow.ps1
-git commit -m "feat(budget): corrigir Base Zero Profit First, Kakeibo 5 potes e motor de 5 perfis"
+git commit -m "feat(budget): Kakeibo 5 potes e motor de 5 modelos"
 ```
 - **Arquivos:**
   - `backend/models.kf` (`savesMonthly` no perfil e onboarding)
-  - `backend/services.kf` (`FREELANCER_BASE_ZERO` 4 potes 50/15/30/5, `KAKEIBO` 5 potes com 20% Poupança, limiares `salarioMinimo()` e seleção em 5 perfis)
+  - `backend/services.kf` (`KAKEIBO` 5 potes com 20% Poupança, limiares `salarioMinimo()` e seleção em 5 modelos)
   - `tests/parity_test.kf` & `scripts/test_e2e_flow.ps1` (paridade e E2E atualizados)
 
 ---

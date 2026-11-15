@@ -165,7 +165,7 @@ Componentes novos usam `Style("<css>")` + `setStyle`; o `Style(4 Ints)` do Batch
 
 `debtCents = toCents(debtAmount)` se `hasDebt`, senão 0. O modelo sugerido continua dependendo só de `hasDebt` (a regra de `suggestBudgetModel` não muda).
 
-Modelos medidos: FIXED + dívida → `ANTI_DEBT_701020`; FIXED 3000 sem dívida → `SURVIVAL_702010`; FIXED 6000 → `STANDARD_503020`; VARIABLE → `FREELANCER_BASE_ZERO` sem buckets. Nomes na Tela 7: "50/30/20", "70/20/10", "Anti-Dívida", "80/20", "Kakeibo", "Base Zero".
+Modelos medidos: FIXED + dívida → `ANTI_DEBT_701020`; FIXED 3000 sem dívida → `SURVIVAL_702010`; FIXED 6000 → `STANDARD_503020`; `VARIABLE` não leva a modelo próprio (segue as mesmas regras de `FIXED`). Nomes na Tela 7: "Anti-Dívida", "70/20/10", "80/20", "Kakeibo", "50/30/20".
 
 ### 4.2 Cliente
 
@@ -263,7 +263,7 @@ Cada tarefa = 1 commit manual da usuária. Ordem: backend → `api_client` async
 | F6 | Frontend: estilos `Style("css")` + `form_widgets.kf` + `brand_mark.kf` + dispatcher + Tela 1 | B2-01 | G-BUILD, G-UI (Mobile e Desktop; 2 cliques). **Feito** (0.6.6 e 0.6.7; ver §3) |
 | F7 | Frontend: Telas 2 e 3 | B2-02, B2-03 | G-BUILD, G-UI: vazio, senha errada, 6 erros (429), 409, validações locais, sucesso → Tela 4, conta concluída → `dashboard`, backend fora. **Feito** (0.6.6 e 0.6.7; ver nota F7 abaixo) |
 | F8a | Frontend: Telas 4 e 5 | B2-04, B2-05 | G-BUILD, G-UI: entradas válidas e inválidas; "Próximo" com `disabled=true` antes da escolha. **Feito** (0.6.6 e 0.6.7; ver nota F8a abaixo) |
-| F8b | Frontend: Telas 6, 6.1 e 7 | B2-06, B2-07 | G-BUILD, G-UI: dois caminhos; Tela 7 com os buckets da spec; VARIABLE com 4 barras (Pró-labore 50%, Impostos 15%, Operação 30%, Reserva 5%); token inválido → Tela 2; `/me` depois → `onboardingCompleted: true`. **Feito** (0.6.6 e 0.6.7: Sim → 6.1 → Anti-Dívida 70/10/20 com R$ 2.100,00/300,00/600,00; Não → 70/20/10 sem passar pela 6.1; VARIABLE → Base Zero 4 barras *Profit First*; token inválido → `login`; `/me` → `onboardingCompleted: true`) |
+| F8b | Frontend: Telas 6, 6.1 e 7 | B2-06, B2-07 | G-BUILD, G-UI: dois caminhos; Tela 7 com os buckets da spec; renda variável segue as mesmas regras dos 5 modelos; token inválido → Tela 2; `/me` depois → `onboardingCompleted: true`. **Feito** (0.6.6 e 0.6.7: Sim → 6.1 → Anti-Dívida 70/10/20 com R$ 2.100,00/300,00/600,00; Não → 70/20/10 sem passar pela 6.1; token inválido → `login`; `/me` → `onboardingCompleted: true`) |
 | F9 | Harness em `scripts/ui/` (PowerShell + JS de probe, sem binários) + docs (README, DEPLOY.md, LLM_KOF_UI_GUIDELINES.md, DESIGN_SYSTEM.md "Observações KOF") | B2-12 | Rodar os scripts na Tela 1 e no fluxo da F7 |
 
 Futuras (fora do batch):

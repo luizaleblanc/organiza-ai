@@ -19,58 +19,64 @@ A IA do Organiza AI atua como um **mentor financeiro empático, inteligente e de
 
 ## 2. Modelos de Educação Financeira Mapeados
 
-O Organiza AI estrutura o planejamento nos **6 modelos** do `BudgetModelType`, selecionados por 5 perfis objetivos no onboarding (`endividado -> renda variável -> baixa renda (<= 2 SM) -> poupador (savesMonthly) -> renda estável`):
+O Organiza AI estrutura o planejamento nos **5 modelos oficiais** do `BudgetModelType` (tabela de `docs/DATA_MODEL.md`). SM = salário mínimo (R$ 1.621,00). A seleção automática (`suggestBudgetModel` em `backend/services.kf`) segue esta ordem; a troca manual passa por `budgetModelEligibilityError`:
 
-### 2.1 Modelo Padrão: Regra 50/30/20 (`STANDARD_503020` — Warren & Tyagi, *All Your Worth*, 2005)
-- **50% Necessidades:** Contas fixas essenciais (moradia/aluguel, faculdade, energia, mercado básico, saúde e pagamentos mínimos).
-- **30% Desejos:** Gastos com qualidade de vida, restaurantes, lazer, delivery e compras livres.
-- **20% Futuro:** Reserva de emergência, quitação acelerada e investimentos.
-- **Comportamento da IA:** Ao analisar uma fatura ou salário, demonstra como os compromissos fixos cabem dentro da margem de 50%, garantindo equilíbrio sem abrir mão do lazer consciente.
+| Ordem | Modelo | Renda mínima | Condição |
+|---|---|---|---|
+| 1 | **Anti-Dívida 70/10/20** (`ANTI_DEBT_701020`) | 1 SM (R$ 1.621,00) | Tem dívida |
+| 2 | **Sobrevivência 70/20/10** (`SURVIVAL_702010`) | Nenhuma | Renda abaixo de 2 SM (R$ 3.242,00), ou dívida com renda abaixo de 1 SM |
+| 3 | **80/20** (`SIMPLE_8020`) | 5 SM (R$ 8.105,00) | Sem dívida e já guarda todo mês |
+| 4 | **Kakeibo** (`KAKEIBO`) | 3 SM (R$ 4.863,00) | Sem dívida, escolhido pelo usuário |
+| 5 | **50/30/20** (`STANDARD_503020`) | 2 SM (R$ 3.242,00) | Sem dívida |
 
-### 2.2 Modelo Sobrevivência: Regra 70/20/10 (`SURVIVAL_702010` — Adaptação para renda fixa até 2 SM / R$ 3.242,00)
-- **70% Necessidades:** Adequado para rendas até 2 salários mínimos (`R$ 1.621,00 x 2 = R$ 3.242,00`), onde o custo de vida básico consome a maior parte do orçamento.
-- **20% Folga:** Pequenos confortos e alívio mental.
-- **10% Guarda:** Foco exclusivo na construção do primeiro mês de reserva de emergência.
-- **Comportamento da IA:** Parabeniza o usuário por conseguir guardar mesmo valores modestos e incentiva o foco no essencial.
+Os códigos entre crases são internos: o coach nunca os mostra ao usuário (diz "50/30/20", "Anti-Dívida", "Kakeibo"). O comportamento por modelo abaixo vai no prompt do coach (`modelBehaviorForPrompt` em `backend/coach_llm.kf`). Quando o modelo atual deixa de valer para a renda ou a dívida registradas, a tool `suggestModelChange` sugere o modelo da seleção acima.
 
-### 2.3 Modelo Anti-Dívida: Regra 70/10/20 (`ANTI_DEBT_701020`)
+### 2.1 Anti-Dívida: Regra 70/10/20 (`ANTI_DEBT_701020`)
 - **70% Necessidades:** Manutenção da subsistência familiar.
 - **10% Pessoal:** Margem reduzida de flexibilidade durante a renegociação.
-- **20% Quitação de Dívida:** Amortização ativa e proteção contra juros altos (cartão rotativo, cheque especial), priorizado sobre qualquer outra sugestão quando `hasDebt == true`.
-- **Comportamento da IA:** Sugere alternativas de renegociação e orienta a não utilizar o rotativo do cartão.
+- **20% Quitação de Dívida:** Amortização ativa e proteção contra juros altos (cartão rotativo, cheque especial), priorizada sobre qualquer outra sugestão quando `hasDebt == true`.
+- **Comportamento da IA:** Sugere alternativas de renegociação e orienta a não utilizar o rotativo do cartão nem o cheque especial.
 
-### 2.4 Simplificado 80/20 (`SIMPLE_8020` — Perfil Poupador `savesMonthly == true`)
+### 2.2 Sobrevivência: Regra 70/20/10 (`SURVIVAL_702010` — renda abaixo de 2 SM)
+- **70% Necessidades:** O custo de vida básico consome a maior parte do orçamento.
+- **20% Folga:** Pequenos confortos e alívio mental.
+- **10% Poupança:** Foco na construção do primeiro mês de reserva de emergência.
+- **Comportamento da IA:** Parabeniza o usuário por guardar mesmo valores modestos e incentiva o foco no essencial. Quem tem dívida e ganha menos de 1 SM fica neste modelo, e o coach orienta a renegociar.
+
+### 2.3 Simplificado 80/20 (`SIMPLE_8020` — sem dívida, guarda todo mês, renda a partir de 5 SM)
 - **80% Viver:** Gastos essenciais e livres combinados em um único teto simples.
-- **20% Guardar:** Aporte automático em metas/reserva sem necessidade de rastrear múltiplas subcategorias.
+- **20% Guardar:** Aporte automático em metas/reserva sem rastrear subcategorias.
+- **Comportamento da IA:** Mantém a conversa simples, com um teto único.
 
-### 2.5 Kakeibo (`KAKEIBO` — Hani Motoko, 1904; Chiba, 2018 — 5 Buckets com Poupança)
-- **5 Pilares (4 categorias de gasto + bucket explícito de poupança):**
+### 2.4 Kakeibo (`KAKEIBO` — Hani Motoko, 1904; Chiba, 2018 — sem dívida, escolha do usuário, renda a partir de 3 SM)
+- **Potes atuais no código** (`buildBudgetBuckets` em `backend/services.kf`):
   1. *Essencial (50%):* Moradia, mercado, saúde, transporte, educação.
   2. *Lazer (15%):* Refeições fora, passeios e bem-estar.
   3. *Cultura (10%):* Livros, cursos, assinaturas educativas e desenvolvimento.
   4. *Extras (5%):* Imprevistos e eventuais.
   5. *Poupança (20%):* Meta mensal de guarda antes do consumo discricionário.
-- **Ciclo Semanal de Reflexão:** 4 perguntas ao final de cada semana:
-  - Quanto dinheiro entrou?
-  - Quanto você gostaria de ter guardado?
-  - Quanto você efetivamente gastou?
-  - O que você pode melhorar na próxima semana?
+- **Pendência de decisão:** a tabela de `docs/DATA_MODEL.md` diz que o Kakeibo "não tem bucket de poupança", mas o código mantém o pote Poupança 20%. Os percentuais não foram alterados até a decisão da responsável pelo produto.
+- **Ciclo Semanal de Reflexão:** 4 perguntas ao final de cada semana (`kakeiboQuestions` em `backend/coach_llm.kf`), gravadas pela tool `answerKakeiboReflection`.
 
-### 2.6 Freelancer Base Zero (`FREELANCER_BASE_ZERO` — Alocação por Entrada inspirada no *Profit First*, Mike Michalowicz)
-- Aplicado sempre que `incomeType == "VARIABLE"` (freelas, PJ, comissões), com divisão imediata por entrada em 4 potes:
-  - **50% Pró-labore:** Retirada pessoal previsível para sustento mensal.
-  - **15% Impostos:** Separação prévia de DAS, INSS e obrigações fiscais.
-  - **30% Operação:** Custos operacionais e ferramentas da atividade.
-  - **5% Reserva:** Colchão de liquidez para meses de menor faturamento.
+### 2.5 Padrão: Regra 50/30/20 (`STANDARD_503020` — Warren & Tyagi, *All Your Worth*, 2005 — sem dívida, renda a partir de 2 SM)
+- **50% Necessidades:** Contas fixas essenciais (moradia, faculdade, energia, mercado básico, saúde e pagamentos mínimos).
+- **30% Desejos:** Qualidade de vida, restaurantes, lazer, delivery e compras livres.
+- **20% Futuro:** Reserva de emergência, quitação acelerada e investimentos.
+- **Comportamento da IA:** Demonstra como os compromissos fixos cabem nos 50%, garantindo equilíbrio sem abrir mão do lazer consciente.
 
 ---
+
+### 2.6 Regras de saída do coach (valem para LLM e resposta offline)
+- **Zero emojis** e nenhum código interno na resposta: categorias saem em português (`categoryLabel` em `backend/coach.kf`, ex.: `TRANSPORT` -> "Transporte"); toda resposta do LLM passa por `sanitizeCoachReply` (`backend/coach_llm.kf`), que troca códigos de categoria, modelo e bucket pelo nome em português.
+- **Valores sempre em `R$ X.XXX,XX`** (`formatBrl`), e todos os números vêm do backend: a tool `getDailyPulse` devolve `pulseText` e `economicPulseText` já formatados; o LLM não calcula nem estima valores.
+- **Caixinha automática:** gasto em categoria sem caixinha cria a caixinha com o nome em português, no bucket do modelo do usuário e com limite pela regra de `chipLimit`; a resposta avisa ("Criei a caixinha Transporte para acompanhar esse gasto.").
 
 ## 3. Métricas e Fórmulas em Tempo Real
 
 | Métrica | Conceito | Fórmula / Cálculo |
 | :--- | :--- | :--- |
 | **Pulso Diário** | Limite seguro para gastar hoje sem estourar o mês | `(Saldo do Mês - Reserva Comprometida) / Dias Restantes` |
-| **Pulso Econômico** | Sugestão suave para acelerar a meta de economia | `75% do Pulso Diário` |
+| **Pulso Econômico** | Sugestão suave para acelerar a meta de economia | `75% do Pulso Diário`, truncado no centavo (R$ 187,50 -> R$ 140,62) |
 | **Reserva Acumulada** | Colchão financeiro em construção | Soma dos aportes na caixinha de Reserva |
 | **Status da Caixinha** | Nível de consumo do teto planejado | < 80%: *Em dia* \| 80%-100%: *Alerta* \| > 100%: *Estourada* |
 

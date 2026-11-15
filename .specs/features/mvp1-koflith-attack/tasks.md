@@ -194,7 +194,7 @@ T14 → T15
 ---
 
 ### T9: Implement Onboarding Result Screen & Model Selector (Tela 7 — Issues #11 e #33)
-- **What**: Complete `frontend/screens/onboarding_screens.kf` with Tela 7 (Resultado do Onboarding) connected to `POST /api/users/onboarding`, displaying the suggested model (`Anti-Dívida 70/10/20`, `Padrão 50/30/20`, `Sobrevivência 70/20/10`, `Simplificado 80/20`, `Kakeibo`, ou `Base Zero`), the 3 calculated buckets in `R$`, and a model-switcher selector (Issue #11) before `"Começar a organizar"` navigates to Dashboard (Tela 8).
+- **What**: Complete `frontend/screens/onboarding_screens.kf` with Tela 7 (Resultado do Onboarding) connected to `POST /api/users/onboarding`, displaying the suggested model (`Anti-Dívida 70/10/20`, `Sobrevivência 70/20/10`, `Simplificado 80/20`, `Kakeibo` ou `Padrão 50/30/20`), the 3 calculated buckets in `R$`, and a model-switcher selector (Issue #11) before `"Começar a organizar"` navigates to Dashboard (Tela 8).
 - **Where**: `frontend/screens/onboarding_screens.kf`
 - **Depends on**: T8
 - **Reuses**: `backend/services.kf::suggestBudgetModel`

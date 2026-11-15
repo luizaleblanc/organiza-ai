@@ -69,7 +69,7 @@ Every ambiguity is resolved or recorded here - nothing is left silently unclear.
 
 ### P1: Welcome, JWT Authentication & Adaptive Onboarding Flow — Screens 1 to 7 (`MVP1-04`, `MVP1-05`) ⭐ MVP
 
-**User Story**: As a new or returning user, I want to authenticate (Screens 1–3) and answer the adaptive onboarding questions on salary, income type, and overdue debt (Screens 4, 5, 6, 6.1, and 7) so that Organiza IA calculates and recommends the ideal budget model (`Anti-Dívida`, `50/30/20`, `70/20/10`, `80/20`, `Kakeibo`, or `Base Zero`) for my reality.
+**User Story**: As a new or returning user, I want to authenticate (Screens 1–3) and answer the adaptive onboarding questions on salary, income type, and overdue debt (Screens 4, 5, 6, 6.1, and 7) so that Organiza IA calculates and recommends the ideal budget model (`Anti-Dívida`, `70/20/10`, `80/20`, `Kakeibo`, or `50/30/20`) for my reality.
 
 **Why P1**: Delivers the core differentiation of adaptive budgeting and closes Issues #11 and #33.
 
