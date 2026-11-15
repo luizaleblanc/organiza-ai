@@ -4,6 +4,7 @@ import kof.ui
 import core.theme
 import core.app_state
 import core.auth_api
+import core.dashboard_api
 import core.envelopes_api
 import components.brand_header
 import components.nav_bar
@@ -13,6 +14,7 @@ import screens.onb_salary_screen
 import screens.onb_income_screen
 import screens.onb_debt_screen
 import screens.onb_debt_amount_screen
+import screens.onb_savings_screen
 import screens.onb_chips_screen
 import screens.onb_result_screen
 import screens.login_screen
@@ -96,12 +98,25 @@ mountScreen(Window w) {
     w.bind(fresh)
 }
 
+invalidateDashboard() {
+    DashState.loaded = false
+    DashState.fresh = false
+}
+
+invalidateFinancialCaches() {
+    invalidateEnvelopes()
+    invalidateDashboard()
+}
+
 // Troca a tela ativa e re-renderiza.
 navigateTo(Window w, String screen) {
     AppState.loadError = ""
     AppState.loading = false
     if (screen == "envelopes" || screen == "welcome" || screen == "login") {
         resetEnvelopes()
+    }
+    if (screen == "dashboard" || screen == "welcome" || screen == "login") {
+        invalidateDashboard()
     }
     AppState.currentScreen = screen
     mountScreen(w)
@@ -130,7 +145,7 @@ Bool isEntryScreen() {
     var s = AppState.currentScreen
     return s == "welcome" || s == "login" || s == "signup" || s == "onboarding"
         || s == "onb_salary" || s == "onb_income" || s == "onb_debt"
-        || s == "onb_debt_amount" || s == "onb_chips" || s == "onb_result"
+        || s == "onb_debt_amount" || s == "onb_savings" || s == "onb_chips" || s == "onb_result"
 }
 
 View buildEntryContent(Window w) {
@@ -148,6 +163,9 @@ View buildEntryContent(Window w) {
     }
     if (AppState.currentScreen == "onb_debt_amount") {
         return onbDebtAmountScreen(w)
+    }
+    if (AppState.currentScreen == "onb_savings") {
+        return onbSavingsScreen(w)
     }
     if (AppState.currentScreen == "onb_chips") {
         return onbChipsScreen(w)

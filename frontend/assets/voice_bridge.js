@@ -18,17 +18,92 @@
   let lastUploadKey = "";
   let lastUploadTime = 0;
   let pendingInvoiceItems = [];
+  let pendingCreditItems = [];
   let pendingDocumentId = "";
+  // documentId anexado (uma vez) a proxima mensagem do chat apos um upload: o backend responde
+  // pela intencao ANALISAR_FATURA, deterministica, em vez do LLM.
+  let chatDocumentIdOnce = "";
+  // source anexado (uma vez) a proxima mensagem do chat quando originada por voz ("VOICE").
+  let chatSourceOnce = null;
+
+  function emitDataChanged(reason) {
+    try {
+      window.dispatchEvent(new CustomEvent("organiza:data-changed", { detail: { reason: reason || "update" } }));
+    } catch (_) {
+      window.dispatchEvent(new Event("organiza:data-changed"));
+    }
+  }
+
+  function clearPendingInvoice() {
+    pendingInvoiceItems = [];
+    pendingCreditItems = [];
+    pendingDocumentId = "";
+  }
 
   // A ponte carrega antes do modulo KOF e observa somente o cabecalho usado
   // nas chamadas same-origin. O token fica em memoria e nunca e persistido.
   const nativeFetch = window.fetch.bind(window);
   window.fetch = (input, init) => {
     const options = init || {};
-    const source = options.headers || (input instanceof Request ? input.headers : undefined);
-    if (source) {
-      const header = new Headers(source).get("Authorization");
+    const headerSource = options.headers || (input instanceof Request ? input.headers : undefined);
+    if (headerSource) {
+      const header = new Headers(headerSource).get("Authorization");
       if (header) authorization = header;
+    }
+    const url = typeof input === "string" ? input : (input instanceof Request ? input.url : String(input));
+    const method = String(options.method || (input instanceof Request ? input.method : "GET")).toUpperCase();
+    const isChatMessage = method === "POST" && (url.endsWith("/api/chat/message") || url.includes("/api/chat/message?")) && typeof options.body === "string";
+    if (isChatMessage) {
+      let nextInit = init;
+      let usedVoice = false;
+      if (chatDocumentIdOnce || chatSourceOnce) {
+        try {
+          const parsed = JSON.parse(options.body);
+          if (parsed && typeof parsed.message === "string") {
+            if (chatDocumentIdOnce) {
+              parsed.documentId = chatDocumentIdOnce;
+              chatDocumentIdOnce = "";
+            }
+            if (chatSourceOnce) {
+              parsed.source = chatSourceOnce;
+              usedVoice = chatSourceOnce === "VOICE";
+              chatSourceOnce = null;
+            }
+            nextInit = Object.assign({}, options, { body: JSON.stringify(parsed) });
+          }
+        } catch (_) { /* corpo nao-JSON segue intacto */ }
+      }
+      return nativeFetch(input, nextInit).then((response) => {
+        if (response && response.ok) {
+          if (usedVoice) {
+            emitDataChanged("voice-chat");
+          }
+          response.clone().json().then((data) => {
+            const replyText = data && typeof data.reply === "string" ? data.reply.toLowerCase() : "";
+            if (replyText && (
+              replyText.includes("salvei seus lançamentos") ||
+              replyText.includes("salvei nas suas caixinhas") ||
+              replyText.includes("confirmado:") ||
+              replyText.includes("estao salvos nas suas caixinhas") ||
+              replyText.includes("estão salvos nas suas caixinhas")
+            )) {
+              clearPendingInvoice();
+              chatDocumentIdOnce = "";
+              emitDataChanged("chat-invoice-confirm");
+            }
+          }).catch(() => {});
+        }
+        return response;
+      });
+    }
+    if (method === "POST" && (url.endsWith("/api/invoices/confirm") || url.includes("/api/invoices/confirm?"))) {
+      return nativeFetch(input, init).then((response) => {
+        if (response && response.ok) {
+          clearPendingInvoice();
+          emitDataChanged("invoice-confirm");
+        }
+        return response;
+      });
     }
     return nativeFetch(input, init);
   };
@@ -54,9 +129,11 @@
   function sendTranscript(text) {
     const input = document.getElementById("chat-input");
     const form = document.getElementById("chat-form");
-    if (!input || !form || !text) return;
+    const clean = (text || "").trim();
+    if (!input || !form || !clean || input.disabled) return;
     speakNextReply = true;
-    input.value = text.trim();
+    chatSourceOnce = "VOICE";
+    input.value = clean;
     input.dispatchEvent(new Event("input", { bubbles: true }));
     if (typeof form.requestSubmit === "function") {
       form.requestSubmit();
@@ -66,7 +143,8 @@
   }
 
   function handleVoiceTranscript(text) {
-    if (!text) return;
+    if (!text || !text.trim()) return;
+    chatSourceOnce = "VOICE";
     const parts = text.split(/\s+(?:e\s+também|e\s+mais|e\s+|também\s+|além\s+disso\s+|\n|;)\s*/i).filter(p => p.trim().length > 0);
     if (parts.length <= 1) {
       sendTranscript(text);
@@ -183,6 +261,150 @@
     });
   }
 
+  function ensureWaveAnimStyle() {
+    if (document.getElementById("organiza-wave-anim-style")) return;
+    const style = document.createElement("style");
+    style.id = "organiza-wave-anim-style";
+    style.textContent = `
+      @keyframes organizaWavePulse {
+        0%, 100% {
+          transform: translate3d(0, 0, 0);
+          opacity: 0.55;
+        }
+        50% {
+          transform: translate3d(2px, -1.5px, 0);
+          opacity: 1;
+        }
+      }
+      @keyframes organizaWaveFloat {
+        0%, 100% {
+          transform: translateY(0px);
+        }
+        50% {
+          transform: translateY(-1.5px);
+        }
+      }
+      .organiza-thinking-bubble {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+      .organiza-wave-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        animation: organizaWaveFloat 2.2s ease-in-out infinite;
+      }
+      .organiza-wave-line {
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: organizaWavePulse 1.6s ease-in-out infinite;
+      }
+      .organiza-wave-line-1 { animation-delay: 0s; }
+      .organiza-wave-line-2 { animation-delay: 0.22s; }
+      .organiza-wave-line-3 { animation-delay: 0.44s; }
+      .organiza-thinking-text {
+        font-style: italic;
+        font-size: 1rem;
+        line-height: 1.4em;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+    `;
+    (document.head || document.documentElement).appendChild(style);
+  }
+
+  function isLightTheme() {
+    if (document.documentElement.dataset.theme === "light") return true;
+    const candidates = [document.getElementById("shell"), document.body];
+    for (const el of candidates) {
+      if (!el) continue;
+      const inlineBg = (el.style && el.style.backgroundColor || "").toLowerCase();
+      if (inlineBg === "#f8f9fc" || inlineBg === "#ffffff" || inlineBg === "rgb(248, 249, 252)" || inlineBg === "rgb(255, 255, 255)") {
+        return true;
+      }
+      if (!window.getComputedStyle) continue;
+      const bg = window.getComputedStyle(el).backgroundColor || "";
+      const m = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?/i);
+      if (!m) continue;
+      if (m[4] !== undefined && Number(m[4]) === 0) continue;
+      const avg = (Number(m[1]) + Number(m[2]) + Number(m[3])) / 3;
+      return avg > 128;
+    }
+    return false;
+  }
+
+  function createOrganizaWaveSvg(isLight, prefix) {
+    const ns = "http://www.w3.org/2000/svg";
+    const gradId = `organiza-wave-grad-${prefix}-${isLight ? "light" : "dark"}`;
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("viewBox", "0 0 120 42");
+    svg.setAttribute("width", "38");
+    svg.setAttribute("height", "16");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("class", "organiza-wave-icon");
+
+    const defs = document.createElementNS(ns, "defs");
+    const grad = document.createElementNS(ns, "linearGradient");
+    grad.setAttribute("id", gradId);
+    grad.setAttribute("x1", "0");
+    grad.setAttribute("y1", "0");
+    grad.setAttribute("x2", "1");
+    grad.setAttribute("y2", "1");
+
+    const stop1 = document.createElementNS(ns, "stop");
+    stop1.setAttribute("offset", "0%");
+    stop1.setAttribute("stop-color", isLight ? "#2563EB" : "#00F0FF");
+
+    const stop2 = document.createElementNS(ns, "stop");
+    stop2.setAttribute("offset", "100%");
+    stop2.setAttribute("stop-color", isLight ? "#1D4ED8" : "#0066FF");
+
+    grad.appendChild(stop1);
+    grad.appendChild(stop2);
+    defs.appendChild(grad);
+    svg.appendChild(defs);
+
+    const paths = [
+      { d: "M8 10 Q30 2 60 10 T112 10", cls: "organiza-wave-line organiza-wave-line-1", op: "1" },
+      { d: "M8 21 Q30 13 60 21 T112 21", cls: "organiza-wave-line organiza-wave-line-2", op: "0.82" },
+      { d: "M8 32 Q30 24 60 32 T112 32", cls: "organiza-wave-line organiza-wave-line-3", op: "0.64" }
+    ];
+    for (const p of paths) {
+      const path = document.createElementNS(ns, "path");
+      path.setAttribute("d", p.d);
+      path.setAttribute("fill", "none");
+      path.setAttribute("stroke", `url(#${gradId})`);
+      path.setAttribute("stroke-width", "3.5");
+      path.setAttribute("stroke-linecap", "round");
+      path.setAttribute("opacity", p.op);
+      path.setAttribute("class", p.cls);
+      svg.appendChild(path);
+    }
+    return svg;
+  }
+
+  function enhanceChatTyping() {
+    const typingEl = document.getElementById("chat-typing");
+    if (!typingEl || typingEl.dataset.organizaWaveEnhanced === "1") return;
+    ensureWaveAnimStyle();
+    const isLight = isLightTheme();
+    const labelText = (typingEl.textContent || "").trim() || "...pensando";
+    typingEl.dataset.organizaWaveEnhanced = "1";
+    typingEl.classList.add("organiza-thinking-bubble");
+    typingEl.style.display = "inline-flex";
+    typingEl.style.alignItems = "center";
+    typingEl.style.gap = "10px";
+    typingEl.style.fontFamily = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+    typingEl.textContent = "";
+    typingEl.appendChild(createOrganizaWaveSvg(isLight, "typing"));
+    const span = document.createElement("span");
+    span.className = "organiza-thinking-text";
+    span.textContent = labelText;
+    typingEl.appendChild(span);
+  }
+
   function showOcrThinking(show) {
     const existing = document.getElementById("chat-ocr-thinking");
     if (!show) {
@@ -192,12 +414,16 @@
     if (existing) return;
     const list = document.getElementById("chat-messages");
     if (!list) return;
-    const isLight = document.documentElement.dataset.theme === "light" || document.body.style.backgroundColor === "rgb(245, 247, 251)";
+    ensureWaveAnimStyle();
+    const isLight = isLightTheme();
     const bubble = document.createElement("div");
     bubble.id = "chat-ocr-thinking";
-    bubble.textContent = "... pensando";
+    bubble.className = "organiza-thinking-bubble";
     bubble.style.alignSelf = "flex-start";
     bubble.style.maxWidth = "74%";
+    bubble.style.display = "inline-flex";
+    bubble.style.alignItems = "center";
+    bubble.style.gap = "10px";
     bubble.style.background = isLight ? "#E5E7EB" : "#1A1F3A";
     bubble.style.color = isLight ? "#6B7280" : "#7B8EAD";
     bubble.style.borderRadius = "20px 20px 20px 4px";
@@ -207,6 +433,11 @@
     bubble.style.fontStyle = "italic";
     bubble.style.margin = "0";
     bubble.style.fontFamily = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+    bubble.appendChild(createOrganizaWaveSvg(isLight, "ocr"));
+    const textSpan = document.createElement("span");
+    textSpan.className = "organiza-thinking-text";
+    textSpan.textContent = "organizando...";
+    bubble.appendChild(textSpan);
     list.insertBefore(bubble, list.firstChild);
   }
 
@@ -222,32 +453,69 @@
   }
 
   async function confirmPendingInvoiceIfNeeded(userText) {
-    if (!pendingInvoiceItems || pendingInvoiceItems.length === 0) return;
+    const hasPending = (pendingInvoiceItems && pendingInvoiceItems.length > 0) ||
+      (pendingCreditItems && pendingCreditItems.length > 0);
+    if (!hasPending) return;
     const msg = (userText || "").trim().toLowerCase();
     if (!msg) return;
-    const isAffirmation = msg === "sim" || msg === "sim!" || msg.startsWith("sim ") || msg.startsWith("sim,") ||
-      msg.includes("confirmo") || msg.includes("confirm") || msg.includes("pode salvar") ||
-      msg.includes("organizar") || msg.includes("distribua") || msg.includes("despesas") ||
-      msg.includes("70/20/10") || msg.includes("50/30/20") || msg === "ok";
-    if (!isAffirmation) return;
     const lastReply = lastAssistantReplyText();
     const awaitingFinalSave = lastReply.includes("Antes de eu salvar nas suas caixinhas") ||
       lastReply.includes("distribua esses gastos na regra") ||
       lastReply.includes("Quer que eu distribua");
     if (!awaitingFinalSave) return;
-    const items = pendingInvoiceItems;
+
+    const isCancel = msg === "não" || msg === "nao" || msg.startsWith("não ") || msg.startsWith("nao ") ||
+      msg.includes("cancela") || msg.includes("não salva") || msg.includes("nao salva") ||
+      msg.includes("não salvar") || msg.includes("nao salvar");
+    if (isCancel) {
+      clearPendingInvoice();
+      return;
+    }
+
+    const isAffirmation = msg === "sim" || msg === "sim!" || msg.startsWith("sim ") || msg.startsWith("sim,") ||
+      msg.includes("confirmo") || msg.includes("confirma") || msg.includes("confirm") || msg.includes("pode salvar") ||
+      msg.includes("organizar") || msg.includes("distribua") || msg.includes("despesas") ||
+      msg.includes("70/20/10") || msg.includes("50/30/20") || msg === "ok" || msg.includes("foram") ||
+      msg.includes("quero") || msg.includes("pode");
+    if (!isAffirmation) return;
+
+    const excludeCreditOps = msg.includes("só despesa") || msg.includes("so despesa") ||
+      msg.includes("apenas despesa") || msg.includes("sem pix") ||
+      msg.includes("sem credito") || msg.includes("sem crédito");
+    const itemsToConfirm = excludeCreditOps
+      ? pendingInvoiceItems.slice()
+      : pendingInvoiceItems.concat(pendingCreditItems);
+    if (itemsToConfirm.length === 0) {
+      clearPendingInvoice();
+      return;
+    }
+
+    const savedExpenses = pendingInvoiceItems;
+    const savedCredit = pendingCreditItems;
     const docId = pendingDocumentId;
-    pendingInvoiceItems = [];
-    pendingDocumentId = "";
+    clearPendingInvoice();
     if (!authorization && window.__kofAuthToken) {
       authorization = "Bearer " + window.__kofAuthToken;
     }
-    const payload = docId ? { items, documentId: docId } : { items };
-    await nativeFetch("/api/invoices/confirm", {
-      method: "POST",
-      headers: { "Authorization": authorization, "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    }).catch(() => {});
+    const payload = docId ? { items: itemsToConfirm, documentId: docId } : { items: itemsToConfirm };
+    try {
+      const resp = await nativeFetch("/api/invoices/confirm", {
+        method: "POST",
+        headers: { "Authorization": authorization, "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (resp && resp.ok) {
+        emitDataChanged("invoice-confirm");
+      } else {
+        pendingInvoiceItems = savedExpenses;
+        pendingCreditItems = savedCredit;
+        pendingDocumentId = docId;
+      }
+    } catch (_) {
+      pendingInvoiceItems = savedExpenses;
+      pendingCreditItems = savedCredit;
+      pendingDocumentId = docId;
+    }
   }
 
   async function uploadInvoice(file) {
@@ -282,7 +550,7 @@
       field.value = savedDraft;
       field.dispatchEvent(new Event("input", { bubbles: true }));
     };
-    setAttachmentStatus("... pensando", "loading");
+    setAttachmentStatus("organizando...", "loading");
     showOcrThinking(true);
     try {
       const fileBase64 = await fileAsBase64(file);
@@ -293,12 +561,43 @@
       });
       const payload = await response.json().catch(() => ({}));
       const status = String(payload.status || "");
-      const transactions = Array.isArray(payload.transactions) ? payload.transactions : [];
-      const extractionFailed = !response.ok || status === "EXTRACAO_FALHOU" || transactions.length === 0;
+      // Contagem e totais vem do backend (payload.summary, em centavos, separados por natureza).
+      // Nenhuma soma em JS e nenhum valor inventado: vao para confirmacao as despesas (DESPESA)
+      // e, se aprovadas pelo usuario, as operacoes de credito (OPERACAO_CREDITO); pendentes e
+      // pagamentos de fatura ficam de fora para evitar dupla contagem.
+      const summary = payload.summary || null;
+      const summaryLines = summary && Array.isArray(summary.lines) ? summary.lines : [];
+      const canonical = Array.isArray(payload.canonicalTransactions) ? payload.canonicalTransactions : [];
+      const legacyTxs = Array.isArray(payload.transactions) ? payload.transactions : [];
+      const extractedCount = summary && Number.isInteger(summary.extractedCount)
+        ? summary.extractedCount
+        : (canonical.length > 0 ? canonical.length : legacyTxs.length);
+      const totalStatementRows = summary && Number.isInteger(summary.totalStatementRows)
+        ? summary.totalStatementRows
+        : extractedCount;
+      const transactionsCount = extractedCount > 0 ? extractedCount : totalStatementRows;
+      const expenseIds = new Set(summaryLines
+        .filter(l => l.flowClass === "DESPESA" && Number.isInteger(l.amountMinor) && l.amountMinor > 0)
+        .map(l => l.txId));
+      const creditOpIds = new Set(summaryLines
+        .filter(l => l.flowClass === "OPERACAO_CREDITO" && Number.isInteger(l.amountMinor) && l.amountMinor > 0)
+        .map(l => l.txId));
+      const extractionFailed = !response.ok || status === "FALHA_EXTRACAO" || status === "EXTRACAO_FALHOU" || transactionsCount === 0;
+
+      if (response.status === 422 || response.status === 408) {
+        clearPendingInvoice();
+        chatDocumentIdOnce = "";
+        showOcrThinking(false);
+        restoreDraft();
+        setAttachmentStatus(response.status === 422
+          ? "Não há leitor de imagem (OCR) disponível no servidor. Envie um PDF com texto selecionável ou digite os gastos."
+          : "A leitura do arquivo demorou demais. Tente uma imagem menor ou mais nítida.", "error");
+        return;
+      }
 
       if (response.status === 402 || response.status === 503) {
-        pendingDocumentId = "";
-        pendingInvoiceItems = [];
+        clearPendingInvoice();
+        chatDocumentIdOnce = "";
         showOcrThinking(false);
         restoreDraft();
         setAttachmentStatus(response.status === 402
@@ -308,10 +607,10 @@
       }
 
       if (extractionFailed) {
-        pendingDocumentId = "";
-        pendingInvoiceItems = [];
+        clearPendingInvoice();
+        chatDocumentIdOnce = "";
         showOcrThinking(false);
-        setAttachmentStatus("", "idle");
+        setAttachmentStatus("Não foi possível extrair lançamentos válidos desse arquivo. Reenvie uma fatura em PDF, PNG, JPEG ou DOCX legível.", "error");
         const input = document.getElementById("chat-input");
         const form = document.getElementById("chat-form");
         if (input && form) {
@@ -325,20 +624,36 @@
         return;
       }
 
-      pendingDocumentId = payload.documentId ? String(payload.documentId) : "";
-      let totalAmount = 0;
-      for (const t of transactions) {
-        if (typeof t.amount === "number") totalAmount += t.amount;
-      }
-      pendingInvoiceItems = transactions.map(t => ({
-        description: String(t.description || "Gasto").trim(),
-        amount: Number(t.amount) || 0.01,
+      const toConfirmItem = (t) => ({
+        description: String(t.descriptionNormalized || t.descriptionRaw || "").trim() || "Despesa da fatura",
+        amount: t.amountMinor / 100,
         category: String(t.category || "OTHER")
-      }));
+      });
+      pendingDocumentId = payload.documentId ? String(payload.documentId) : "";
+      chatDocumentIdOnce = pendingDocumentId;
+      const isExcludedFlow = (t) => t.flowClass === "PAGAMENTO_FATURA" || t.flowClass === "PENDENTE_REVISAO";
+      if (summaryLines.length > 0) {
+        pendingInvoiceItems = canonical
+          .filter(t => !isExcludedFlow(t) && expenseIds.has(t.id) && Number.isInteger(t.amountMinor) && t.amountMinor > 0)
+          .map(toConfirmItem);
+        pendingCreditItems = canonical
+          .filter(t => !isExcludedFlow(t) && creditOpIds.has(t.id) && Number.isInteger(t.amountMinor) && t.amountMinor > 0)
+          .map(toConfirmItem);
+      } else {
+        pendingInvoiceItems = canonical
+          .filter(t => !isExcludedFlow(t) && Number.isInteger(t.amountMinor) && t.amountMinor > 0 && t.direction !== "CREDIT" &&
+            t.kind !== "PAYMENT" && t.kind !== "INCOME" && t.kind !== "REFUND" &&
+            t.reviewStatus !== "NEEDS_REVIEW" && t.reviewStatus !== "PENDENTE_REVISAO" &&
+            (t.reviewStatus === "CONFIRMED" || t.kind === "FEE" || t.kind === "INTEREST"))
+          .map(toConfirmItem);
+        pendingCreditItems = canonical
+          .filter(t => !isExcludedFlow(t) && Number.isInteger(t.amountMinor) && t.amountMinor > 0 && t.direction !== "CREDIT" && t.kind === "CARD_EXIT")
+          .map(toConfirmItem);
+      }
 
-      const count = transactions.length;
-      const countText = count === 1 ? "1 lançamento identificado" : `${count} lançamentos identificados`;
-      const formattedTotal = totalAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const countText = totalStatementRows > extractedCount && extractedCount > 0
+        ? `${extractedCount} de ${totalStatementRows} registros extraídos`
+        : (transactionsCount === 1 ? "1 registro extraído" : `${transactionsCount} registros extraídos`);
 
       showOcrThinking(false);
       setAttachmentStatus("", "idle");
@@ -346,7 +661,7 @@
       const input = document.getElementById("chat-input");
       const form = document.getElementById("chat-form");
       if (input && form) {
-        const msgText = `Fatura ${file.name} processada: ${countText} totalizando R$ ${formattedTotal}!`;
+        const msgText = `Fatura ${file.name} enviada: ${countText}. Analise o documento.`;
         input.value = msgText;
         input.dispatchEvent(new Event("input", { bubbles: true }));
         if (typeof form.requestSubmit === "function") form.requestSubmit();
@@ -409,5 +724,23 @@
     }
   }, true);
 
-  new MutationObserver(readNewAssistantReplies).observe(document.documentElement, { childList: true, subtree: true });
+  window.addEventListener("organiza:data-changed", () => {
+    if (document.getElementById("screen-envelopes") &&
+        !document.getElementById("env-new-modal") &&
+        !document.getElementById("env-edit-modal")) {
+      const navEnv = document.getElementById("nav-envelopes");
+      if (navEnv) navEnv.click();
+    } else if (document.getElementById("screen-dashboard")) {
+      const navDash = document.getElementById("nav-dashboard");
+      if (navDash) navDash.click();
+    }
+  });
+
+  function onDomMutated() {
+    readNewAssistantReplies();
+    enhanceChatTyping();
+  }
+
+  new MutationObserver(onDomMutated).observe(document.documentElement, { childList: true, subtree: true });
+  onDomMutated();
 })();

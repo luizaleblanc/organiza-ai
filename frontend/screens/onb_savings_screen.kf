@@ -1,0 +1,147 @@
+package screens
+
+import kof.ui
+import core.theme
+import core.app_state
+import core.format
+import core.auth_api
+import core.onb_api
+import core.dashboard_api
+import core.envelopes_api
+import core.chat_api
+import core.navigation
+import components.form_widgets
+
+// =============================================================================
+// Tela 6.1b — Poupança inicial (sub-etapa da Etapa 3 de 5)
+// =============================================================================
+// Dots (2 de 5), título, subtítulo, 3 radioChoiceCard:
+//   - "Sim" -> caixa condicional com bigMoneyAmount ("Quanto você já tem guardado?")
+//   - "Esses dados sobre mim estão errados. Limpe tudo." -> reset completo para "onb_salary"
+//   - "Não" -> avança para "onb_chips"
+// =============================================================================
+
+String msgInvalidSavingsAmount() = "Digite um valor entre R$ 1 e R$ 1.000.000."
+
+chooseSavings(Window w, String choice) {
+    OnboardingState.savingsChoice = choice
+    AppState.formError = ""
+    mountScreen(w)
+}
+
+resetOnboardingAndProfile(Window w) {
+    if (OnboardingState.submitting) {
+        return
+    }
+    OnboardingState.submitting = true
+    AppState.formError = ""
+    mountScreen(w)
+    try {
+        resetUserOnboardingData()
+        resetOnboardingState()
+        clearResultState()
+        invalidateFinancialCaches()
+        DashState.raw = ""
+        DashState.period = "month"
+        DashState.selectedSlice = -1
+        DashState.keepSliceSelection = false
+        resetEnvelopes()
+        ChatState.messages = ""
+        ChatUi.loadedFor = ""
+        ChatUi.draft = ""
+        ChatUi.pending = ""
+        ChatUi.pendingQueue = ""
+        ChatUi.activeRequests = 0
+        ChatUi.sending = false
+        ChatUi.error = ""
+        OnboardingState.submitting = false
+        navigateTo(w, "onb_salary")
+    } catch (String e) {
+        OnboardingState.submitting = false
+        if (SessionState.token == "") {
+            AppState.formError = msgSessionExpired()
+            navigateTo(w, "login")
+        } else {
+            AppState.formError = e
+            mountScreen(w)
+        }
+    }
+}
+
+savingsNext(Window w, Input field) {
+    val choice = OnboardingState.savingsChoice
+    if (choice == "YES") {
+        val raw = field.text().trim()
+        OnboardingState.savingsAmount = raw
+        try {
+            parseMoney(raw)
+        } catch (String e) {
+            AppState.formError = msgInvalidSavingsAmount()
+            mountScreen(w)
+            return
+        }
+        AppState.formError = ""
+        navigateTo(w, "onb_chips")
+        return
+    }
+    if (choice == "RESET") {
+        spawn {
+            resetOnboardingAndProfile(w)
+        }
+        return
+    }
+    if (choice == "NO") {
+        OnboardingState.savingsAmount = ""
+        AppState.formError = ""
+        navigateTo(w, "onb_chips")
+    }
+}
+
+View onbSavingsScreen(Window w) {
+    val choice = OnboardingState.savingsChoice
+
+    var title = onbTitle("Você tem alguma poupança?", "savings-title")
+    var subtitle = onbSubtitle("Isso preenche sua caixinha Reserva acumulada desde o primeiro dia.", "savings-subtitle")
+
+    var yes = radioChoiceCard("Sim", "choice-savings-yes", choice == "YES", () -> chooseSavings(w, "YES"))
+    var resetChoice = radioChoiceCard("Esses dados sobre mim estão errados. Limpe tudo.", "choice-savings-reset",
+        choice == "RESET", () -> chooseSavings(w, "RESET"))
+    var no = radioChoiceCard("Não", "choice-savings-no", choice == "NO", () -> chooseSavings(w, "NO"))
+
+    var cards = Column(listOf(yes, resetChoice, no))
+    cards.setStyle(choiceListCss())
+    var cardsBlock = View(screenStyle())
+    cardsBlock.setStyle(blockCss())
+    cardsBlock.bind(cards)
+
+    var savingsField = bigMoneyField(OnboardingState.savingsAmount, "savings-amount-input")
+    savingsField.on("input", () -> {
+        OnboardingState.savingsAmount = savingsField.text()
+    })
+
+    var next = disabledButton("Próximo", "btn-next")
+    if (OnboardingState.submitting) {
+        next = disabledButton("Limpando…", "btn-next")
+    } else if (choice == "RESET") {
+        next = primaryButton("Limpar e recomeçar", "btn-next", false, () -> savingsNext(w, savingsField))
+    } else if (choice != "") {
+        next = primaryButton("Próximo", "btn-next", false, () -> savingsNext(w, savingsField))
+    }
+
+    var items = listOf(dotsBlock(2), titleBlock(title, subtitle), cardsBlock)
+    if (choice == "YES") {
+        var boxLabel = Label("Quanto você já tem guardado?")
+        boxLabel.setStyle(pjLabelCss())
+        var boxHint = Label("Esse valor entra na sua Reserva acumulada.")
+        boxHint.setStyle(pjHintCss())
+        var savingsBox = Column(listOf(boxLabel, bigMoneyAmount(savingsField, "savings-amount-value"), boxHint))
+        savingsBox.setId("savings-amount-box")
+        savingsBox.setStyle(pjBoxCss())
+        items.add(savingsBox)
+    }
+    if (AppState.formError != "") {
+        items.add(errorBlock(AppState.formError))
+    }
+    items.add(buttonBlock(next))
+    return onbBody(items, onbColumn480Css())
+}

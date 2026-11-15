@@ -17,6 +17,7 @@ import core.auth_api
 // =============================================================================
 
 record ChipsRequest(List<String> fixed, List<String> variable)
+record InitialSavingsRequest(Double amount)
 
 String submitChips(List<String> fixed, List<String> variable) {
     var body = ""
@@ -36,6 +37,34 @@ String submitChips(List<String> fixed, List<String> variable) {
     }
     if (!body.trim().startsWith("[")) {
         throw msgNetwork()
+    }
+    return body
+}
+
+// Registra a reserva inicial acumulada informada no onboarding.
+String submitInitialSavings(Double amount) {
+    var body = ""
+    try {
+        body = apiPost("/api/users/me/initial-savings", json.encode(InitialSavingsRequest(amount)))
+    } catch (String e) {
+        throw msgNetwork()
+    }
+    if (isApiError(body)) {
+        throw apiErrorMessage(body)
+    }
+    return body
+}
+
+// Limpa os dados de onboarding e perfil financeiro para recomeçar do início.
+String resetUserOnboardingData() {
+    var body = ""
+    try {
+        body = apiPost("/api/users/me/reset-onboarding", "{}")
+    } catch (String e) {
+        throw msgNetwork()
+    }
+    if (isApiError(body)) {
+        throw apiErrorMessage(body)
     }
     return body
 }

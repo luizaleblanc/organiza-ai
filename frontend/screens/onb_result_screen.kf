@@ -20,6 +20,11 @@ import components.form_widgets
 
 class ResultState {
     static OnboardingResponse? last
+    static OnboardingResponse? empty
+}
+
+clearResultState() {
+    ResultState.last = ResultState.empty
 }
 
 sendOnboardingAndChips(Window w, List<String> fixed, List<String> variable) {
@@ -37,6 +42,13 @@ sendOnboardingAndChips(Window w, List<String> fixed, List<String> variable) {
         val result = submitOnboarding(parseMoney(OnboardingState.salary), OnboardingState.incomeType, OnboardingState.hasDebt, debt)
         ResultState.last = result
         submitChips(fixed, variable)
+        if (OnboardingState.savingsChoice == "YES" && OnboardingState.savingsAmount.trim() != "") {
+            val initialSavings = parseMoney(OnboardingState.savingsAmount)
+            if (initialSavings > 0.0) {
+                submitInitialSavings(initialSavings)
+            }
+        }
+        invalidateFinancialCaches()
         OnboardingState.submitting = false
         navigateTo(w, "onb_result")
     } catch (String e) {

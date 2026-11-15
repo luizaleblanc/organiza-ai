@@ -11,7 +11,7 @@ import components.form_widgets
 // Tela 6.1 — Valor da dívida (sub-etapa da Etapa 3 de 5)
 // =============================================================================
 // Dots (2 de 5), título, subtítulo, bigMoneyAmount ("R$" + bigMoneyField com
-// máscara de milhar), validação via parseMoney e "Próximo" → "onb_chips".
+// máscara de milhar), validação via parseMoney e "Próximo" → "onb_savings".
 // =============================================================================
 
 String msgInvalidAmount() = "Digite um valor entre R$ 1 e R$ 1.000.000."
@@ -28,7 +28,7 @@ debtAmountNext(Window w, Input field) {
     }
     OnboardingState.hasDebt = true
     AppState.formError = ""
-    navigateTo(w, "onb_chips")
+    navigateTo(w, "onb_savings")
 }
 
 View onbDebtAmountScreen(Window w) {

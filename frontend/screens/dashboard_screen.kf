@@ -635,6 +635,70 @@ View verticalBarLabel(BucketBalanceDTO b, Int i) {
     return col
 }
 
+Style distExplainBoxCss()       = themed(Style("display: flex; flex-direction: column; gap: 6; width: 100%; padding-top: 12; border-top: 1px solid rgba(0,0,0,.06); box-sizing: border-box"), Style("display: flex; flex-direction: column; gap: 6; width: 100%; padding-top: 12; border-top: 1px solid rgba(255,255,255,.06); box-sizing: border-box"))
+Style distExplainLineCss()      = themed(Style("color: #6B7280; font-size: 0.8125rem; line-height: 1.45em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #7B8EAD; font-size: 0.8125rem; line-height: 1.45em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+
+String bucketExplanation(String bucketName) {
+    if (bucketName == "Necessidades") {
+        return "Necessidades: tudo o que mantém seu mês funcionando — moradia, mercado, contas e transporte."
+    }
+    if (bucketName == "Folga") {
+        return "Folga: seu espaço para aproveitar o hoje e cobrir pequenos imprevistos sem culpa."
+    }
+    if (bucketName == "Poupança") {
+        return "Poupança: a parte que você guarda primeiro para dar fôlego à sua reserva e aos seus planos."
+    }
+    if (bucketName == "Desejos") {
+        return "Desejos: seu espaço para aproveitar o hoje com lazer, compras e mimos sem culpa."
+    }
+    if (bucketName == "Futuro") {
+        return "Futuro: a parte que você guarda primeiro para dar fôlego à sua reserva e aos seus planos."
+    }
+    if (bucketName == "Pessoal") {
+        return "Pessoal: um espaço mínimo para você respirar no dia a dia enquanto coloca as contas em ordem."
+    }
+    if (bucketName == "Quitação de Dívida") {
+        return "Quitação de Dívida: a fatia separada para reduzir seus débitos com prioridade até sair do vermelho."
+    }
+    if (bucketName == "Viver") {
+        return "Viver: tudo o que mantém seu mês funcionando — contas essenciais e gastos do dia a dia."
+    }
+    if (bucketName == "Guardar") {
+        return "Guardar: a parte que você guarda primeiro para dar fôlego à sua reserva e aos seus planos."
+    }
+    if (bucketName == "Essencial") {
+        return "Essencial: tudo o que mantém seu mês funcionando — moradia, mercado, contas e saúde."
+    }
+    if (bucketName == "Lazer") {
+        return "Lazer: seu espaço para aproveitar o hoje com passeios e momentos leves sem culpa."
+    }
+    if (bucketName == "Cultura") {
+        return "Cultura: livros, cursos e experiências que ampliam seu repertório dentro do orçamento."
+    }
+    if (bucketName == "Extras") {
+        return "Extras: aquela margem para presentes, celebrações e pequenos imprevistos do mês."
+    }
+    return bucketName + ": parte do seu orçamento reservada para manter esse pilar em equilíbrio."
+}
+
+View distributionExplanation(DashboardResponse d) {
+    var lines: List<View> = listOf()
+    var i = 0
+    for (var b in d.buckets) {
+        lines.add(idLabel(bucketExplanation(b.name), "dist-explain-" + i, distExplainLineCss()))
+        i = i + 1
+    }
+    if (i == 0) {
+        lines.add(idLabel(bucketExplanation("Necessidades"), "dist-explain-0", distExplainLineCss()))
+        lines.add(idLabel(bucketExplanation("Folga"), "dist-explain-1", distExplainLineCss()))
+        lines.add(idLabel(bucketExplanation("Poupança"), "dist-explain-2", distExplainLineCss()))
+    }
+    var box = Column(lines)
+    box.setId("dist-explain")
+    box.setStyle(distExplainBoxCss())
+    return box
+}
+
 // Gráfico em barras verticais do Modelo de Economia fiel à referência
 View distributionCard(Window w, DashboardResponse d) {
     var pillars: List<View> = listOf()
@@ -661,6 +725,8 @@ View distributionCard(Window w, DashboardResponse d) {
     chartWrap.setId("dash-bars")
     chartWrap.setStyle(barChartContainerCss())
 
+    var explain = distributionExplanation(d)
+
     var titleCss = cardTitleMobileCss()
     var cardCss = dashCardMobileCss()
     if (AppState.isDesktop) {
@@ -671,7 +737,7 @@ View distributionCard(Window w, DashboardResponse d) {
         idLabel("Modelo de Economia", "dist-title", titleCss),
         idLabel(modelFriendlyName(d.budgetModel), "dist-model", distributionModelCss())))
     heading.setStyle(distributionHeadingCss())
-    var card = Column(listOf(heading, chartWrap))
+    var card = Column(listOf(heading, chartWrap, explain))
     card.setId("card-distribution")
     card.setStyle(cardCss)
     return card
@@ -747,9 +813,10 @@ String dashSubtitle(DashboardResponse? d) {
 // ---------------------------------------------------------------- tela
 
 View dashboardScreen(Window w) {
-    if (DashState.fresh) {
+    if (DashState.fresh && DashState.loaded) {
         DashState.fresh = false
     } else {
+        DashState.fresh = false
         startLoad(w)
     }
     var d = dashboardData()

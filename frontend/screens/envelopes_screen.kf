@@ -251,6 +251,7 @@ removeEnvelope(Window w, String id) {
         return
     }
     loadEnvelopes()
+    invalidateDashboard()
     EnvState.busy = false
     if (redirectIfEnvSessionExpired(w, EnvState.loadError)) {
         return
@@ -297,6 +298,7 @@ submitEnvelopeEdit(Window w, Input nameField, Input limit) {
         EnvState.editingLimit = ""
         EnvState.formError = ""
         loadEnvelopes()
+        invalidateDashboard()
     } catch (String e) {
         err = e
         EnvState.formError = e
@@ -351,6 +353,7 @@ submitNewEnvelope(Window w, Input name, Input limit, List<String> availableBucke
         EnvState.showNew = false
         resetNewEnvelopeForm()
         loadEnvelopes()
+        invalidateDashboard()
     } catch (String e) {
         err = e
         EnvState.formError = e

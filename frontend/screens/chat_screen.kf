@@ -29,7 +29,7 @@ Style chatBodyCss()          = Style("display: flex; flex-direction: column; gap
 Style chatListCss()          = Style("display: flex; flex-direction: column-reverse; gap: 18; width: 100%; max-width: 1088; align-self: center; flex: 1 1 0; min-height: 0; overflow-y: auto; padding: 16px 10px; box-sizing: border-box")
 Style chatBubbleAiCss()      = themed(Style("align-self: flex-start; max-width: 74%; background: #E5E7EB; color: #1A1D2E; border: none; border-radius: 20px 20px 20px 4px; padding: 18px 22px; font-size: 1.125rem; font-weight: 500; line-height: 1.4em; white-space: pre-wrap; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("align-self: flex-start; max-width: 74%; background: #1A1F3A; color: #F0F0F0; border: none; border-radius: 20px 20px 20px 4px; padding: 18px 22px; font-size: 1.125rem; font-weight: 500; line-height: 1.4em; white-space: pre-wrap; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style chatBubbleUserCss()    = themed(Style("align-self: flex-end; max-width: 62%; background: #2563EB; color: #FFFFFF; font-weight: 600; border: none; border-radius: 20px 20px 4px 20px; padding: 18px 22px; font-size: 1.125rem; line-height: 1.4em; white-space: pre-wrap; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("align-self: flex-end; max-width: 62%; background: #00C8F5; color: #06121C; font-weight: 600; border: none; border-radius: 20px 20px 4px 20px; padding: 18px 22px; font-size: 1.125rem; line-height: 1.4em; white-space: pre-wrap; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
-Style chatTypingCss()        = themed(Style("align-self: flex-start; max-width: 74%; background: #E5E7EB; color: #6B7280; border: none; border-radius: 20px 20px 20px 4px; padding: 18px 22px; font-size: 1rem; line-height: 1.4em; font-style: italic; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("align-self: flex-start; max-width: 74%; background: #1A1F3A; color: #7B8EAD; border: none; border-radius: 20px 20px 20px 4px; padding: 18px 22px; font-size: 1rem; line-height: 1.4em; font-style: italic; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style chatTypingCss()        = themed(Style("align-self: flex-start; max-width: 74%; display: inline-flex; align-items: center; gap: 10; background: #E5E7EB; color: #6B7280; border: none; border-radius: 20px 20px 20px 4px; padding: 18px 22px; font-size: 1rem; line-height: 1.4em; font-style: italic; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("align-self: flex-start; max-width: 74%; display: inline-flex; align-items: center; gap: 10; background: #1A1F3A; color: #7B8EAD; border: none; border-radius: 20px 20px 20px 4px; padding: 18px 22px; font-size: 1rem; line-height: 1.4em; font-style: italic; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style chatComposerCss()      = Style("display: flex; flex-direction: column; width: 100%; max-width: 1040; align-self: center; flex-shrink: 0; gap: 8")
 Style chatBarCss()           = themed(Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 12; width: 100%; min-height: 78; flex-shrink: 0; box-sizing: border-box; background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 20; padding: 11px 12px; box-shadow: 0 8px 28px rgba(37,99,235,.08)"), Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 12; width: 100%; min-height: 78; flex-shrink: 0; box-sizing: border-box; background: #12162A; border: 1px solid rgba(0,212,255,.22); border-radius: 20; padding: 11px 12px; box-shadow: 0 8px 28px rgba(0,0,0,.2)"))
 Style chatInputCss()         = themed(Style("background: transparent; color: #1A1D2E; border: none; outline: none; height: 54; width: auto; flex: 1 1 0; min-width: 0; box-sizing: border-box; padding: 0 8px; font-size: 1.0625rem; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("background: transparent; color: #F0F0F0; border: none; outline: none; height: 54; width: auto; flex: 1 1 0; min-width: 0; box-sizing: border-box; padding: 0 8px; font-size: 1.0625rem; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
@@ -70,7 +70,7 @@ Label chatBubble(String role, String text, String id) {
 List<View> chatBubblesNewestFirst() {
     var out: List<View> = listOf()
     if (ChatUi.activeRequests > 0) {
-        var t = Label("... pensando")
+        var t = Label("...pensando")
         t.setId("chat-typing")
         t.setStyle(chatTypingCss())
         out.add(t)
@@ -199,6 +199,7 @@ View chatScreen(Window w) {
             mountScreen(w)
             spawn {
                 sendChatMessage(text)
+                invalidateFinancialCaches()
                 mountScreen(w)
             }
         }

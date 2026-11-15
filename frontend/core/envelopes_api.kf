@@ -72,6 +72,11 @@ String envelopeErrorMessage(String body) {
 
 String msgEnvelopeBucket() = "Esse grupo não existe no seu modelo de orçamento. Escolha um dos grupos sugeridos."
 
+invalidateEnvelopes() {
+    EnvState.loaded = false
+    EnvState.loadedFor = ""
+}
+
 resetEnvelopes() {
     EnvState.raw = ""
     EnvState.loadedFor = ""
@@ -156,7 +161,7 @@ List<EnvelopeItem> envelopeItems() {
 }
 
 // POST /api/envelopes {categoryName (nome livre, 1 a 40), limitAmount, bucket}. 400/409 trazem a mensagem pronta em PT. Bucket fora do
-// modelo = 400 "Bucket inválido..." -> mensagem fixa; "" omite bucket (Base Zero).
+// modelo = 400 "Bucket inválido..." -> mensagem fixa; "" omite bucket.
 createEnvelope(String name, Double limit, String bucket) {
     var payload = ""
     if (bucket != "") {

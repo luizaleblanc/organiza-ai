@@ -10,7 +10,7 @@ import components.form_widgets
 // Tela 6 — Dívidas (Etapa 3 de 5)
 // =============================================================================
 // Dots (2 de 5), título, subtítulo, dois radioChoiceCard (radio 18px).
-// "Sim" → "onb_debt_amount" (mesma etapa 3 de 5). "Não" → "onb_chips" (etapa 4).
+// "Sim" → "onb_debt_amount" (mesma etapa 3 de 5). "Não" → "onb_savings".
 // =============================================================================
 
 chooseDebt(Window w, String choice) {
@@ -28,7 +28,7 @@ debtNext(Window w) {
         OnboardingState.hasDebt = false
         OnboardingState.debtAmount = ""
         AppState.formError = ""
-        navigateTo(w, "onb_chips")
+        navigateTo(w, "onb_savings")
     }
 }
 

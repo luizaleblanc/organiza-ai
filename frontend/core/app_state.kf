@@ -56,7 +56,10 @@ class OnboardingState {
     static String modelDescription = ""
     // Tela 6 (F8b): "" (nada escolhido), "YES" ou "NO".
     static String debtChoice = ""
-    // Telas 6/6.1: envio do onboarding em andamento (um toque = uma chamada).
+    // Tela Poupança ("onb_savings"): "" (nada escolhido), "YES", "NO" ou "RESET".
+    static String savingsChoice = ""
+    static String savingsAmount = ""
+    // Telas 6/6.1/Poupança: envio em andamento (um toque = uma chamada).
     static Bool submitting = false
     // Etapa 4 (chips): selecionados separados por "," (defaults dos artefatos).
     static String fixedChips = "Aluguel,Contas,Transporte"
@@ -93,6 +96,23 @@ chatAppend(String role, String text) {
     ChatState.messages = ChatState.messages + role + "|" + text + "\n"
 }
 
+resetOnboardingState() {
+    OnboardingState.salary = ""
+    OnboardingState.incomeType = "FIXED"
+    OnboardingState.incomeChosen = false
+    OnboardingState.pjIncome = ""
+    OnboardingState.hasDebt = false
+    OnboardingState.debtAmount = ""
+    OnboardingState.suggestedModel = ""
+    OnboardingState.modelDescription = ""
+    OnboardingState.debtChoice = ""
+    OnboardingState.savingsChoice = ""
+    OnboardingState.savingsAmount = ""
+    OnboardingState.submitting = false
+    OnboardingState.fixedChips = "Aluguel,Contas,Transporte"
+    OnboardingState.variableChips = "Alimentação,Delivery"
+}
+
 resetSession() {
     SessionState.token = ""
     SessionState.userId = ""
@@ -100,6 +120,7 @@ resetSession() {
     SessionState.userEmail = ""
     SessionState.tier = "FREE"
     ChatState.messages = ""
+    resetOnboardingState()
     AppState.currentScreen = "welcome"
     AppState.themeMode = "dark"
 }
