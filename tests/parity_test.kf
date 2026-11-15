@@ -46,7 +46,7 @@
 
 enum BudgetModelType {
     STANDARD_503020, SURVIVAL_702010, ANTI_DEBT_701020,
-    SIMPLE_8020, KAKEIBO, FREELANCER_BASE_ZERO
+    SIMPLE_8020, KAKEIBO
 }
 
 enum Category {
@@ -162,11 +162,6 @@ List<BucketSummaryDTO> buildBudgetBuckets(BudgetModelType model, Double salary) 
             bucketOf("Cultura", 10, salary),
             bucketOf("Extras", 5, salary),
             bucketOf("Poupança", 20, salary))
-        case FREELANCER_BASE_ZERO -> listOf(
-            bucketOf("Pró-labore", 50, salary),
-            bucketOf("Impostos", 15, salary),
-            bucketOf("Operação", 30, salary),
-            bucketOf("Reserva", 5, salary))
     }
 }
 
@@ -246,12 +241,6 @@ String planBucketForTx(BudgetModelType model, Category? category) {
         return "Viver"
     }
     var b = toStandardBucket(category)
-    if (model == BudgetModelType.FREELANCER_BASE_ZERO) {
-        if (b == Bucket.NEEDS) {
-            return "Pró-labore"
-        }
-        return "Operação"
-    }
     if (b == Bucket.NEEDS) {
         return "Necessidades"
     }
@@ -291,9 +280,6 @@ GetBalanceOutput calculateBalance(String userId, String fromIso) {
             resultBuckets.add(BucketBalanceDTO(b.name, b.percentage, b.amount, spent, b.amount - spent))
         }
 
-        if (model == BudgetModelType.FREELANCER_BASE_ZERO) {
-            return GetBalanceOutput(model.name(), resultBuckets, totalSpent, salary - totalSpent)
-        }
         return GetBalanceOutput(model.name(), resultBuckets, 0.0, 0.0)
     }
     throw "Usuário não encontrado."
