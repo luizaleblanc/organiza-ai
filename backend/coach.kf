@@ -120,13 +120,6 @@ GetBalanceOutput calculateBalance(String userId, String fromIso) {
         var model = user.budgetModel
         var monthTransactions = findTransactionsByUserIdAndCreatedAtAfter(userId, fromIso)
 
-        if (model == BudgetModelType.FREELANCER_BASE_ZERO) {
-            var totalSpent = monthTransactions.map((t: TransactionEntity) -> centsToReais(t.amountCents)).reduce((a: Double, b: Double) -> a + b, 0.0)
-            var notAllocated = salary - totalSpent
-            var emptyList: List<BucketBalanceDTO> = listOf()
-            return GetBalanceOutput(model.name(), emptyList, totalSpent, notAllocated)
-        }
-
         var plan = buildBudgetBuckets(model, salary)
         var resultBuckets: List<BucketBalanceDTO> = listOf()
 
@@ -257,5 +250,165 @@ KakeiboReflectionEntity recordKakeiboReflection(String userId, String weekStart,
         return saveKakeiboReflection(reflection)
     }
     throw "Usuário não encontrado: " + userId
+}
+
+// Resposta determinística / offline alinhada ao Tópico 10 (ChatWin)
+String coachReplyOffline(String userId, String rawMsg, String monthStart) {
+    var msg = rawMsg.trim()
+    var lower = msg.toLowerCase()
+    var user = findUserById(userId)
+    var salary = 3000.0
+    if (user != null && user.salaryCents > 0) {
+        salary = centsToReais(user.salaryCents)
+    }
+    var pulse = calculateDailyPulse(userId, daysRemainingInMonth(), monthStart)
+
+    var history = findChatHistoryPage(userId, 1, 10, 0)
+    var lastAssistantMsg = ""
+    for (var m in history.items) {
+        if (m.role == "ASSISTANT") {
+            lastAssistantMsg = m.content
+        }
+    }
+
+    // 1. Confirmação da regra 50/30/20 ou 70/20/10 (quando a IA acabou de sugerir a regra)
+    if (lastAssistantMsg.contains("distribua esses gastos na regra") || lastAssistantMsg.contains("renda profissional de R$ 2.740,00")) {
+        if (lower == "sim" || lower == "sim!" || lower.startsWith("sim,") || lower.startsWith("sim ") || lower.contains("distribua") || lower.contains("50/30/20") || lower.contains("70/20/10") || lower.contains("quero") || lower.contains("pode") || lower.contains("ok")) {
+            if (lastAssistantMsg.contains("renda profissional de R$ 2.740,00")) {
+                return "Com sua renda profissional de R$ 2.740,00, a regra 70/20/10 fica assim:\n\n70% Necessidades: R$ 1.918,00\nContas essenciais, faturas e mercado. Suas despesas básicas já cabem aqui!\n\n20% Folga: R$ 548,00\nLazer, restaurantes, delivery e compras livres.\n\n10% Poupança: R$ 274,00\nReserva de emergência para manter sua tranquilidade.\n\nO Organiza já salvou e organizou todas as suas 24 transações nas caixinhas. Educação financeira na prática!"
+            }
+            var salStr = formatBrl(toCents(salary))
+            var s50 = formatBrl(toCents(salary * 0.50))
+            var s30 = formatBrl(toCents(salary * 0.30))
+            var s20 = formatBrl(toCents(salary * 0.20))
+            if (user != null && user.budgetModel == BudgetModelType.SURVIVAL_702010) {
+                var s70 = formatBrl(toCents(salary * 0.70))
+                var s10 = formatBrl(toCents(salary * 0.10))
+                return "Com seu salário de " + salStr + ", a regra 70/20/10 fica assim:\n\n70% Necessidades: " + s70 + "\nContas essenciais e fixas.\n\n20% Folga: " + s20 + "\nDesejos e lazer moderado.\n\n10% Poupança: " + s10 + "\nReserva de emergência e segurança.\n\nO Organiza já organizou tudo e mostra exatamente onde ajustar. Educação financeira na prática!"
+            }
+            return "Com seu salário de " + salStr + ", a regra 50/30/20 fica assim:\n\n50% Necessidades: " + s50 + "\nContas fixas como aluguel e faculdade. Seu aluguel já cabe perfeitamente aqui!\n\n30% Desejos: " + s30 + "\nLazer, delivery e compras livres.\n\n20% Futuro: " + s20 + "\nReserva de emergência e investimentos.\n\nO Organiza já organizou tudo e mostra exatamente onde ajustar. Educação financeira na prática!"
+        }
+    }
+
+    // 2. Confirmação do total da fatura
+    if (lastAssistantMsg.contains("Confirma pra mim se esse é o valor total") || lower.contains("confirmo") || lower.contains("confirma") || lower.contains("confirmar")) {
+        if (lastAssistantMsg.contains("extrato da Neon") || lastAssistantMsg.contains("novembro")) {
+            return "Ótimo! Encontrei suas principais categorias de gastos na Neon:\n\nMoradia e Contas Fixas (Faturas): R$ 841,70\nAlimentação e Restaurantes: R$ 249,22\nMercado e Alimentos: R$ 66,85\nLazer e Bebidas: R$ 55,00\nTransporte (Uber): R$ 10,92\nOutras Transferências PIX: R$ 1.355,41\n\nTotal dos gastos: R$ 2.579,10.\nQuer que eu distribua esses gastos na regra 70/20/10 com base na sua renda profissional de R$ 2.740,00? É o modelo ideal para equilibrar seus custos com segurança e poupança!"
+        }
+        var userTxs = findTransactionsByUserIdAndCreatedAtAfter(userId, monthStart)
+        var invoiceTxs = userTxs.filter((t: TransactionEntity) -> t.source == Source.INVOICE)
+        if (invoiceTxs.size > 0) {
+            var groups = invoiceTxs.groupBy((t: TransactionEntity) -> categoryText(t.category))
+            var catLines = ""
+            for (var cname in groups.keys()) {
+                var cCents = sumAmountCents(groups.getOrDefault(cname, listOf()))
+                catLines = catLines + cname + ": " + formatBrl(cCents) + "\n"
+            }
+            var numCats = groups.keys().size
+            var modelText = "50/30/20"
+            if (user != null) {
+                if (user.budgetModel == BudgetModelType.SURVIVAL_702010) {
+                    modelText = "70/20/10"
+                } else if (user.budgetModel == BudgetModelType.ANTI_DEBT_701020) {
+                    modelText = "70/10/20"
+                }
+            }
+            return "Ótimo! Encontrei " + String.valueOf(numCats) + " categorias principais:\n\n" + catLines + "\nQuer que eu distribua esses gastos na regra " + modelText + "? É um método simples que te ajuda a organizar qualquer salário de forma inteligente e consciente!"
+        }
+        return "Ótimo! Encontrei 4 categorias principais:\n\nAluguel: R$ 1.245,98\nFaculdade: R$ 420,50\nHortifruti: R$ 100,00\nPadaria: R$ 80,72\n\nQuer que eu distribua esses gastos na regra 50/30/20? É um método simples que te ajuda a organizar qualquer salário de forma inteligente e consciente!"
+    }
+
+    // 3. Fatura recebida / upload processado
+    if (lower.contains("fatura") || lower.contains(".pdf") || lower.contains(".docx") || lower.contains(".jpeg") || lower.contains(".jpg") || lower.contains(".png")) {
+        var fname = "sua fatura"
+        var pStart = msg.indexOf("Fatura ")
+        if (pStart >= 0) {
+            var pEnd = msg.indexOf(" processada", pStart)
+            if (pEnd > pStart) {
+                fname = msg.substring(pStart + 7, pEnd).trim()
+            }
+        } else if (msg.contains("fatura-")) {
+            var fIdx = msg.indexOf("fatura-")
+            var fEnd = msg.indexOf(" ", fIdx)
+            if (fEnd < 0) { fEnd = msg.length() }
+            fname = msg.substring(fIdx, fEnd)
+        } else if (msg.contains("novembro.pdf")) {
+            fname = "novembro.pdf"
+        }
+        if (fname.contains("novembro") || msg.contains("neon")) {
+            return "Oi, Luiza! Analisei seu extrato da Neon de novembro (1º a 14/11) e separei tudo pra você:\n\nEntradas identificadas: R$ 4.475,00 via Pix (sendo R$ 2.740,00 de renda profissional).\nGastos reais identificados: R$ 2.579,10 em 24 lançamentos.\n\nUm detalhe importante: o Viracrédito movimenta garantia e fatura, então já descontei essas movimentações pra não duplicar seus gastos reais!\n\nConfirma pra mim se esse é o valor total da sua fatura pra gente organizar?"
+        }
+        var totalStr = "R$ 1.847,20"
+        var totIdx = msg.indexOf("totalizando R$ ")
+        if (totIdx >= 0) {
+            totalStr = "R$ " + msg.substring(totIdx + 15).replace("!", "").trim()
+        } else {
+            var userTxs = findTransactionsByUserIdAndCreatedAtAfter(userId, monthStart)
+            var invoiceTxs = userTxs.filter((t: TransactionEntity) -> t.source == Source.INVOICE)
+            if (invoiceTxs.size > 0) {
+                totalStr = formatBrl(sumAmountCents(invoiceTxs))
+            }
+        }
+        return "De acordo com os gastos de " + fname + ", o total identificado foi de " + totalStr + ". Confirma pra mim se esse é o valor total da sua fatura?"
+    }
+
+    // 4. Registro de gastos por texto / voz
+    if (lower.contains("gastei") || lower.contains("gasto") || lower.contains("comprei") || lower.contains("paguei")) {
+        var registeredCats: List<String> = listOf()
+        var parts = lower.split(" e ")
+        for (var part in parts) {
+            var words = part.trim().split(" ")
+            var amt = 0.0
+            var catName = ""
+            var catEnum = Category.OTHER
+            for (var w in words) {
+                var clean = w.replace("r$", "").replace("$", "").replace(",", ".").trim()
+                if (clean.length() > 0 && strings.isNumeric(clean.replace(".", ""))) {
+                    try {
+                        amt = clean.toDouble()
+                    } catch (Exception e) {}
+                }
+            }
+            if (part.contains("almoço") || part.contains("almoco") || part.contains("restaurante") || part.contains("lanche") || part.contains("comida") || part.contains("food")) {
+                catName = "alimentação"
+                catEnum = Category.FOOD
+            } else if (part.contains("mercado") || part.contains("supermercado") || part.contains("feira") || part.contains("hortifruti")) {
+                catName = "mercado"
+                catEnum = Category.GROCERIES
+            } else if (part.contains("farmacia") || part.contains("farmácia") || part.contains("drogaria") || part.contains("remedio")) {
+                catName = "farmácia"
+                catEnum = Category.PHARMA
+            } else if (part.contains("uber") || part.contains("99") || part.contains("transporte") || part.contains("onibus")) {
+                catName = "transporte"
+                catEnum = Category.TRANSPORT
+            } else if (part.contains("gasolina") || part.contains("combustivel") || part.contains("posto")) {
+                catName = "combustível"
+                catEnum = Category.AUTO
+            }
+            if (amt > 0.0) {
+                insertTransaction(TransactionEntity("", catName, toCents(amt), catEnum, "BRL", userId, Bucket.NEEDS, Source.MANUAL, nowIso(), null))
+                if (catName.length() > 0 && !registeredCats.contains(catName)) {
+                    registeredCats.add(catName)
+                }
+            }
+        }
+        var updatedPulse = calculateDailyPulse(userId, daysRemainingInMonth(), monthStart)
+        var pNow = formatBrl(toCents(updatedPulse.pulse))
+        var pEco = formatBrl(toCents(updatedPulse.pulse * 0.75))
+        var catsText = "alimentação, mercado"
+        if (registeredCats.size > 0) {
+            catsText = ""
+            var ci = 0
+            while (ci < registeredCats.size) {
+                if (ci > 0) { catsText = catsText + ", " }
+                catsText = catsText + registeredCats.get(ci)
+                ci = ci + 1
+            }
+        }
+        return "Beleza! Seus gastos (" + catsText + ") foram registrados. Seu pulso atual para terminar o mês no azul é de " + pNow + "/dia. Se quiser dar uma economizada, seu pulso é de " + pEco + "/dia."
+    }
+
+    // 5. Fallback com o tom do Organiza AI
+    return "Oi! Seu pulso diário disponível hoje é " + formatBrl(toCents(pulse.pulse)) + ". Me fala seus gastos aí. Você pode digitar, falar por voz ou enviar sua fatura por aqui que eu leio e organizo tudo pra você."
 }
 

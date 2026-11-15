@@ -934,6 +934,16 @@ void deleteTransactionsByUserId(String userId) {
     }
 }
 
+void deleteChatMessagesByUserId(String userId) {
+    if (strings.isNumeric(userId)) {
+        var uid = userId.toLong()
+        var messages = orm.where<ChatMessageRow>(DbConn.handle, "userId", uid)
+        for (var row in messages) {
+            orm.delete<ChatMessageRow>(DbConn.handle, row.id())
+        }
+    }
+}
+
 // Sempre insere: o id vem do banco (PERS-06/07); texto vai por bind, gravado literal (PERS-15).
 TransactionEntity insertTransaction(TransactionEntity transaction) {
     return insertTransactionOn(DbConn.handle, transaction)

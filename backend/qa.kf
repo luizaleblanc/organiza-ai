@@ -8,7 +8,13 @@ String qaNewEmail() = "qa-novo@organiza.local"
 String qaPassword() = "Qa@Organiza1"
 
 String qaScreenName(String requested) {
-    var allowed = listOf("dashboard", "chat", "envelopes", "notifications", "settings", "welcome")
+    if (requested == "caixinhas") { return "envelopes" }
+    if (requested == "notificacoes") { return "notifications" }
+    if (requested == "configuracoes") { return "settings" }
+    if (requested == "boas-vindas") { return "welcome" }
+    if (requested == "cadastro") { return "signup" }
+    if (requested == "onboarding") { return "onb_salary" }
+    var allowed = listOf("dashboard", "chat", "envelopes", "notifications", "settings", "welcome", "login", "signup", "onb_salary", "onb_income", "onb_debt", "onb_result", "onb_chips")
     if (allowed.contains(requested)) { return requested }
     return "dashboard"
 }
@@ -111,12 +117,12 @@ QaSeedResult resetQaData() {
 }
 
 String qaGuide() {
-    return "Organiza AI - QA local\n" +
-        "Conta pronta: qa@organiza.local / Qa@Organiza1\n" +
-        "Conta sem onboarding: qa-novo@organiza.local / Qa@Organiza1\n" +
-        "POST /api/qa/seed - recria os dados da demonstracao\n" +
-        "POST /api/qa/reset - limpa somente os dados da conta pronta\n" +
-        "Desktop: /qa/dashboard /qa/chat /qa/caixinhas /qa/notificacoes /qa/configuracoes /qa/boas-vindas\n" +
-        "Mobile: /qa/mobile/dashboard /qa/mobile/chat /qa/mobile/caixinhas /qa/mobile/notificacoes /qa/mobile/configuracoes /qa/mobile/boas-vindas\n" +
-        "Entrada: /login /cadastro /onboarding\n"
+    return "Organiza AI - QA Local & Rotas Dinâmicas\n\n" +
+        "Rotas Dinâmicas Diretas:\n" +
+        "  Desktop: /qa/view/:screen (ex: /qa/view/dashboard, /qa/view/chat, /qa/view/caixinhas, /qa/view/configuracoes)\n" +
+        "  Mobile:  /qa/mobile/view/:screen (ex: /qa/mobile/view/dashboard, /qa/mobile/view/chat, /qa/mobile/view/caixinhas)\n\n" +
+        "Atalhos Rápidos:\n" +
+        "  Desktop: /qa/dashboard · /qa/chat · /qa/caixinhas · /qa/notificacoes · /qa/configuracoes\n" +
+        "  Mobile:  /qa/mobile/dashboard · /qa/mobile/chat · /qa/mobile/caixinhas · /qa/mobile/notificacoes · /qa/mobile/configuracoes\n" +
+        "  Entrada: /login · /cadastro · /onboarding\n"
 }
