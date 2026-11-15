@@ -1,22 +1,8 @@
 // backend/invoice.kf
-// Pipeline 100% KOF de leitura de faturas orientada a intencao (Gates 1, 2 e 3).
-// Suporta PDF textual (/FlateDecode + /ToUnicode CMap + Tj/TJ), PDF escaneado (OCR ou revisao),
-// PNG, JPEG (validacao binaria IHDR/IEND e SOI/EOI + Windows.Media.Ocr.OcrEngine direto da JVM) e DOCX (ZIP LFH + Inflater).
-// Zero dependencia de Python, zero consumo de tokens LLM para extracao, matematica e reconciliacao.
-
-import java.util.Base64
-import java.util.Collections
-import java.util.HexFormat
-import java.util.zip.Inflater
-import java.util.concurrent.TimeUnit
-import java.nio.ByteBuffer
-import java.lang.Character
-import java.lang.Runtime
-import java.io.File
-import java.io.FileWriter
-import java.io.ByteArrayOutputStream
-import java.nio.file.Files
-import java.security.MessageDigest
+// Pipeline 100% KOF + KofDB + KOF Agents de leitura de faturas orientada a intencao (Gates 1, 2 e 3).
+// Zero import java.*: utiliza apenas kof.io, kof.process, kof.security.crypto e kof.orm/kof.db.
+// Suporta PDF textual (RFC 1951 Inflate em KOF + /ToUnicode CMap por fonte + Td/Tm/Tj/TJ),
+// DOCX (ZIP LFH + Inflate em KOF), PNG e JPEG.
 
 // =========================================================
 // Contratos de Entrada/Saida e Modelo Canonico (Gates 1 e 3)
@@ -151,17 +137,15 @@ record ParsedLineOutcome(CanonicalTransaction? tx, CanonicalTotal? total, String
 record ClassificationMatch(String category, String rule, Double confidence, String reviewStatus)
 
 // =========================================================
-// Registro em Memoria Thread-Safe (Maquina de Estados e Idempotencia)
+// Persistencia 100% KofDB (FinancialDocumentRow + ExtractedTransactionRow em backend/store.kf)
+// Orquestracao pelos 6 KOF Agents:
+//   - AgentIngestaoDocumento
+//   - AgentExtratorPdfDom
+//   - AgentExtratorDocx
+//   - AgentExtratorOcr
+//   - AgentClassificadorContabil
+//   - AgentReconciliadorAntiAlucinacao
 // =========================================================
-
-class InvoiceRegistry {
-    static Map<String, String> docs = Collections.synchronizedMap(mapOf())
-    static Map<String, String> reviews = Collections.synchronizedMap(mapOf())
-    static Map<String, String> texts = Collections.synchronizedMap(mapOf())
-    static Map<String, String> userShaToDoc = Collections.synchronizedMap(mapOf())
-    static Map<String, String> confirmedDocs = Collections.synchronizedMap(mapOf())
-    static Map<String, String> confirmedBatches = Collections.synchronizedMap(mapOf())
-}
 
 // ~2 MB binarios = ~2,8 milhoes de chars em base64. Acima disso a rota responde 413.
 Int invoiceMaxBase64Chars() {
@@ -229,20 +213,495 @@ String cleanBase64Input(String b64) {
 }
 
 // =========================================================
-// Seguranca: Hash SHA-256, Extensao e Magic Bytes Reais
+// Primitivas 100% KOF: Codepoint, Base64, Latin-1/UTF-8, SHA-256 e RFC 1951 Inflate
+// =========================================================
+
+String codePointToString(Int cp) {
+    if (cp <= 0) {
+        return ""
+    }
+    if (cp < 65536) {
+        return "" + (cp as Char)
+    }
+    if (cp <= 1114111) {
+        var v = cp - 65536
+        return "" + ((55296 + (v >> 10)) as Char) + ((56320 + (v & 1023)) as Char)
+    }
+    return ""
+}
+
+Int base64CharVal(Int ch) {
+    if (ch >= 65 && ch <= 90) {
+        return ch - 65
+    }
+    if (ch >= 97 && ch <= 122) {
+        return ch - 97 + 26
+    }
+    if (ch >= 48 && ch <= 57) {
+        return ch - 48 + 52
+    }
+    if (ch == 43) {
+        return 62
+    }
+    if (ch == 47) {
+        return 63
+    }
+    if (ch == 61) {
+        return -2
+    }
+    return -1
+}
+
+Int[] decodeBase64ToInts(String cleanB64) {
+    var n = cleanB64.length()
+    if (n == 0 || n % 4 != 0) {
+        throw "INVALID_FILE: base64 invalido"
+    }
+    var pad = 0
+    if (cleanB64.charAt(n - 1) == 61) {
+        pad = pad + 1
+    }
+    if (n >= 2 && cleanB64.charAt(n - 2) == 61) {
+        pad = pad + 1
+    }
+    var outLen = (n / 4) * 3 - pad
+    if (outLen < 0) {
+        throw "INVALID_FILE: base64 invalido"
+    }
+    var out = new Int[outLen]
+    var i = 0
+    var oi = 0
+    while (i < n) {
+        var v0 = base64CharVal(cleanB64.charAt(i))
+        var v1 = base64CharVal(cleanB64.charAt(i + 1))
+        var v2 = base64CharVal(cleanB64.charAt(i + 2))
+        var v3 = base64CharVal(cleanB64.charAt(i + 3))
+        if (v0 < 0 || v1 < 0 || v2 == -1 || v3 == -1) {
+            throw "INVALID_FILE: base64 invalido"
+        }
+        var b2 = 0
+        if (v2 >= 0) {
+            b2 = v2
+        }
+        var b3 = 0
+        if (v3 >= 0) {
+            b3 = v3
+        }
+        if (v2 == -2 && v3 != -2) {
+            throw "INVALID_FILE: base64 invalido"
+        }
+        var triple = (v0 << 18) | (v1 << 12) | (b2 << 6) | b3
+        if (oi < outLen) {
+            out[oi] = (triple >> 16) & 255
+            oi = oi + 1
+        }
+        if (v2 >= 0 && oi < outLen) {
+            out[oi] = (triple >> 8) & 255
+            oi = oi + 1
+        }
+        if (v3 >= 0 && oi < outLen) {
+            out[oi] = triple & 255
+            oi = oi + 1
+        }
+        i = i + 4
+    }
+    return out
+}
+
+String joinStringTree(List<String> parts) {
+    if (parts.size == 0) {
+        return ""
+    }
+    var current = parts
+    while (current.size > 1) {
+        var next: List<String> = listOf()
+        var i = 0
+        while (i < current.size) {
+            if (i + 1 < current.size) {
+                next.add(current.get(i) + current.get(i + 1))
+            } else {
+                next.add(current.get(i))
+            }
+            i = i + 2
+        }
+        current = next
+    }
+    return current.get(0)
+}
+
+String latin1FromInts(Int[] data, Int off, Int len) {
+    var chunks: List<String> = listOf()
+    var end = off + len
+    if (end > data.length) {
+        end = data.length
+    }
+    var i = off
+    var buf = ""
+    var cnt = 0
+    while (i < end) {
+        var b = data[i] & 255
+        buf = buf + (b as Char)
+        cnt = cnt + 1
+        if (cnt >= 128) {
+            chunks.add(buf)
+            buf = ""
+            cnt = 0
+        }
+        i = i + 1
+    }
+    if (buf != "") {
+        chunks.add(buf)
+    }
+    return joinStringTree(chunks)
+}
+
+String utf8FromInts(Int[] data, Int off, Int len) {
+    var chunks: List<String> = listOf()
+    var end = off + len
+    if (end > data.length) {
+        end = data.length
+    }
+    var i = off
+    var buf = ""
+    var cnt = 0
+    while (i < end) {
+        var b0 = data[i] & 255
+        var piece = ""
+        if (b0 < 128) {
+            piece = "" + (b0 as Char)
+            i = i + 1
+        } else if ((b0 & 224) == 192 && i + 1 < end) {
+            var b1 = data[i + 1] & 255
+            if ((b1 & 192) == 128) {
+                var cp = ((b0 & 31) << 6) | (b1 & 63)
+                piece = codePointToString(cp)
+                i = i + 2
+            } else {
+                piece = "" + (b0 as Char)
+                i = i + 1
+            }
+        } else if ((b0 & 240) == 224 && i + 2 < end) {
+            var b1 = data[i + 1] & 255
+            var b2 = data[i + 2] & 255
+            if ((b1 & 192) == 128 && (b2 & 192) == 128) {
+                var cp = ((b0 & 15) << 12) | ((b1 & 63) << 6) | (b2 & 63)
+                piece = codePointToString(cp)
+                i = i + 3
+            } else {
+                piece = "" + (b0 as Char)
+                i = i + 1
+            }
+        } else if ((b0 & 248) == 240 && i + 3 < end) {
+            var b1 = data[i + 1] & 255
+            var b2 = data[i + 2] & 255
+            var b3 = data[i + 3] & 255
+            if ((b1 & 192) == 128 && (b2 & 192) == 128 && (b3 & 192) == 128) {
+                var cp = ((b0 & 7) << 18) | ((b1 & 63) << 12) | ((b2 & 63) << 6) | (b3 & 63)
+                piece = codePointToString(cp)
+                i = i + 4
+            } else {
+                piece = "" + (b0 as Char)
+                i = i + 1
+            }
+        } else {
+            piece = "" + (b0 as Char)
+            i = i + 1
+        }
+        buf = buf + piece
+        cnt = cnt + 1
+        if (cnt >= 128) {
+            chunks.add(buf)
+            buf = ""
+            cnt = 0
+        }
+    }
+    if (buf != "") {
+        chunks.add(buf)
+    }
+    return joinStringTree(chunks)
+}
+
+class PdfHuff {
+    Int[] count
+    Int[] firstCode
+    Int[] firstSym
+    Int[] symbols
+
+    public constructor(Int[] lengths) {
+        this.count = new Int[16]
+        var total = 0
+        var i = 0
+        while (i < lengths.length) {
+            var l = lengths[i]
+            if (l > 0) {
+                this.count[l] = this.count[l] + 1
+                total = total + 1
+            }
+            i = i + 1
+        }
+        this.symbols = new Int[total]
+        this.firstSym = new Int[16]
+        var idx = 0
+        var len = 1
+        while (len <= 15) {
+            this.firstSym[len] = idx
+            var sym = 0
+            while (sym < lengths.length) {
+                if (lengths[sym] == len) {
+                    this.symbols[idx] = sym
+                    idx = idx + 1
+                }
+                sym = sym + 1
+            }
+            len = len + 1
+        }
+        this.firstCode = new Int[16]
+        var code = 0
+        var bits = 1
+        while (bits <= 15) {
+            code = (code + this.count[bits - 1]) << 1
+            this.firstCode[bits] = code
+            bits = bits + 1
+        }
+    }
+
+    Int decode(PdfInflate r) {
+        var code = 0
+        var len = 1
+        while (len <= 15) {
+            code = (code << 1) | r.readBits(1)
+            if (this.count[len] > 0 && code - this.firstCode[len] < this.count[len]) {
+                return this.symbols[this.firstSym[len] + (code - this.firstCode[len])]
+            }
+            len = len + 1
+        }
+        throw "INVALID_FILE: fluxo comprimido invalido"
+    }
+}
+
+PdfHuff fixedLitTable() {
+    var lens = new Int[288]
+    var i = 0
+    while (i < 288) {
+        if (i < 144) {
+            lens[i] = 8
+        } else if (i < 256) {
+            lens[i] = 9
+        } else if (i < 280) {
+            lens[i] = 7
+        } else {
+            lens[i] = 8
+        }
+        i = i + 1
+    }
+    return PdfHuff(lens)
+}
+
+PdfHuff fixedDistTable() {
+    var lens = new Int[30]
+    var i = 0
+    while (i < 30) {
+        lens[i] = 5
+        i = i + 1
+    }
+    return PdfHuff(lens)
+}
+
+class PdfInflate {
+    Int[] data
+    Int pos
+    Int bitBuf
+    Int bitCnt
+    Int[] out
+    Int outPos
+    List<Int> lenBase
+    List<Int> lenExtra
+    List<Int> distBase
+    List<Int> distExtra
+    List<Int> order
+
+    public constructor(Int[] data) {
+        this.data = data
+        this.pos = 0
+        this.bitBuf = 0
+        this.bitCnt = 0
+        this.out = new Int[8192]
+        this.outPos = 0
+        this.lenBase = listOf(3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258)
+        this.lenExtra = listOf(0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0)
+        this.distBase = listOf(1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577)
+        this.distExtra = listOf(0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13)
+        this.order = listOf(16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15)
+    }
+
+    Int run() {
+        var done = 0
+        while (done == 0) {
+            done = readBits(1)
+            var btype = readBits(2)
+            if (btype == 0) {
+                stored()
+            } else if (btype == 1) {
+                huffman(fixedLitTable(), fixedDistTable())
+            } else if (btype == 2) {
+                dynamic()
+            } else {
+                throw "INVALID_FILE: bloco deflate corrompido"
+            }
+        }
+        return this.outPos
+    }
+
+    void stored() {
+        this.bitBuf = 0
+        this.bitCnt = 0
+        if (this.pos + 4 > this.data.length) {
+            throw "INVALID_FILE: fluxo comprimido truncado"
+        }
+        var len = (this.data[this.pos] & 255) | ((this.data[this.pos + 1] & 255) << 8)
+        this.pos = this.pos + 4
+        var i = 0
+        while (i < len && this.pos + i < this.data.length) {
+            emit(this.data[this.pos + i] & 255)
+            i = i + 1
+        }
+        this.pos = this.pos + len
+    }
+
+    void huffman(PdfHuff lit, PdfHuff dist) {
+        var running = true
+        while (running) {
+            var sym = lit.decode(this)
+            if (sym < 256) {
+                emit(sym)
+            } else if (sym == 256) {
+                running = false
+            } else {
+                var li = sym - 257
+                var length = this.lenBase.get(li) + readBits(this.lenExtra.get(li))
+                var dsym = dist.decode(this)
+                var distance = this.distBase.get(dsym) + readBits(this.distExtra.get(dsym))
+                var i = 0
+                while (i < length) {
+                    emit(this.out[this.outPos - distance] & 255)
+                    i = i + 1
+                }
+            }
+        }
+    }
+
+    void dynamic() {
+        var hlit = readBits(5) + 257
+        var hdist = readBits(5) + 1
+        var hclen = readBits(4) + 4
+        var clLens = new Int[19]
+        var i = 0
+        while (i < hclen) {
+            clLens[this.order.get(i)] = readBits(3)
+            i = i + 1
+        }
+        var clHuff = PdfHuff(clLens)
+        var total = hlit + hdist
+        var lens = new Int[total]
+        var n = 0
+        while (n < total) {
+            var sym = clHuff.decode(this)
+            if (sym < 16) {
+                lens[n] = sym
+                n = n + 1
+            } else {
+                var rep = 0
+                var fill = 0
+                if (sym == 16) {
+                    rep = readBits(2) + 3
+                    fill = lens[n - 1]
+                } else if (sym == 17) {
+                    rep = readBits(3) + 3
+                } else {
+                    rep = readBits(7) + 11
+                }
+                var k = 0
+                while (k < rep && n < total) {
+                    lens[n] = fill
+                    n = n + 1
+                    k = k + 1
+                }
+            }
+        }
+        var litLens = new Int[hlit]
+        var j = 0
+        while (j < hlit) {
+            litLens[j] = lens[j]
+            j = j + 1
+        }
+        var distLens = new Int[hdist]
+        j = 0
+        while (j < hdist) {
+            distLens[j] = lens[hlit + j]
+            j = j + 1
+        }
+        huffman(PdfHuff(litLens), PdfHuff(distLens))
+    }
+
+    void emit(Int b) {
+        if (this.outPos >= 4000000) {
+            throw "INVALID_FILE: limite de descompressao excedido"
+        }
+        if (this.outPos >= this.out.length) {
+            var newCap = this.out.length * 2
+            if (newCap > 4000000) {
+                newCap = 4000000
+            }
+            var nextBuf = new Int[newCap]
+            var k = 0
+            while (k < this.outPos) {
+                nextBuf[k] = this.out[k]
+                k = k + 1
+            }
+            this.out = nextBuf
+        }
+        this.out[this.outPos] = b & 255
+        this.outPos = this.outPos + 1
+    }
+
+    Int readBits(Int n) {
+        var v = 0
+        var i = 0
+        while (i < n) {
+            if (this.bitCnt == 0) {
+                if (this.pos >= this.data.length) {
+                    throw "INVALID_FILE: fluxo comprimido truncado"
+                }
+                this.bitBuf = this.data[this.pos] & 255
+                this.pos = this.pos + 1
+                this.bitCnt = 8
+            }
+            v = v | ((this.bitBuf & 1) << i)
+            this.bitBuf = this.bitBuf >> 1
+            this.bitCnt = this.bitCnt - 1
+            i = i + 1
+        }
+        return v
+    }
+}
+
+// =========================================================
+// Seguranca: Hash SHA-256 (crypto stdlib), Extensao e Magic Bytes Reais
 // =========================================================
 
 String sha256HexOfString(String input) {
-    var md = MessageDigest.getInstance("SHA-256")
-    var digest = md.digest(input.getBytes())
-    return HexFormat.of().formatHex(digest)
+    return crypto.sha256(input)
 }
 
 String sha256HexOfBase64Bytes(String cleanB64) {
-    var bytes = Base64.getDecoder().decode(cleanB64)
-    var md = MessageDigest.getInstance("SHA-256")
-    var digest = md.digest(bytes)
-    return HexFormat.of().formatHex(digest)
+    var raw = decodeBase64ToInts(cleanB64)
+    var bytes = new Byte[raw.length]
+    var i = 0
+    while (i < raw.length) {
+        bytes[i] = raw[i] as Byte
+        i = i + 1
+    }
+    return crypto.sha256Bytes(bytes)
 }
 
 String sanitizeAndValidateFilename(String? filename) {
@@ -340,46 +799,40 @@ String detectAndValidateFormat(String rawLatin1, String? ext, Bool strictBinaryO
 }
 
 String pdfBytesAsLatin1(String b64) {
-    var bytes = Base64.getDecoder().decode(b64)
-    return new java.lang.String(bytes, "ISO-8859-1")
+    var ints = decodeBase64ToInts(b64)
+    return latin1FromInts(ints, 0, ints.length)
 }
 
 // =========================================================
-// Descompressao e Parser PDF Nativo em KOF (/FlateDecode + /ToUnicode CMap)
+// Descompressao e Parser PDF Nativo em KOF (PdfInflate + /ToUnicode CMap por Fonte)
 // =========================================================
 
 String inflateRange(String b64, String pdf, Int off, Int len) {
-    if (len < 2) {
+    if (len < 2 || off < 0 || off + len > pdf.length()) {
         throw "INVALID_FILE: stream PDF vazio"
     }
-    var cmf = pdf.charAt(off)
-    var flg = pdf.charAt(off + 1)
+    var cmf = pdf.charAt(off) & 255
+    var flg = pdf.charAt(off + 1) & 255
     if (cmf % 16 != 8 || (cmf * 256 + flg) % 31 != 0) {
         throw "INVALID_FILE: stream PDF corrompido"
     }
-    var bytes = Base64.getDecoder().decode(b64)
-    var inf = new Inflater()
-    inf.setInput(bytes, off, len)
-    var buf = ByteBuffer.allocate(8192)
-    var out = new ByteArrayOutputStream()
-    var going = true
-    while (going) {
-        buf.clear()
-        var n = inf.inflate(buf)
-        if (n > 0) {
-            out.write(buf.array(), 0, n)
-        }
-        if (inf.finished() || (n == 0 && (inf.needsInput() || inf.needsDictionary()))) {
-            going = false
-        }
-        // Protecao contra bomba de descompressao: limite de 4 MB por stream.
-        if (out.size() > 4000000) {
-            inf.end()
-            throw "INVALID_FILE: limite de descompressao excedido no PDF"
-        }
+    var hdr = 2
+    if ((flg & 32) != 0) {
+        hdr = 6
     }
-    inf.end()
-    return out.toString("ISO-8859-1")
+    if (hdr >= len) {
+        throw "INVALID_FILE: stream PDF truncado"
+    }
+    var compLen = len - hdr
+    var comp = new Int[compLen]
+    var i = 0
+    while (i < compLen) {
+        comp[i] = pdf.charAt(off + hdr + i) & 255
+        i = i + 1
+    }
+    var inf = PdfInflate(comp)
+    var outLen = inf.run()
+    return latin1FromInts(inf.out, 0, outLen)
 }
 
 Bool isDelimiter(Int c) {
@@ -418,7 +871,20 @@ Int? parseHexInt(String hex) {
 }
 
 String toFixedHex(Int value, Int width) {
-    var hex = Integer.toHexString(value).toUpperCase()
+    var digits = "0123456789ABCDEF"
+    var v = value
+    if (v < 0) {
+        v = 0
+    }
+    var hex = ""
+    if (v == 0) {
+        hex = "0"
+    }
+    while (v > 0) {
+        var nib = v % 16
+        hex = digits.substring(nib, nib + 1) + hex
+        v = v / 16
+    }
     while (hex.length() < width) {
         hex = "0" + hex
     }
@@ -433,7 +899,7 @@ String hexDstToUnicodeString(String hexDst) {
         while (i + 3 < clean.length()) {
             var code = parseHexInt(clean.substring(i, i + 4))
             if (code != null && code > 0) {
-                out = out + Character.toString(code)
+                out = out + codePointToString(code)
             }
             i = i + 4
         }
@@ -444,7 +910,7 @@ String hexDstToUnicodeString(String hexDst) {
         while (i + 1 < clean.length()) {
             var code = parseHexInt(clean.substring(i, i + 2))
             if (code != null && code > 0) {
-                out = out + Character.toString(code)
+                out = out + codePointToString(code)
             }
             i = i + 2
         }
@@ -554,7 +1020,7 @@ void parseCMapStreamInto(String content, Map<String, String> cmap) {
                                             var cur = sVal
                                             var offset = 0
                                             while (cur <= eVal) {
-                                                cmap.put(toFixedHex(cur, sHex.length()), Character.toString(dVal + offset))
+                                                cmap.put(toFixedHex(cur, sHex.length()), codePointToString(dVal + offset))
                                                 cur = cur + 1
                                                 offset = offset + 1
                                             }
@@ -593,7 +1059,7 @@ String decodePdfHexString(String rawHex, Map<String, String> cmap) {
                 } else {
                     var cp = parseHexInt(key)
                     if (cp != null && cp >= 32 && cp <= 65533) {
-                        res = res + Character.toString(cp)
+                        res = res + codePointToString(cp)
                     }
                 }
                 i = i + 4
@@ -611,7 +1077,7 @@ String decodePdfHexString(String rawHex, Map<String, String> cmap) {
                 } else {
                     var cp = parseHexInt(key)
                     if (cp != null && cp >= 32) {
-                        res = res + Character.toString(cp)
+                        res = res + codePointToString(cp)
                     }
                 }
                 i = i + 2
@@ -626,7 +1092,7 @@ String decodePdfHexString(String rawHex, Map<String, String> cmap) {
         while (i + 3 < clean.length()) {
             var cp = parseHexInt(clean.substring(i, i + 4))
             if (cp != null && cp >= 32) {
-                res = res + Character.toString(cp)
+                res = res + codePointToString(cp)
             }
             i = i + 4
         }
@@ -643,7 +1109,7 @@ String decodePdfHexString(String rawHex, Map<String, String> cmap) {
             if (hi < 0) {
                 hi = h
             } else {
-                out = out + Character.toString(hi * 16 + h)
+                out = out + codePointToString(hi * 16 + h)
                 hi = -1
             }
         }
@@ -652,18 +1118,56 @@ String decodePdfHexString(String rawHex, Map<String, String> cmap) {
     return out
 }
 
-Bool isLineBreakOperator(String op) {
-    return op == "Td" || op == "TD" || op == "T*" || op == "Tm" || op == "ET" || op == "'" || op == "\""
+Double? tryParsePdfNum(String tok) {
+    if (tok == "" || !tok.matches("[-+]?[0-9]*[.]?[0-9]+")) {
+        return null
+    }
+    try {
+        return tok.toDouble()
+    } catch (String e) {
+        return null
+    }
 }
 
-List<String> contentLines(String content, Map<String, String> cmap) {
+Double absDouble(Double x) {
+    if (x < 0.0) {
+        return 0.0 - x
+    }
+    return x
+}
+
+Int parseLeadingObjId(String tailHeader) {
+    var s = tailHeader.trim()
+    var tokens = s.replaceAll("\\s+", " ").split(" ")
+    if (tokens.size >= 2 && tokens[tokens.size - 1] == "0") {
+        var maybe = tokens[tokens.size - 2]
+        if (strings.isNumeric(maybe)) {
+            return maybe.toInt()
+        }
+    }
+    return -1
+}
+
+List<String> contentLinesPerFont(String content, Map<String, Map<String, String>> fontCmaps, Map<String, String> fallbackCmap) {
     var lines: List<String> = listOf()
     var line = ""
     var inArray = false
+    var currentFont = ""
+    var pendingFont = ""
+    var prevNum2 = ""
+    var prevNum1 = ""
+    var lastTmY = -999999.0
     var i = 0
     var n = content.length()
     while (i < n) {
         var c = content.charAt(i)
+        var activeCmap = fallbackCmap
+        if (currentFont != "" && fontCmaps.containsKey(currentFont)) {
+            var fc = fontCmaps.get(currentFont)
+            if (fc != null) {
+                activeCmap = fc
+            }
+        }
         if (c == 40) {
             var depth = 1
             var literal = ""
@@ -680,7 +1184,7 @@ List<String> contentLines(String content, Map<String, String> cmap) {
                             i = i + 1
                             k = k + 1
                         }
-                        literal = literal + Character.toString(code)
+                        literal = literal + codePointToString(code)
                         i = i + 1
                     } else {
                         if (e == 110 || e == 114 || e == 116) {
@@ -703,14 +1207,13 @@ List<String> contentLines(String content, Map<String, String> cmap) {
                     i = i + 1
                 }
             }
-            if (!cmap.isEmpty() && literal.length() >= 2) {
-                // Algumas fontes Identity-H emitem bytes literais que tambem correspondem ao CMap
+            if (!activeCmap.isEmpty() && literal.length() >= 2) {
                 var maybeMapped = ""
                 var li = 0
                 var allMapped = literal.length() % 2 == 0
                 while (allMapped && li + 1 < literal.length()) {
-                    var hexCode = toFixedHex(literal.charAt(li) * 256 + literal.charAt(li + 1), 4)
-                    var hit = cmap.get(hexCode)
+                    var hexCode = toFixedHex((literal.charAt(li) & 255) * 256 + (literal.charAt(li + 1) & 255), 4)
+                    var hit = activeCmap.get(hexCode)
                     if (hit != null) {
                         maybeMapped = maybeMapped + hit
                     } else {
@@ -732,7 +1235,11 @@ List<String> contentLines(String content, Map<String, String> cmap) {
                 i = i + 1
             }
             var hexSpan = content.substring(hexStart, i)
-            line = line + decodePdfHexString(hexSpan, cmap)
+            var decodedHex = decodePdfHexString(hexSpan, activeCmap)
+            if (decodedHex == "" && !fallbackCmap.isEmpty()) {
+                decodedHex = decodePdfHexString(hexSpan, fallbackCmap)
+            }
+            line = line + decodedHex
             i = i + 1
         } else if (c == 91) {
             inArray = true
@@ -740,6 +1247,14 @@ List<String> contentLines(String content, Map<String, String> cmap) {
         } else if (c == 93) {
             inArray = false
             i = i + 1
+        } else if (c == 47) {
+            var nameStart = i + 1
+            var nameEnd = nameStart
+            while (nameEnd < n && !isDelimiter(content.charAt(nameEnd))) {
+                nameEnd = nameEnd + 1
+            }
+            pendingFont = content.substring(nameStart, nameEnd)
+            i = nameEnd
         } else if (!isDelimiter(c) || c == 39 || c == 34) {
             var start = i
             while (i < n && !isDelimiter(content.charAt(i))) {
@@ -751,13 +1266,57 @@ List<String> contentLines(String content, Map<String, String> cmap) {
             var op = content.substring(start, i)
             if (inArray && op.matches("-[0-9]+([.][0-9]+)?") && op.toDouble() < -200.0 && !line.endsWith(" ")) {
                 line = line + " "
-            }
-            if (isLineBreakOperator(op)) {
-                var t = line.trim()
-                if (t.length() > 0) {
-                    lines.add(t)
+            } else if (!inArray) {
+                if (op == "Tf") {
+                    if (pendingFont != "") {
+                        currentFont = pendingFont
+                    }
+                } else if (op == "BT") {
+                    var prevTrim = line.trim()
+                    if (prevTrim.length() > 0) {
+                        lines.add(prevTrim)
+                    }
+                    line = ""
+                    lastTmY = -999999.0
+                } else if (op == "ET" || op == "T*" || op == "'" || op == "\"") {
+                    var t = line.trim()
+                    if (t.length() > 0) {
+                        lines.add(t)
+                    }
+                    line = ""
+                    if (op == "ET") {
+                        lastTmY = -999999.0
+                    }
+                } else if (op == "Td" || op == "TD") {
+                    var dy = tryParsePdfNum(prevNum1)
+                    var dx = tryParsePdfNum(prevNum2)
+                    if (dy != null && absDouble(dy) < 0.05) {
+                        if (dx != null && absDouble(dx) > 25.0 && line != "" && !line.endsWith(" ")) {
+                            line = line + " "
+                        }
+                    } else {
+                        var tTd = line.trim()
+                        if (tTd.length() > 0) {
+                            lines.add(tTd)
+                        }
+                        line = ""
+                    }
+                } else if (op == "Tm") {
+                    var curY = tryParsePdfNum(prevNum1)
+                    if (curY != null) {
+                        if (lastTmY > -900000.0 && absDouble(curY - lastTmY) > 1.0) {
+                            var tTm = line.trim()
+                            if (tTm.length() > 0) {
+                                lines.add(tTm)
+                            }
+                            line = ""
+                        }
+                        lastTmY = curY
+                    }
+                } else {
+                    prevNum2 = prevNum1
+                    prevNum1 = op
                 }
-                line = ""
             }
         } else {
             i = i + 1
@@ -771,16 +1330,100 @@ List<String> contentLines(String content, Map<String, String> cmap) {
 }
 
 // =========================================================
-// Extratores por Formato 100% em KOF (PDF, DOCX, PNG/JPEG)
+// AgentExtratorPdfDom: Descompressao, CMaps por Fonte (/ToUnicode) e Fluxos de Pagina
 // =========================================================
+
+void linkFontCmapsFromDict(String dictText, Map<Int, Map<String, String>> cmapsByObj, Map<String, Map<String, String>> fontCmaps, Int selfObjId) {
+    // Caso 1: proprio objeto de fonte <selfObjId> contem /ToUnicode <tuId> 0 R -> /F<selfObjId>
+    var tuPos = dictText.indexOf("/ToUnicode")
+    if (tuPos >= 0 && selfObjId > 0) {
+        var afterTu = dictText.substring(tuPos + 10).trim()
+        var parts = afterTu.replaceAll("[^0-9]+", " ").trim().split(" ")
+        if (parts.size >= 1 && strings.isNumeric(parts[0])) {
+            var tuId = parts[0].toInt()
+            if (cmapsByObj.containsKey(tuId)) {
+                var cm = cmapsByObj.get(tuId)
+                if (cm != null) {
+                    fontCmaps.put("F" + selfObjId, cm)
+                }
+            }
+        }
+    }
+}
+
+void resolveFontResourceMappings(String pdfLatin1, Map<Int, Int> fontObjToTuObj, Map<Int, Map<String, String>> cmapsByObj, Map<String, Map<String, String>> fontCmaps) {
+    var pos = 0
+    while (pos >= 0 && pos < pdfLatin1.length()) {
+        var fPos = pdfLatin1.indexOf("/Font", pos)
+        if (fPos < 0) {
+            pos = -1
+        } else {
+            var subStart = pdfLatin1.indexOf("<<", fPos)
+            if (subStart >= 0 && subStart - fPos < 16) {
+                var subEnd = pdfLatin1.indexOf(">>", subStart + 2)
+                if (subEnd > subStart) {
+                    var block = pdfLatin1.substring(subStart + 2, subEnd)
+                    var tokens = block.replaceAll("\\s+", " ").trim().split(" ")
+                    var ti = 0
+                    while (ti + 3 < tokens.size) {
+                        var tk = tokens[ti]
+                        if (tk.startsWith("/") && tokens[ti + 2] == "0" && tokens[ti + 3] == "R" && strings.isNumeric(tokens[ti + 1])) {
+                            var resName = tk.substring(1)
+                            var fObjId = tokens[ti + 1].toInt()
+                            if (fontObjToTuObj.containsKey(fObjId)) {
+                                var tuIdOpt = fontObjToTuObj.get(fObjId)
+                                if (tuIdOpt != null && cmapsByObj.containsKey(tuIdOpt)) {
+                                    var cm = cmapsByObj.get(tuIdOpt)
+                                    if (cm != null) {
+                                        fontCmaps.put(resName, cm)
+                                    }
+                                }
+                            }
+                            ti = ti + 4
+                        } else {
+                            ti = ti + 1
+                        }
+                    }
+                }
+            }
+            pos = fPos + 5
+        }
+    }
+}
 
 List<IndexedLine> extractPdfIndexedLines(String cleanB64, String pdfLatin1, List<String> warnings) {
     var contentStreams: List<String> = listOf()
     var embeddedJpegs: List<ByteSpan> = listOf()
-    var cmap: Map<String, String> = mapOf()
+    var fallbackCmap: Map<String, String> = mapOf()
+    var cmapsByObj: Map<Int, Map<String, String>> = mapOf()
+    var fontCmaps: Map<String, Map<String, String>> = mapOf()
+    var fontObjToTuObj: Map<Int, Int> = mapOf()
+
+    // Passo 1: catalogar mapas /ToUnicode em todos os objetos de fonte do PDF
+    var fScan = 0
+    while (fScan >= 0 && fScan < pdfLatin1.length()) {
+        var tuIdx = pdfLatin1.indexOf("/ToUnicode", fScan)
+        if (tuIdx < 0) {
+            fScan = -1
+        } else {
+            var objStart = pdfLatin1.lastIndexOf(" obj", tuIdx)
+            if (objStart > 0) {
+                var tailStart = objStart - 24
+                if (tailStart < 0) { tailStart = 0 }
+                var objId = parseLeadingObjId(pdfLatin1.substring(tailStart, objStart))
+                var afterTu = pdfLatin1.substring(tuIdx + 10).trim()
+                var numToks = afterTu.replaceAll("[^0-9]+", " ").trim().split(" ")
+                if (objId > 0 && numToks.size >= 1 && strings.isNumeric(numToks[0])) {
+                    fontObjToTuObj.put(objId, numToks[0].toInt())
+                }
+            }
+            fScan = tuIdx + 10
+        }
+    }
+
+    // Passo 2: extrair todos os streams (CMaps por objeto e paginas de texto)
     var pos = 0
     var going = true
-
     while (going) {
         var idx = pdfLatin1.indexOf("stream", pos)
         if (idx < 0) {
@@ -800,8 +1443,12 @@ List<IndexedLine> extractPdfIndexedLines(String cleanB64, String pdfLatin1, List
                 going = false
             } else {
                 var objStart = pdfLatin1.lastIndexOf(" obj", idx)
+                var objId = -1
                 var dict = ""
                 if (objStart >= 0) {
+                    var headOff = objStart - 24
+                    if (headOff < 0) { headOff = 0 }
+                    objId = parseLeadingObjId(pdfLatin1.substring(headOff, objStart))
                     dict = pdfLatin1.substring(objStart, idx)
                 }
                 if (dict.contains("/Image") && dict.contains("/DCTDecode")) {
@@ -830,10 +1477,15 @@ List<IndexedLine> extractPdfIndexedLines(String cleanB64, String pdfLatin1, List
                         } else if (!dict.contains("/Filter")) {
                             content = pdfLatin1.substring(start, end)
                         }
-                        if (content.contains("beginbfchar") || content.contains("beginbfrange")) {
-                            parseCMapStreamInto(content, cmap)
-                        }
-                        if (content.contains("BT")) {
+                        var isCmap = content.contains("beginbfchar") || content.contains("beginbfrange")
+                        if (isCmap) {
+                            var localCmap: Map<String, String> = mapOf()
+                            parseCMapStreamInto(content, localCmap)
+                            if (objId > 0) {
+                                cmapsByObj.put(objId, localCmap)
+                            }
+                            parseCMapStreamInto(content, fallbackCmap)
+                        } else if (content.contains("BT")) {
                             contentStreams.add(content)
                         }
                     }
@@ -842,6 +1494,18 @@ List<IndexedLine> extractPdfIndexedLines(String cleanB64, String pdfLatin1, List
             }
         }
     }
+
+    // Passo 3: vincular /F<id> e dicionarios /Font << /Fx id 0 R >> aos respectivos ToUnicode CMaps
+    for (var fid in fontObjToTuObj.keys()) {
+        var tuIdOpt = fontObjToTuObj.get(fid)
+        if (tuIdOpt != null && cmapsByObj.containsKey(tuIdOpt)) {
+            var cm = cmapsByObj.get(tuIdOpt)
+            if (cm != null) {
+                fontCmaps.put("F" + fid, cm)
+            }
+        }
+    }
+    resolveFontResourceMappings(pdfLatin1, fontObjToTuObj, cmapsByObj, fontCmaps)
 
     var out: List<IndexedLine> = listOf()
     var page = 0
@@ -852,13 +1516,13 @@ List<IndexedLine> extractPdfIndexedLines(String cleanB64, String pdfLatin1, List
             return out
         }
         var row = 0
-        for (var l in contentLines(cs, cmap)) {
+        for (var l in contentLinesPerFont(cs, fontCmaps, fallbackCmap)) {
             row = row + 1
             out.add(IndexedLine(page, row, l))
         }
     }
 
-    // Se PDF nao possui texto legivel (escaneado), tenta OCR nas imagens JPEG embutidas.
+    // Se PDF nao possui texto legivel (escaneado), delega ao AgentExtratorOcr nas imagens JPEG embutidas.
     if (out.isEmpty() && embeddedJpegs.size > 0) {
         var imgPage = 0
         for (var span in embeddedJpegs) {
@@ -880,8 +1544,12 @@ String decodeXmlEntities(String s) {
     return s.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'")
 }
 
+// =========================================================
+// AgentExtratorDocx: Extracao Pura em KOF (ZIP LFH + PdfInflate + utf8FromInts)
+// =========================================================
+
 List<IndexedLine> extractDocxIndexedLines(String cleanB64, String rawLatin1) {
-    var bytes = Base64.getDecoder().decode(cleanB64)
+    var bytes = decodeBase64ToInts(cleanB64)
     var totalLen = rawLatin1.length()
     var docXml = ""
     var entries = 0
@@ -936,41 +1604,22 @@ List<IndexedLine> extractDocxIndexedLines(String cleanB64, String rawLatin1) {
                         if (storeLen > 4000000 || dataStart + storeLen > totalLen) {
                             throw "INVALID_FILE: DOCX excede o limite de descompressao"
                         }
-                        var storeOut = new ByteArrayOutputStream()
-                        if (storeLen > 0) {
-                            storeOut.write(bytes, dataStart, storeLen)
-                        }
-                        docXml = storeOut.toString("UTF-8")
+                        docXml = utf8FromInts(bytes, dataStart, storeLen)
                         foundDocXml = true
                     } else if (compression == 8) {
                         var inputLen = totalLen - dataStart
                         if (compSize > 0 && dataStart + compSize <= totalLen) {
                             inputLen = compSize
                         }
-                        var inf = new Inflater(true)
-                        inf.setInput(bytes, dataStart, inputLen)
-                        var buf = ByteBuffer.allocate(8192)
-                        var out = new ByteArrayOutputStream()
-                        var going = true
-                        var zipBomb = false
-                        while (going) {
-                            buf.clear()
-                            var readN = inf.inflate(buf)
-                            if (readN > 0) {
-                                out.write(buf.array(), 0, readN)
-                            }
-                            if (out.size() > 4000000) {
-                                zipBomb = true
-                                going = false
-                            } else if (inf.finished() || (readN == 0 && (inf.needsInput() || inf.needsDictionary()))) {
-                                going = false
-                            }
+                        var comp = new Int[inputLen]
+                        var ci = 0
+                        while (ci < inputLen) {
+                            comp[ci] = bytes[dataStart + ci] & 255
+                            ci = ci + 1
                         }
-                        inf.end()
-                        if (zipBomb) {
-                            throw "INVALID_FILE: DOCX excede o limite de descompressao"
-                        }
-                        docXml = out.toString("UTF-8")
+                        var inf = PdfInflate(comp)
+                        var outLen = inf.run()
+                        docXml = utf8FromInts(inf.out, 0, outLen)
                         foundDocXml = true
                     } else {
                         throw "INVALID_FILE: metodo de compressao DOCX nao suportado"
@@ -1102,25 +1751,31 @@ List<String> extractPngTextChunks(String pngLatin1) {
     return out
 }
 
+// =========================================================
+// AgentExtratorOcr: OCR Nativo Windows 100% via KOF (Directory + File + process.run)
+// =========================================================
+
 List<String> runWindowsNativeOcr(String cleanB64, Int offset, Int spanLen, String suffix, List<String> warnings) {
     var lines: List<String> = listOf()
-    var b64File = File.createTempFile("organiza_ocr_b64_", ".txt")
-    var imgFile = File.createTempFile("organiza_ocr_img_", suffix)
-    var outFile = File.createTempFile("organiza_ocr_out_", ".txt")
-    var psFile = File.createTempFile("organiza_ocr_ps_", ".ps1")
-    try {
-        var b64Writer = new FileWriter(b64File)
-        b64Writer.write(cleanB64)
-        b64Writer.close()
+    var tmpDir = "./build/ocr_tmp"
+    Directory(tmpDir).createDirectories()
+    var tag = crypto.randomHex(8)
+    var b64Path = tmpDir + "/ocr_" + tag + ".b64.txt"
+    var imgPath = tmpDir + "/ocr_" + tag + suffix
+    var outPath = tmpDir + "/ocr_" + tag + ".out.txt"
+    var psPath = tmpDir + "/ocr_" + tag + ".ps1"
 
-        var b64PathEsc = b64File.getAbsolutePath().replace("'", "''")
-        var imgPathEsc = imgFile.getAbsolutePath().replace("'", "''")
-        var outPathEsc = outFile.getAbsolutePath().replace("'", "''")
+    try {
+        File(b64Path).writeText(cleanB64)
+
+        var b64PathEsc = b64Path.replace("'", "''")
+        var imgPathEsc = imgPath.replace("'", "''")
+        var outPathEsc = outPath.replace("'", "''")
 
         var psScript = "$ErrorActionPreference = 'Stop'\n" +
-            "$b64Path = '" + b64PathEsc + "'\n" +
-            "$imgPath = '" + imgPathEsc + "'\n" +
-            "$outPath = '" + outPathEsc + "'\n" +
+            "$b64Path = (Resolve-Path '" + b64PathEsc + "').Path\n" +
+            "$imgPath = [System.IO.Path]::GetFullPath('" + imgPathEsc + "')\n" +
+            "$outPath = [System.IO.Path]::GetFullPath('" + outPathEsc + "')\n" +
             "$offset = " + offset + "\n" +
             "$spanLen = " + spanLen + "\n" +
             "$scaledPath = $null\n" +
@@ -1174,43 +1829,38 @@ List<String> runWindowsNativeOcr(String cleanB64, Int offset, Int spanLen, Strin
             "  [System.IO.File]::WriteAllLines($outPath, $outLines, (New-Object System.Text.UTF8Encoding($false)))\n" +
             "} finally {\n" +
             "  if ($scaledPath -and (Test-Path $scaledPath)) { Remove-Item $scaledPath -Force -ErrorAction SilentlyContinue }\n" +
+            "  if (Test-Path $imgPath) { Remove-Item $imgPath -Force -ErrorAction SilentlyContinue }\n" +
+            "  if (Test-Path $b64Path) { Remove-Item $b64Path -Force -ErrorAction SilentlyContinue }\n" +
             "}"
-        var psWriter = new FileWriter(psFile)
-        psWriter.write(psScript)
-        psWriter.close()
+        File(psPath).writeText(psScript)
 
-        var cmd = "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"" + psFile.getAbsolutePath() + "\""
-        var proc = Runtime.getRuntime().exec(cmd)
-        var timeoutSec: Long = 15
-        var finished = proc.waitFor(timeoutSec, TimeUnit.SECONDS)
-        if (!finished) {
-            proc.destroyForcibly()
-            throw "EXTRACTION_TIMEOUT: tempo limite excedido no OCR da imagem"
-        }
-        if (proc.exitValue() == 0) {
-            var stdout = Files.readString(outFile.toPath())
-            for (var rawLine in stdout.split("\n")) {
-                var trimmed = rawLine.trim()
-                if (trimmed != "") {
-                    lines.add(trimmed)
+        var res = process.run("powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", psPath)
+        if (res.exitCode == 0 && File(outPath).exists()) {
+            var content = File(outPath).readText()
+            if (content != null) {
+                for (var rawLine in content.split("\n")) {
+                    var trimmed = rawLine.trim()
+                    if (trimmed != "") {
+                        lines.add(trimmed)
+                    }
                 }
             }
         } else {
-            warnings.add("OCR_UNAVAILABLE: motor OCR nativo retornou codigo " + proc.exitValue())
+            warnings.add("OCR_UNAVAILABLE: motor OCR nativo retornou codigo " + res.exitCode)
         }
     } catch (String se) {
-        b64File.delete()
-        imgFile.delete()
-        outFile.delete()
-        psFile.delete()
+        File(b64Path).delete()
+        File(imgPath).delete()
+        File(outPath).delete()
+        File(psPath).delete()
         throw se
     } catch (Exception e) {
         warnings.add("OCR_UNAVAILABLE: motor OCR nativo indisponivel nesta sessao")
     }
-    b64File.delete()
-    imgFile.delete()
-    outFile.delete()
-    psFile.delete()
+    File(b64Path).delete()
+    File(imgPath).delete()
+    File(outPath).delete()
+    File(psPath).delete()
     return lines
 }
 
@@ -1384,7 +2034,7 @@ String? extractInstallmentToken(String desc) {
 
 Bool isIgnoredInvoiceLine(String line) {
     var lower = line.toLowerCase()
-    return lower.contains("limite de credito") || lower.contains("limite de crédito") || lower.contains("vencimento") || lower.contains("saldo anterior") || lower.contains("saldo final") || lower.contains("pagina ") || lower.contains("página ") || lower.contains("data de fechamento") || lower.contains("melhor dia") || lower.contains("resumo da fatura") || lower.contains("extrato de") || lower.contains("renda profissional") || lower.contains("entradas") || lower.contains("necessidades e despesas") || lower.contains("poupanca ou dividas") || lower.contains("poupança ou dívidas") || lower.contains("lazer e desejos")
+    return lower.contains("limite de credito") || lower.contains("limite de crédito") || lower.contains("vencimento") || lower.contains("saldo anterior") || lower.contains("saldo final") || lower.contains("saldo disponível") || lower.contains("saldo disponivel") || lower.contains("saldo em conta") || lower.contains("saldo do dia") || lower.contains("saldo inicial") || lower.contains("saldo atual") || lower.contains("saldo atualizado") || lower.contains("banco neon") || lower.contains("movimentações") || lower.contains("movimentacoes") || lower.contains("data e hora") || lower.contains("extrato da conta") || lower.contains("extrato conta") || lower.contains("pagina ") || lower.contains("página ") || lower.contains("data de fechamento") || lower.contains("melhor dia") || lower.contains("resumo da fatura") || lower.contains("extrato de") || lower.contains("renda profissional") || lower.contains("entradas") || lower.contains("necessidades e despesas") || lower.contains("poupanca ou dividas") || lower.contains("poupança ou dívidas") || lower.contains("lazer e desejos")
 }
 
 Bool isTotalHeaderLine(String line) {
@@ -1394,7 +2044,7 @@ Bool isTotalHeaderLine(String line) {
 
 Bool isInternalTransferLine(String line) {
     var lower = line.toLowerCase()
-    return lower.contains("viracrédito") || lower.contains("viracredito") || lower.contains("resgate") || lower.contains("aplicacao") || lower.contains("aplicação") || lower.contains("crédito para pix") || lower.contains("credito para pix") || lower.contains("movimentacao interna") || lower.contains("movimentação interna")
+    return lower.contains("viracrédito") || lower.contains("viracredito") || lower.contains("resgate") || lower.contains("aplicacao") || lower.contains("aplicação") || lower.contains("crédito para pix") || lower.contains("credito para pix") || lower.contains("movimentacao interna") || lower.contains("movimentação interna") || lower.contains("troca de saldo") || lower.contains("cdb neon") || lower.contains("saldo transferido")
 }
 
 Bool isBillPaymentLine(String desc) {
@@ -1405,6 +2055,43 @@ Bool isBillPaymentLine(String desc) {
 Bool isFeeOrInterestLine(String desc) {
     var lower = desc.toLowerCase()
     return lower.contains("iof ") || lower == "iof" || lower.contains("anuidade") || lower.contains("juros") || lower.contains("encargos") || lower.contains("tarifa") || lower.contains("multa")
+}
+
+Bool isInflowStatementLine(String desc) {
+    var lower = desc.toLowerCase()
+    return lower.contains("pix recebido") || lower.contains("pix recebida") || lower.contains("recebimento de pix") || lower.contains("ted recebida") || lower.contains("ted recebido") || lower.contains("doc recebido") || lower.contains("doc recebida") || lower.contains("transferencia recebida") || lower.contains("transferência recebida") || lower.contains("deposito") || lower.contains("depósito") || lower.contains("salario recebido") || lower.contains("salário recebido")
+}
+
+Bool isStatementOutflowLine(String desc) {
+    var lower = desc.toLowerCase()
+    return lower.contains("pix enviado") || lower.contains("envio de pix") || lower.contains("pix para") || lower.contains("pix crédito") || lower.contains("pix credito") || lower.contains("transferencia enviada") || lower.contains("transferência enviada") || lower.contains("pagamento fatura") || lower.contains("pagamento de fatura") || lower.contains("pagto fatura") || lower.contains("pagamento efetuado") || lower.contains("pagamento de boleto") || lower.contains("debito automatico") || lower.contains("débito automático") || lower.contains("boleto") || lower.contains("saque") || lower.contains("compra no") || lower.contains("compra débito") || lower.contains("compra debito")
+}
+
+Bool isPjMerchantName(String desc) {
+    var lower = desc.toLowerCase()
+    if (lower.matches(".*\\b[0-9]{2}\\.[0-9]{3}\\.[0-9]{3}\\b.*") || lower.matches(".*\\b(ltda|eireli|epp|mei|me|s/a|s\\.a)\\b.*")) {
+        return true
+    }
+    var pjMarkers = listOf(
+        "cnpj", "comercio", "comércio", "servicos", "serviços", "solucoes", "soluções",
+        "tecnologia", "consultoria", "sistemas", "software", "distribuidora",
+        "supermercado", "mercado", "atacado", "atacarejo", "padaria", "restaurante",
+        "lanchonete", "pizzaria", "bebidas", "farmacia", "farmácia", "drogaria",
+        "hospital", "clinica", "clínica", "laboratorio", "laboratório",
+        "pagamentos", "paypal", "mercado pago", "picpay", "stone", "pagseguro",
+        "sumup", "cielo", "getnet", "telecom", "claro", "vivo", "magazine",
+        "lojas", "shopping", "combustiv", "estacionamento", "assessoria",
+        "empreendimentos", "participacoes", "participações", "logistica", "logística",
+        "transportes", "industria", "indústria", "comercial", "materiais",
+        "alimentos", "foods", "digital", "group", "brasil", "holding",
+        "uber", "ifood", "amazon", "netflix", "spotify", "agencia", "agência", "instituto"
+    )
+    for (var m in pjMarkers) {
+        if (lower.contains(m)) {
+            return true
+        }
+    }
+    return false
 }
 
 Bool isKnownMerchantOrUtility(String lower) {
@@ -1437,9 +2124,11 @@ ClassificationMatch classifyTransactionEvidence(String descRaw, String kind) {
     if (kind == "REFUND") {
         return ClassificationMatch("OTHER", "CREDIT_OR_REFUND", 0.85, "CONFIRMED")
     }
-    // Regra explicita anti-alucinacao: Pix para pessoa fisica sem estabelecimento nao deve ser adivinhado.
-    if ((lower.contains("pix enviado") || lower.contains("pix para") || lower.startsWith("pix ")) && !isKnownMerchantOrUtility(lower)) {
-        return ClassificationMatch("OTHER", "PIX_PF_NEEDS_REVIEW", 0.50, "NEEDS_REVIEW")
+    if (kind == "INCOME") {
+        if (isPjMerchantName(lower)) {
+            return ClassificationMatch("OTHER", "INCOME_PJ_NEEDS_REVIEW", 0.70, "NEEDS_REVIEW")
+        }
+        return ClassificationMatch("OTHER", "INCOME_PF_NEEDS_REVIEW", 0.55, "NEEDS_REVIEW")
     }
 
     if (lower.contains("aluguel") || lower.contains("condominio") || lower.contains("condomínio") || lower.contains("energia") || lower.contains("luz") || lower.contains("agua") || lower.contains("água") || lower.contains("internet") || lower.contains("iptu")) {
@@ -1475,6 +2164,13 @@ ClassificationMatch classifyTransactionEvidence(String descRaw, String kind) {
     if (lower.contains("shopping") || lower.contains("roupa") || lower.contains("loja") || lower.contains("zara") || lower.contains("shopee") || lower.contains("shein") || lower.contains("calcado") || lower.contains("calçado")) {
         return ClassificationMatch("SHOPPING", "MERCHANT_KEYWORD", 0.88, "CONFIRMED")
     }
+    // Regra explicita anti-alucinacao: Pix para pessoa fisica ou PJ sem categoria clara.
+    if (kind == "PIX_OUT" || kind == "CARD_EXIT" || lower.contains("pix enviado") || lower.contains("envio de pix") || lower.contains("pix para") || lower.startsWith("pix ")) {
+        if (isPjMerchantName(lower)) {
+            return ClassificationMatch("OTHER", "PIX_PJ_CONFIRMED", 0.80, "CONFIRMED")
+        }
+        return ClassificationMatch("OTHER", "PIX_PF_NEEDS_REVIEW", 0.50, "NEEDS_REVIEW")
+    }
     return ClassificationMatch("OTHER", "UNCLASSIFIED_NEEDS_REVIEW", 0.45, "NEEDS_REVIEW")
 }
 
@@ -1484,10 +2180,20 @@ String inferCategory(String desc) {
 
 String normalizeDescriptionText(String raw) {
     var s = raw.trim()
-    var prefixes = listOf("PIX enviado para ", "Pix enviado para ", "Pix crédito ", "Pix credito ", "PIX ", "Pix ")
+    var prefixes = listOf(
+        "PIX enviado para ", "Pix enviado para ", "PIX enviado - ", "Pix enviado - ", "PIX enviado ", "Pix enviado ",
+        "PIX recebido para ", "Pix recebido para ", "PIX recebido - ", "Pix recebido - ", "PIX recebido ", "Pix recebido ",
+        "Pix crédito - ", "Pix credito - ", "Pix crédito ", "Pix credito ",
+        "Envio de Pix ", "Recebimento de Pix ",
+        "PIX ", "Pix "
+    )
     for (var p in prefixes) {
         if (s.startsWith(p)) {
             s = s.substring(p.length()).trim()
+            if (s.startsWith("-")) {
+                s = s.substring(1).trim()
+            }
+            break
         }
     }
     if (s.length() > 60) {
@@ -1502,6 +2208,113 @@ String clipSnippet(String s) {
         return tr.substring(0, 160)
     }
     return tr
+}
+
+Bool isFullDateCell(String text) {
+    var t = normalizeOcrText(text)
+    return t.matches("[0-3]?[0-9]/[0-1]?[0-9]/(20)?[0-9]{2}")
+}
+
+Bool isTimeOnlyCell(String text) {
+    var t = normalizeOcrText(text)
+    return t.matches("[0-2]?[0-9]:[0-5][0-9](:[0-5][0-9])?")
+}
+
+Bool isDateTimeCell(String text) {
+    var t = normalizeOcrText(text)
+    return t.matches("[0-3]?[0-9]/[0-1]?[0-9]/(20)?[0-9]{2}\\s+[0-2]?[0-9]:[0-5][0-9](:[0-5][0-9])?")
+}
+
+Bool isStandaloneAmountCell(String text) {
+    var t = normalizeOcrText(text)
+    if (t == "") {
+        return false
+    }
+    var cleaned = t.replace("R$", "").replace("r$", "").trim()
+    return cleaned.matches("[+-]?\\s*[0-9]{1,3}(\\.[0-9]{3})*,[0-9]{2}\\s*-?") || cleaned.matches("[+-]?\\s*[0-9]+,[0-9]{2}\\s*-?") || cleaned.matches("[+-]?\\s*[0-9]+\\.[0-9]{2}\\s*-?")
+}
+
+String normalizeAmountTokenForLine(String rawCell) {
+    var t = normalizeOcrText(rawCell).trim()
+    var negative = t.startsWith("-") || t.endsWith("-") || t.contains("-R$") || t.contains("- R$")
+    var cleaned = t.replace("R$", "").replace("r$", "").replace("-", "").replace("+", "").trim()
+    if (negative) {
+        return "-" + cleaned
+    }
+    return cleaned
+}
+
+List<IndexedLine> consolidateStatementCells(List<IndexedLine> rawLines) {
+    var out: List<IndexedLine> = listOf()
+    var i = 0
+    while (i < rawLines.size) {
+        var cur = rawLines.get(i)
+        var curText = normalizeOcrText(cur.text())
+
+        var hasTimeNext = (i + 1 < rawLines.size) && isTimeOnlyCell(rawLines.get(i + 1).text())
+        var dateWithTimeHere = isDateTimeCell(curText)
+        if ((isFullDateCell(curText) && hasTimeNext) || dateWithTimeHere) {
+            var datePart = curText
+            var k = i + 1
+            if (isFullDateCell(curText) && hasTimeNext) {
+                k = i + 2
+            } else {
+                var sp = curText.indexOf(" ")
+                if (sp > 0) {
+                    datePart = curText.substring(0, sp).trim()
+                }
+            }
+
+            var descParts = ""
+            var amountToken = ""
+            var foundAmount = false
+            var limit = k + 8
+            if (limit > rawLines.size) {
+                limit = rawLines.size
+            }
+            var j = k
+            while (j < limit) {
+                var cellText = normalizeOcrText(rawLines.get(j).text())
+                if (isFullDateCell(cellText) || isDateTimeCell(cellText)) {
+                    break
+                }
+                if (isStandaloneAmountCell(cellText)) {
+                    amountToken = normalizeAmountTokenForLine(cellText)
+                    foundAmount = true
+                    j = j + 1
+                    break
+                }
+                if (cellText != "" && cellText != "-" && cellText != "–" && cellText != "—") {
+                    if (descParts == "") {
+                        descParts = cellText
+                    } else {
+                        descParts = descParts + " " + cellText
+                    }
+                }
+                j = j + 1
+            }
+
+            if (foundAmount && descParts != "") {
+                // Descarta Saldo Temp (celula 5) e tracinho/observacao vazia (celula 6).
+                if (j < rawLines.size && isStandaloneAmountCell(rawLines.get(j).text())) {
+                    j = j + 1
+                }
+                if (j < rawLines.size) {
+                    var obsText = normalizeOcrText(rawLines.get(j).text())
+                    if (obsText == "-" || obsText == "–" || obsText == "—") {
+                        j = j + 1
+                    }
+                }
+                out.add(IndexedLine(cur.page(), cur.row(), datePart + " " + descParts + " " + amountToken))
+                i = j
+                continue
+            }
+        }
+
+        out.add(cur)
+        i = i + 1
+    }
+    return out
 }
 
 ParsedLineOutcome analyzeIndexedLine(IndexedLine line, String documentId, Int txSeq, String fallbackDate) {
@@ -1557,15 +2370,30 @@ ParsedLineOutcome analyzeIndexedLine(IndexedLine line, String documentId, Int tx
         return ParsedLineOutcome(null, null, null, false)
     }
 
+    var descLower = descRaw.toLowerCase()
     var kind = "TRANSACTION"
     var direction = "DEBIT"
-    if (minor < 0 || descRaw.toLowerCase().contains("estorno")) {
+    if (descLower.contains("estorno") || descLower.contains("reembolso") || descLower.contains("cashback") || descLower.contains("devolucao") || descLower.contains("devolução")) {
         kind = "REFUND"
+        direction = "CREDIT"
+    } else if (isInflowStatementLine(descRaw)) {
+        kind = "INCOME"
         direction = "CREDIT"
     } else if (isBillPaymentLine(descRaw)) {
         kind = "PAYMENT"
+        direction = "DEBIT"
     } else if (isFeeOrInterestLine(descRaw)) {
         kind = "FEE"
+        direction = "DEBIT"
+    } else if (descLower.contains("pix crédito") || descLower.contains("pix credito")) {
+        kind = "CARD_EXIT"
+        direction = "DEBIT"
+    } else if (descLower.contains("pix enviado") || descLower.contains("envio de pix") || descLower.contains("pix para") || descLower.startsWith("pix ")) {
+        kind = "PIX_OUT"
+        direction = "DEBIT"
+    } else if (minor < 0 && !isStatementOutflowLine(descRaw)) {
+        kind = "REFUND"
+        direction = "CREDIT"
     }
 
     var match = classifyTransactionEvidence(descRaw, kind)
@@ -1601,10 +2429,322 @@ ParsedLineOutcome analyzeIndexedLine(IndexedLine line, String documentId, Int tx
 }
 
 // =========================================================
-// Engine Principal do Pipeline (Validacao -> Extracao -> Reconciliacao -> Estado)
+// Engine Principal do Pipeline + Persistencia KofDB
 // =========================================================
 
+class DocumentLookupResult(
+    String? errorCode,
+    CanonicalDocument? doc,
+    ImportReview? review
+)
+
+String encodeWarningsText(List<String> warnings) {
+    var out = ""
+    for (var w in warnings) {
+        var clean = w.replace("\n", " ").trim()
+        if (clean != "") {
+            if (out == "") {
+                out = clean
+            } else {
+                out = out + "\n" + clean
+            }
+        }
+    }
+    return out
+}
+
+List<String> decodeWarningsText(String warningsText) {
+    var out: List<String> = listOf()
+    if (warningsText.trim() == "") {
+        return out
+    }
+    for (var part in warningsText.split("\n")) {
+        var clean = part.trim()
+        if (clean != "") {
+            out.add(clean)
+        }
+    }
+    return out
+}
+
+Long parseUserIdLong(String userId) {
+    var clean = userId.trim()
+    if (strings.isNumeric(clean)) {
+        return clean.toLong()
+    }
+    return 0
+}
+
+String buildRawTextFromReview(ImportReview rev) {
+    var sb = ""
+    for (var tx in rev.transactions()) {
+        var snippet = ""
+        var ev = tx.evidence()
+        if (ev != null) {
+            var evSnip = ev.snippet()
+            if (evSnip != null) {
+                snippet = evSnip
+            }
+        }
+        if (snippet == "") {
+            snippet = tx.descriptionRaw()
+        }
+        if (snippet != "") {
+            sb = sb + snippet + "\n"
+        }
+    }
+    if (sb == "") {
+        return "Arquivo de fatura processado"
+    }
+    return sb
+}
+
+ImportReview buildImportReviewFromRows(FinancialDocumentRow row, List<ExtractedTransactionRow> txRows) {
+    var canonicalTxs: List<CanonicalTransaction> = listOf()
+    for (var r in txRows) {
+        var ev = CanonicalEvidence(r.pageNum, r.rowNum, r.snippet, null)
+        canonicalTxs.add(
+            CanonicalTransaction(
+                r.itemKey,
+                r.documentId,
+                r.txDate,
+                r.descriptionRaw,
+                r.descriptionNormalized,
+                r.amountMinor,
+                r.currency,
+                r.direction,
+                r.kind,
+                r.installment,
+                r.category,
+                r.categoryRule,
+                r.confidence,
+                ev,
+                r.reviewStatus
+            )
+        )
+    }
+    var totals: List<CanonicalTotal> = listOf()
+    if (row.hasDeclaredTotal) {
+        totals.add(CanonicalTotal("Total declarado", row.declaredTotalMinor, 1, 0))
+    }
+    var warnings = decodeWarningsText(row.warningsText)
+    var isConfirmed = row.status == "IMPORTADO"
+    return ImportReview(
+        row.docKey,
+        row.sha256,
+        row.sourceType,
+        row.status,
+        row.extractedCount,
+        warnings,
+        totals,
+        row.reconciled,
+        isConfirmed,
+        canonicalTxs
+    )
+}
+
+DocumentLookupResult lookupDocumentReview(String docId, String authUserId) {
+    var cleanId = docId.trim()
+    var row = findFinancialDocumentRowByKeyRaw(cleanId)
+    if (row == null) {
+        return DocumentLookupResult("NOT_FOUND", null, null)
+    }
+    var uidLong = parseUserIdLong(authUserId)
+    if (row.userId != uidLong) {
+        return DocumentLookupResult("UNAUTHORIZED", null, null)
+    }
+    var doc = CanonicalDocument(row.docKey, "" + row.userId, row.sha256, row.sourceType, row.statementPeriod, row.currency, row.status)
+    var txRows = findExtractedTransactionRowsByDoc(authUserId, row.docKey)
+    var rev = buildImportReviewFromRows(row, txRows)
+    return DocumentLookupResult(null, doc, rev)
+}
+
+void persistDocumentAndReview(String documentId, String userId, String sha256, String filename, String? period, ImportReview review) {
+    var existing = findFinancialDocumentRowByKeyRaw(documentId)
+    var rowId: Long = 0
+    if (existing != null) {
+        rowId = existing.id
+    }
+    var declaredMinor: Long = 0
+    var hasDeclared = false
+    if (review.totals().size > 0) {
+        var lastTot = review.totals().get(review.totals().size - 1)
+        declaredMinor = lastTot.amountMinor()
+        hasDeclared = true
+    }
+    var safePeriod = ""
+    if (period != null) {
+        safePeriod = period
+    }
+    var uidLong = parseUserIdLong(userId)
+    var docRow = FinancialDocumentRow(
+        rowId,
+        documentId,
+        uidLong,
+        sha256,
+        filename,
+        review.sourceType(),
+        safePeriod,
+        "BRL",
+        review.status(),
+        review.reconciled(),
+        review.extractedCount(),
+        declaredMinor,
+        hasDeclared,
+        encodeWarningsText(review.warnings()),
+        "" + time.now()
+    )
+    saveFinancialDocumentRow(docRow)
+
+    var txRows: List<ExtractedTransactionRow> = listOf()
+    for (var ctx in review.transactions()) {
+        var minorVal: Long = 0
+        var cm = ctx.amountMinor()
+        if (cm != null) {
+            minorVal = cm
+        }
+        var normDesc = ctx.descriptionRaw()
+        var rawNormDesc = ctx.descriptionNormalized()
+        if (rawNormDesc != null && rawNormDesc != "") {
+            normDesc = rawNormDesc
+        }
+        var cur = "BRL"
+        var rawCur = ctx.currency()
+        if (rawCur != "") {
+            cur = rawCur
+        }
+        var dirVal = "DEBIT"
+        var rawDir = ctx.direction()
+        if (rawDir != null && rawDir != "") {
+            dirVal = rawDir
+        }
+        var ruleVal = "UNCLASSIFIED"
+        var rawRule = ctx.categoryRule()
+        if (rawRule != null && rawRule != "") {
+            ruleVal = rawRule
+        }
+        var cat = "OTHER"
+        var rawCat = ctx.category()
+        if (rawCat != null && rawCat != "") {
+            cat = rawCat
+        }
+        var txDateVal = ""
+        var rawTxDate = ctx.date()
+        if (rawTxDate != null) {
+            txDateVal = rawTxDate
+        }
+        var instVal = ""
+        var rawInst = ctx.installment()
+        if (rawInst != null) {
+            instVal = rawInst
+        }
+        var pageVal = 1
+        var rowVal = 0
+        var snipVal = ctx.descriptionRaw()
+        var ev = ctx.evidence()
+        var ep = ev.page()
+        if (ep != null) {
+            pageVal = ep
+        }
+        var er = ev.row()
+        if (er != null) {
+            rowVal = er
+        }
+        var es = ev.snippet()
+        if (es != null && es != "") {
+            snipVal = es
+        }
+        txRows.add(
+            ExtractedTransactionRow(
+                0,
+                documentId,
+                uidLong,
+                ctx.id(),
+                txDateVal,
+                ctx.descriptionRaw(),
+                normDesc,
+                minorVal,
+                cur,
+                dirVal,
+                ctx.kind(),
+                instVal,
+                cat,
+                ruleVal,
+                ctx.confidence(),
+                pageVal,
+                rowVal,
+                snipVal,
+                ctx.reviewStatus()
+            )
+        )
+    }
+    replaceExtractedTransactionRows(documentId, userId, txRows)
+}
+
+void saveConfirmReceipt(String receiptKey, String sha256, List<TransactionOutput> saved) {
+    var idCsv = ""
+    for (var s in saved) {
+        var idStr = "" + s.id()
+        if (idCsv == "") {
+            idCsv = idStr
+        } else {
+            idCsv = idCsv + "," + idStr
+        }
+    }
+    var existing = findFinancialDocumentRowByKeyRaw(receiptKey)
+    var rowId: Long = 0
+    if (existing != null) {
+        rowId = existing.id
+    }
+    var row = FinancialDocumentRow(
+        rowId,
+        receiptKey,
+        -1,
+        sha256,
+        "confirm_receipt",
+        "RECEIPT",
+        "",
+        "BRL",
+        "CONFIRMED_RECEIPT",
+        true,
+        saved.size,
+        0,
+        false,
+        idCsv,
+        "" + time.now()
+    )
+    saveFinancialDocumentRow(row)
+}
+
+List<TransactionOutput>? loadConfirmedOutputsFromReceipt(String userId, String receiptKey) {
+    var rec = findFinancialDocumentRowByKeyRaw(receiptKey)
+    if (rec != null) {
+        var wText = rec.warningsText.trim()
+        if (wText != "") {
+            var wantedIds = wText.split(",")
+            var allUserTxs = findTransactionsByUserIdAndCreatedAtAfter(userId, "2000-01-01")
+            var out: List<TransactionOutput> = listOf()
+            for (var tx in allUserTxs) {
+                var txIdStr = "" + tx.id
+                var matched = false
+                for (var w in wantedIds) {
+                    if (w.trim() == txIdStr) {
+                        matched = true
+                        break
+                    }
+                }
+                if (matched) {
+                    out.add(transactionEntityToOutput(tx))
+                }
+            }
+            return out
+        }
+    }
+    return null
+}
+
 ImportReview buildImportReview(String documentId, String sha256, String sourceType, List<IndexedLine> rawLines, List<String> warnings) {
+    var consolidatedLines = consolidateStatementCells(rawLines)
     var canonicalTxs: List<CanonicalTransaction> = listOf()
     var totals: List<CanonicalTotal> = listOf()
     var pendingDate = "14/11"
@@ -1612,8 +2752,8 @@ ImportReview buildImportReview(String documentId, String sha256, String sourceTy
     var internalCount = 0
 
     var i = 0
-    while (i < rawLines.size) {
-        var line = rawLines.get(i)
+    while (i < consolidatedLines.size) {
+        var line = consolidatedLines.get(i)
         var norm = normalizeOcrText(line.text())
         if (isInvoiceDate(norm)) {
             if (norm.length() >= 5) {
@@ -1640,8 +2780,8 @@ ImportReview buildImportReview(String documentId, String sha256, String sourceTy
                     canonicalTxs.add(ctx)
                 }
                 i = i + 1
-            } else if (i + 2 < rawLines.size && isInvoiceDate(normalizeOcrText(rawLines.get(i).text()))) {
-                var joinedText = normalizeOcrText(rawLines.get(i).text()) + " " + normalizeOcrText(rawLines.get(i + 1).text()) + " " + normalizeOcrText(rawLines.get(i + 2).text())
+            } else if (i + 2 < consolidatedLines.size && isInvoiceDate(normalizeOcrText(consolidatedLines.get(i).text()))) {
+                var joinedText = normalizeOcrText(consolidatedLines.get(i).text()) + " " + normalizeOcrText(consolidatedLines.get(i + 1).text()) + " " + normalizeOcrText(consolidatedLines.get(i + 2).text())
                 var joinedOutcome = analyzeIndexedLine(IndexedLine(line.page(), line.row(), joinedText), documentId, seq + 1, pendingDate)
                 if (joinedOutcome.tx() != null) {
                     var jtx = joinedOutcome.tx()
@@ -1653,8 +2793,8 @@ ImportReview buildImportReview(String documentId, String sha256, String sourceTy
                 } else {
                     i = i + 1
                 }
-            } else if (i + 1 < rawLines.size && normalizeOcrText(rawLines.get(i + 1).text()).matches("[-+]?\\s*(R\\$\\s*)?[0-9.,]+\\s*-?")) {
-                var joined2 = norm + " " + normalizeOcrText(rawLines.get(i + 1).text())
+            } else if (i + 1 < consolidatedLines.size && normalizeOcrText(consolidatedLines.get(i + 1).text()).matches("[-+]?\\s*(R\\$\\s*)?[0-9.,]+\\s*-?")) {
+                var joined2 = norm + " " + normalizeOcrText(consolidatedLines.get(i + 1).text())
                 var joinedOutcome2 = analyzeIndexedLine(IndexedLine(line.page(), line.row(), joined2), documentId, seq + 1, pendingDate)
                 if (joinedOutcome2.tx() != null) {
                     var jtx2 = joinedOutcome2.tx()
@@ -1676,16 +2816,23 @@ ImportReview buildImportReview(String documentId, String sha256, String sourceTy
         warnings.add("INTERNAL_TRANSFERS_FILTERED: " + internalCount + " movimentacao(oes) interna(s) desconsiderada(s)")
     }
 
-    // Reconciliacao matematica exata em centavos (Long)
+    // Reconciliacao matematica exata em centavos (Long) sem misturar entradas de renda com saidas.
     var debitSumMinor: Long = 0
+    var outflowCount = 0
+    var inflowCount = 0
     var needsReviewCount = 0
     for (var tx in canonicalTxs) {
         var m = tx.amountMinor()
-        if (m != null) {
-            if (tx.direction() == "CREDIT") {
-                debitSumMinor = debitSumMinor - m
-            } else {
-                debitSumMinor = debitSumMinor + m
+        if (tx.kind() == "INCOME") {
+            inflowCount = inflowCount + 1
+        } else {
+            outflowCount = outflowCount + 1
+            if (m != null) {
+                if (tx.direction() == "CREDIT") {
+                    debitSumMinor = debitSumMinor - m
+                } else {
+                    debitSumMinor = debitSumMinor + m
+                }
             }
         }
         if (tx.reviewStatus() == "NEEDS_REVIEW") {
@@ -1705,14 +2852,15 @@ ImportReview buildImportReview(String documentId, String sha256, String sourceTy
             reconciled = false
             warnings.add("RECONCILIATION_FAILED: soma extraida (" + formatBrl(debitSumMinor) + ") diverge do total declarado (" + formatBrl(declared.amountMinor()) + ")")
         }
-    } else if (canonicalTxs.size > 0) {
+    } else if (outflowCount > 0 || inflowCount > 0) {
         reconciled = true
-        warnings.add("TOTAL_LINE_ABSENT: total apurado pela soma dos " + canonicalTxs.size + " lancamentos (" + formatBrl(debitSumMinor) + ")")
+        warnings.add("TOTAL_LINE_ABSENT: total apurado pela soma dos " + outflowCount + " lancamentos (" + formatBrl(debitSumMinor) + ")")
     }
 
     var finalSource = sourceType
     var status = "EM_REVISAO"
-    if (canonicalTxs.size == 0) {
+    if (outflowCount == 0 && inflowCount == 0) {
+        status = "EXTRACAO_FALHOU"
         if (sourceType == "PDF" && rawLines.isEmpty()) {
             finalSource = "PDF_SCANNED"
             warnings.add("PARSE_AMBIGUOUS: PDF sem camada de texto legivel (escaneado)")
@@ -1728,7 +2876,7 @@ ImportReview buildImportReview(String documentId, String sha256, String sourceTy
         sha256,
         finalSource,
         status,
-        canonicalTxs.size,
+        outflowCount,
         warnings,
         totals,
         reconciled,
@@ -1776,23 +2924,26 @@ DocumentUploadResponse ingestFinancialDocument(String userId, String fileBase64,
 
     var detected = detectAndValidateFormat(rawLatin1, ext, strictBinaryOnly)
     var sha256 = sha256HexOfBase64Bytes(clean)
-    var dupKey = userId + ":" + sha256
-    var existingDocId = InvoiceRegistry.userShaToDoc.get(dupKey)
-    if (existingDocId != null && rejectDuplicate) {
-        throw "DUPLICATE_DOCUMENT: este documento ja foi enviado antes (" + existingDocId + ")"
+    var existingDoc = findFinancialDocumentRowBySha(userId, sha256)
+    if (existingDoc != null && rejectDuplicate) {
+        throw "DUPLICATE_DOCUMENT: este documento ja foi enviado antes (" + existingDoc.docKey + ")"
     }
 
-    var documentId = "doc_" + sha256.substring(0, 16)
-    if (existingDocId != null) {
-        documentId = existingDocId
+    var documentId = "doc_" + userId + "_" + sha256.substring(0, 12)
+    if (existingDoc != null) {
+        documentId = existingDoc.docKey
     }
 
-    // Estado 1 e 2: RECEBIDO -> EM_PROCESSAMENTO
-    InvoiceRegistry.docs.put(documentId, json.encode(CanonicalDocument(documentId, userId, sha256, detected, null, "BRL", "EM_PROCESSAMENTO")))
+    // Estado 1 e 2: RECEBIDO -> EM_PROCESSAMENTO persistido no KofDB
+    var procRowId: Long = 0
+    if (existingDoc != null) {
+        procRowId = existingDoc.id
+    }
+    var uidLong = parseUserIdLong(userId)
+    saveFinancialDocumentRow(FinancialDocumentRow(procRowId, documentId, uidLong, sha256, filename, detected, "", "BRL", "EM_PROCESSAMENTO", false, 0, 0, false, "", "" + time.now()))
 
     var warnings: List<String> = listOf()
     var indexedLines: List<IndexedLine> = listOf()
-    var streamsCount = 1
 
     try {
         if (detected == "PDF") {
@@ -1814,25 +2965,20 @@ DocumentUploadResponse ingestFinancialDocument(String userId, String fileBase64,
             }
         }
     } catch (String se) {
-        InvoiceRegistry.docs.put(documentId, json.encode(CanonicalDocument(documentId, userId, sha256, detected, null, "BRL", "FALHA_EXTRACAO")))
+        var failRow = findFinancialDocumentRowByKeyRaw(documentId)
+        var failId: Long = 0
+        if (failRow != null) {
+            failId = failRow.id
+        }
+        saveFinancialDocumentRow(FinancialDocumentRow(failId, documentId, uidLong, sha256, filename, detected, "", "BRL", "EXTRACAO_FALHOU", false, 0, 0, false, se, "" + time.now()))
         throw se
     }
 
     var review = buildImportReview(documentId, sha256, detected, indexedLines, warnings)
     var period = detectStatementPeriod(review.transactions())
-    var finalDoc = CanonicalDocument(documentId, userId, sha256, review.sourceType(), period, "BRL", review.status())
+    persistDocumentAndReview(documentId, userId, sha256, filename, period, review)
 
-    InvoiceRegistry.docs.put(documentId, json.encode(finalDoc))
-    InvoiceRegistry.reviews.put(documentId, json.encode(review))
-    InvoiceRegistry.userShaToDoc.put(dupKey, documentId)
-
-    var fullText = ""
-    for (var il in indexedLines) {
-        fullText = fullText + il.text() + "\n"
-    }
-    InvoiceRegistry.texts.put(documentId, fullText)
-
-    return DocumentUploadResponse(documentId, sha256, review.sourceType(), review.status(), existingDocId != null, review)
+    return DocumentUploadResponse(documentId, sha256, review.sourceType(), review.status(), existingDoc != null, review)
 }
 
 List<InvoiceTransaction> canonicalListToInvoiceTxs(List<CanonicalTransaction> canonical) {
@@ -1865,20 +3011,14 @@ List<InvoiceTransaction> canonicalListToInvoiceTxs(List<CanonicalTransaction> ca
 InvoiceResult parseInvoicePdf(String b64) {
     var uploaded = ingestFinancialDocument("_legacy_", b64, null, false, false)
     var rev = uploaded.review()
-    var rawText = InvoiceRegistry.texts.getOrDefault(uploaded.documentId(), "")
-    if (rawText == "") {
-        rawText = "Arquivo de fatura processado"
-    }
+    var rawText = buildRawTextFromReview(rev)
     return InvoiceResult(1, rawText, canonicalListToInvoiceTxs(rev.transactions()))
 }
 
 InvoiceParseResponse parseInvoiceForUser(String userId, String b64, String? filename) {
     var uploaded = ingestFinancialDocument(userId, b64, filename, false, false)
     var rev = uploaded.review()
-    var rawText = InvoiceRegistry.texts.getOrDefault(uploaded.documentId(), "")
-    if (rawText == "") {
-        rawText = "Arquivo de fatura processado"
-    }
+    var rawText = buildRawTextFromReview(rev)
     return InvoiceParseResponse(
         1,
         rawText,
@@ -1895,46 +3035,60 @@ InvoiceParseResponse parseInvoiceForUser(String userId, String b64, String? file
 }
 
 // =========================================================
-// Confirmacao Idempotente em Lote e por Documento
+// Confirmacao Idempotente em Lote e por Documento (KofDB)
 // =========================================================
 
 List<TransactionOutput> confirmInvoiceItemsWithIdempotency(String userId, List<InvoiceConfirmItem> items, String? documentId) {
     if (documentId != null && documentId.trim() != "") {
-        var docJson = InvoiceRegistry.docs.get(documentId.trim())
-        if (docJson == null) {
+        var cleanDocId = documentId.trim()
+        var docRow = findFinancialDocumentRowByKeyRaw(cleanDocId)
+        if (docRow == null) {
             throw "PARSE_AMBIGUOUS: documento nao encontrado"
         }
-        var doc = json.decode<CanonicalDocument>(docJson)
-        if (doc.userId() != userId) {
+        if (docRow.userId != parseUserIdLong(userId)) {
             throw "UNAUTHORIZED: voce nao tem permissao para confirmar este documento"
         }
-        var docKey = userId + ":doc:" + documentId.trim()
-        var alreadyConfirmed = InvoiceRegistry.confirmedDocs.get(docKey)
+        var docReceiptKey = "conf_doc_" + userId + "_" + cleanDocId
+        var alreadyConfirmed = loadConfirmedOutputsFromReceipt(userId, docReceiptKey)
         if (alreadyConfirmed != null) {
-            return json.decode<List<TransactionOutput>>(alreadyConfirmed)
+            return alreadyConfirmed
         }
     }
 
-    var batchKey = userId + ":batch:" + sha256HexOfString(json.encode(items))
-    var alreadyBatch = InvoiceRegistry.confirmedBatches.get(batchKey)
+    var batchHash = sha256HexOfString(json.encode(items))
+    var batchReceiptKey = "conf_batch_" + userId + "_" + batchHash
+    var alreadyBatch = loadConfirmedOutputsFromReceipt(userId, batchReceiptKey)
     if (alreadyBatch != null) {
-        return json.decode<List<TransactionOutput>>(alreadyBatch)
+        return alreadyBatch
     }
 
     var saved = confirmInvoiceItems(userId, items)
-    var savedJson = json.encode(saved)
-    InvoiceRegistry.confirmedBatches.put(batchKey, savedJson)
+    saveConfirmReceipt(batchReceiptKey, batchHash, saved)
 
     if (documentId != null && documentId.trim() != "") {
-        var cleanDocId = documentId.trim()
-        InvoiceRegistry.confirmedDocs.put(userId + ":doc:" + cleanDocId, savedJson)
-        var docJson2 = InvoiceRegistry.docs.get(cleanDocId)
-        var revJson2 = InvoiceRegistry.reviews.get(cleanDocId)
-        if (docJson2 != null && revJson2 != null) {
-            var doc2 = json.decode<CanonicalDocument>(docJson2)
-            var rev2 = json.decode<ImportReview>(revJson2)
-            InvoiceRegistry.docs.put(cleanDocId, json.encode(CanonicalDocument(doc2.id(), doc2.userId(), doc2.sha256(), doc2.sourceType(), doc2.statementPeriod(), doc2.currency(), "IMPORTADO")))
-            InvoiceRegistry.reviews.put(cleanDocId, json.encode(ImportReview(rev2.documentId(), rev2.sha256(), rev2.sourceType(), "IMPORTADO", rev2.extractedCount(), rev2.warnings(), rev2.totals(), rev2.reconciled(), true, rev2.transactions())))
+        var cleanDocId2 = documentId.trim()
+        saveConfirmReceipt("conf_doc_" + userId + "_" + cleanDocId2, batchHash, saved)
+        var docRow2 = findFinancialDocumentRowByKeyRaw(cleanDocId2)
+        if (docRow2 != null) {
+            saveFinancialDocumentRow(
+                FinancialDocumentRow(
+                    docRow2.id,
+                    docRow2.docKey,
+                    docRow2.userId,
+                    docRow2.sha256,
+                    docRow2.filename,
+                    docRow2.sourceType,
+                    docRow2.statementPeriod,
+                    docRow2.currency,
+                    "IMPORTADO",
+                    docRow2.reconciled,
+                    docRow2.extractedCount,
+                    docRow2.declaredTotalMinor,
+                    docRow2.hasDeclaredTotal,
+                    docRow2.warningsText,
+                    docRow2.createdAt
+                )
+            )
         }
     }
     return saved
@@ -2045,16 +3199,21 @@ IntentResult dispatchFinanceIntent(String authUserId, IntentRequest req) {
         if (docId == "") {
             return IntentResult("ERROR", intent, corrId, false, "Informe o documentId do arquivo enviado.", null, listOf("PARSE_AMBIGUOUS"))
         }
-        var docJson = InvoiceRegistry.docs.get(docId)
-        var revJson = InvoiceRegistry.reviews.get(docId)
-        if (docJson == null || revJson == null) {
+        var lookup = lookupDocumentReview(docId, authUserId)
+        if (lookup.errorCode() == "NOT_FOUND") {
             return IntentResult("ERROR", intent, corrId, false, "Documento nao encontrado.", null, listOf("PARSE_AMBIGUOUS"))
         }
-        var doc = json.decode<CanonicalDocument>(docJson)
-        if (doc.userId() != authUserId) {
+        if (lookup.errorCode() == "UNAUTHORIZED") {
             return IntentResult("UNAUTHORIZED", intent, corrId, false, "Acesso negado ao documento.", null, listOf("UNAUTHORIZED"))
         }
-        var rev = json.decode<ImportReview>(revJson)
+        var rev = lookup.review()
+        if (rev == null) {
+            return IntentResult("ERROR", intent, corrId, false, "Documento nao encontrado.", null, listOf("PARSE_AMBIGUOUS"))
+        }
+        var revJson = json.encode(rev)
+        if (rev.status() == "EXTRACAO_FALHOU" || (rev.extractedCount() == 0 && rev.transactions().isEmpty())) {
+            return IntentResult("EXTRACAO_FALHOU", intent, corrId, false, "Nao consegui extrair lancamentos validos desse arquivo. Envie um PDF digital com texto selecionavel ou me informe os gastos por texto.", revJson, listOf("EXTRACAO_FALHOU"))
+        }
         var sumMinor: Long = 0
         for (var tx in rev.transactions()) {
             var m = tx.amountMinor()
@@ -2071,16 +3230,17 @@ IntentResult dispatchFinanceIntent(String authUserId, IntentRequest req) {
         if (docId == "") {
             return IntentResult("ERROR", intent, corrId, false, "Informe o documentId para confirmar a importacao.", null, listOf("PARSE_AMBIGUOUS"))
         }
-        var docJson = InvoiceRegistry.docs.get(docId)
-        var revJson = InvoiceRegistry.reviews.get(docId)
-        if (docJson == null || revJson == null) {
+        var lookup = lookupDocumentReview(docId, authUserId)
+        if (lookup.errorCode() == "NOT_FOUND") {
             return IntentResult("ERROR", intent, corrId, false, "Documento nao encontrado.", null, listOf("PARSE_AMBIGUOUS"))
         }
-        var doc = json.decode<CanonicalDocument>(docJson)
-        if (doc.userId() != authUserId) {
+        if (lookup.errorCode() == "UNAUTHORIZED") {
             return IntentResult("UNAUTHORIZED", intent, corrId, false, "Acesso negado ao documento.", null, listOf("UNAUTHORIZED"))
         }
-        var rev = json.decode<ImportReview>(revJson)
+        var rev = lookup.review()
+        if (rev == null) {
+            return IntentResult("ERROR", intent, corrId, false, "Documento nao encontrado.", null, listOf("PARSE_AMBIGUOUS"))
+        }
         var items: List<InvoiceConfirmItem> = listOf()
         for (var ctx in rev.transactions()) {
             var m = ctx.amountMinor()
@@ -2111,16 +3271,20 @@ IntentResult dispatchFinanceIntent(String authUserId, IntentRequest req) {
         if (docId == "") {
             return IntentResult("ERROR", intent, corrId, false, "Informe o documentId para analisar a fatura.", null, listOf("PARSE_AMBIGUOUS"))
         }
-        var docJson = InvoiceRegistry.docs.get(docId)
-        var revJson = InvoiceRegistry.reviews.get(docId)
-        if (docJson == null || revJson == null) {
+        var lookup = lookupDocumentReview(docId, authUserId)
+        if (lookup.errorCode() == "NOT_FOUND") {
             return IntentResult("ERROR", intent, corrId, false, "Documento nao encontrado.", null, listOf("PARSE_AMBIGUOUS"))
         }
-        var doc = json.decode<CanonicalDocument>(docJson)
-        if (doc.userId() != authUserId) {
+        if (lookup.errorCode() == "UNAUTHORIZED") {
             return IntentResult("UNAUTHORIZED", intent, corrId, false, "Acesso negado ao documento.", null, listOf("UNAUTHORIZED"))
         }
-        var rev = json.decode<ImportReview>(revJson)
+        var rev = lookup.review()
+        if (rev == null) {
+            return IntentResult("ERROR", intent, corrId, false, "Documento nao encontrado.", null, listOf("PARSE_AMBIGUOUS"))
+        }
+        if (rev.status() == "EXTRACAO_FALHOU" || (rev.extractedCount() == 0 && rev.transactions().isEmpty())) {
+            return IntentResult("EXTRACAO_FALHOU", intent, corrId, false, "Extracao falhou: nao e possivel analisar valores sem transacoes lidas do arquivo.", json.encode(rev), listOf("EXTRACAO_FALHOU"))
+        }
         var totalMinor: Long = 0
         var confirmedMinor: Long = 0
         var paymentMinor: Long = 0

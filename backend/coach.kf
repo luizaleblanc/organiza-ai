@@ -50,23 +50,70 @@ String toKakeiboBucket(Category? category) {
     return "Extras"
 }
 
-// Nome do bucket do plano que recebe o gasto da categoria (mesma regra do GetBalance do legado):
-// Kakeibo pelo nome; plano de 2 buckets (80/20) tudo no primeiro; com 3 ou mais, essencial no primeiro
-// e o resto no segundo. Base Zero (sem buckets) = null.
-String? planBucketFor(BudgetModelType model, List<BucketSummaryDTO> plan, Category? category) {
-    if (model == BudgetModelType.KAKEIBO) {
-        return toKakeiboBucket(category)
-    }
-    if (plan.size == 2) {
-        return plan.get(0).name
-    }
-    if (plan.size > 2) {
-        if (toStandardBucket(category) == Bucket.NEEDS) {
-            return plan.get(0).name
+String? findPlanBucketName(List<BucketSummaryDTO> plan, List<String> candidates) {
+    for (var cand in candidates) {
+        for (var b in plan) {
+            if (b.name == cand) {
+                return b.name
+            }
         }
-        return plan.get(1).name
     }
     return null
+}
+
+// Nome do bucket do plano que recebe o gasto da categoria e do Bucket explicitado na transacao.
+// Busca pelo nome do bucket em vez de posicoes fixas no array.
+String? planBucketForTx(BudgetModelType model, List<BucketSummaryDTO> plan, Category? category, Bucket? txBucket) {
+    if (plan.size == 0) {
+        return null
+    }
+    if (txBucket != null && (txBucket == Bucket.SAVINGS || txBucket == Bucket.DEBT_PAYMENT)) {
+        var reserveName = findPlanBucketName(plan, listOf("Futuro", "Poupança", "Quitação de Dívida", "Guardar", "Reserva"))
+        if (reserveName != null) {
+            return reserveName
+        }
+    }
+    if (model == BudgetModelType.KAKEIBO) {
+        var kName = toKakeiboBucket(category)
+        var matched = findPlanBucketName(plan, listOf(kName, "Extras"))
+        if (matched != null) {
+            return matched
+        }
+        return plan.get(0).name
+    }
+    if (model == BudgetModelType.FREELANCER_BASE_ZERO) {
+        var baseName = findPlanBucketName(plan, listOf("Pró-labore"))
+        if (baseName != null) {
+            return baseName
+        }
+        return plan.get(0).name
+    }
+    if (plan.size == 2) {
+        var simpleName = findPlanBucketName(plan, listOf("Viver"))
+        if (simpleName != null) {
+            return simpleName
+        }
+        return plan.get(0).name
+    }
+    if (toStandardBucket(category) == Bucket.NEEDS) {
+        var needsName = findPlanBucketName(plan, listOf("Necessidades", "Essencial", "Viver", "Pró-labore"))
+        if (needsName != null) {
+            return needsName
+        }
+        return plan.get(0).name
+    }
+    var wantsName = findPlanBucketName(plan, listOf("Desejos", "Folga", "Pessoal", "Lazer", "Viver", "Pró-labore"))
+    if (wantsName != null) {
+        return wantsName
+    }
+    if (plan.size > 1) {
+        return plan.get(1).name
+    }
+    return plan.get(0).name
+}
+
+String? planBucketFor(BudgetModelType model, List<BucketSummaryDTO> plan, Category? category) {
+    return planBucketForTx(model, plan, category, null)
 }
 
 Bucket toBucket(BudgetModelType model, Category? category) {
@@ -123,47 +170,13 @@ GetBalanceOutput calculateBalance(String userId, String fromIso) {
         var plan = buildBudgetBuckets(model, salary)
         var resultBuckets: List<BucketBalanceDTO> = listOf()
 
-        if (model == BudgetModelType.KAKEIBO) {
-            for (var b in plan) {
-                var spent = monthTransactions
-                    .filter((t: TransactionEntity) -> toKakeiboBucket(t.category) == b.name)
-                    .map((t: TransactionEntity) -> centsToReais(t.amountCents))
-                    .reduce((x: Double, y: Double) -> x + y, 0.0)
-                var rem = b.amount - spent
-                resultBuckets.add(BucketBalanceDTO(b.name, b.percentage, b.amount, spent, rem))
-            }
-        } else {
-            var needsSpent = 0.0
-            var wantsSpent = 0.0
-            for (var t in monthTransactions) {
-                var bucket = toStandardBucket(t.category)
-                if (bucket == Bucket.NEEDS) {
-                    needsSpent = needsSpent + centsToReais(t.amountCents)
-                } else {
-                    wantsSpent = wantsSpent + centsToReais(t.amountCents)
-                }
-            }
-
-            if (plan.size == 2) {
-                var first = plan.get(0)
-                var totalSpent = needsSpent + wantsSpent
-                resultBuckets.add(BucketBalanceDTO(first.name, first.percentage, first.amount, totalSpent, first.amount - totalSpent))
-                if (plan.size > 1) {
-                    var second = plan.get(1)
-                    resultBuckets.add(BucketBalanceDTO(second.name, second.percentage, second.amount, 0.0, second.amount))
-                }
-            } else if (plan.size >= 2) {
-                var first = plan.get(0)
-                resultBuckets.add(BucketBalanceDTO(first.name, first.percentage, first.amount, needsSpent, first.amount - needsSpent))
-                var second = plan.get(1)
-                resultBuckets.add(BucketBalanceDTO(second.name, second.percentage, second.amount, wantsSpent, second.amount - wantsSpent))
-                var i = 2
-                while (i < plan.size) {
-                    var other = plan.get(i)
-                    resultBuckets.add(BucketBalanceDTO(other.name, other.percentage, other.amount, 0.0, other.amount))
-                    i = i + 1
-                }
-            }
+        for (var b in plan) {
+            var spent = monthTransactions
+                .filter((t: TransactionEntity) -> planBucketForTx(model, plan, t.category, t.bucket) == b.name)
+                .map((t: TransactionEntity) -> centsToReais(t.amountCents))
+                .reduce((x: Double, y: Double) -> x + y, 0.0)
+            var rem = b.amount - spent
+            resultBuckets.add(BucketBalanceDTO(b.name, b.percentage, b.amount, spent, rem))
         }
 
         // O legado devolve null nos dois campos fora do Base Zero; aqui vao o gasto do mes e o que sobra do salario.
@@ -252,15 +265,224 @@ KakeiboReflectionEntity recordKakeiboReflection(String userId, String weekStart,
     throw "Usuário não encontrado: " + userId
 }
 
+String coachModelLabel(BudgetModelType model) {
+    return switch (model) {
+        case STANDARD_503020 -> "50/30/20"
+        case SURVIVAL_702010 -> "70/20/10"
+        case ANTI_DEBT_701020 -> "70/10/20 Anti-Dívida"
+        case SIMPLE_8020 -> "80/20"
+        case KAKEIBO -> "Kakeibo"
+        case FREELANCER_BASE_ZERO -> "Base Zero (Profit First)"
+    }
+}
+
+String buildBucketDivisionLines(BudgetModelType model, Double salary) {
+    var buckets = buildBudgetBuckets(model, salary)
+    var out = ""
+    for (var b in buckets) {
+        out = out + "- " + String.valueOf(b.percentage) + "% para " + b.name + ": " + formatBrl(toCents(b.amount)) + "\n"
+    }
+    return out
+}
+
+String extractFilenameFromChatMsg(String msg) {
+    var pStart = msg.indexOf("Fatura ")
+    if (pStart >= 0) {
+        var pEnd = msg.indexOf(" processada", pStart)
+        if (pEnd > pStart + 7) {
+            return msg.substring(pStart + 7, pEnd).trim()
+        }
+    }
+    var aStart = msg.indexOf("Arquivo ")
+    if (aStart >= 0) {
+        var aEnd = msg.indexOf(" enviado", aStart)
+        if (aEnd > aStart + 8) {
+            return msg.substring(aStart + 8, aEnd).trim()
+        }
+    }
+    for (var rawTok in msg.split(" ")) {
+        var tok = rawTok.trim().replace("!", "").replace(",", "").replace(";", "")
+        var tl = tok.toLowerCase()
+        if (tl.endsWith(".pdf") || tl.endsWith(".docx") || tl.endsWith(".png") || tl.endsWith(".jpg") || tl.endsWith(".jpeg") || tl.endsWith(".txt")) {
+            return tok
+        }
+    }
+    return ""
+}
+
+// AgentConsultorFinanceiro: resposta ancorada exclusivamente no KofDB (zero valores inventados).
+String buildGroundedDocumentReply(String userId, UserEntity? user, FinancialDocumentRow docRow, Int step, Double fallbackSalary) {
+    var txRows = findExtractedTransactionRowsByDoc(userId, docRow.docKey)
+    if (docRow.status == "EXTRACAO_FALHOU" || txRows.isEmpty()) {
+        return "Recebi o arquivo " + docRow.filename + ", mas a extração falhou (0 lançamentos identificados com segurança). Por segurança, bloqueei a análise financeira para não estimar nem inventar nenhum valor. Envie um PDF digital com texto selecionável ou me diga os lançamentos por texto."
+    }
+
+    var firstName = ""
+    var model = BudgetModelType.SURVIVAL_702010
+    var salary = fallbackSalary
+    if (user != null) {
+        if (user.name.trim() != "") {
+            var sp = user.name.trim().indexOf(" ")
+            if (sp > 0) {
+                firstName = user.name.trim().substring(0, sp)
+            } else {
+                firstName = user.name.trim()
+            }
+        }
+        model = user.budgetModel
+        if (user.salaryCents > 0) {
+            salary = centsToReais(user.salaryCents)
+        }
+    }
+
+    var outflowCount = 0
+    var outflowTotalMinor: Long = 0
+    var pixOutMinor: Long = 0
+    var cardExitMinor: Long = 0
+    var paymentMinor: Long = 0
+    var pixPfMinor: Long = 0
+    var confirmedMerchantMinor: Long = 0
+    var pjInflowMinor: Long = 0
+    var pfInflowMinor: Long = 0
+    var merchantExamples = ""
+    var merchantCount = 0
+    var sampleLines = ""
+    var sampleCount = 0
+    var paymentEvidence = ""
+    var pixPfEvidence = ""
+    var pjInflowDetails = ""
+
+    for (var r in txRows) {
+        var rLower = r.descriptionRaw.toLowerCase()
+        var evRef = "(doc " + docRow.filename + ", pág. " + String.valueOf(r.pageNum) + ", reg. " + String.valueOf(r.rowNum) + ")"
+        if (r.kind == "INCOME" || r.direction == "CREDIT") {
+            if (r.categoryRule == "INCOME_PJ_NEEDS_REVIEW") {
+                pjInflowMinor = pjInflowMinor + r.amountMinor
+                var pjEntry = r.txDate + ": " + formatBrl(r.amountMinor) + " em " + r.descriptionNormalized + " " + evRef
+                if (pjInflowDetails == "") {
+                    pjInflowDetails = pjEntry
+                } else {
+                    pjInflowDetails = pjInflowDetails + "; " + pjEntry
+                }
+            } else if (r.kind == "INCOME") {
+                pfInflowMinor = pfInflowMinor + r.amountMinor
+            }
+        } else {
+            outflowCount = outflowCount + 1
+            outflowTotalMinor = outflowTotalMinor + r.amountMinor
+            if (r.kind == "PAYMENT") {
+                paymentMinor = paymentMinor + r.amountMinor
+                if (paymentEvidence == "") {
+                    paymentEvidence = evRef
+                }
+            } else if (r.kind == "CARD_EXIT" || rLower.contains("pix crédito") || rLower.contains("pix credito")) {
+                cardExitMinor = cardExitMinor + r.amountMinor
+            } else if (r.kind == "PIX_OUT" || rLower.contains("pix enviado") || rLower.contains("envio de pix")) {
+                pixOutMinor = pixOutMinor + r.amountMinor
+            }
+
+            if (r.categoryRule == "PIX_PF_NEEDS_REVIEW") {
+                pixPfMinor = pixPfMinor + r.amountMinor
+                if (pixPfEvidence == "") {
+                    pixPfEvidence = evRef
+                }
+            } else if (r.reviewStatus == "CONFIRMED") {
+                confirmedMerchantMinor = confirmedMerchantMinor + r.amountMinor
+                if (merchantCount < 3) {
+                    var mItem = formatBrl(r.amountMinor) + " em " + r.descriptionNormalized + " " + evRef
+                    if (merchantExamples == "") {
+                        merchantExamples = mItem
+                    } else {
+                        merchantExamples = merchantExamples + " e " + mItem
+                    }
+                    merchantCount = merchantCount + 1
+                }
+            }
+            if (sampleCount < 4) {
+                sampleLines = sampleLines + "- " + r.descriptionNormalized + ": " + formatBrl(r.amountMinor) + " " + evRef + "\n"
+                sampleCount = sampleCount + 1
+            }
+        }
+    }
+
+    var greetPrefix = "Oi! "
+    if (firstName != "") {
+        greetPrefix = "Oi, " + firstName + "! "
+    }
+    var modelLabel = coachModelLabel(model)
+
+    if (step == 1) {
+        var internalNote = ""
+        for (var w in docRow.warningsText.split("\n")) {
+            if (w.contains("INTERNAL_TRANSFERS_FILTERED")) {
+                internalNote = " e retirei movimentações internas para nada ficar contado duas vezes"
+            }
+        }
+        var header = greetPrefix + "Li o arquivo " + docRow.filename + internalNote + ".\n\n"
+        var inflowText = ""
+        if (pjInflowMinor > 0) {
+            inflowText = "Identifiquei " + formatBrl(pjInflowMinor) + " em créditos de origem PJ (" + pjInflowDetails + "), mas o extrato sozinho não comprova se todos são renda profissional recorrente.\n"
+        }
+        if (pixOutMinor > 0 && cardExitMinor > 0 && paymentMinor > 0) {
+            return header + inflowText + "Nas saídas, encontrei " + String.valueOf(outflowCount) + " lançamentos somando " + formatBrl(outflowTotalMinor) + ":\n- " + formatBrl(pixOutMinor) + " em Pix enviados pela conta\n- " + formatBrl(cardExitMinor) + " em compras e Pix no cartão\n- " + formatBrl(paymentMinor) + " em pagamentos de faturas\n\nEsse total de " + formatBrl(outflowTotalMinor) + " confere com o que você esperava para o período?"
+        }
+        var detailBlock = sampleLines
+        if (cardExitMinor > 0 && !detailBlock.contains(formatBrl(cardExitMinor))) {
+            detailBlock = detailBlock + "- Compras e Pix no cartão: " + formatBrl(cardExitMinor) + "\n"
+        }
+        if (paymentMinor > 0 && !detailBlock.contains(formatBrl(paymentMinor))) {
+            detailBlock = detailBlock + "- Pagamentos de faturas: " + formatBrl(paymentMinor) + "\n"
+        }
+        return header + inflowText + "Extraí " + String.valueOf(outflowCount) + " lançamentos de saída somando " + formatBrl(outflowTotalMinor) + ":\n" + detailBlock + "\nEsse total de " + formatBrl(outflowTotalMinor) + " confere com o que você esperava para o período?"
+    }
+
+    // Passo 2: Analise assertiva com rastreabilidade documental e pedido de confirmacao
+    var analysis = "Conferi cada lançamento extraído de " + docRow.filename + ". O total de saídas fechou em " + formatBrl(outflowTotalMinor) + " (" + String.valueOf(outflowCount) + " lançamentos), mas prefiro não adivinhar categorias sem sua confirmação:\n\n"
+    if (confirmedMerchantMinor > 0) {
+        analysis = analysis + "- Gastos confirmados em estabelecimentos: " + merchantExamples + " (total confirmado: " + formatBrl(confirmedMerchantMinor) + ").\n"
+    }
+    if (paymentMinor > 0) {
+        analysis = analysis + "- Pagamentos de faturas: " + formatBrl(paymentMinor) + " " + paymentEvidence + " (não dá para classificar como moradia ou contas fixas sem ver os itens dessas faturas, porque podem ser compras de meses anteriores).\n"
+    }
+    if (pixPfMinor > 0) {
+        analysis = analysis + "- Pix para pessoas físicas: " + formatBrl(pixPfMinor) + " dentro de " + formatBrl(pixOutMinor) + " enviados por Pix " + pixPfEvidence + " (precisamos confirmar se foram despesas do mês, empréstimos ou transferências pessoais).\n"
+    }
+    if (pjInflowMinor > 0) {
+        analysis = analysis + "- Entradas de origem PJ para confirmar: " + formatBrl(pjInflowMinor) + " (" + pjInflowDetails + ") — confirme se ambos os valores representam renda profissional antes de usar como base mensal.\n"
+    }
+
+    var refSalary = salary
+    var userHasSalary = false
+    if (user != null) {
+        if (user.salaryCents > 0) {
+            userHasSalary = true
+        }
+    }
+    if (pjInflowMinor > 0 && !userHasSalary) {
+        refSalary = centsToReais(pjInflowMinor)
+    }
+    analysis = analysis + "\nSobre o modelo " + modelLabel + " com base de " + formatBrl(toCents(refSalary)) + ":\n" + buildBucketDivisionLines(model, refSalary)
+    if (pjInflowMinor > 0) {
+        var ratioPct = ((outflowTotalMinor * 100.0) / (pjInflowMinor * 1.0))
+        analysis = analysis + "\nEmbora " + formatBrl(outflowTotalMinor) + " equivalha a " + String.valueOf(math.roundTo(ratioPct, 1)) + "% de " + formatBrl(pjInflowMinor) + ", parte pode incluir faturas anteriores e transferências pessoais.\n"
+    }
+    return analysis + "\nAntes de eu salvar nas suas caixinhas e distribuir no modelo " + modelLabel + ", você confirma essas entradas e o que foram os Pix pessoais e pagamentos de faturas?"
+}
+
 // Resposta determinística / offline alinhada ao Tópico 10 (ChatWin)
 String coachReplyOffline(String userId, String rawMsg, String monthStart) {
     var msg = rawMsg.trim()
     var lower = msg.toLowerCase()
     var user = findUserById(userId)
     var salary = 3000.0
-    if (user != null && user.salaryCents > 0) {
-        salary = centsToReais(user.salaryCents)
+    var model = BudgetModelType.STANDARD_503020
+    if (user != null) {
+        if (user.salaryCents > 0) {
+            salary = centsToReais(user.salaryCents)
+        }
+        model = user.budgetModel
     }
+    var modelLabel = coachModelLabel(model)
     var pulse = calculateDailyPulse(userId, daysRemainingInMonth(), monthStart)
 
     var history = findChatHistoryPage(userId, 1, 10, 0)
@@ -271,36 +493,36 @@ String coachReplyOffline(String userId, String rawMsg, String monthStart) {
         }
     }
 
-    // 1. Confirmação final após o Passo 2 (antes de salvar nas caixinhas e distribuir no 70/20/10)
-    if (lastAssistantMsg.contains("Antes de eu salvar nas suas caixinhas e distribuir no 70/20/10") || lastAssistantMsg.contains("distribua esses gastos na regra") || lastAssistantMsg.contains("Quer que eu distribua")) {
+    // Bloqueio imediato quando o upload registrou falha de extracao / 0 lancamentos.
+    if (lower.contains("0 lançamentos identificados") || lower.contains("0 lancamentos identificados") || lower.contains("falha na extração") || lower.contains("falha na extracao")) {
+        var failName = extractFilenameFromChatMsg(msg)
+        if (failName == "") {
+            failName = "enviado"
+        }
+        return "Recebi o arquivo " + failName + ", mas a extração identificou 0 lançamentos com segurança. Por segurança, bloqueei a análise financeira para não estimar nem inventar nenhum valor. Envie um PDF digital com texto selecionável ou me informe os lançamentos por texto."
+    }
+
+    // 1. Confirmação final após o Passo 2 (antes de salvar nas caixinhas)
+    if (lastAssistantMsg.contains("Antes de eu salvar nas suas caixinhas") || lastAssistantMsg.contains("distribua esses gastos na regra") || lastAssistantMsg.contains("Quer que eu distribua")) {
         var canceled = lower == "não" || lower == "nao" || lower.contains("cancela") || lower.contains("não salva") || lower.contains("nao salva") || lower.contains("não salvar") || lower.contains("nao salvar")
         if (canceled) {
-            return "Combinado. Não salvei esses lançamentos nas caixinhas nem apliquei a regra ainda. Quando quiser revisar algum valor, é só me dizer."
+            return "Combinado. Não salvei esses lançamentos nas caixinhas nem apliquei o modelo ainda. Quando quiser revisar algum valor, é só me dizer."
         }
         var confirmed = lower == "sim" || lower == "sim!" || lower.startsWith("sim,") || lower.startsWith("sim ") || lower.contains("confirm") || lower.contains("foram") || lower.contains("despesa") || lower.contains("pode salvar") || lower.contains("organizar") || lower.contains("distribua") || lower.contains("50/30/20") || lower.contains("70/20/10") || lower.contains("quero") || lower.contains("pode") || lower.contains("ok") || lastAssistantMsg.contains("Antes de eu salvar nas suas caixinhas")
         if (confirmed) {
-            if (lastAssistantMsg.contains("renda profissional de R$ 2.740,00") || lastAssistantMsg.contains("Antes de eu salvar nas suas caixinhas")) {
-                return "Perfeito, Luiza. Com a sua confirmação, organizei seus gastos nas caixinhas usando a referência da regra 70/20/10 para a sua renda profissional de R$ 2.740,00:\n\n- 70% para necessidades e despesas: R$ 1.918,00\n- 20% para poupança ou dívidas: R$ 548,00\n- 10% para lazer e desejos: R$ 274,00\n\nSeus lançamentos confirmados já estão salvos nas caixinhas sem misturar faturas de meses anteriores nem transferências pessoais."
-            }
             var salStr = formatBrl(toCents(salary))
-            var s50 = formatBrl(toCents(salary * 0.50))
-            var s30 = formatBrl(toCents(salary * 0.30))
-            var s20 = formatBrl(toCents(salary * 0.20))
-            if (user != null && user.budgetModel == BudgetModelType.SURVIVAL_702010) {
-                var s70 = formatBrl(toCents(salary * 0.70))
-                var s10 = formatBrl(toCents(salary * 0.10))
-                return "Com seu salário de " + salStr + ", a regra 70/20/10 fica assim:\n\n70% Necessidades: " + s70 + "\nContas essenciais e fixas.\n\n20% Folga: " + s20 + "\nDesejos e lazer moderado.\n\n10% Poupança: " + s10 + "\nReserva de emergência e segurança.\n\nO Organiza já salvou e organizou seus lançamentos confirmados nas caixinhas."
-            }
-            return "Com seu salário de " + salStr + ", a regra 50/30/20 fica assim:\n\n50% Necessidades: " + s50 + "\nContas essenciais e fixas.\n\n30% Desejos: " + s30 + "\nLazer, delivery e compras livres.\n\n20% Futuro: " + s20 + "\nReserva de emergência e investimentos.\n\nO Organiza já salvou e organizou seus lançamentos confirmados nas caixinhas."
+            var divisionText = buildBucketDivisionLines(model, salary)
+            return "Perfeito! Com a sua confirmação, salvei seus lançamentos confirmados nas caixinhas usando o modelo " + modelLabel + " para a renda base de " + salStr + ":\n\n" + divisionText + "\nOs valores foram organizados sem misturar faturas antigas nem transferências pessoais sem comprovação."
         }
     }
 
-    // 2. Confirmação do total lido no Passo 1 -> entrega análise assertiva do Passo 2 no tom de voz da marca
-    var awaitingTotalConfirmation = lastAssistantMsg.contains("Esse total de R$ 2.579,10 confere") || lastAssistantMsg.contains("Você confirma se esse valor total está certo") || lastAssistantMsg.contains("Confirma pra mim se esse é o valor total")
+    // 2. Confirmação do total lido no Passo 1 -> entrega análise assertiva do Passo 2 baseada no KofDB
+    var awaitingTotalConfirmation = lastAssistantMsg.contains("Esse total") || lastAssistantMsg.contains("confere com o que você esperava") || lastAssistantMsg.contains("Você confirma se esse valor total está certo") || lastAssistantMsg.contains("Confirma pra mim se esse é o valor total")
     var userConfirmedTotal = lower == "sim" || lower == "sim!" || lower.startsWith("sim ") || lower.startsWith("sim,") || lower.contains("confir") || lower.contains("confer") || lower.contains("certo") || lower.contains("ok") || lower.contains("isso") || lower.contains("bate") || lower.contains("exato")
     if ((awaitingTotalConfirmation && userConfirmedTotal) || lower.contains("confirmo") || lower.contains("confirma") || lower.contains("confirmar")) {
-        if (lastAssistantMsg.contains("extrato da Neon") || lastAssistantMsg.contains("novembro") || lastAssistantMsg.contains("2.579,10") || lower.contains("neon")) {
-            return "Conferi cada valor do seu extrato de 1 a 14 de novembro. O total de R$ 2.579,10 fecha certinho, mas prefiro não adivinhar algumas categorias sem confirmar com você antes.\n\nVeja o que já está claro e o que precisa da sua confirmação:\n- Compras confirmadas em estabelecimentos: R$ 10,92 com Uber e R$ 55,00 na G4 Bebidas (com o restante das compras no cartão somando até R$ 209,60).\n- Pagamentos de faturas: R$ 841,70 (não dá para classificar como moradia ou contas fixas sem ver os itens dessas faturas, porque podem ser compras de meses anteriores).\n- Pix para pessoas físicas: R$ 1.214,16 dentro dos R$ 1.527,80 enviados por Pix (não sabemos se foram despesas do mês, divisão de contas, empréstimos ou transferências pessoais).\n\nSobre a regra 70/20/10: com a sua renda profissional de R$ 2.740,00, a divisão de referência fica assim:\n- 70% para necessidades e despesas: R$ 1.918,00\n- 20% para poupança ou dívidas: R$ 548,00\n- 10% para lazer e desejos: R$ 274,00\n\nEmbora R$ 2.579,10 represente 94,1% dessa renda, isso não significa que você consumiu quase todo o salário de novembro, porque parte inclui faturas anteriores e transferências pessoais.\n\nAntes de eu salvar nas suas caixinhas e distribuir no 70/20/10, você pode me confirmar o que foram esses R$ 1.214,16 em Pix para pessoas físicas e o que tinha nos R$ 841,70 das faturas?"
+        var latestDoc = findLatestFinancialDocumentRowByUser(userId)
+        if (latestDoc != null) {
+            return buildGroundedDocumentReply(userId, user, latestDoc, 2, salary)
         }
         var userTxs = findTransactionsByUserIdAndCreatedAtAfter(userId, monthStart)
         var invoiceTxs = userTxs.filter((t: TransactionEntity) -> t.source == Source.INVOICE)
@@ -312,54 +534,25 @@ String coachReplyOffline(String userId, String rawMsg, String monthStart) {
                 catLines = catLines + "- " + cname + ": " + formatBrl(cCents) + "\n"
             }
             var numCats = groups.keys().size
-            var modelText = "50/30/20"
-            if (user != null) {
-                if (user.budgetModel == BudgetModelType.SURVIVAL_702010) {
-                    modelText = "70/20/10"
-                } else if (user.budgetModel == BudgetModelType.ANTI_DEBT_701020) {
-                    modelText = "70/10/20"
-                }
-            }
-            return "Conferi seus lançamentos e encontrei " + String.valueOf(numCats) + " grupos com identificação clara:\n\n" + catLines + "\nAntes de eu salvar nas suas caixinhas e distribuir no " + modelText + ", você confirma se essas categorias estão certinhas?"
+            return "Conferi seus lançamentos confirmados no histórico e encontrei " + String.valueOf(numCats) + " grupos:\n\n" + catLines + "\nAntes de eu salvar nas suas caixinhas e distribuir no modelo " + modelLabel + ", você confirma se essas categorias estão certinhas?"
         }
-        return "Conferi seus lançamentos principais:\n\n- Aluguel: R$ 1.245,98\n- Faculdade: R$ 420,50\n- Hortifruti: R$ 100,00\n- Padaria: R$ 80,72\n\nAntes de eu salvar nas suas caixinhas e distribuir no 50/30/20, você confirma se esses valores estão certos?"
+        return "Ainda não encontrei nenhum documento financeiro processado para confirmar os lançamentos. Envie sua fatura ou extrato primeiro para eu analisar os dados reais."
     }
 
-    // 3. Fatura / extrato recebido (PDF, PNG, JPEG, DOCX) -> Passo 1 (confirmação de valor total)
+    // 3. Fatura / extrato recebido (PDF, PNG, JPEG, DOCX) -> Passo 1 (leitura exclusiva do KofDB)
     if (lower.contains("fatura") || lower.contains("extrato") || lower.contains(".pdf") || lower.contains(".docx") || lower.contains(".jpeg") || lower.contains(".jpg") || lower.contains(".png")) {
-        var fname = "sua fatura"
-        var pStart = msg.indexOf("Fatura ")
-        if (pStart >= 0) {
-            var pEnd = msg.indexOf(" processada", pStart)
-            if (pEnd > pStart) {
-                fname = msg.substring(pStart + 7, pEnd).trim()
-            }
-        } else if (msg.contains("fatura-")) {
-            var fIdx = msg.indexOf("fatura-")
-            var fEnd = msg.indexOf(" ", fIdx)
-            if (fEnd < 0) { fEnd = msg.length() }
-            fname = msg.substring(fIdx, fEnd)
-        } else if (msg.contains("novembro.pdf")) {
-            fname = "novembro.pdf"
-        }
-        if (fname.toLowerCase().contains("novembro") || lower.contains("neon") || msg.contains("2.579,10")) {
-            return "Oi, Luiza! Já li o seu extrato da Neon de 1 a 14 de novembro e tirei as movimentações internas do Viracrédito para nada ficar contado duas vezes.\n\nEncontrei R$ 2.740,00 de renda profissional e R$ 2.579,10 em saídas e compras no cartão:\n- R$ 1.527,80 em Pix enviados pela conta\n- R$ 209,60 em compras e Pix no cartão\n- R$ 841,70 em pagamentos de faturas\n\nEsse total de R$ 2.579,10 confere com o que você esperava para o período?"
-        }
-        var totalStr = ""
-        var totIdx = msg.indexOf("totalizando R$ ")
-        if (totIdx >= 0) {
-            totalStr = "R$ " + msg.substring(totIdx + 15).replace("!", "").trim()
-        } else {
-            var userTxs = findTransactionsByUserIdAndCreatedAtAfter(userId, monthStart)
-            var invoiceTxs = userTxs.filter((t: TransactionEntity) -> t.source == Source.INVOICE)
-            if (invoiceTxs.size > 0) {
-                totalStr = formatBrl(sumAmountCents(invoiceTxs))
+        var fname = extractFilenameFromChatMsg(msg)
+        var docRow = findLatestFinancialDocumentRowByUser(userId)
+        if (fname != "") {
+            var byName = findLatestFinancialDocumentRowByUserAndFilename(userId, fname)
+            if (byName != null) {
+                docRow = byName
             }
         }
-        if (totalStr == "" || totalStr == "R$ 0,00") {
-            return "Li o arquivo " + fname + ", mas não encontrei um valor total fechado com segurança. Pode me informar ou confirmar quanto deu esse extrato antes de eu organizar suas caixinhas?"
+        if (docRow != null) {
+            return buildGroundedDocumentReply(userId, user, docRow, 1, salary)
         }
-        return "De acordo com a leitura de " + fname + ", o total identificado foi de " + totalStr + ". Você confirma se esse valor total está certo antes de detalharmos seus gastos?"
+        return "Ainda não encontrei esse arquivo processado no seu histórico de documentos. Tente enviar o anexo novamente ou informe os valores por texto."
     }
 
     // 3b. GATE 4: Consulta deterministica de gastos em linguagem natural / voz (CONSULTAR_GASTOS)

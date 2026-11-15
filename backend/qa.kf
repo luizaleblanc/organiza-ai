@@ -5,6 +5,7 @@ record QaSeedResult(String demoUserId, String newUserId, Int envelopes, Int tran
 
 String qaDemoEmail() = "qa@organiza.local"
 String qaNewEmail() = "qa-novo@organiza.local"
+String qaOwnerEmail() = "luizaa.fq@gmail.com"
 String qaPassword() = "Qa@Organiza1"
 
 String qaScreenName(String requested) {
@@ -31,12 +32,60 @@ Bool qaEnabled() {
     return qaRequested() && !isProduction()
 }
 
+void ensureOwnerDefaults(UserEntity owner) {
+    if (findEnvelopesByUserId(owner.id).size == 0) {
+        saveEnvelope(EnvelopeEntity("", owner.id, "Moradia", 1000.0, 0.0,
+            EnvelopeLimitType.FIXED, 3, nowIso(), "Necessidades"))
+        saveEnvelope(EnvelopeEntity("", owner.id, "Alimentacao", 600.0, 0.0,
+            EnvelopeLimitType.FIXED, 3, nowIso(), "Necessidades"))
+        saveEnvelope(EnvelopeEntity("", owner.id, "Lazer", 274.0, 0.0,
+            EnvelopeLimitType.FIXED, 3, nowIso(), "Desejos"))
+        savePreferences(owner.id, PreferencesInput(true, "DAILY", true, "DARK"))
+    }
+}
+
+UserEntity ensureOwnerUser(String? rawPassword) {
+    var pwd = qaPassword()
+    var hasCustomPwd = false
+    if (rawPassword != null && rawPassword != "") {
+        pwd = rawPassword
+        hasCustomPwd = true
+    }
+    var existing = findUserByEmail(qaOwnerEmail())
+    if (existing == null) {
+        var salary: Long = 274000
+        var userRecord = UserEntity("", qaOwnerEmail(), passwords.hash(pwd), Role.USER, salary, true,
+            Tier.PREMIUM, false, 149100, true, BudgetModelType.SURVIVAL_702010,
+            IncomeType.FIXED, false, 0, "Luiza Ferraz", "Luiza", "Ferraz", 27)
+        var created = insertUserIfNew(userRecord)
+        if (created != null) {
+            ensureOwnerDefaults(created)
+            return created
+        }
+        var concurrent = findUserByEmail(qaOwnerEmail())
+        if (concurrent == null) {
+            throw "Nao foi possivel criar a conta local."
+        }
+        ensureOwnerDefaults(concurrent)
+        return concurrent
+    }
+    if (hasCustomPwd && !passwords.verify(pwd, existing.passwordHash)) {
+        existing.passwordHash = passwords.hash(pwd)
+        var updated = updateUser(existing)
+        ensureOwnerDefaults(updated)
+        return updated
+    }
+    ensureOwnerDefaults(existing)
+    return existing
+}
+
 void logQaMode() {
     if (qaRequested() && isProduction()) {
         log.warn("QA desligado em producao")
         return
     }
     if (qaEnabled()) {
+        ensureOwnerUser(null)
         log.info("QA local habilitado")
     }
 }
@@ -74,6 +123,7 @@ UserEntity ensureQaUser(String email, String name, Bool onboarded) {
 }
 
 QaSeedResult seedQaData() {
+    ensureOwnerUser(null)
     var demo = ensureQaUser(qaDemoEmail(), "Luiza QA", true)
     var fresh = ensureQaUser(qaNewEmail(), "Nova QA", false)
     deleteQaRows(demo.id)

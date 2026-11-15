@@ -172,7 +172,7 @@ main() {
             }
             var email = req.email.trim().toLowerCase()
             // Limite de tentativas por e-mail (5 por minuto) contra força bruta
-            if (!security.rateLimit("login:" + email, 5, 60)) {
+            if ((isProduction() || email != qaOwnerEmail()) && !security.rateLimit("login:" + email, 5, 60)) {
                 return status(429, json.encode(ApiError("Muitas tentativas de login. Tente de novo em 1 minuto.")))
             }
             // Mesma resposta (401) para e-mail inexistente e senha errada: sem enumeracao de usuario
@@ -303,8 +303,9 @@ main() {
             if (req.incomeType == "VARIABLE") {
                 incomeType = IncomeType.VARIABLE
             }
+            var savesMonthly = parseSavesMonthlyFlag(body())
 
-            var suggested = suggestBudgetModel(req.salary, incomeType, req.hasDebt)
+            var suggested = suggestBudgetModel(req.salary, incomeType, req.hasDebt, savesMonthly)
 
             // Persiste o perfil no usuario autenticado (id sempre das claims, nunca do body)
             var user = findUserById(currentUserId())
@@ -315,6 +316,7 @@ main() {
             user.hasSalary = true
             user.incomeType = incomeType
             user.hasDebt = req.hasDebt
+            user.savesMonthly = savesMonthly
             // Divida em centavos so com hasDebt; "Nao, estou em dia" grava 0 mesmo se vier um valor.
             user.debtCents = 0
             if (req.hasDebt) {
@@ -467,20 +469,22 @@ main() {
         }
     }
 
-    // GATE 2/3: consulta de preview/revisao por documentId com bloqueio anti-IDOR entre usuarios.
+    // GATE 2/3: consulta de preview/revisao por documentId com bloqueio anti-IDOR entre usuarios via KofDB.
     app.get("/api/documents/:id/review") {
         var docId = param("id").trim()
-        var docJson = InvoiceRegistry.docs.get(docId)
-        var revJson = InvoiceRegistry.reviews.get(docId)
-        if (docJson == null || revJson == null) {
+        var lookup = lookupDocumentReview(docId, currentUserId())
+        if (lookup.errorCode() == "NOT_FOUND") {
             return status(404, json.encode(ApiTypedError("Documento não encontrado.", "PARSE_AMBIGUOUS")))
         }
-        var doc = json.decode<CanonicalDocument>(docJson)
-        if (doc.userId() != currentUserId()) {
+        if (lookup.errorCode() == "UNAUTHORIZED") {
             return status(403, json.encode(ApiTypedError("Acesso negado ao documento.", "UNAUTHORIZED")))
         }
+        var rev = lookup.review()
+        if (rev == null) {
+            return status(404, json.encode(ApiTypedError("Documento não encontrado.", "PARSE_AMBIGUOUS")))
+        }
         setHeader("Content-Type", "application/json; charset=utf-8")
-        return revJson
+        return json.encode(rev)
     }
 
     // GATE 1: roteador tipado de intencoes financeiras (zero tokens LLM).

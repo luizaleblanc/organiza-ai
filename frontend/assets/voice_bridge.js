@@ -274,6 +274,14 @@
     uploadingInvoice = true;
     lastUploadKey = uploadKey;
     lastUploadTime = now;
+    const draftInput = document.getElementById("chat-input");
+    const savedDraft = draftInput ? draftInput.value : "";
+    const restoreDraft = () => {
+      const field = document.getElementById("chat-input");
+      if (!field) return;
+      field.value = savedDraft;
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    };
     setAttachmentStatus("... pensando", "loading");
     showOcrThinking(true);
     try {
@@ -284,7 +292,39 @@
         body: JSON.stringify({ fileBase64, filename: file.name })
       });
       const payload = await response.json().catch(() => ({}));
+      const status = String(payload.status || "");
       const transactions = Array.isArray(payload.transactions) ? payload.transactions : [];
+      const extractionFailed = !response.ok || status === "EXTRACAO_FALHOU" || transactions.length === 0;
+
+      if (response.status === 402 || response.status === 503) {
+        pendingDocumentId = "";
+        pendingInvoiceItems = [];
+        showOcrThinking(false);
+        restoreDraft();
+        setAttachmentStatus(response.status === 402
+          ? "Você atingiu o limite de mensagens deste mês."
+          : "O serviço está indisponível no momento. Tente novamente em instantes.", "error");
+        return;
+      }
+
+      if (extractionFailed) {
+        pendingDocumentId = "";
+        pendingInvoiceItems = [];
+        showOcrThinking(false);
+        setAttachmentStatus("", "idle");
+        const input = document.getElementById("chat-input");
+        const form = document.getElementById("chat-form");
+        if (input && form) {
+          input.value = `Arquivo ${file.name} enviado: falha na extração (0 lançamentos identificados).`;
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          if (typeof form.requestSubmit === "function") form.requestSubmit();
+          else form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+          input.value = "";
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+        return;
+      }
+
       pendingDocumentId = payload.documentId ? String(payload.documentId) : "";
       let totalAmount = 0;
       for (const t of transactions) {
@@ -316,6 +356,7 @@
       }
     } catch (error) {
       showOcrThinking(false);
+      restoreDraft();
       setAttachmentStatus(error.message || "Não foi possível analisar a fatura.", "error");
     } finally {
       uploadingInvoice = false;

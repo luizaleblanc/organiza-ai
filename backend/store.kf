@@ -38,6 +38,7 @@ entity UserRow {
     firstName: String
     lastName: String
     age: Int
+    savesMonthly: Bool
 }
 
 entity TransactionRow {
@@ -336,6 +337,7 @@ void migrateUserProfileColumns(String conn) {
     addUserColumn(conn, "firstName", "ALTER TABLE \"userrow\" ADD COLUMN \"firstName\" VARCHAR(255) DEFAULT '' NOT NULL")
     addUserColumn(conn, "lastName", "ALTER TABLE \"userrow\" ADD COLUMN \"lastName\" VARCHAR(255) DEFAULT '' NOT NULL")
     addUserColumn(conn, "age", "ALTER TABLE \"userrow\" ADD COLUMN \"age\" INT DEFAULT 0 NOT NULL")
+    addUserColumn(conn, "savesMonthly", "ALTER TABLE \"userrow\" ADD COLUMN \"savesMonthly\" BOOLEAN DEFAULT FALSE NOT NULL")
 }
 
 // B4: mesma regra do migrateUserNameColumn para enveloperow.bucket (DDL fixa, DEFAULT '', nada apagado).
@@ -438,6 +440,97 @@ void migratePreferenceThemeColumn(String conn) {
     log.info("migracao: coluna preferencerow.theme adicionada")
 }
 
+entity FinancialDocumentRow {
+    id: Long generated
+    docKey: String unique
+    userId: Long
+    sha256: String
+    filename: String
+    sourceType: String
+    statementPeriod: String
+    currency: String
+    status: String
+    reconciled: Bool
+    extractedCount: Int
+    declaredTotalMinor: Long
+    hasDeclaredTotal: Bool
+    warningsText: String
+    createdAt: String
+}
+
+entity ExtractedTransactionRow {
+    id: Long generated
+    documentId: String
+    userId: Long
+    itemKey: String
+    txDate: String
+    descriptionRaw: String
+    descriptionNormalized: String
+    amountMinor: Long
+    currency: String
+    direction: String
+    kind: String
+    installment: String
+    category: String
+    categoryRule: String
+    confidence: Double
+    pageNum: Int
+    rowNum: Int
+    snippet: String
+    reviewStatus: String
+}
+
+Long infoSchemaLength(String conn, String tableName, String colName) {
+    var rows = db.query(conn, "SELECT CHARACTER_MAXIMUM_LENGTH AS n FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = SCHEMA() AND LOWER(TABLE_NAME) = '" + tableName + "' AND LOWER(COLUMN_NAME) = '" + colName + "'")
+    if (rows.size == 1) {
+        var row = rows.get(0).toLowerCase()
+        if (row.startsWith("{\"n\":") && row.endsWith("}")) {
+            var digits = row.substring(5, row.length() - 1)
+            if (strings.isNumeric(digits)) {
+                return digits.toLong()
+            }
+        }
+    }
+    return 0
+}
+
+void widenTextColumn(String conn, String tableName, String colName, String mysqlDdl, String h2Ddl) {
+    var cur = infoSchemaLength(conn, tableName.toLowerCase(), colName.toLowerCase())
+    if (cur <= 0 || cur > 255) {
+        return
+    }
+    if (dbScheme(DbConn.url) == "mysql") {
+        db.execute(conn, mysqlDdl)
+    } else {
+        db.execute(conn, h2Ddl)
+    }
+}
+
+void migrateFinanceDocumentColumns(String conn) {
+    widenTextColumn(conn, "financialdocumentrow", "warningstext",
+        "ALTER TABLE \"financialdocumentrow\" MODIFY \"warningsText\" TEXT",
+        "ALTER TABLE \"financialdocumentrow\" ALTER COLUMN \"warningsText\" VARCHAR(4000)")
+    widenTextColumn(conn, "extractedtransactionrow", "descriptionraw",
+        "ALTER TABLE \"extractedtransactionrow\" MODIFY \"descriptionRaw\" TEXT",
+        "ALTER TABLE \"extractedtransactionrow\" ALTER COLUMN \"descriptionRaw\" VARCHAR(4000)")
+    widenTextColumn(conn, "extractedtransactionrow", "descriptionnormalized",
+        "ALTER TABLE \"extractedtransactionrow\" MODIFY \"descriptionNormalized\" TEXT",
+        "ALTER TABLE \"extractedtransactionrow\" ALTER COLUMN \"descriptionNormalized\" VARCHAR(4000)")
+    widenTextColumn(conn, "extractedtransactionrow", "snippet",
+        "ALTER TABLE \"extractedtransactionrow\" MODIFY \"snippet\" TEXT",
+        "ALTER TABLE \"extractedtransactionrow\" ALTER COLUMN \"snippet\" VARCHAR(4000)")
+}
+
+void cleanupStaleHallucinatedChat(String conn) {
+    try {
+        db.execute(conn, "DELETE FROM \"chatmessagerow\" WHERE \"content\" LIKE '%0 lançamentos identificados!%' OR \"content\" LIKE '%Já li o seu extrato da Neon de 1 a 14 de novembro%'")
+    } catch (String e) {
+        log.warn("limpeza de mensagens antigas ignorada")
+    } catch (Exception e) {
+        log.warn("limpeza de mensagens antigas ignorada")
+    }
+}
+
 // Cria as tabelas que faltam (PERS-22): orm.create e idempotente (medido: 3x no mesmo banco = true).
 // Banco novo: orm.create ja cria userrow com name e a migracao nao faz nada.
 void ensureSchema(String db) {
@@ -456,6 +549,10 @@ void ensureSchema(String db) {
     orm.create<PreferenceRow>(db)
     orm.create<PasswordResetRow>(db)
     orm.create<EmailLogRow>(db)
+    orm.create<FinancialDocumentRow>(db)
+    orm.create<ExtractedTransactionRow>(db)
+    migrateFinanceDocumentColumns(db)
+    cleanupStaleHallucinatedChat(db)
 }
 
 // Abre uma conexao nova com a URL final (DbConn.url) e as credenciais separadas. Falha de rede ou de
@@ -626,18 +723,20 @@ IncomeType incomeTypeFromText(String text) {
 
 // O id do banco (Long) vira texto ("1") na borda: JWT sub e o restante do backend usam String.
 UserEntity userFromRow(UserRow row) {
-    return UserEntity(String.valueOf(row.id()), row.email(), row.passwordHash(), roleFromText(row.role()),
+    var user = UserEntity(String.valueOf(row.id()), row.email(), row.passwordHash(), roleFromText(row.role()),
         row.salaryCents(), row.hasSalary(), tierFromText(row.tier()), row.hasVariableIncome(),
         row.emergencyGoalCents(), row.hasEmergencyGoal(), budgetModelFromText(row.budgetModel()),
         incomeTypeFromText(row.incomeType()), row.hasDebt(), row.debtCents(), row.name(),
         row.firstName(), row.lastName(), row.age())
+    user.savesMonthly = row.savesMonthly()
+    return user
 }
 
 UserRow userToRow(Long id, UserEntity user) {
     return UserRow(id, user.email, user.passwordHash, user.role.name(), user.salaryCents, user.hasSalary,
         user.tier.name(), user.hasVariableIncome, user.emergencyGoalCents, user.hasEmergencyGoal,
         user.budgetModel.name(), user.incomeType.name(), user.hasDebt, user.debtCents, user.name,
-        user.firstName, user.lastName, user.age)
+        user.firstName, user.lastName, user.age, user.savesMonthly)
 }
 
 // Id fora do formato do banco (ex.: "usr_1" de um token antigo) = usuario inexistente.
@@ -1253,4 +1352,184 @@ Bool emailAlreadySent(String userId, String kind, String dayKey) {
 
 void recordEmailSent(String userId, String kind, String dayKey) {
     orm.save(DbConn.handle, EmailLogRow(0, userId.toLong(), kind, dayKey, nowIso()))
+}
+
+// =========================================================
+// Documentos Financeiros e Extracoes Auditaveis (KofDB / kof.orm)
+// =========================================================
+
+String clipDbText(String s, Int maxLen) {
+    if (s.length() <= maxLen) {
+        return s
+    }
+    return s.substring(0, maxLen)
+}
+
+FinancialDocumentRow? findFinancialDocumentRowByKeyRaw(String docKey) {
+    var cleanKey = docKey.trim()
+    if (cleanKey == "") {
+        return null
+    }
+    var rows = FinancialDocumentRow.query(DbConn.handle) {
+        where docKey == cleanKey
+        orderBy id desc
+    }
+    if (rows.isEmpty()) {
+        return null
+    }
+    return rows.get(0)
+}
+
+FinancialDocumentRow? findFinancialDocumentRowByKey(String userId, String docKey) {
+    if (!strings.isNumeric(userId)) {
+        return null
+    }
+    var row = findFinancialDocumentRowByKeyRaw(docKey)
+    if (row == null) {
+        return null
+    }
+    if (row.userId() != userId.toLong()) {
+        return null
+    }
+    return row
+}
+
+FinancialDocumentRow? findFinancialDocumentRowBySha(String userId, String sha) {
+    if (!strings.isNumeric(userId) || sha.trim() == "") {
+        return null
+    }
+    var uid = userId.toLong()
+    var wantedSha = sha.trim()
+    var rows = FinancialDocumentRow.query(DbConn.handle) {
+        where userId == uid
+        where sha256 == wantedSha
+        orderBy id desc
+    }
+    if (rows.isEmpty()) {
+        return null
+    }
+    return rows.get(0)
+}
+
+FinancialDocumentRow? findLatestFinancialDocumentRowByUser(String userId) {
+    if (!strings.isNumeric(userId)) {
+        return null
+    }
+    var uid = userId.toLong()
+    var rows = FinancialDocumentRow.query(DbConn.handle) {
+        where userId == uid
+        orderBy id desc
+        limit 1
+    }
+    if (rows.isEmpty()) {
+        return null
+    }
+    return rows.get(0)
+}
+
+FinancialDocumentRow? findLatestFinancialDocumentRowByUserAndFilename(String userId, String filenamePart) {
+    if (!strings.isNumeric(userId)) {
+        return null
+    }
+    var uid = userId.toLong()
+    var rows = FinancialDocumentRow.query(DbConn.handle) {
+        where userId == uid
+        orderBy id desc
+    }
+    var wanted = filenamePart.trim().toLowerCase()
+    if (wanted == "") {
+        if (rows.isEmpty()) {
+            return null
+        }
+        return rows.get(0)
+    }
+    for (var r in rows) {
+        if (r.filename().toLowerCase().contains(wanted)) {
+            return r
+        }
+    }
+    return null
+}
+
+List<FinancialDocumentRow> findFinancialDocumentRowsByUser(String userId) {
+    if (!strings.isNumeric(userId)) {
+        return listOf()
+    }
+    var uid = userId.toLong()
+    return FinancialDocumentRow.query(DbConn.handle) {
+        where userId == uid
+        orderBy id desc
+    }
+}
+
+FinancialDocumentRow saveFinancialDocumentRow(FinancialDocumentRow row) {
+    var saveId = row.id()
+    if (saveId == 0) {
+        var existing = findFinancialDocumentRowByKeyRaw(row.docKey())
+        if (existing != null) {
+            saveId = existing.id()
+        }
+    }
+    return orm.save(DbConn.handle, FinancialDocumentRow(
+        saveId, row.docKey(), row.userId(), row.sha256(), clipDbText(row.filename(), 240),
+        clipDbText(row.sourceType(), 60), clipDbText(row.statementPeriod(), 240), clipDbText(row.currency(), 16),
+        clipDbText(row.status(), 40), row.reconciled(), row.extractedCount(), row.declaredTotalMinor(),
+        row.hasDeclaredTotal(), clipDbText(row.warningsText(), 3800), clipDbText(row.createdAt(), 64)
+    ))
+}
+
+List<ExtractedTransactionRow> findExtractedTransactionRowsByDoc(String userId, String docKey) {
+    if (!strings.isNumeric(userId) || docKey.trim() == "") {
+        return listOf()
+    }
+    var uid = userId.toLong()
+    var wantedDoc = docKey.trim()
+    return ExtractedTransactionRow.query(DbConn.handle) {
+        where userId == uid
+        where documentId == wantedDoc
+        orderBy id asc
+    }
+}
+
+ExtractedTransactionRow saveExtractedTransactionRow(ExtractedTransactionRow row) {
+    return orm.save(DbConn.handle, ExtractedTransactionRow(
+        row.id(), row.documentId(), row.userId(), clipDbText(row.itemKey(), 120),
+        clipDbText(row.txDate(), 32), clipDbText(row.descriptionRaw(), 3800),
+        clipDbText(row.descriptionNormalized(), 3800), row.amountMinor(), clipDbText(row.currency(), 16),
+        clipDbText(row.direction(), 24), clipDbText(row.kind(), 32), clipDbText(row.installment(), 32),
+        clipDbText(row.category(), 48), clipDbText(row.categoryRule(), 80), row.confidence(),
+        row.pageNum(), row.rowNum(), clipDbText(row.snippet(), 3800), clipDbText(row.reviewStatus(), 32)
+    ))
+}
+
+void replaceExtractedTransactionRows(String docKey, String userId, List<ExtractedTransactionRow> rows) {
+    if (!strings.isNumeric(userId)) {
+        return
+    }
+    var existing = findExtractedTransactionRowsByDoc(userId, docKey)
+    for (var oldRow in existing) {
+        orm.delete<ExtractedTransactionRow>(DbConn.handle, oldRow.id())
+    }
+    for (var row in rows) {
+        saveExtractedTransactionRow(row)
+    }
+}
+
+void deleteFinancialDocumentDataByUser(String userId) {
+    if (!strings.isNumeric(userId)) {
+        return
+    }
+    var uid = userId.toLong()
+    var txRows = ExtractedTransactionRow.query(DbConn.handle) {
+        where userId == uid
+    }
+    for (var tr in txRows) {
+        orm.delete<ExtractedTransactionRow>(DbConn.handle, tr.id())
+    }
+    var docRows = FinancialDocumentRow.query(DbConn.handle) {
+        where userId == uid
+    }
+    for (var dr in docRows) {
+        orm.delete<FinancialDocumentRow>(DbConn.handle, dr.id())
+    }
 }
