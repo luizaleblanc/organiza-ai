@@ -1,10 +1,10 @@
-# Plano de Ataque para Amanhã e Blocos de Commits Atômicos
+# Plano de Ataque em Execução Hoje e Blocos de Commits Atômicos
 
-Este documento consolida a mensagem oficial de análise financeira no tom de voz do Organiza AI, o plano de ataque técnico para a execução de amanhã (OCR com suporte a PNG, subagentes mini/nano de leitura assertiva, confirmação obrigatória do usuário, indicador `... pensando` e correção de duplicidade) e os 8 blocos de commits atômicos do estado atual do repositório.
+Este documento consolida a mensagem oficial de análise financeira no tom de voz do Organiza AI, o plano de ataque técnico em execução **hoje** (OCR com suporte a PNG, subagentes mini/nano de leitura assertiva, confirmação obrigatória do usuário, indicador `... pensando` e correção de duplicidade) e os blocos de commits atômicos do repositório.
 
 ---
 
-## 1. Mensagem Adaptada ao Tom de Voz da Marca (Caso Extrato Neon 1 a 14/11)
+## 1. Mensagem Adaptada ao Tom de Voz da Marca (Fluxo Ativo Hoje — Caso Extrato Neon 1 a 14/11)
 
 Diretrizes aplicadas: **sucinta, acolhedora, zero emojis, zero jargões técnicos e confirmação explícita da usuária antes de salvar categorias ou distribuir na regra 70/20/10.**
 
@@ -21,26 +21,35 @@ Diretrizes aplicadas: **sucinta, acolhedora, zero emojis, zero jargões técnico
 >
 > Esse total de **R\$ 2.579,10** confere com o que você esperava para o período?
 
-### Passo 2 — Análise assertiva (substituindo a resposta antiga que classificava R\$ 841,70 como moradia)
+### Passo 2 — Análise assertiva no tom de voz da marca (substituindo a resposta antiga que classificava R\$ 841,70 como moradia)
 > Conferi cada valor do seu extrato de 1 a 14 de novembro. O total de **R\$ 2.579,10** fecha certinho, mas prefiro não adivinhar algumas categorias sem confirmar com você antes.
 >
-> Veja o que está confirmado e o que precisa do seu olhar:
-> - **Compras e Pix confirmados em estabelecimentos:** **R\$ 10,92** com Uber e **R\$ 55,00** na G4 Bebidas (o restante das compras no cartão soma até **R\$ 209,60** no total).
-> - **Pagamentos de faturas:** **R\$ 841,70** (não dá para colocar como moradia ou contas fixas sem olhar os itens dessas faturas, porque podem ser compras de meses anteriores).
-> - **Pix para pessoas físicas:** **R\$ 1.214,16** dentro dos **R\$ 1.527,80** enviados por Pix (não sabemos se foram gastos do mês, divisão de contas, empréstimos ou movimentações pessoais).
+> Veja o que já está claro e o que precisa da sua confirmação:
+> - **Compras confirmadas em estabelecimentos:** **R\$ 10,92** com Uber e **R\$ 55,00** na G4 Bebidas (com o restante das compras no cartão somando até **R\$ 209,60**).
+> - **Pagamentos de faturas:** **R\$ 841,70** (não dá para classificar como moradia ou contas fixas sem ver os itens dessas faturas, porque podem ser compras de meses anteriores).
+> - **Pix para pessoas físicas:** **R\$ 1.214,16** dentro dos **R\$ 1.527,80** enviados por Pix (não sabemos se foram despesas do mês, divisão de contas, empréstimos ou transferências pessoais).
 >
-> **Sobre a regra 70/20/10:** com a sua renda profissional de **R\$ 2.740,00**, a divisão ficaria assim:
+> **Sobre a regra 70/20/10:** com a sua renda profissional de **R\$ 2.740,00**, a divisão de referência fica assim:
 > - **70% para necessidades e despesas:** **R\$ 1.918,00**
 > - **20% para poupança ou dívidas:** **R\$ 548,00**
 > - **10% para lazer e desejos:** **R\$ 274,00**
 >
-> Embora **R\$ 2.579,10** represente **94,1%** da renda de **R\$ 2.740,00**, isso não quer dizer que você gastou quase todo o salário de novembro, já que parte envolve faturas antigas e transferências pessoais.
+> Embora **R\$ 2.579,10** represente **94,1%** dessa renda, isso não significa que você consumiu quase todo o salário de novembro, porque parte inclui faturas anteriores e transferências pessoais.
 >
-> Antes de eu salvar tudo nas suas caixinhas e organizar no 70/20/10, você pode me confirmar o que foram esses **R\$ 1.214,16** em Pix para pessoas físicas e o que tinha nos **R\$ 841,70** das faturas?
+> Antes de eu salvar nas suas caixinhas e distribuir no 70/20/10, você pode me confirmar o que foram esses **R\$ 1.214,16** em Pix para pessoas físicas e o que tinha nos **R\$ 841,70** das faturas?
+
+### Passo 3 — Confirmação final e organização nas caixinhas (somente após confirmação da usuária)
+> Perfeito, Luiza. Com a sua confirmação, organizei seus gastos nas caixinhas usando a referência da regra 70/20/10 para a sua renda profissional de **R\$ 2.740,00**:
+>
+> - **70% para necessidades e despesas:** **R\$ 1.918,00**
+> - **20% para poupança ou dívidas:** **R\$ 548,00**
+> - **10% para lazer e desejos:** **R\$ 274,00**
+>
+> Seus lançamentos confirmados já estão salvos nas caixinhas sem misturar faturas de meses anteriores nem transferências pessoais.
 
 ---
 
-## 2. Plano de Ataque para Amanhã (5 Frentes Técnicas)
+## 2. Plano de Ataque em Execução Hoje (5 Frentes Técnicas)
 
 ### Frente 1 — Correção da Duplicidade no Upload e Fim do Auto-Save Precoce
 - **Arquivos:** `frontend/assets/voice_bridge.js`, `frontend/screens/chat_screen.kf`

@@ -83,11 +83,13 @@ O Organiza AI estrutura o planejamento em 5 modelos consolidados de educação f
 - Resposta:
   > *"Beleza! Seus gastos (alimentação, mercado) foram registrados. Seu pulso atual para terminar o mês no azul é de R$ 187,50/dia. Se quiser dar uma economizada, seu pulso é de R$ 140,62/dia."*
 
-### 4.3 Pipeline de Faturas (PDF, DOCX, JPEG)
-1. **Upload & Extração Determinística:** Leitura dos itens, valores e datas com custo zero de tokens.
-2. **Confirmação do Total:**
-   > *"De acordo com os gastos de fatura.pdf, o total identificado foi de R$ 1.847,20. Confirma pra mim se esse é o valor total da sua fatura?"*
-3. **Agrupamento por Categorias:** Após o *"Sim, confirmo!"*:
-   > *"Ótimo! Encontrei 4 categorias principais:\n\nAluguel: R$ 1.245,98\nFaculdade: R$ 420,50\nHortifruti: R$ 100,00\nPadaria: R$ 80,72\n\nQuer que eu distribua esses gastos na regra 50/30/20?..."*
-4. **Educação e Distribuição:** Após o *"Sim!"*:
-   > Explica detalhadamente como o salário do usuário cobre cada pilar e confirma a persistência dos dados nas caixinhas correspondentes.
+### 4.3 Pipeline de Faturas e Extratos (PDF, PNG, JPEG, DOCX)
+1. **Indicador de Processamento Natural:** Enquanto o arquivo é lido via OCR e analisado, a interface exibe `... pensando` sem bloquear nem duplicar mensagens no chat.
+2. **Upload & Extração OCR via Subagentes Mini/Nano:**
+   - *Subagente Nano (Extrator OCR):* lê texto nativo ou OCR (inclusive prints `.png` e `.jpeg`), descarta movimentações internas/circulares (como garantia Viracrédito) e pede confirmação inicial dos totais antes de gravar qualquer lançamento.
+   - *Subagente Mini (Triagem por Comprovação):* separa compras confirmadas em estabelecimentos, pagamentos de fatura (nunca rotulados como moradia sem ver os itens) e Pix para pessoas físicas (mantidos em aberto para confirmação).
+3. **Confirmação do Total (Passo 1):**
+   > *"Oi, Luiza! Já li o seu extrato da Neon de 1 a 14 de novembro e tirei as movimentações internas do Viracrédito para nada ficar contado duas vezes.\n\nEncontrei R$ 2.740,00 de renda profissional e R$ 2.579,10 em saídas e compras no cartão:\n- R$ 1.527,80 em Pix enviados pela conta\n- R$ 209,60 em compras e Pix no cartão\n- R$ 841,70 em pagamentos de faturas\n\nEsse total de R$ 2.579,10 confere com o que você esperava para o período?"*
+4. **Análise Assertiva no Tom de Voz da Marca (Passo 2 — zero emojis, zero jargões técnicos):**
+   > *"Conferi cada valor do seu extrato de 1 a 14 de novembro. O total de R$ 2.579,10 fecha certinho, mas prefiro não adivinhar algumas categorias sem confirmar com você antes.\n\nVeja o que já está claro e o que precisa da sua confirmação:\n- Compras confirmadas em estabelecimentos: R$ 10,92 com Uber e R$ 55,00 na G4 Bebidas (com o restante das compras no cartão somando até R$ 209,60).\n- Pagamentos de faturas: R$ 841,70 (não dá para classificar como moradia ou contas fixas sem ver os itens dessas faturas, porque podem ser compras de meses anteriores).\n- Pix para pessoas físicas: R$ 1.214,16 dentro dos R$ 1.527,80 enviados por Pix (não sabemos se foram despesas do mês, divisão de contas, empréstimos ou transferências pessoais).\n\nSobre a regra 70/20/10: com a sua renda profissional de R$ 2.740,00, a divisão de referência fica assim:\n- 70% para necessidades e despesas: R$ 1.918,00\n- 20% para poupança ou dívidas: R$ 548,00\n- 10% para lazer e desejos: R$ 274,00\n\nEmbora R$ 2.579,10 represente 94,1% dessa renda, isso não significa que você consumiu quase todo o salário de novembro, porque parte inclui faturas anteriores e transferências pessoais.\n\nAntes de eu salvar nas suas caixinhas e distribuir no 70/20/10, você pode me confirmar o que foram esses R$ 1.214,16 em Pix para pessoas físicas e o que tinha nos R$ 841,70 das faturas?"*
+5. **Confirmação e Persistência (Passo 3):** Após confirmação explícita da usuária, grava os lançamentos confirmados nas caixinhas e confirma a organização no modelo de orçamento sem misturar faturas antigas nem transferências pessoais.
