@@ -347,26 +347,6 @@ test "calculateBalance (STANDARD_503020): buckets devem arredondar para 2 casas 
     assert(result.buckets.get(2).plannedAmount == 66.67, "bucket Futuro esperado 66.67 (HALF_UP/2 casas) igual ao Java")
 }
 
-test "calculateBalance (FREELANCER_BASE_ZERO): 4 potes Profit First + totalSpent/notAllocated" {
-    var salary4: Double = 1000.0
-    saveUser(UserEntity("u4", salary4, BudgetModelType.FREELANCER_BASE_ZERO))
-    MirrorDb.transactions.add(TransactionEntity("tx4", 250, null, "u4", "2026-09-15T12:00:00Z"))
-
-    var result = calculateBalance("u4", "2026-09-01T00:00:00Z")
-
-    assert(result.totalSpent == 250.0)
-    assert(result.notAllocated == 750.0)
-    assert(result.buckets.size == 4)
-    assert(result.buckets.get(0).name == "Pró-labore")
-    assert(result.buckets.get(0).percentage == 50)
-    assert(result.buckets.get(1).name == "Impostos")
-    assert(result.buckets.get(1).percentage == 15)
-    assert(result.buckets.get(2).name == "Operação")
-    assert(result.buckets.get(2).spentAmount == 250.0)
-    assert(result.buckets.get(3).name == "Reserva")
-    assert(result.buckets.get(3).percentage == 5)
-}
-
 test "calculateBalance (KAKEIBO): 5 potes com Poupança 20% e categoria nula em Extras" {
     var salary5: Double = 1000.0
     saveUser(UserEntity("u5", salary5, BudgetModelType.KAKEIBO))

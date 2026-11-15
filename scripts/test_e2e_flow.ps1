@@ -414,12 +414,12 @@ try {
         Expect ($r.Status -eq 200 -and $j.suggestedModel -eq "ANTI_DEBT_701020" -and $b.Count -eq 3 -and $b[2].name -ceq "Quitação de Dívida" -and $b[2].amount -eq 600.0 -and $me.onboardingCompleted -eq $true -and $me.name -ceq "Caio Dívida") "$($r.Status) $($r.Body) | me: $($me | ConvertTo-Json -Compress)"
     }
 
-    Test-Step "Onboarding VARIABLE sugere FREELANCER_BASE_ZERO com 4 potes (Profit First)" {
+    Test-Step "Onboarding VARIABLE sem divida (4000 >= 2 SM) sugere STANDARD_503020; Base Zero fora da selecao" {
         $tv = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Vera"; email = "var_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaDaV123!" } | ConvertTo-Json -Compress)).Body
         $r = Invoke-Api "POST" "/api/users/onboarding" $tv (@{ salary = 4000.0; incomeType = "VARIABLE"; hasDebt = $false } | ConvertTo-Json -Compress)
         $j = $r.Body | ConvertFrom-Json
         $vb = @($j.buckets)
-        Expect ($r.Status -eq 200 -and $j.suggestedModel -eq "FREELANCER_BASE_ZERO" -and $vb.Count -eq 4 -and $vb[0].name -ceq "Pró-labore" -and $vb[0].percentage -eq 50 -and $vb[3].name -ceq "Reserva" -and $vb[3].percentage -eq 5) "$($r.Status) $($r.Body)"
+        Expect ($r.Status -eq 200 -and $j.suggestedModel -eq "STANDARD_503020" -and $vb.Count -eq 3 -and $vb[0].percentage -eq 50) "$($r.Status) $($r.Body)"
     }
 
     Test-Step "Pulso após onboarding: daysRemaining = dias que faltam no mês (#44), pulse = 3000/daysRemaining" {

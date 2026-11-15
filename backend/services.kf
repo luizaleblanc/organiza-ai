@@ -191,24 +191,54 @@ Double survivalThreshold() {
     return 2.0 * salarioMinimo()
 }
 
-Double standardThreshold() {
-    return 5000.0
+Double antiDebtThreshold() {
+    return salarioMinimo()
 }
 
+Double kakeiboThreshold() {
+    return 3.0 * salarioMinimo()
+}
+
+Double simple8020Threshold() {
+    return 5.0 * salarioMinimo()
+}
+
+// Ordem de selecao (educacao financeira, SM = salarioMinimo()):
+// 1. Anti-Divida 70/10/20: tem divida e renda >= 1 SM. Abaixo disso, 20% nao cobre
+//    nem a parcela minima: fica no Sobrevivencia e o coach orienta renegociar.
+// 2. Sobrevivencia 70/20/10: renda < 2 SM (modelo de entrada).
+// 3. 80/20: sem divida, ja guarda todo mes e renda >= 5 SM.
+// 4. Kakeibo: so por escolha do usuario, sem divida e renda >= 3 SM (ver budgetModelEligibilityError).
+// 5. 50/30/20: sem divida e renda >= 2 SM.
+// Base Zero (renda variavel) nao entra na selecao automatica.
 BudgetModelType suggestBudgetModel(Double salary, IncomeType incomeType, Bool hasDebt, Bool savesMonthly) {
-    if (hasDebt) {
+    if (hasDebt && salary >= antiDebtThreshold()) {
         return BudgetModelType.ANTI_DEBT_701020
     }
-    if (incomeType == IncomeType.VARIABLE) {
-        return BudgetModelType.FREELANCER_BASE_ZERO
-    }
-    if (salary <= survivalThreshold()) {
+    if (salary < survivalThreshold() || hasDebt) {
         return BudgetModelType.SURVIVAL_702010
     }
-    if (savesMonthly) {
+    if (savesMonthly && salary >= simple8020Threshold()) {
         return BudgetModelType.SIMPLE_8020
     }
     return BudgetModelType.STANDARD_503020
+}
+
+// Valida a troca manual de modelo contra os pisos de renda da tabela. null = permitido.
+String? budgetModelEligibilityError(BudgetModelType model, Double salary, Bool hasDebt) {
+    if (model == BudgetModelType.ANTI_DEBT_701020 && (!hasDebt || salary < antiDebtThreshold())) {
+        return "O modelo Anti-Dívida é para quem tem dívida e renda a partir de 1 salário mínimo."
+    }
+    if (model == BudgetModelType.SIMPLE_8020 && (hasDebt || salary < simple8020Threshold())) {
+        return "O modelo 80/20 é para quem está sem dívidas e tem renda a partir de 5 salários mínimos."
+    }
+    if (model == BudgetModelType.KAKEIBO && (hasDebt || salary < kakeiboThreshold())) {
+        return "O modelo Kakeibo é para quem está sem dívidas e tem renda a partir de 3 salários mínimos."
+    }
+    if (model == BudgetModelType.STANDARD_503020 && (hasDebt || salary < survivalThreshold())) {
+        return "O modelo 50/30/20 é para quem está sem dívidas e tem renda a partir de 2 salários mínimos."
+    }
+    return null
 }
 
 BudgetModelType suggestBudgetModel(Double salary, IncomeType incomeType, Bool hasDebt) {
@@ -317,25 +347,10 @@ BudgetModelType migrateBudgetModelIfNeeded(UserEntity? user) {
         var hasDebt = user.hasDebt
         var salary = userSalary(user)
 
-        if (hasDebt) {
-            return BudgetModelType.ANTI_DEBT_701020
+        // Kakeibo e escolha do usuario: mantem enquanto continuar elegivel.
+        if (current == BudgetModelType.KAKEIBO && budgetModelEligibilityError(current, salary, hasDebt) == null) {
+            return current
         }
-        if (incomeType == IncomeType.VARIABLE) {
-            return BudgetModelType.FREELANCER_BASE_ZERO
-        }
-        if (current == BudgetModelType.ANTI_DEBT_701020 && !hasDebt) {
-            return suggestBudgetModel(salary, incomeType, hasDebt, user.savesMonthly)
-        }
-        if (current == BudgetModelType.STANDARD_503020 && salary <= survivalThreshold() && !hasDebt) {
-            return BudgetModelType.SURVIVAL_702010
-        }
-        if (current == BudgetModelType.SURVIVAL_702010 && salary > standardThreshold() && !hasDebt) {
-            if (user.savesMonthly) {
-                return BudgetModelType.SIMPLE_8020
-            }
-            return BudgetModelType.STANDARD_503020
-        }
-
         var suggested = suggestBudgetModel(salary, incomeType, hasDebt, user.savesMonthly)
         if (suggested == current) {
             return current

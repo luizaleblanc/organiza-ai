@@ -832,6 +832,10 @@ main() {
         if (user == null) {
             return status(404, json.encode(ApiError("Usuário não encontrado")))
         }
+        var ineligible = budgetModelEligibilityError(model, userSalary(user), user.hasDebt)
+        if (ineligible != null) {
+            return status(400, json.encode(ApiError(ineligible)))
+        }
         user.budgetModel = model
         updateUser(user)
         return json.encode(OnboardingResponse(model.name(), describeBudgetModel(model), buildBudgetBuckets(model, userSalary(user))))
