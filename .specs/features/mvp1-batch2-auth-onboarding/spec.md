@@ -239,7 +239,7 @@ O frontend em `kof.ui` (Batch 1) só tem a casca: tema, estado, navegação e ca
 
 1. WHEN o onboarding é enviado THEN the frontend SHALL chamar `POST /api/users/onboarding` com `Authorization: Bearer <token>` e `{"salary":<Double>,"incomeType":"FIXED|VARIABLE","hasDebt":<Bool>,"debtAmount":<Double>}`
 2. WHEN o backend responde `{"suggestedModel","description","buckets":[{"name","percentage","amount"}]}` (JSON, desde o F3) THEN the frontend SHALL mostrar a Tela 7 com o nome amigável do modelo, a descrição e uma barra por bucket com nome, porcentagem e valor em `R$ 1.234,56`
-3. WHEN o modelo é `FREELANCER_BASE_ZERO` (lista vazia) THEN the frontend SHALL mostrar a descrição sem barras
+3. WHEN o modelo é `FREELANCER_BASE_ZERO` THEN the frontend SHALL renderizar as 4 barras de alocação por entrada (*Profit First*): Pró-labore (50%), Impostos (15%), Operação (30%) e Reserva (5%)
 4. WHEN a pessoa toca "Começar a organizar" THEN the frontend SHALL navegar para a rota `dashboard`
 5. IF o backend responde `Token ausente` THEN the frontend SHALL limpar a sessão, mostrar a Tela 2 e a mensagem "Sua sessão expirou. Entre de novo."
 6. The largura preenchida de cada barra SHALL ser proporcional à porcentagem do bucket, limitada a 100%

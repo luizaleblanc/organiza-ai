@@ -19,41 +19,49 @@ A IA do Organiza AI atua como um **mentor financeiro empático, inteligente e de
 
 ## 2. Modelos de Educação Financeira Mapeados
 
-O Organiza AI estrutura o planejamento em 5 modelos consolidados de educação financeira:
+O Organiza AI estrutura o planejamento nos **6 modelos** do `BudgetModelType`, selecionados por 5 perfis objetivos no onboarding (`endividado -> renda variável -> baixa renda (<= 2 SM) -> poupador (savesMonthly) -> renda estável`):
 
-### 2.1 Modelo Padrão: Regra 50/30/20
-- **50% Necessidades:** Contas fixas essenciais (moradia/aluguel, faculdade, energia, mercado básico, saúde).
+### 2.1 Modelo Padrão: Regra 50/30/20 (`STANDARD_503020` — Warren & Tyagi, *All Your Worth*, 2005)
+- **50% Necessidades:** Contas fixas essenciais (moradia/aluguel, faculdade, energia, mercado básico, saúde e pagamentos mínimos).
 - **30% Desejos:** Gastos com qualidade de vida, restaurantes, lazer, delivery e compras livres.
 - **20% Futuro:** Reserva de emergência, quitação acelerada e investimentos.
 - **Comportamento da IA:** Ao analisar uma fatura ou salário, demonstra como os compromissos fixos cabem dentro da margem de 50%, garantindo equilíbrio sem abrir mão do lazer consciente.
 
-### 2.2 Modelo Sobrevivência: Regra 70/20/10
-- **70% Necessidades:** Adequado para rendas menores onde o custo de vida básico consome a maior parte do orçamento.
+### 2.2 Modelo Sobrevivência: Regra 70/20/10 (`SURVIVAL_702010` — Adaptação para renda fixa até 2 SM / R$ 3.242,00)
+- **70% Necessidades:** Adequado para rendas até 2 salários mínimos (`R$ 1.621,00 x 2 = R$ 3.242,00`), onde o custo de vida básico consome a maior parte do orçamento.
 - **20% Folga:** Pequenos confortos e alívio mental.
-- **10% Poupança:** Foco exclusivo na construção do primeiro mês de reserva de emergência.
+- **10% Guarda:** Foco exclusivo na construção do primeiro mês de reserva de emergência.
 - **Comportamento da IA:** Parabeniza o usuário por conseguir guardar mesmo valores modestos e incentiva o foco no essencial.
 
-### 2.3 Modelo Anti-Dívida: Regra 70/10/20
+### 2.3 Modelo Anti-Dívida: Regra 70/10/20 (`ANTI_DEBT_701020`)
 - **70% Necessidades:** Manutenção da subsistência familiar.
-- **10% Amortização de Dívidas:** Pagamento focado nas dívidas com maiores juros (cartão rotativo, cheque especial).
-- **20% Futuro / Estabilização:** Criação de colchão de segurança para evitar reendividamento.
+- **10% Pessoal:** Margem reduzida de flexibilidade durante a renegociação.
+- **20% Quitação de Dívida:** Amortização ativa e proteção contra juros altos (cartão rotativo, cheque especial), priorizado sobre qualquer outra sugestão quando `hasDebt == true`.
 - **Comportamento da IA:** Sugere alternativas de renegociação e orienta a não utilizar o rotativo do cartão.
 
-### 2.4 Kakeibo (Método Japonês de Consciência Financeira)
-- **4 Pilares de Registro:**
-  1. *Sobrevivência:* O que você não pode viver sem (alimentação, moradia).
-  2. *Lazer:* O que você escolhe fazer para relaxar (viagens, refeições fora).
-  3. *Cultura:* Investimentos em crescimento pessoal (livros, cursos).
-  4. *Extras:* Gastos imprevistos e substituições.
+### 2.4 Simplificado 80/20 (`SIMPLE_8020` — Perfil Poupador `savesMonthly == true`)
+- **80% Viver:** Gastos essenciais e livres combinados em um único teto simples.
+- **20% Guardar:** Aporte automático em metas/reserva sem necessidade de rastrear múltiplas subcategorias.
+
+### 2.5 Kakeibo (`KAKEIBO` — Hani Motoko, 1904; Chiba, 2018 — 5 Buckets com Poupança)
+- **5 Pilares (4 categorias de gasto + bucket explícito de poupança):**
+  1. *Essencial (50%):* Moradia, mercado, saúde, transporte, educação.
+  2. *Lazer (15%):* Refeições fora, passeios e bem-estar.
+  3. *Cultura (10%):* Livros, cursos, assinaturas educativas e desenvolvimento.
+  4. *Extras (5%):* Imprevistos e eventuais.
+  5. *Poupança (20%):* Meta mensal de guarda antes do consumo discricionário.
 - **Ciclo Semanal de Reflexão:** 4 perguntas ao final de cada semana:
   - Quanto dinheiro entrou?
   - Quanto você gostaria de ter guardado?
   - Quanto você efetivamente gastou?
   - O que você pode melhorar na próxima semana?
 
-### 2.5 Base Zero (Zero-Based Budget)
-- Todo real do salário recebe uma destinação antes do início do mês: `Renda - Gastos Fixos - Caixinhas - Investimentos = R$ 0,00`.
-- **Comportamento da IA:** Ajuda a alocar saldos residuais direto para metas de curto ou longo prazo.
+### 2.6 Freelancer Base Zero (`FREELANCER_BASE_ZERO` — Alocação por Entrada inspirada no *Profit First*, Mike Michalowicz)
+- Aplicado sempre que `incomeType == "VARIABLE"` (freelas, PJ, comissões), com divisão imediata por entrada em 4 potes:
+  - **50% Pró-labore:** Retirada pessoal previsível para sustento mensal.
+  - **15% Impostos:** Separação prévia de DAS, INSS e obrigações fiscais.
+  - **30% Operação:** Custos operacionais e ferramentas da atividade.
+  - **5% Reserva:** Colchão de liquidez para meses de menor faturamento.
 
 ---
 
@@ -83,13 +91,10 @@ O Organiza AI estrutura o planejamento em 5 modelos consolidados de educação f
 - Resposta:
   > *"Beleza! Seus gastos (alimentação, mercado) foram registrados. Seu pulso atual para terminar o mês no azul é de R$ 187,50/dia. Se quiser dar uma economizada, seu pulso é de R$ 140,62/dia."*
 
-### 4.3 Pipeline de Faturas e Extratos (PDF, PNG, JPEG, DOCX)
-1. **Indicador de Processamento Natural:** Enquanto o arquivo é lido via OCR e analisado, a interface exibe `... pensando` sem bloquear nem duplicar mensagens no chat.
-2. **Upload & Extração OCR via Subagentes Mini/Nano:**
-   - *Subagente Nano (Extrator OCR):* lê texto nativo ou OCR (inclusive prints `.png` e `.jpeg`), descarta movimentações internas/circulares (como garantia Viracrédito) e pede confirmação inicial dos totais antes de gravar qualquer lançamento.
-   - *Subagente Mini (Triagem por Comprovação):* separa compras confirmadas em estabelecimentos, pagamentos de fatura (nunca rotulados como moradia sem ver os itens) e Pix para pessoas físicas (mantidos em aberto para confirmação).
-3. **Confirmação do Total (Passo 1):**
-   > *"Oi, Luiza! Já li o seu extrato da Neon de 1 a 14 de novembro e tirei as movimentações internas do Viracrédito para nada ficar contado duas vezes.\n\nEncontrei R$ 2.740,00 de renda profissional e R$ 2.579,10 em saídas e compras no cartão:\n- R$ 1.527,80 em Pix enviados pela conta\n- R$ 209,60 em compras e Pix no cartão\n- R$ 841,70 em pagamentos de faturas\n\nEsse total de R$ 2.579,10 confere com o que você esperava para o período?"*
-4. **Análise Assertiva no Tom de Voz da Marca (Passo 2 — zero emojis, zero jargões técnicos):**
-   > *"Conferi cada valor do seu extrato de 1 a 14 de novembro. O total de R$ 2.579,10 fecha certinho, mas prefiro não adivinhar algumas categorias sem confirmar com você antes.\n\nVeja o que já está claro e o que precisa da sua confirmação:\n- Compras confirmadas em estabelecimentos: R$ 10,92 com Uber e R$ 55,00 na G4 Bebidas (com o restante das compras no cartão somando até R$ 209,60).\n- Pagamentos de faturas: R$ 841,70 (não dá para classificar como moradia ou contas fixas sem ver os itens dessas faturas, porque podem ser compras de meses anteriores).\n- Pix para pessoas físicas: R$ 1.214,16 dentro dos R$ 1.527,80 enviados por Pix (não sabemos se foram despesas do mês, divisão de contas, empréstimos ou transferências pessoais).\n\nSobre a regra 70/20/10: com a sua renda profissional de R$ 2.740,00, a divisão de referência fica assim:\n- 70% para necessidades e despesas: R$ 1.918,00\n- 20% para poupança ou dívidas: R$ 548,00\n- 10% para lazer e desejos: R$ 274,00\n\nEmbora R$ 2.579,10 represente 94,1% dessa renda, isso não significa que você consumiu quase todo o salário de novembro, porque parte inclui faturas anteriores e transferências pessoais.\n\nAntes de eu salvar nas suas caixinhas e distribuir no 70/20/10, você pode me confirmar o que foram esses R$ 1.214,16 em Pix para pessoas físicas e o que tinha nos R$ 841,70 das faturas?"*
-5. **Confirmação e Persistência (Passo 3):** Após confirmação explícita da usuária, grava os lançamentos confirmados nas caixinhas e confirma a organização no modelo de orçamento sem misturar faturas antigas nem transferências pessoais.
+### 4.3 Pipeline Anti-Alucinação de Faturas e Extratos em 100% KOF (PDF, PNG, JPEG, DOCX)
+1. **Indicador de Processamento Natural:** Enquanto o arquivo é lido e analisado pelos 6 agentes KOF (`AgentValidacaoSeguranca`, `AgentExtratorPdfDom`/`Docx`/`Ocr`, `AgentClassificadorContabil`, `AgentReconciliadorAntiAlucinacao`, `AgentConsultorFinanceiro`), a interface exibe `... pensando` sem bloquear nem duplicar mensagens no chat.
+2. **Trava Obrigatória Anti-Alucinação (`SE transacoes_extraidas.length === 0`):**
+   - Caso a extração retorne `0` lançamentos válidos, o documento recebe `status = "EXTRACAO_FALHOU"`, a análise financeira é bloqueada em definitivo e o assistente solicita novo arquivo ou revisão manual — **jamais** reutiliza contexto anterior ou estima números.
+3. **Rastreabilidade em KofDB (`FinancialDocumentRow` + `ExtractedTransactionRow`):**
+   - Toda análise exibida no chat lê exclusivamente o registro real persistido no banco (com referência de documento, página e linha `doc <arquivo>, pág. X, reg. Y`), separa entradas de origem PJ (solicitando confirmação se compõem renda profissional recorrente), exclui movimentações internas (ex.: Viracrédito e `Crédito para Pix via cartão de crédito`) e mantém pagamentos de faturas (`NEEDS_REVIEW`, nunca `HOUSING`) e Pix para pessoas físicas (`PIX_PF_NEEDS_REVIEW`) aguardando confirmação antes de salvar.
+4. **Confirmação Final (Passo 3):** Somente após confirmação explícita da usuária, grava os lançamentos confirmados nas caixinhas e aplica o modelo de orçamento ativo sem misturar faturas antigas nem transferências pessoais.

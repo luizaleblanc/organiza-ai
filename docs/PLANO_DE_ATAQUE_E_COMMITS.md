@@ -1,6 +1,8 @@
 # Plano de Ataque em Execução Hoje e Blocos de Commits Atômicos
 
-Este documento consolida a mensagem oficial de análise financeira no tom de voz do Organiza AI, o plano de ataque técnico em execução **hoje** (OCR com suporte a PNG, subagentes mini/nano de leitura assertiva, confirmação obrigatória do usuário, indicador `... pensando` e correção de duplicidade) e os blocos de commits atômicos do repositório.
+Este documento consolida a orquestração simultânea das duas frentes estruturais no **Organiza AI**:
+- **Frente A (Extração Anti-Alucinação 100% em KOF + KofDB):** substituição de `import java.*` e do registro em memória por código 100% KOF (`kof.io`, `kof.process`, `kof.security.crypto`, `kof.orm`/`kof.db`), extração PDF por fonte (`/ToUnicode`), consolidação de células 6-por-linha da Neon, trava `EXTRACAO_FALHOU` (`0` transações bloqueia análise) e respostas rastreadas por documento/página/registro.
+- **Frente B (Correção dos 3 Modelos de Orçamento e Motor de 5 Perfis):** correção do modelo `FREELANCER_BASE_ZERO` (*Profit First*: 50% Pró-labore, 15% Impostos, 30% Operação, 5% Reserva), adição do bucket explícito `Poupança` (20%) no `KAKEIBO`, suporte a `savesMonthly` no onboarding e seleção adaptativa pelos 5 perfis (`endividado -> renda variável -> baixa renda -> poupador -> renda estável`).
 
 ---
 
@@ -171,37 +173,34 @@ git commit -m "style(settings): centralizar tela de configuracoes e remover etiq
 
 ---
 
-### Bloco 6: Extratos e Faturas - Parser Determinístico e Agente OCR
+### Bloco 6: Extração Anti-Alucinação em 100% KOF + KofDB (Frente A)
 ```powershell
-git add scripts/parse_pdf.py backend/invoice.kf frontend/assets/voice_bridge.js
-git commit -m "feat(invoice): implementar agente ocr e parser deterministico de extratos"
+git add backend/store.kf backend/invoice.kf backend/main.kf backend/coach.kf frontend/assets/voice_bridge.js
+git commit -m "feat(invoice): extracao 100% KOF com KofDB, trava EXTRACAO_FALHOU e leitura rastreavel"
 ```
 - **Arquivos:**
-  - `scripts/parse_pdf.py` (leitura de PDFs com codificação Adobe UCS / CID)
-  - `backend/invoice.kf` (integração via ponte de processo com isolamento de I/O e parsing dinâmico)
-  - `frontend/assets/voice_bridge.js` (suporte a PDF, DOCX, JPEG, PNG e TXT com cálculo dinâmico de totais)
+  - `backend/store.kf` (`FinancialDocumentRow`, `ExtractedTransactionRow`, repositórios e migrações idempotentes)
+  - `backend/invoice.kf` (zero `import java.*`, zero registro em memória; Inflate RFC 1951 e SHA-256 em KOF, CMap por fonte, consolidação 6 células/linha da Neon, `EXTRACAO_FALHOU`)
+  - `backend/main.kf` (`GET /api/documents/:id/review` apoiado em KofDB)
+  - `backend/coach.kf` (`AgentConsultorFinanceiro` ancorado no KofDB com citação `doc/pág/reg` e confirmação de entradas PJ)
+  - `frontend/assets/voice_bridge.js` (tratamento de `EXTRACAO_FALHOU` / `0` lançamentos)
 
 ---
 
-### Bloco 7: Backend - Fluxo Conversacional, Rotas Diretas e QA Local
+### Bloco 7: Modelos de Orçamento, 5 Perfis e Alinhamento de Testes (Frente B)
 ```powershell
-git add backend/coach.kf backend/store.kf backend/qa.kf backend/main.kf
-git commit -m "feat(backend): fluxo conversacional offline, rotas dinamicas de qa e limpeza de historico"
+git add backend/models.kf backend/services.kf tests/parity_test.kf scripts/test_e2e_flow.ps1
+git commit -m "feat(budget): corrigir Base Zero Profit First, Kakeibo 5 potes e motor de 5 perfis"
 ```
 - **Arquivos:**
-  - `backend/coach.kf` (progressão em 3 etapas baseada no último estado da IA, sem emojis)
-  - `backend/store.kf` (método `deleteChatMessagesByUserId`)
-  - `backend/qa.kf` (semeadura dos modelos de notificação e ajustes de QA)
-  - `backend/main.kf` (endpoints `/api/qa/clear-chat`, `/api/qa/clear-transactions`, `/qa/reset-all`, `/api/qa/notifications/simulate` e rotas diretas `/organizaai`, `/dashboard`, `/caixinhas`, `/notificacoes`, `/configuracoes` e variantes mobile)
+  - `backend/models.kf` (`savesMonthly` no perfil e onboarding)
+  - `backend/services.kf` (`FREELANCER_BASE_ZERO` 4 potes 50/15/30/5, `KAKEIBO` 5 potes com 20% Poupança, limiares `salarioMinimo()` e seleção em 5 perfis)
+  - `tests/parity_test.kf` & `scripts/test_e2e_flow.ps1` (paridade e E2E atualizados)
 
 ---
 
-### Bloco 8: Documentação e Diretrizes de Engenharia
+### Bloco 8: Documentação, Specs e Diretrizes de Engenharia
 ```powershell
-git add docs/AI_FINANCIAL_COACH_GUIDELINE.md docs/PLANO_DE_ATAQUE_E_COMMITS.md README.md
-git commit -m "docs: atualizar readme, diretriz do coach financeiro e plano de ataque do chat"
+git add docs/AI_FINANCIAL_COACH_GUIDELINE.md docs/DATA_MODEL.md docs/EDUCATION_VISION.md docs/PLANO_DE_ATAQUE_E_COMMITS.md .specs/features/mvp1-batch2-auth-onboarding/spec.md .specs/features/mvp1-batch2-auth-onboarding/design.md README.md
+git commit -m "docs: atualizar modelos adaptativos, anti-alucinacao e plano de ataque"
 ```
-- **Arquivos:**
-  - `docs/AI_FINANCIAL_COACH_GUIDELINE.md`
-  - `docs/PLANO_DE_ATAQUE_E_COMMITS.md`
-  - `README.md`
