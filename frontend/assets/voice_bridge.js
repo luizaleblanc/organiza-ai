@@ -60,8 +60,30 @@
     }
   }
 
-  function stopRecognition() {
-    if (recognition && listening) recognition.stop();
+  function handleVoiceTranscript(text) {
+    if (!text) return;
+    const parts = text.split(/\s+(?:e\s+também|e\s+mais|e\s+|também\s+|além\s+disso\s+|\n|;)\s*/i).filter(p => p.trim().length > 0);
+    if (parts.length <= 1) {
+      sendTranscript(text);
+      return;
+    }
+    let i = 0;
+    function dispatchNext() {
+      if (i >= parts.length) return;
+      let part = parts[i].trim();
+      const firstLower = text.toLowerCase();
+      if (!part.toLowerCase().startsWith("gastei") && !part.toLowerCase().startsWith("paguei") && !part.toLowerCase().startsWith("comprei")) {
+        if (firstLower.startsWith("gastei")) part = "gastei " + part;
+        else if (firstLower.startsWith("paguei")) part = "paguei " + part;
+        else if (firstLower.startsWith("comprei")) part = "comprei " + part;
+      }
+      sendTranscript(part);
+      i++;
+      if (i < parts.length) {
+        setTimeout(dispatchNext, 1200);
+      }
+    }
+    dispatchNext();
   }
 
   function startRecognition() {
@@ -85,7 +107,7 @@
     };
     recognition.onresult = (event) => {
       const transcript = event.results && event.results[0] && event.results[0][0] ? event.results[0][0].transcript : "";
-      sendTranscript(transcript);
+      handleVoiceTranscript(transcript);
     };
     recognition.onerror = (event) => {
       if (event.error === "not-allowed" || event.error === "service-not-allowed") {
@@ -158,35 +180,62 @@
 
   async function uploadInvoice(file) {
     if (!file) return;
-    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
-      setAttachmentStatus("Envie uma fatura em PDF.", "error");
+    const nameLower = file.name.toLowerCase();
+    const isPdf = nameLower.endsWith(".pdf") || file.type === "application/pdf";
+    const isImg = nameLower.endsWith(".jpeg") || nameLower.endsWith(".jpg") || nameLower.endsWith(".png") || file.type.startsWith("image/");
+    const isDocx = nameLower.endsWith(".docx") || file.type.includes("wordprocessingml");
+    if (!isPdf && !isImg && !isDocx) {
+      setAttachmentStatus("Envie uma fatura em PDF, JPEG ou DOCX.", "error");
       return;
     }
-    if (file.size > 2 * 1024 * 1024) {
-      setAttachmentStatus("O PDF deve ter no maximo 2 MB.", "error");
+    if (file.size > 10 * 1024 * 1024) {
+      setAttachmentStatus("O arquivo deve ter no máximo 10 MB.", "error");
       return;
     }
     if (!authorization) {
-      setAttachmentStatus("A sessao ainda esta carregando. Tente novamente em instantes.", "error");
-      return;
+      authorization = window.__kofAuthToken ? ("Bearer " + window.__kofAuthToken) : authorization;
     }
-    setAttachmentStatus(`Analisando ${file.name}...`, "loading");
+    setAttachmentStatus(`Processando ${file.name}...`, "loading");
     try {
       const fileBase64 = await fileAsBase64(file);
       const response = await nativeFetch("/api/invoices/parse", {
         method: "POST",
         headers: { "Authorization": authorization, "Content-Type": "application/json" },
-        body: JSON.stringify({ fileBase64 })
+        body: JSON.stringify({ fileBase64, filename: file.name })
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload.message || payload.error || "Nao foi possivel analisar a fatura.");
+      const transactions = Array.isArray(payload.transactions) ? payload.transactions : [];
+      let totalAmount = 0;
+      for (const t of transactions) {
+        if (typeof t.amount === "number") totalAmount += t.amount;
       }
-      const count = Array.isArray(payload.transactions) ? payload.transactions.length : 0;
-      const suffix = count === 1 ? "lancamento identificado" : "lancamentos identificados";
-      setAttachmentStatus(`${file.name}: ${count} ${suffix}.`, "success");
+      if (transactions.length > 0) {
+        const itemsToConfirm = transactions.map(t => ({
+          description: String(t.description || "Gasto").trim(),
+          amount: Number(t.amount) || 0.01,
+          category: String(t.category || "OTHER")
+        }));
+        await nativeFetch("/api/invoices/confirm", {
+          method: "POST",
+          headers: { "Authorization": authorization, "Content-Type": "application/json" },
+          body: JSON.stringify({ items: itemsToConfirm })
+        }).catch(() => {});
+      }
+      const count = transactions.length;
+      const countText = count === 1 ? "1 lançamento identificado" : `${count} lançamentos identificados`;
+      const formattedTotal = totalAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      setAttachmentStatus(`${file.name}: ${countText} (R$ ${formattedTotal}).`, "success");
+      
+      const input = document.getElementById("chat-input");
+      const form = document.getElementById("chat-form");
+      if (input && form) {
+        input.value = `Fatura ${file.name} processada: ${countText} totalizando R$ ${formattedTotal}!`;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        if (typeof form.requestSubmit === "function") form.requestSubmit();
+        else form.dispatchEvent(new Event("submit", { bubbles: true }));
+      }
     } catch (error) {
-      setAttachmentStatus(error.message || "Nao foi possivel analisar a fatura.", "error");
+      setAttachmentStatus(error.message || "Não foi possível analisar a fatura.", "error");
     }
   }
 
@@ -195,7 +244,7 @@
     if (!control || control.disabled || control.getAttribute("disabled") !== null) return;
     const picker = document.createElement("input");
     picker.type = "file";
-    picker.accept = "application/pdf,.pdf";
+    picker.accept = ".pdf,.jpeg,.jpg,.png,.docx,application/pdf,image/jpeg,image/png,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     picker.hidden = true;
     picker.addEventListener("change", async () => {
       await uploadInvoice(picker.files && picker.files[0]);
