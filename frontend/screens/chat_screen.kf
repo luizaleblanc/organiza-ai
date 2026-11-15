@@ -70,7 +70,7 @@ Label chatBubble(String role, String text, String id) {
 List<View> chatBubblesNewestFirst() {
     var out: List<View> = listOf()
     if (ChatUi.activeRequests > 0) {
-        var t = Label("Organiza AI está digitando…")
+        var t = Label("... pensando")
         t.setId("chat-typing")
         t.setStyle(chatTypingCss())
         out.add(t)
@@ -171,7 +171,7 @@ View chatScreen(Window w) {
     })
 
     var off = ChatUi.blocked
-    var attach = chatFeatureButton("plus", 20, "secondary", "chat-attach", true, chatAttachCss(), chatAttachOffCss(), "Anexar PDF ou fatura")
+    var attach = chatFeatureButton("plus", 20, "secondary", "chat-attach", true, chatAttachCss(), chatAttachOffCss(), "Anexar PDF, PNG ou fatura")
     var mic = chatVoiceButton(true, "Entrada por voz")
 
     var send = View(screenStyle())

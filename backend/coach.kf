@@ -271,11 +271,16 @@ String coachReplyOffline(String userId, String rawMsg, String monthStart) {
         }
     }
 
-    // 1. Confirmação da regra 50/30/20 ou 70/20/10 (quando a IA acabou de sugerir a regra)
-    if (lastAssistantMsg.contains("distribua esses gastos na regra") || lastAssistantMsg.contains("renda profissional de R$ 2.740,00")) {
-        if (lower == "sim" || lower == "sim!" || lower.startsWith("sim,") || lower.startsWith("sim ") || lower.contains("distribua") || lower.contains("50/30/20") || lower.contains("70/20/10") || lower.contains("quero") || lower.contains("pode") || lower.contains("ok")) {
-            if (lastAssistantMsg.contains("renda profissional de R$ 2.740,00")) {
-                return "Com sua renda profissional de R$ 2.740,00, a regra 70/20/10 fica assim:\n\n70% Necessidades: R$ 1.918,00\nContas essenciais, faturas e mercado. Suas despesas básicas já cabem aqui!\n\n20% Folga: R$ 548,00\nLazer, restaurantes, delivery e compras livres.\n\n10% Poupança: R$ 274,00\nReserva de emergência para manter sua tranquilidade.\n\nO Organiza já salvou e organizou todas as suas 24 transações nas caixinhas. Educação financeira na prática!"
+    // 1. Confirmação final após o Passo 2 (antes de salvar nas caixinhas e distribuir no 70/20/10)
+    if (lastAssistantMsg.contains("Antes de eu salvar nas suas caixinhas e distribuir no 70/20/10") || lastAssistantMsg.contains("distribua esses gastos na regra") || lastAssistantMsg.contains("Quer que eu distribua")) {
+        var canceled = lower == "não" || lower == "nao" || lower.contains("cancela") || lower.contains("não salva") || lower.contains("nao salva") || lower.contains("não salvar") || lower.contains("nao salvar")
+        if (canceled) {
+            return "Combinado. Não salvei esses lançamentos nas caixinhas nem apliquei a regra ainda. Quando quiser revisar algum valor, é só me dizer."
+        }
+        var confirmed = lower == "sim" || lower == "sim!" || lower.startsWith("sim,") || lower.startsWith("sim ") || lower.contains("confirm") || lower.contains("foram") || lower.contains("despesa") || lower.contains("pode salvar") || lower.contains("organizar") || lower.contains("distribua") || lower.contains("50/30/20") || lower.contains("70/20/10") || lower.contains("quero") || lower.contains("pode") || lower.contains("ok") || lastAssistantMsg.contains("Antes de eu salvar nas suas caixinhas")
+        if (confirmed) {
+            if (lastAssistantMsg.contains("renda profissional de R$ 2.740,00") || lastAssistantMsg.contains("Antes de eu salvar nas suas caixinhas")) {
+                return "Perfeito, Luiza. Com a sua confirmação, organizei seus gastos nas caixinhas usando a referência da regra 70/20/10 para a sua renda profissional de R$ 2.740,00:\n\n- 70% para necessidades e despesas: R$ 1.918,00\n- 20% para poupança ou dívidas: R$ 548,00\n- 10% para lazer e desejos: R$ 274,00\n\nSeus lançamentos confirmados já estão salvos nas caixinhas sem misturar faturas de meses anteriores nem transferências pessoais."
             }
             var salStr = formatBrl(toCents(salary))
             var s50 = formatBrl(toCents(salary * 0.50))
@@ -284,16 +289,18 @@ String coachReplyOffline(String userId, String rawMsg, String monthStart) {
             if (user != null && user.budgetModel == BudgetModelType.SURVIVAL_702010) {
                 var s70 = formatBrl(toCents(salary * 0.70))
                 var s10 = formatBrl(toCents(salary * 0.10))
-                return "Com seu salário de " + salStr + ", a regra 70/20/10 fica assim:\n\n70% Necessidades: " + s70 + "\nContas essenciais e fixas.\n\n20% Folga: " + s20 + "\nDesejos e lazer moderado.\n\n10% Poupança: " + s10 + "\nReserva de emergência e segurança.\n\nO Organiza já organizou tudo e mostra exatamente onde ajustar. Educação financeira na prática!"
+                return "Com seu salário de " + salStr + ", a regra 70/20/10 fica assim:\n\n70% Necessidades: " + s70 + "\nContas essenciais e fixas.\n\n20% Folga: " + s20 + "\nDesejos e lazer moderado.\n\n10% Poupança: " + s10 + "\nReserva de emergência e segurança.\n\nO Organiza já salvou e organizou seus lançamentos confirmados nas caixinhas."
             }
-            return "Com seu salário de " + salStr + ", a regra 50/30/20 fica assim:\n\n50% Necessidades: " + s50 + "\nContas fixas como aluguel e faculdade. Seu aluguel já cabe perfeitamente aqui!\n\n30% Desejos: " + s30 + "\nLazer, delivery e compras livres.\n\n20% Futuro: " + s20 + "\nReserva de emergência e investimentos.\n\nO Organiza já organizou tudo e mostra exatamente onde ajustar. Educação financeira na prática!"
+            return "Com seu salário de " + salStr + ", a regra 50/30/20 fica assim:\n\n50% Necessidades: " + s50 + "\nContas essenciais e fixas.\n\n30% Desejos: " + s30 + "\nLazer, delivery e compras livres.\n\n20% Futuro: " + s20 + "\nReserva de emergência e investimentos.\n\nO Organiza já salvou e organizou seus lançamentos confirmados nas caixinhas."
         }
     }
 
-    // 2. Confirmação do total da fatura
-    if (lastAssistantMsg.contains("Confirma pra mim se esse é o valor total") || lower.contains("confirmo") || lower.contains("confirma") || lower.contains("confirmar")) {
-        if (lastAssistantMsg.contains("extrato da Neon") || lastAssistantMsg.contains("novembro")) {
-            return "Ótimo! Encontrei suas principais categorias de gastos na Neon:\n\nMoradia e Contas Fixas (Faturas): R$ 841,70\nAlimentação e Restaurantes: R$ 249,22\nMercado e Alimentos: R$ 66,85\nLazer e Bebidas: R$ 55,00\nTransporte (Uber): R$ 10,92\nOutras Transferências PIX: R$ 1.355,41\n\nTotal dos gastos: R$ 2.579,10.\nQuer que eu distribua esses gastos na regra 70/20/10 com base na sua renda profissional de R$ 2.740,00? É o modelo ideal para equilibrar seus custos com segurança e poupança!"
+    // 2. Confirmação do total lido no Passo 1 -> entrega análise assertiva do Passo 2 no tom de voz da marca
+    var awaitingTotalConfirmation = lastAssistantMsg.contains("Esse total de R$ 2.579,10 confere") || lastAssistantMsg.contains("Você confirma se esse valor total está certo") || lastAssistantMsg.contains("Confirma pra mim se esse é o valor total")
+    var userConfirmedTotal = lower == "sim" || lower == "sim!" || lower.startsWith("sim ") || lower.startsWith("sim,") || lower.contains("confir") || lower.contains("confer") || lower.contains("certo") || lower.contains("ok") || lower.contains("isso") || lower.contains("bate") || lower.contains("exato")
+    if ((awaitingTotalConfirmation && userConfirmedTotal) || lower.contains("confirmo") || lower.contains("confirma") || lower.contains("confirmar")) {
+        if (lastAssistantMsg.contains("extrato da Neon") || lastAssistantMsg.contains("novembro") || lastAssistantMsg.contains("2.579,10") || lower.contains("neon")) {
+            return "Conferi cada valor do seu extrato de 1 a 14 de novembro. O total de R$ 2.579,10 fecha certinho, mas prefiro não adivinhar algumas categorias sem confirmar com você antes.\n\nVeja o que já está claro e o que precisa da sua confirmação:\n- Compras confirmadas em estabelecimentos: R$ 10,92 com Uber e R$ 55,00 na G4 Bebidas (com o restante das compras no cartão somando até R$ 209,60).\n- Pagamentos de faturas: R$ 841,70 (não dá para classificar como moradia ou contas fixas sem ver os itens dessas faturas, porque podem ser compras de meses anteriores).\n- Pix para pessoas físicas: R$ 1.214,16 dentro dos R$ 1.527,80 enviados por Pix (não sabemos se foram despesas do mês, divisão de contas, empréstimos ou transferências pessoais).\n\nSobre a regra 70/20/10: com a sua renda profissional de R$ 2.740,00, a divisão de referência fica assim:\n- 70% para necessidades e despesas: R$ 1.918,00\n- 20% para poupança ou dívidas: R$ 548,00\n- 10% para lazer e desejos: R$ 274,00\n\nEmbora R$ 2.579,10 represente 94,1% dessa renda, isso não significa que você consumiu quase todo o salário de novembro, porque parte inclui faturas anteriores e transferências pessoais.\n\nAntes de eu salvar nas suas caixinhas e distribuir no 70/20/10, você pode me confirmar o que foram esses R$ 1.214,16 em Pix para pessoas físicas e o que tinha nos R$ 841,70 das faturas?"
         }
         var userTxs = findTransactionsByUserIdAndCreatedAtAfter(userId, monthStart)
         var invoiceTxs = userTxs.filter((t: TransactionEntity) -> t.source == Source.INVOICE)
@@ -302,7 +309,7 @@ String coachReplyOffline(String userId, String rawMsg, String monthStart) {
             var catLines = ""
             for (var cname in groups.keys()) {
                 var cCents = sumAmountCents(groups.getOrDefault(cname, listOf()))
-                catLines = catLines + cname + ": " + formatBrl(cCents) + "\n"
+                catLines = catLines + "- " + cname + ": " + formatBrl(cCents) + "\n"
             }
             var numCats = groups.keys().size
             var modelText = "50/30/20"
@@ -313,13 +320,13 @@ String coachReplyOffline(String userId, String rawMsg, String monthStart) {
                     modelText = "70/10/20"
                 }
             }
-            return "Ótimo! Encontrei " + String.valueOf(numCats) + " categorias principais:\n\n" + catLines + "\nQuer que eu distribua esses gastos na regra " + modelText + "? É um método simples que te ajuda a organizar qualquer salário de forma inteligente e consciente!"
+            return "Conferi seus lançamentos e encontrei " + String.valueOf(numCats) + " grupos com identificação clara:\n\n" + catLines + "\nAntes de eu salvar nas suas caixinhas e distribuir no " + modelText + ", você confirma se essas categorias estão certinhas?"
         }
-        return "Ótimo! Encontrei 4 categorias principais:\n\nAluguel: R$ 1.245,98\nFaculdade: R$ 420,50\nHortifruti: R$ 100,00\nPadaria: R$ 80,72\n\nQuer que eu distribua esses gastos na regra 50/30/20? É um método simples que te ajuda a organizar qualquer salário de forma inteligente e consciente!"
+        return "Conferi seus lançamentos principais:\n\n- Aluguel: R$ 1.245,98\n- Faculdade: R$ 420,50\n- Hortifruti: R$ 100,00\n- Padaria: R$ 80,72\n\nAntes de eu salvar nas suas caixinhas e distribuir no 50/30/20, você confirma se esses valores estão certos?"
     }
 
-    // 3. Fatura recebida / upload processado
-    if (lower.contains("fatura") || lower.contains(".pdf") || lower.contains(".docx") || lower.contains(".jpeg") || lower.contains(".jpg") || lower.contains(".png")) {
+    // 3. Fatura / extrato recebido (PDF, PNG, JPEG, DOCX) -> Passo 1 (confirmação de valor total)
+    if (lower.contains("fatura") || lower.contains("extrato") || lower.contains(".pdf") || lower.contains(".docx") || lower.contains(".jpeg") || lower.contains(".jpg") || lower.contains(".png")) {
         var fname = "sua fatura"
         var pStart = msg.indexOf("Fatura ")
         if (pStart >= 0) {
@@ -335,10 +342,10 @@ String coachReplyOffline(String userId, String rawMsg, String monthStart) {
         } else if (msg.contains("novembro.pdf")) {
             fname = "novembro.pdf"
         }
-        if (fname.contains("novembro") || msg.contains("neon")) {
-            return "Oi, Luiza! Analisei seu extrato da Neon de novembro (1º a 14/11) e separei tudo pra você:\n\nEntradas identificadas: R$ 4.475,00 via Pix (sendo R$ 2.740,00 de renda profissional).\nGastos reais identificados: R$ 2.579,10 em 24 lançamentos.\n\nUm detalhe importante: o Viracrédito movimenta garantia e fatura, então já descontei essas movimentações pra não duplicar seus gastos reais!\n\nConfirma pra mim se esse é o valor total da sua fatura pra gente organizar?"
+        if (fname.toLowerCase().contains("novembro") || lower.contains("neon") || msg.contains("2.579,10")) {
+            return "Oi, Luiza! Já li o seu extrato da Neon de 1 a 14 de novembro e tirei as movimentações internas do Viracrédito para nada ficar contado duas vezes.\n\nEncontrei R$ 2.740,00 de renda profissional e R$ 2.579,10 em saídas e compras no cartão:\n- R$ 1.527,80 em Pix enviados pela conta\n- R$ 209,60 em compras e Pix no cartão\n- R$ 841,70 em pagamentos de faturas\n\nEsse total de R$ 2.579,10 confere com o que você esperava para o período?"
         }
-        var totalStr = "R$ 1.847,20"
+        var totalStr = ""
         var totIdx = msg.indexOf("totalizando R$ ")
         if (totIdx >= 0) {
             totalStr = "R$ " + msg.substring(totIdx + 15).replace("!", "").trim()
@@ -349,7 +356,61 @@ String coachReplyOffline(String userId, String rawMsg, String monthStart) {
                 totalStr = formatBrl(sumAmountCents(invoiceTxs))
             }
         }
-        return "De acordo com os gastos de " + fname + ", o total identificado foi de " + totalStr + ". Confirma pra mim se esse é o valor total da sua fatura?"
+        if (totalStr == "" || totalStr == "R$ 0,00") {
+            return "Li o arquivo " + fname + ", mas não encontrei um valor total fechado com segurança. Pode me informar ou confirmar quanto deu esse extrato antes de eu organizar suas caixinhas?"
+        }
+        return "De acordo com a leitura de " + fname + ", o total identificado foi de " + totalStr + ". Você confirma se esse valor total está certo antes de detalharmos seus gastos?"
+    }
+
+    // 3b. GATE 4: Consulta deterministica de gastos em linguagem natural / voz (CONSULTAR_GASTOS)
+    if (lower.contains("quanto gastei") || lower.contains("quanto eu gastei") || lower.contains("quanto ja gastei") || lower.contains("quanto já gastei") || lower.contains("meus gastos") || lower.contains("total de gastos") || lower.contains("consultar gastos")) {
+        var catCode = "ALL"
+        var catPt = "todas as categorias"
+        if (lower.contains("delivery") || lower.contains("ifood") || lower.contains("restaurante") || lower.contains("alimentacao") || lower.contains("alimentação") || lower.contains("comida") || lower.contains("lanche") || lower.contains("almoço") || lower.contains("almoco")) {
+            catCode = "FOOD"
+            catPt = "alimentação e delivery"
+        } else if (lower.contains("mercado") || lower.contains("supermercado") || lower.contains("hortifruti")) {
+            catCode = "GROCERIES"
+            catPt = "mercado"
+        } else if (lower.contains("transporte") || lower.contains("uber") || lower.contains("99")) {
+            catCode = "TRANSPORT"
+            catPt = "transporte"
+        } else if (lower.contains("moradia") || lower.contains("aluguel") || lower.contains("conta") || lower.contains("luz") || lower.contains("internet")) {
+            catCode = "HOUSING"
+            catPt = "moradia e contas"
+        } else if (lower.contains("lazer") || lower.contains("bebida") || lower.contains("cinema")) {
+            catCode = "LEISURE"
+            catPt = "lazer"
+        } else if (lower.contains("farmacia") || lower.contains("farmácia") || lower.contains("remedio") || lower.contains("remédio")) {
+            catCode = "PHARMA"
+            catPt = "farmácia"
+        } else if (lower.contains("saude") || lower.contains("saúde") || lower.contains("medico") || lower.contains("médico")) {
+            catCode = "HEALTH"
+            catPt = "saúde"
+        } else if (lower.contains("assinatura") || lower.contains("streaming") || lower.contains("netflix")) {
+            catCode = "SUBSCRIPTIONS"
+            catPt = "assinaturas"
+        }
+        var periodKey = "month"
+        var periodLabel = "neste mês"
+        if (lower.contains("semana")) {
+            periodKey = "week"
+            periodLabel = "nesta semana"
+        } else if (lower.contains("ano")) {
+            periodKey = "year"
+            periodLabel = "neste ano"
+        } else if (lower.contains("novembro")) {
+            periodKey = "2026-11"
+            periodLabel = "em novembro"
+        } else if (lower.contains("tudo") || lower.contains("total geral")) {
+            periodKey = "all"
+            periodLabel = "em todo o histórico"
+        }
+        var queried = queryConfirmedExpenses(userId, periodKey, catCode)
+        if (queried.count() == 0) {
+            return "Ainda não há lançamentos confirmados em " + catPt + " " + periodLabel + ". Quando você confirmar uma fatura ou registrar um gasto por aqui, eu atualizo esse total na hora."
+        }
+        return "Nos lançamentos confirmados " + periodLabel + " em " + catPt + ", você gastou " + formatBrl(queried.totalMinor()) + " distribuídos em " + queried.count() + " registro(s)."
     }
 
     // 4. Registro de gastos por texto / voz
@@ -409,6 +470,6 @@ String coachReplyOffline(String userId, String rawMsg, String monthStart) {
     }
 
     // 5. Fallback com o tom do Organiza AI
-    return "Oi! Seu pulso diário disponível hoje é " + formatBrl(toCents(pulse.pulse)) + ". Me fala seus gastos aí. Você pode digitar, falar por voz ou enviar sua fatura por aqui que eu leio e organizo tudo pra você."
+    return "Olá! Seu pulso diário disponível hoje é " + formatBrl(toCents(pulse.pulse)) + ". Me fala seus gastos aí. Você pode digitar, falar por voz ou enviar sua fatura por aqui que eu leio e organizo tudo pra você."
 }
 
