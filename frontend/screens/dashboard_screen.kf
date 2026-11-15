@@ -114,13 +114,27 @@ Style legendDotWarningCss()   = themed(Style("width: 7; height: 7; min-width: 7;
 Style legendNameCss()         = themed(Style("color: #1A1D2E; font-size: 0.875rem; font-weight: 600; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #F0F0F0; font-size: 0.875rem; font-weight: 600; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style legendNameSelCss()      = themed(Style("color: #1A1D2E; font-size: 0.875rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #F0F0F0; font-size: 0.875rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style legendValCss()          = themed(Style("color: #6B7280; font-size: 0.8125rem; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #7B8EAD; font-size: 0.8125rem; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
-Style sliceTrackCss()         = themed(Style("display: flex; height: 7; width: 100%; border-radius: 4; background: #E5E7EB; overflow: hidden"), Style("display: flex; height: 7; width: 100%; border-radius: 4; background: rgba(255,255,255,.08); overflow: hidden"))
-Style sliceRowCss()           = Style("display: flex; flex-direction: row; flex-wrap: nowrap; width: 100%; height: 7; gap: 0")
-Style sliceRestCss()          = Style("height: 7; background: transparent; padding: 0; min-width: 0")
-Style sliceBarAccentCss()     = themed(Style("height: 7; border-radius: 4; background: #2563EB; min-width: 0"), Style("height: 7; border-radius: 4; background: #00D4FF; min-width: 0"))
-Style sliceBarDesCss()        = themed(Style("height: 7; border-radius: 4; background: #7C3AED; min-width: 0"), Style("height: 7; border-radius: 4; background: #0066FF; min-width: 0"))
-Style sliceBarSuccessCss()    = themed(Style("height: 7; border-radius: 4; background: #10B981; min-width: 0"), Style("height: 7; border-radius: 4; background: #00E5A0; min-width: 0"))
-Style sliceBarWarningCss()    = themed(Style("height: 7; border-radius: 4; background: #F59E0B; min-width: 0"), Style("height: 7; border-radius: 4; background: #FFB800; min-width: 0"))
+Style barChartContainerCss() = Style("display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; gap: 8; padding: 16px 0; box-sizing: border-box")
+Style barChartGridCss()      = Style("display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: center; align-items: flex-end; width: 100%; height: 180; gap: 32; border-bottom: 2px solid rgba(255,255,255,.14); padding-bottom: 0; box-sizing: border-box; background: transparent")
+Style barColCss()            = Style("display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 170; width: 72; flex-shrink: 0; background: transparent; padding: 0; box-sizing: border-box")
+Style barPillarBoxCss()      = Style("display: flex; flex-direction: column; justify-content: flex-end; align-items: center; width: 56; height: 160; background: transparent; padding: 0")
+Style barSpacerCss()         = Style("width: 100%; background: transparent; padding: 0; min-height: 0")
+Style barPillarAccentCss()   = Style("width: 56; border-radius: 8 8 0 0; background: linear-gradient(180deg, #00D4FF, #0066FF); min-height: 8; padding: 0")
+Style barPillarDesCss()      = Style("width: 56; border-radius: 8 8 0 0; background: linear-gradient(180deg, #0066FF, #0033AA); min-height: 8; padding: 0")
+Style barPillarSuccessCss()  = Style("width: 56; border-radius: 8 8 0 0; background: linear-gradient(180deg, #00E5A0, #009966); min-height: 8; padding: 0")
+Style barPillarWarningCss()  = Style("width: 56; border-radius: 8 8 0 0; background: linear-gradient(180deg, #FFB800, #CC8800); min-height: 8; padding: 0")
+Style barValLabelCss()       = themed(Style("color: #1A1D2E; font-size: 0.875rem; font-weight: 700; margin: 4px 0 0 0; text-align: center; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #F0F0F0; font-size: 0.875rem; font-weight: 700; margin: 4px 0 0 0; text-align: center; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style barNameLabelCss()      = themed(Style("color: #1A1D2E; font-size: 0.8125rem; font-weight: 600; text-align: center; margin: 2px 0 0 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #B8BCC4; font-size: 0.8125rem; font-weight: 600; text-align: center; margin: 2px 0 0 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style barPctLabelCss()       = themed(Style("color: #6B7280; font-size: 0.75rem; font-weight: 500; text-align: center; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #7B8EAD; font-size: 0.75rem; font-weight: 500; text-align: center; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style barNamesRowCss()       = Style("display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: center; align-items: flex-start; width: 100%; gap: 32; padding-top: 6; box-sizing: border-box; background: transparent")
+
+Style sliceTrackCss()         = themed(Style("display: flex; height: 12; width: 100%; border-radius: 6; background: #E5E7EB; overflow: hidden"), Style("display: flex; height: 12; width: 100%; border-radius: 6; background: rgba(255,255,255,.08); overflow: hidden"))
+Style sliceRowCss()           = Style("display: flex; flex-direction: row; flex-wrap: nowrap; width: 100%; height: 12; gap: 0")
+Style sliceRestCss()          = Style("height: 12; background: transparent; padding: 0; min-width: 0")
+Style sliceBarAccentCss()     = themed(Style("height: 12; border-radius: 6; background: #2563EB; min-width: 0"), Style("height: 12; border-radius: 6; background: #00D4FF; min-width: 0"))
+Style sliceBarDesCss()        = themed(Style("height: 12; border-radius: 6; background: #7C3AED; min-width: 0"), Style("height: 12; border-radius: 6; background: #0066FF; min-width: 0"))
+Style sliceBarSuccessCss()    = themed(Style("height: 12; border-radius: 6; background: #10B981; min-width: 0"), Style("height: 12; border-radius: 6; background: #00E5A0; min-width: 0"))
+Style sliceBarWarningCss()    = themed(Style("height: 12; border-radius: 6; background: #F59E0B; min-width: 0"), Style("height: 12; border-radius: 6; background: #FFB800; min-width: 0"))
 
 // ---- Transações -------------------------------------------------------------
 Style txListCss()             = Style("display: flex; flex-direction: column; gap: 0; width: 100%")
@@ -279,7 +293,7 @@ View tabButton(Window w, String text, String period) {
 }
 
 View periodTabs(Window w) {
-    var row = Row(listOf(tabButton(w, "Semana", "week"), tabButton(w, "Mês", "month"), tabButton(w, "Ano", "year")))
+    var row = Row(listOf(tabButton(w, "Semana", "week"), tabButton(w, "Mês", "month")))
     row.setId("dash-tabs")
     row.setStyle(dashTabsCss())
     return row
@@ -302,49 +316,20 @@ View tile(String key, String label, String value, Style valueStyle, String sub, 
     return col
 }
 
-// Simulação visual temporária: não cria transação nem altera o histórico.
-// Assim que houver lançamentos reais no mês, o dashboard passa a exibir o total
-// retornado pela API.
-Bool isSpentSimulation(DashboardResponse d) = DashState.period != "year" && d.totalSpent == 0.0
-
-Double displayedSpent(DashboardResponse d) {
-    if (isSpentSimulation(d)) {
-        return 623.66
-    }
-    return d.totalSpent
-}
-
-Double displayedPulse(DashboardResponse d) {
-    if (isSpentSimulation(d) && d.daysRemaining > 0) {
-        return math.roundTo((d.salary - displayedSpent(d)) / (d.daysRemaining * 1.0), 2)
-    }
-    return d.pulse
-}
-
-String displayedSpentSub(DashboardResponse d) {
-    if (isSpentSimulation(d)) {
-        return "Simulação de gastos informados"
-    }
-    return "de " + brl(d.salary)
-}
-
-// A reserva informada é usada apenas enquanto a API não tiver um saldo real.
-Bool isReserveSimulation(DashboardResponse d) = d.reserve.accumulated == 0.0
-
-Double displayedReserve(DashboardResponse d) {
-    if (isReserveSimulation(d)) {
-        return 1491.0
-    }
-    return d.reserve.accumulated
-}
+Double displayedSpent(DashboardResponse d) = d.totalSpent
+Double displayedPulse(DashboardResponse d) = d.pulse
+String displayedSpentSub(DashboardResponse d) = "de " + brl(d.salary)
+Double displayedReserve(DashboardResponse d) = d.reserve.accumulated
 
 View tiles(DashboardResponse d) {
     val currentSpent = displayedSpent(d)
     val currentPulse = displayedPulse(d)
     val spentSub = displayedSpentSub(d)
-    var reserveSub = "Reserva informada"
-    if (d.reserve.hasGoal) {
+    var reserveSub = "Sem meta definida"
+    if (d.reserve.hasGoal && d.reserve.goal > 0.0) {
         reserveSub = "Meta: " + brlShort(brl(d.reserve.goal)) + " — " + String.valueOf(d.reserve.percent) + "%"
+    } else if (d.reserve.accumulated > 0.0) {
+        reserveSub = "Total acumulado"
     }
     if (AppState.isDesktop) {
         var row = Row(listOf(
@@ -606,45 +591,76 @@ View legendItem(Window w, BucketBalanceDTO b, Int i, Int selectedSlice) {
     } else {
         item.setStyle(legendItemCss())
     }
-    item.bind(Column(listOf(top, track)))
+    var bot = Row(listOf(
+        idLabel(brl(b.spentAmount) + " gastos", "legend-" + i + "-spent", tileSubCss()),
+        idLabel(brl(b.remainingAmount) + " restantes", "legend-" + i + "-rem", tileSubCss())))
+    bot.setStyle(rowBetweenCss())
+    item.bind(Column(listOf(top, track, bot)))
     item.on("click", () -> toggleSlice(w, i))
     return item
 }
 
+Style barFillStyle(Int i) {
+    if (i == 0) { return barPillarAccentCss() }
+    if (i == 1) { return barPillarDesCss() }
+    if (i == 2) { return barPillarSuccessCss() }
+    return barPillarWarningCss()
+}
+
+View verticalBarPillar(BucketBalanceDTO b, Int i) {
+    var p = b.percentage
+    if (p > 100) { p = 100 }
+    if (p < 5) { p = 5 }
+
+    var rest = View(screenStyle())
+    rest.setStyle(barSpacerCss())
+    rest.setFlexBasis((100 - p) * 10)
+
+    var fill = View(screenStyle())
+    fill.setStyle(barFillStyle(i))
+    fill.setFlexBasis(p * 10)
+
+    var col = Column(listOf(rest, fill))
+    col.setId("bar-col-" + i)
+    col.setStyle(barColCss())
+    return col
+}
+
+View verticalBarLabel(BucketBalanceDTO b, Int i) {
+    var valLabel = idLabel(brlShort(brl(b.plannedAmount)), "bar-val-" + i, barValLabelCss())
+    var name = idLabel(b.name, "bar-name-" + i, barNameLabelCss())
+    var pct = idLabel(String.valueOf(b.percentage) + "%", "bar-pct-" + i, barPctLabelCss())
+    var col = Column(listOf(valLabel, name, pct))
+    col.setStyle(Style("display: flex; flex-direction: column; align-items: center; width: 72; flex-shrink: 0; gap: 2"))
+    return col
+}
+
+// Gráfico em barras verticais do Modelo de Economia fiel à referência
 View distributionCard(Window w, DashboardResponse d) {
-    var sel = DashState.selectedSlice
-    if (sel >= d.buckets.size) {
-        sel = -1
-    }
-    var canvasWrap = View(screenStyle())
-    canvasWrap.setStyle(canvasZoomCss())
-    canvasWrap.bind(donutCanvas(d.buckets, sel))
-
-    var holder = View(screenStyle())
-    holder.setId("dash-donut")
-    holder.setStyle(donutOuterCss())
-    holder.bind(canvasWrap)
-    holder.on("click", () -> clearSlice(w))
-
-    var items: List<View> = listOf()
+    var pillars: List<View> = listOf()
+    var labels: List<View> = listOf()
     var i = 0
     for (var b in d.buckets) {
-        items.add(legendItem(w, b, i, sel))
+        pillars.add(verticalBarPillar(b, i))
+        labels.add(verticalBarLabel(b, i))
         i = i + 1
     }
     if (i == 0) {
-        items.add(idLabel("Sem divisões fixas neste modelo.", "legend-empty", tileSubCss()))
+        pillars.add(idLabel("Sem divisões fixas neste modelo.", "legend-empty", tileSubCss()))
     }
-    var legend = Column(items)
-    legend.setStyle(legendCss())
 
-    var body = Row(listOf(holder, legend))
-    if (AppState.isDesktop) {
-        body.setStyle(distBodyDesktopCss())
-    } else {
-        body = Column(listOf(holder, legend))
-        body.setStyle(distBodyMobileCss())
-    }
+    var chartGrid = Row(pillars)
+    chartGrid.setId("bar-chart-grid")
+    chartGrid.setStyle(barChartGridCss())
+
+    var labelsRow = Row(labels)
+    labelsRow.setId("bar-labels-row")
+    labelsRow.setStyle(barNamesRowCss())
+
+    var chartWrap = Column(listOf(chartGrid, labelsRow))
+    chartWrap.setId("dash-bars")
+    chartWrap.setStyle(barChartContainerCss())
+
     var titleCss = cardTitleMobileCss()
     var cardCss = dashCardMobileCss()
     if (AppState.isDesktop) {
@@ -655,10 +671,9 @@ View distributionCard(Window w, DashboardResponse d) {
         idLabel("Modelo de Economia", "dist-title", titleCss),
         idLabel(modelFriendlyName(d.budgetModel), "dist-model", distributionModelCss())))
     heading.setStyle(distributionHeadingCss())
-    var card = Column(listOf(heading, body))
+    var card = Column(listOf(heading, chartWrap))
     card.setId("card-distribution")
     card.setStyle(cardCss)
-    card.on("click", () -> clearSliceFromDistributionCard(w))
     return card
 }
 
