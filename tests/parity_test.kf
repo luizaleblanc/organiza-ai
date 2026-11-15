@@ -158,10 +158,15 @@ List<BucketSummaryDTO> buildBudgetBuckets(BudgetModelType model, Double salary) 
             bucketOf("Guardar", 20, salary))
         case KAKEIBO -> listOf(
             bucketOf("Essencial", 50, salary),
+            bucketOf("Lazer", 15, salary),
             bucketOf("Cultura", 10, salary),
-            bucketOf("Lazer", 30, salary),
-            bucketOf("Extras", 10, salary))
-        case FREELANCER_BASE_ZERO -> listOf()
+            bucketOf("Extras", 5, salary),
+            bucketOf("Poupança", 20, salary))
+        case FREELANCER_BASE_ZERO -> listOf(
+            bucketOf("Pró-labore", 50, salary),
+            bucketOf("Impostos", 15, salary),
+            bucketOf("Operação", 30, salary),
+            bucketOf("Reserva", 5, salary))
     }
 }
 
@@ -233,6 +238,32 @@ String toKakeiboBucket(Category? category) {
     return "Extras"
 }
 
+String planBucketForTx(BudgetModelType model, Category? category) {
+    if (model == BudgetModelType.KAKEIBO) {
+        return toKakeiboBucket(category)
+    }
+    if (model == BudgetModelType.SIMPLE_8020) {
+        return "Viver"
+    }
+    var b = toStandardBucket(category)
+    if (model == BudgetModelType.FREELANCER_BASE_ZERO) {
+        if (b == Bucket.NEEDS) {
+            return "Pró-labore"
+        }
+        return "Operação"
+    }
+    if (b == Bucket.NEEDS) {
+        return "Necessidades"
+    }
+    if (model == BudgetModelType.SURVIVAL_702010) {
+        return "Folga"
+    }
+    if (model == BudgetModelType.ANTI_DEBT_701020) {
+        return "Pessoal"
+    }
+    return "Desejos"
+}
+
 GetBalanceOutput calculateBalance(String userId, String fromIso) {
     var user = findUserById(userId)
     if (user != null) {
@@ -244,64 +275,25 @@ GetBalanceOutput calculateBalance(String userId, String fromIso) {
         var model = user.budgetModel
         var monthTransactions = findTransactionsByUserIdAndCreatedAtAfter(userId, fromIso)
 
-        if (model == BudgetModelType.FREELANCER_BASE_ZERO) {
-            var totalSpent = 0.0
-            for (var t in monthTransactions) {
-                totalSpent = totalSpent + (t.amount * 1.0)
-            }
-            var notAllocated = salary - totalSpent
-            var emptyList: List<BucketBalanceDTO> = listOf()
-            return GetBalanceOutput(model.name(), emptyList, totalSpent, notAllocated)
-        }
-
         var plan = buildBudgetBuckets(model, salary)
         var resultBuckets: List<BucketBalanceDTO> = listOf()
-
-        if (model == BudgetModelType.KAKEIBO) {
-            for (var b in plan) {
-                var spent = 0.0
-                for (var t in monthTransactions) {
-                    if (toKakeiboBucket(t.category) == b.name) {
-                        spent = spent + (t.amount * 1.0)
-                    }
-                }
-                var rem = b.amount - spent
-                resultBuckets.add(BucketBalanceDTO(b.name, b.percentage, b.amount, spent, rem))
-            }
-        } else {
-            var needsSpent = 0.0
-            var wantsSpent = 0.0
+        var totalSpent = 0.0
+        for (var t in monthTransactions) {
+            totalSpent = totalSpent + (t.amount * 1.0)
+        }
+        for (var b in plan) {
+            var spent = 0.0
             for (var t in monthTransactions) {
-                var bucket = toStandardBucket(t.category)
-                if (bucket == Bucket.NEEDS) {
-                    needsSpent = needsSpent + (t.amount * 1.0)
-                } else {
-                    wantsSpent = wantsSpent + (t.amount * 1.0)
+                if (planBucketForTx(model, t.category) == b.name) {
+                    spent = spent + (t.amount * 1.0)
                 }
             }
-
-            if (plan.size == 2) {
-                var first = plan.get(0)
-                var totalSpent = needsSpent + wantsSpent
-                resultBuckets.add(BucketBalanceDTO(first.name, first.percentage, first.amount, totalSpent, first.amount - totalSpent))
-                if (plan.size > 1) {
-                    var second = plan.get(1)
-                    resultBuckets.add(BucketBalanceDTO(second.name, second.percentage, second.amount, 0.0, second.amount))
-                }
-            } else if (plan.size >= 2) {
-                var first = plan.get(0)
-                resultBuckets.add(BucketBalanceDTO(first.name, first.percentage, first.amount, needsSpent, first.amount - needsSpent))
-                var second = plan.get(1)
-                resultBuckets.add(BucketBalanceDTO(second.name, second.percentage, second.amount, wantsSpent, second.amount - wantsSpent))
-                var i = 2
-                while (i < plan.size) {
-                    var other = plan.get(i)
-                    resultBuckets.add(BucketBalanceDTO(other.name, other.percentage, other.amount, 0.0, other.amount))
-                    i = i + 1
-                }
-            }
+            resultBuckets.add(BucketBalanceDTO(b.name, b.percentage, b.amount, spent, b.amount - spent))
         }
 
+        if (model == BudgetModelType.FREELANCER_BASE_ZERO) {
+            return GetBalanceOutput(model.name(), resultBuckets, totalSpent, salary - totalSpent)
+        }
         return GetBalanceOutput(model.name(), resultBuckets, 0.0, 0.0)
     }
     throw "Usuário não encontrado."
@@ -355,7 +347,7 @@ test "calculateBalance (STANDARD_503020): buckets devem arredondar para 2 casas 
     assert(result.buckets.get(2).plannedAmount == 66.67, "bucket Futuro esperado 66.67 (HALF_UP/2 casas) igual ao Java")
 }
 
-test "calculateBalance (FREELANCER_BASE_ZERO): totalSpent/notAllocated ja tem paridade exata com o Java" {
+test "calculateBalance (FREELANCER_BASE_ZERO): 4 potes Profit First + totalSpent/notAllocated" {
     var salary4: Double = 1000.0
     saveUser(UserEntity("u4", salary4, BudgetModelType.FREELANCER_BASE_ZERO))
     MirrorDb.transactions.add(TransactionEntity("tx4", 250, null, "u4", "2026-09-15T12:00:00Z"))
@@ -364,23 +356,32 @@ test "calculateBalance (FREELANCER_BASE_ZERO): totalSpent/notAllocated ja tem pa
 
     assert(result.totalSpent == 250.0)
     assert(result.notAllocated == 750.0)
-    assert(result.buckets.size == 0)
+    assert(result.buckets.size == 4)
+    assert(result.buckets.get(0).name == "Pró-labore")
+    assert(result.buckets.get(0).percentage == 50)
+    assert(result.buckets.get(1).name == "Impostos")
+    assert(result.buckets.get(1).percentage == 15)
+    assert(result.buckets.get(2).name == "Operação")
+    assert(result.buckets.get(2).spentAmount == 250.0)
+    assert(result.buckets.get(3).name == "Reserva")
+    assert(result.buckets.get(3).percentage == 5)
 }
 
-test "calculateBalance (KAKEIBO): categoria nula -- documenta a divergencia de contrato do ACHADO #3" {
-    // Java lancaria NullPointerException aqui (ver comentario acima de
-    // toKakeiboBucket). Este teste fixa o comportamento ATUAL do Kof
-    // (classifica como "Extras" sem lancar) para que a divergencia nao
-    // regrida silenciosamente para um terceiro comportamento antes de uma
-    // decisao explicita de produto (replicar o erro Java, ou consertar o
-    // Java tambem).
+test "calculateBalance (KAKEIBO): 5 potes com Poupança 20% e categoria nula em Extras" {
     var salary5: Double = 1000.0
     saveUser(UserEntity("u5", salary5, BudgetModelType.KAKEIBO))
     MirrorDb.transactions.add(TransactionEntity("tx5", 50, null, "u5", "2026-09-15T12:00:00Z"))
 
     var result = calculateBalance("u5", "2026-09-01T00:00:00Z")
 
+    assert(result.buckets.size == 5)
+    assert(result.buckets.get(1).name == "Lazer")
+    assert(result.buckets.get(1).percentage == 15)
     var extras = result.buckets.get(3)
     assert(extras.name == "Extras")
+    assert(extras.percentage == 5)
     assert(extras.spentAmount == 50.0, "Kof classifica categoria nula como Extras; Java lancaria NPE (500) no mesmo cenario -- ver ACHADO #3")
+    assert(result.buckets.get(4).name == "Poupança")
+    assert(result.buckets.get(4).percentage == 20)
+    assert(result.buckets.get(4).plannedAmount == 200.0)
 }

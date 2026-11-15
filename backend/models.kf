@@ -73,6 +73,7 @@ class UserEntity {
     String firstName
     String lastName
     Int age
+    Bool savesMonthly
 
     public constructor(String id, String email, String passwordHash, Role role,
             Long salaryCents, Bool hasSalary, Tier tier, Bool hasVariableIncome,
@@ -97,6 +98,7 @@ class UserEntity {
         this.firstName = firstName
         this.lastName = lastName
         this.age = age
+        this.savesMonthly = false
     }
 }
 
@@ -271,7 +273,7 @@ record ApiError(String error)
 record MeResponse(String name, String email, Bool onboardingCompleted, String tier, String firstName, String lastName, Int? age)
 
 // Resposta do POST /api/users/onboarding (Batch 2; antes era o texto "MODELO|descricao|nome:pct:valor,").
-// suggestedModel e o nome do enum (ASCII); buckets vazio no FREELANCER_BASE_ZERO.
+// suggestedModel e o nome do enum (ASCII).
 record OnboardingResponse(String suggestedModel, String description, List<BucketSummaryDTO> buckets)
 
 Bool onboardingCompleted(UserEntity user) {
@@ -357,10 +359,91 @@ RegisterRequest? decodeRegisterRequest(String raw) {
     }
 }
 
+Int parseTopLevelJsonBool(String raw, String targetKey) {
+    var i = 0
+    var n = raw.length
+    var depth = 0
+    while (i < n) {
+        var ch = raw.substring(i, i + 1)
+        if (ch == "{") {
+            depth = depth + 1
+            i = i + 1
+        } else if (ch == "}") {
+            depth = depth - 1
+            i = i + 1
+        } else if (ch == "[") {
+            depth = depth + 1
+            i = i + 1
+        } else if (ch == "]") {
+            depth = depth - 1
+            i = i + 1
+        } else if (ch == "\"") {
+            var start = i + 1
+            var end = start
+            var escaped = false
+            while (end < n) {
+                var c = raw.substring(end, end + 1)
+                if (escaped) {
+                    escaped = false
+                    end = end + 1
+                } else if (c == "\\") {
+                    escaped = true
+                    end = end + 1
+                } else if (c == "\"") {
+                    break
+                } else {
+                    end = end + 1
+                }
+            }
+            var key = raw.substring(start, end)
+            i = end + 1
+            if (depth == 1) {
+                while (i < n && (raw.substring(i, i + 1) == " " || raw.substring(i, i + 1) == "\t" || raw.substring(i, i + 1) == "\n" || raw.substring(i, i + 1) == "\r")) {
+                    i = i + 1
+                }
+                if (i < n && raw.substring(i, i + 1) == ":") {
+                    if (key == targetKey) {
+                        i = i + 1
+                        while (i < n && (raw.substring(i, i + 1) == " " || raw.substring(i, i + 1) == "\t" || raw.substring(i, i + 1) == "\n" || raw.substring(i, i + 1) == "\r")) {
+                            i = i + 1
+                        }
+                        if (i + 4 <= n && raw.substring(i, i + 4) == "true") {
+                            if (i + 4 == n || raw.substring(i + 4, i + 5) == "," || raw.substring(i + 4, i + 5) == "}" || raw.substring(i + 4, i + 5) == " " || raw.substring(i + 4, i + 5) == "\n" || raw.substring(i + 4, i + 5) == "\r" || raw.substring(i + 4, i + 5) == "\t") {
+                                return 1
+                            }
+                        }
+                        if (i + 5 <= n && raw.substring(i, i + 5) == "false") {
+                            if (i + 5 == n || raw.substring(i + 5, i + 6) == "," || raw.substring(i + 5, i + 6) == "}" || raw.substring(i + 5, i + 6) == " " || raw.substring(i + 5, i + 6) == "\n" || raw.substring(i + 5, i + 6) == "\r" || raw.substring(i + 5, i + 6) == "\t") {
+                                return 0
+                            }
+                        }
+                        if (i + 4 <= n && raw.substring(i, i + 4) == "null") {
+                            if (i + 4 == n || raw.substring(i + 4, i + 5) == "," || raw.substring(i + 4, i + 5) == "}" || raw.substring(i + 4, i + 5) == " " || raw.substring(i + 4, i + 5) == "\n" || raw.substring(i + 4, i + 5) == "\r" || raw.substring(i + 4, i + 5) == "\t") {
+                                return 0
+                            }
+                        }
+                        return -1
+                    }
+                }
+            }
+        } else {
+            i = i + 1
+        }
+    }
+    return 0
+}
+
+Bool parseSavesMonthlyFlag(String raw) {
+    return parseTopLevelJsonBool(raw, "savesMonthly") == 1
+}
+
 OnboardingRequest? decodeOnboardingRequest(String raw) {
     try {
         var req = json.decode<OnboardingRequest>(raw)
         if (req.incomeType() == null) {
+            return null
+        }
+        if (parseTopLevelJsonBool(raw, "savesMonthly") < 0) {
             return null
         }
         return req

@@ -183,14 +183,36 @@ VariableIncomeOutput variableIncomeEntityToOutput(VariableIncomeEntity v) {
 // mod_budget/service/BudgetModelSuggestionService.java
 // =========================================================
 
-BudgetModelType suggestBudgetModel(Double salary, IncomeType incomeType, Bool hasDebt) {
+Double salarioMinimo() {
+    return 1621.0
+}
+
+Double survivalThreshold() {
+    return 2.0 * salarioMinimo()
+}
+
+Double standardThreshold() {
+    return 5000.0
+}
+
+BudgetModelType suggestBudgetModel(Double salary, IncomeType incomeType, Bool hasDebt, Bool savesMonthly) {
     if (hasDebt) {
         return BudgetModelType.ANTI_DEBT_701020
     }
-    if (salary <= 3242.0) {
+    if (incomeType == IncomeType.VARIABLE) {
+        return BudgetModelType.FREELANCER_BASE_ZERO
+    }
+    if (salary <= survivalThreshold()) {
         return BudgetModelType.SURVIVAL_702010
     }
+    if (savesMonthly) {
+        return BudgetModelType.SIMPLE_8020
+    }
     return BudgetModelType.STANDARD_503020
+}
+
+BudgetModelType suggestBudgetModel(Double salary, IncomeType incomeType, Bool hasDebt) {
+    return suggestBudgetModel(salary, incomeType, hasDebt, false)
 }
 
 // =========================================================
@@ -203,8 +225,8 @@ String describeBudgetModel(BudgetModelType model) {
         case SURVIVAL_702010 -> "Modelo Sobrevivência 70/20/10: a maior parte cobre o essencial, uma folga pra respirar e um pouco guardado, mesmo que pouco."
         case ANTI_DEBT_701020 -> "Modelo Anti-Dívida: 70% para necessidades, 10% para o mínimo pessoal, 20% para quitar suas dívidas. Quando você sair do vermelho, o sistema migra automaticamente para outro modelo."
         case SIMPLE_8020 -> "Modelo Simplificado 80/20: 80% pra viver sem culpa, 20% pra guardar sem esforço. Simples assim."
-        case KAKEIBO -> "Modelo Kakeibo: reflexão em 4 categorias -- essencial, cultura, lazer e extras. Toda semana você para pra pensar no que gastou e como pode melhorar."
-        case FREELANCER_BASE_ZERO -> "Modelo de Economia 50/30/20: metade da sua renda cobre o essencial, 30% é pra viver bem hoje, e 20% guarda pro futuro."
+        case KAKEIBO -> "Modelo Kakeibo: você acompanha seus gastos por reflexão em Essencial (50%), Lazer (15%), Cultura (10%) e Extras (5%), separando 20% em Poupança no início do mês."
+        case FREELANCER_BASE_ZERO -> "Modelo Base Zero: sua renda varia, então cada entrada é dividida na hora -- 50% vira seu pró-labore, 15% vai para impostos, 30% para os custos do trabalho e 5% para a reserva dos meses fracos. Seu pró-labore segue a regra 50/30/20."
     }
 }
 
@@ -232,13 +254,15 @@ List<BucketSummaryDTO> buildBudgetBuckets(BudgetModelType model, Double salary) 
             bucketOf("Guardar", 20, salary))
         case KAKEIBO -> listOf(
             bucketOf("Essencial", 50, salary),
+            bucketOf("Lazer", 15, salary),
             bucketOf("Cultura", 10, salary),
-            bucketOf("Lazer", 30, salary),
-            bucketOf("Extras", 10, salary))
+            bucketOf("Extras", 5, salary),
+            bucketOf("Poupança", 20, salary))
         case FREELANCER_BASE_ZERO -> listOf(
-            bucketOf("Necessidades", 50, salary),
-            bucketOf("Desejos", 30, salary),
-            bucketOf("Futuro", 20, salary))
+            bucketOf("Pró-labore", 50, salary),
+            bucketOf("Impostos", 15, salary),
+            bucketOf("Operação", 30, salary),
+            bucketOf("Reserva", 5, salary))
     }
 }
 
@@ -293,26 +317,26 @@ BudgetModelType migrateBudgetModelIfNeeded(UserEntity? user) {
         var hasDebt = user.hasDebt
         var salary = userSalary(user)
 
-        if (current == BudgetModelType.ANTI_DEBT_701020 && !hasDebt) {
-            return BudgetModelType.STANDARD_503020
+        if (hasDebt) {
+            return BudgetModelType.ANTI_DEBT_701020
         }
-        if (current == BudgetModelType.STANDARD_503020 && incomeType == IncomeType.VARIABLE) {
+        if (incomeType == IncomeType.VARIABLE) {
             return BudgetModelType.FREELANCER_BASE_ZERO
         }
-        if (current == BudgetModelType.STANDARD_503020 && hasDebt) {
-            return BudgetModelType.ANTI_DEBT_701020
+        if (current == BudgetModelType.ANTI_DEBT_701020 && !hasDebt) {
+            return suggestBudgetModel(salary, incomeType, hasDebt, user.savesMonthly)
         }
-        if (current == BudgetModelType.SURVIVAL_702010 && hasDebt) {
-            return BudgetModelType.ANTI_DEBT_701020
-        }
-        if (current == BudgetModelType.STANDARD_503020 && salary <= 3242.0 && !hasDebt) {
+        if (current == BudgetModelType.STANDARD_503020 && salary <= survivalThreshold() && !hasDebt) {
             return BudgetModelType.SURVIVAL_702010
         }
-        if (current == BudgetModelType.SURVIVAL_702010 && salary > 5000.0 && !hasDebt) {
+        if (current == BudgetModelType.SURVIVAL_702010 && salary > standardThreshold() && !hasDebt) {
+            if (user.savesMonthly) {
+                return BudgetModelType.SIMPLE_8020
+            }
             return BudgetModelType.STANDARD_503020
         }
 
-        var suggested = suggestBudgetModel(salary, incomeType, hasDebt)
+        var suggested = suggestBudgetModel(salary, incomeType, hasDebt, user.savesMonthly)
         if (suggested == current) {
             return current
         }

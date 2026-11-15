@@ -414,11 +414,12 @@ try {
         Expect ($r.Status -eq 200 -and $j.suggestedModel -eq "ANTI_DEBT_701020" -and $b.Count -eq 3 -and $b[2].name -ceq "Quitação de Dívida" -and $b[2].amount -eq 600.0 -and $me.onboardingCompleted -eq $true -and $me.name -ceq "Caio Dívida") "$($r.Status) $($r.Body) | me: $($me | ConvertTo-Json -Compress)"
     }
 
-    Test-Step "Onboarding VARIABLE sugere FREELANCER_BASE_ZERO sem buckets" {
+    Test-Step "Onboarding VARIABLE sugere FREELANCER_BASE_ZERO com 4 potes (Profit First)" {
         $tv = (Invoke-Api "POST" "/api/auth/register" "" (@{ name = "Vera"; email = "var_$([Guid]::NewGuid().ToString('N'))@organiza.ai"; password = "senhaDaV123!" } | ConvertTo-Json -Compress)).Body
         $r = Invoke-Api "POST" "/api/users/onboarding" $tv (@{ salary = 4000.0; incomeType = "VARIABLE"; hasDebt = $false } | ConvertTo-Json -Compress)
         $j = $r.Body | ConvertFrom-Json
-        Expect ($r.Status -eq 200 -and $j.suggestedModel -eq "FREELANCER_BASE_ZERO" -and @($j.buckets).Count -eq 0) "$($r.Status) $($r.Body)"
+        $vb = @($j.buckets)
+        Expect ($r.Status -eq 200 -and $j.suggestedModel -eq "FREELANCER_BASE_ZERO" -and $vb.Count -eq 4 -and $vb[0].name -ceq "Pró-labore" -and $vb[0].percentage -eq 50 -and $vb[3].name -ceq "Reserva" -and $vb[3].percentage -eq 5) "$($r.Status) $($r.Body)"
     }
 
     Test-Step "Pulso após onboarding: daysRemaining = dias que faltam no mês (#44), pulse = 3000/daysRemaining" {
@@ -780,12 +781,12 @@ try {
         Expect ($r.Status -eq 200 -and $j.salary -eq 6000.0 -and $j.previousModel -eq "SURVIVAL_702010" -and $j.budgetModel -eq "STANDARD_503020" -and $j.migrated -eq $true -and @($j.buckets)[0].amount -eq 3000.0 -and $z.Status -eq 400 -and $bad.Status -eq 400 -and $p.salary -eq 6000.0) "$($r.Status) $($r.Body) | 0=$($z.Status) inválido=$($bad.Status)"
     }
 
-    Test-Step "PUT /api/users/me/budget-model (#11): KAKEIBO com 4 buckets; modelo inválido = 400" {
+    Test-Step "PUT /api/users/me/budget-model (#11): KAKEIBO com 5 buckets (Poupança 20%); modelo inválido = 400" {
         $r = Invoke-Api "PUT" "/api/users/me/budget-model" $script:tokenD (@{ model = "KAKEIBO" } | ConvertTo-Json -Compress)
         $j = $r.Body | ConvertFrom-Json
         $bad = Invoke-Api "PUT" "/api/users/me/budget-model" $script:tokenD (@{ model = "TUDO_NO_LAZER" } | ConvertTo-Json -Compress)
         $bal = (Invoke-Api "GET" "/api/budgets/balance" $script:tokenD).Body | ConvertFrom-Json
-        Expect ($r.Status -eq 200 -and $j.suggestedModel -eq "KAKEIBO" -and @($j.buckets).Count -eq 4 -and $bad.Status -eq 400 -and $bal.model -eq "KAKEIBO" -and @($bal.buckets)[2].spentAmount -eq 700.0) "$($r.Status) $($r.Body) | inválido=$($bad.Status) | balance=$($bal | ConvertTo-Json -Compress -Depth 4)"
+        Expect ($r.Status -eq 200 -and $j.suggestedModel -eq "KAKEIBO" -and @($j.buckets).Count -eq 5 -and $bad.Status -eq 400 -and $bal.model -eq "KAKEIBO" -and @($bal.buckets)[1].name -ceq "Lazer" -and @($bal.buckets)[1].spentAmount -eq 700.0 -and @($bal.buckets)[4].name -ceq "Poupança" -and @($bal.buckets)[4].percentage -eq 20) "$($r.Status) $($r.Body) | inválido=$($bad.Status) | balance=$($bal | ConvertTo-Json -Compress -Depth 4)"
     }
 
     Test-Step "Meta da reserva: renda variável vai para a reserva até a meta; dashboard mostra a reserva; aviso de meta batida" {
