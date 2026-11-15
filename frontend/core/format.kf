@@ -147,9 +147,6 @@ String modelFriendlyName(String model) {
     if (model == "KAKEIBO") {
         return "Kakeibo"
     }
-    if (model == "FREELANCER_BASE_ZERO") {
-        return "Base Zero"
-    }
     return model
 }
 

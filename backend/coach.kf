@@ -81,13 +81,6 @@ String? planBucketForTx(BudgetModelType model, List<BucketSummaryDTO> plan, Cate
         }
         return plan.get(0).name
     }
-    if (model == BudgetModelType.FREELANCER_BASE_ZERO) {
-        var baseName = findPlanBucketName(plan, listOf("Pró-labore"))
-        if (baseName != null) {
-            return baseName
-        }
-        return plan.get(0).name
-    }
     if (plan.size == 2) {
         var simpleName = findPlanBucketName(plan, listOf("Viver"))
         if (simpleName != null) {
@@ -272,7 +265,6 @@ String coachModelLabel(BudgetModelType model) {
         case ANTI_DEBT_701020 -> "70/10/20 Anti-Dívida"
         case SIMPLE_8020 -> "80/20"
         case KAKEIBO -> "Kakeibo"
-        case FREELANCER_BASE_ZERO -> "Base Zero (Profit First)"
     }
 }
 

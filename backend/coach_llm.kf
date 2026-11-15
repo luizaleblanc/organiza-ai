@@ -172,10 +172,9 @@ String coachSystemPrompt(UserEntity user, Bool kakeiboPending) {
         "REGRAS DE MODELO:\n" +
         "9. O modelo de orçamento do usuário é " + user.budgetModel.name() + ". Respeite os percentuais dele.\n" +
         "10. Se o modelo for ANTI_DEBT_701020, priorize orientação sobre quitação de dívida.\n" +
-        "11. Se o modelo for FREELANCER_BASE_ZERO, pergunte \"quanto dessa renda é líquido?\" antes de alocar.\n" +
-        "12. Se o modelo for KAKEIBO, faça as 4 perguntas reflexivas no final da semana.\n" +
-        "13. Se o usuário estiver em KAKEIBO e ainda não tiver respondido a reflexão semanal desta semana, pergunte as 4 perguntas em sequência e, após o usuário responder, chame a tool answerKakeiboReflection com as 4 respostas na ordem correta.\n" +
-        "14. Se detectar que os gastos essenciais passaram do percentual do modelo por 3 meses seguidos, sugira trocar de modelo (tool suggestModelChange).\n\n" +
+        "11. Se o modelo for KAKEIBO, faça as 4 perguntas reflexivas no final da semana.\n" +
+        "12. Se o usuário estiver em KAKEIBO e ainda não tiver respondido a reflexão semanal desta semana, pergunte as 4 perguntas em sequência e, após o usuário responder, chame a tool answerKakeiboReflection com as 4 respostas na ordem correta.\n" +
+        "13. Se detectar que os gastos essenciais passaram do percentual do modelo por 3 meses seguidos, sugira trocar de modelo (tool suggestModelChange).\n\n" +
         "REGRAS DE CATEGORIZAÇÃO:\n" +
         "Para cada transação, use OBRIGATORIAMENTE um destes valores exatos: GROCERIES (mercado, feira, padaria), LEISURE (cinema, show, viagem, passeio, ingresso), " +
         "FOOD (restaurante, lanche, delivery, café, almoço, jantar fora), PHARMA (farmácia, remédio), HEALTH (consulta, exame, dentista, plano de saúde, psicólogo), " +

@@ -256,7 +256,6 @@ String describeBudgetModel(BudgetModelType model) {
         case ANTI_DEBT_701020 -> "Modelo Anti-Dívida: 70% para necessidades, 10% para o mínimo pessoal, 20% para quitar suas dívidas. Quando você sair do vermelho, o sistema migra automaticamente para outro modelo."
         case SIMPLE_8020 -> "Modelo Simplificado 80/20: 80% pra viver sem culpa, 20% pra guardar sem esforço. Simples assim."
         case KAKEIBO -> "Modelo Kakeibo: você acompanha seus gastos por reflexão em Essencial (50%), Lazer (15%), Cultura (10%) e Extras (5%), separando 20% em Poupança no início do mês."
-        case FREELANCER_BASE_ZERO -> "Modelo Base Zero: sua renda varia, então cada entrada é dividida na hora -- 50% vira seu pró-labore, 15% vai para impostos, 30% para os custos do trabalho e 5% para a reserva dos meses fracos. Seu pró-labore segue a regra 50/30/20."
     }
 }
 
@@ -288,11 +287,6 @@ List<BucketSummaryDTO> buildBudgetBuckets(BudgetModelType model, Double salary) 
             bucketOf("Cultura", 10, salary),
             bucketOf("Extras", 5, salary),
             bucketOf("Poupança", 20, salary))
-        case FREELANCER_BASE_ZERO -> listOf(
-            bucketOf("Pró-labore", 50, salary),
-            bucketOf("Impostos", 15, salary),
-            bucketOf("Operação", 30, salary),
-            bucketOf("Reserva", 5, salary))
     }
 }
 

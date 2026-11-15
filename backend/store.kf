@@ -713,6 +713,11 @@ BudgetModelType budgetModelFromText(String text) {
     return BudgetModelType.STANDARD_503020
 }
 
+// Texto gravado que nao e mais um dos 5 modelos oficiais (ex.: o antigo FREELANCER_BASE_ZERO).
+Bool isRetiredBudgetModel(String text) {
+    return BudgetModelType.valueOf(text) == null
+}
+
 IncomeType incomeTypeFromText(String text) {
     var value = IncomeType.valueOf(text)
     if (value != null) {
@@ -729,6 +734,10 @@ UserEntity userFromRow(UserRow row) {
         incomeTypeFromText(row.incomeType()), row.hasDebt(), row.debtCents(), row.name(),
         row.firstName(), row.lastName(), row.age())
     user.savesMonthly = row.savesMonthly()
+    // Modelo aposentado no banco: recalcula pela tabela dos 5 modelos oficiais (o proximo save grava o novo).
+    if (isRetiredBudgetModel(row.budgetModel())) {
+        user.budgetModel = suggestBudgetModel(userSalary(user), user.incomeType, user.hasDebt, user.savesMonthly)
+    }
     return user
 }
 

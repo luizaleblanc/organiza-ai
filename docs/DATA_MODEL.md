@@ -29,7 +29,7 @@ erDiagram
         float monthly_salary
         boolean has_variable_income
         float emergency_fund_goal
-        string budget_model "Um dos 6 modelos adaptativos"
+        string budget_model "Um dos 5 modelos oficiais"
         string income_type "FIXED ou VARIABLE"
         boolean has_debt
         float debt_amount
@@ -127,20 +127,21 @@ flowchart TD
     S["Você já guarda dinheiro todo mês?"] --> D
     C2 --> D
     C -->|Não| D
-    D -->|1. Com dívida| F[Modelo Anti-Dívida 70/10/20]
-    D -->|2. Renda variável| E[Modelo Freelancer Base Zero]
-    D -->|3. Renda fixa <= 2 SM| G[Modelo Sobrevivência 70/20/10]
-    D -->|4. Renda fixa e poupa| P[Modelo Simplificado 80/20]
-    D -->|5. Demais rendas fixas| H[Modelo Padrão 50/30/20]
+    D -->|1. Dívida e renda >= 1 SM| F[Anti-Dívida 70/10/20]
+    D -->|2. Renda < 2 SM ou dívida com renda < 1 SM| G[Sobrevivência 70/20/10]
+    D -->|3. Sem dívida, guarda todo mês e renda >= 5 SM| P[80/20]
+    D -->|4. Sem dívida, renda >= 3 SM, escolha do usuário| K[Kakeibo]
+    D -->|5. Sem dívida e renda >= 2 SM| H[50/30/20]
 ```
 
 ## Modelos de orçamento adaptativos
 
-| Modelo | Percentuais / categorias | Público-alvo |
-|---|---|---|
-| **Padrão (STANDARD_503020)** | 50% Necessidades / 30% Desejos / 20% Futuro | Renda fixa acima de 2 salários mínimos (Warren & Tyagi, 2005) |
-| **Sobrevivência (SURVIVAL_702010)** | 70% Necessidades / 20% Folga / 10% Guarda | Renda fixa até 2 salários mínimos (R$ 3.242,00), sem dívidas em atraso |
-| **Anti-Dívida (ANTI_DEBT_701020)** | 70% Necessidades / 10% Pessoal / 20% Quitação de Dívida | Qualquer perfil com dívidas em atraso |
-| **Simplificado (SIMPLE_8020)** | 80% Viver / 20% Guardar | Renda fixa acima de 2 SM que já guarda todo mês (`savesMonthly`) |
-| **Kakeibo (KAKEIBO)** | 50% Essencial / 15% Lazer / 10% Cultura / 5% Extras / 20% Poupança | Quem quer refletir semanalmente sobre hábitos de consumo |
-| **Freelancer Base Zero (FREELANCER_BASE_ZERO)** | 50% Pró-labore / 15% Impostos / 30% Operação / 5% Reserva | Renda variável (alocação por entrada inspirada no *Profit First*) |
+SM = salário mínimo (R$ 1.621,00). A coluna `budget_model` só aceita estes 5 valores; contas antigas gravadas com `FREELANCER_BASE_ZERO` são convertidas ao carregar (`userFromRow` em `backend/store.kf`).
+
+| Ordem | Modelo | Renda mínima | Condição | Por quê |
+|---|---|---|---|---|
+| 1 | **Anti-Dívida 70/10/20 (ANTI_DEBT_701020)** | 1 SM (R$ 1.621) | Tem dívida | Abaixo disso, 20% para quitação não cobre nem a parcela mínima. Quem tem dívida e ganha menos de 1 SM fica no Sobrevivência, e o coach orienta a renegociar. |
+| 2 | **Sobrevivência 70/20/10 (SURVIVAL_702010)** | Nenhuma | Renda abaixo de 2 SM (R$ 3.242) | É o modelo de entrada. |
+| 3 | **80/20 (SIMPLE_8020)** | 5 SM (R$ 8.105) | Sem dívida e já guarda todo mês | Com 80% livre e sem divisão interna, precisa de folga para não estourar o essencial. |
+| 4 | **Kakeibo (KAKEIBO)** | 3 SM (R$ 4.863) | Sem dívida, escolhido pelo usuário | Ele não tem bucket de poupança, então exige margem. |
+| 5 | **50/30/20 (STANDARD_503020)** | 2 SM (R$ 3.242) | Sem dívida | |
