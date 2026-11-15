@@ -39,14 +39,12 @@ View brandMark(Int width, String id) {
     return holder
 }
 
-// Ícone do botão de enviar: símbolo oficial azul (3 ondas, vetor), sem texto
-// alternativo para nunca vazar texto se o arquivo falhar (o nome acessível
-// fica no View do botão).
+// Ícone do botão de enviar: símbolo oficial azul (3 ondas destacadas, vetor).
 View sendSymbol(String id) {
     var img = Image("assets/brand/organiza-simbolo.svg")
     img.setAlt("")
-    img.setWidth(30)
-    img.setHeight(13)
+    img.setWidth(34)
+    img.setHeight(15)
     var holder = View(screenStyle())
     holder.setId(id)
     holder.setStyle(markCss())
