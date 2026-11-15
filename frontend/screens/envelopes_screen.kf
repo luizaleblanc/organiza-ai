@@ -163,7 +163,7 @@ View envelopeCard(Window w, EnvelopeItem e) {
         var editBtn = Button("Editar", () -> {
             EnvState.editingId = id
             EnvState.editingName = e.categoryName()
-            EnvState.editingNameDraft = e.categoryName()
+            EnvState.editingNameDraft = envelopeLabel(e.categoryName())
             EnvState.editingLimit = String.valueOf(e.limitAmount())
             EnvState.confirmDelete = ""
             EnvState.formError = ""
@@ -263,16 +263,16 @@ submitEnvelopeEdit(Window w, Input nameField, Input limit) {
         return
     }
     EnvState.editingLimit = limit.text()
-    var newName = EnvState.editingName
-    if (!isCategoryName(EnvState.editingName)) {
-        EnvState.editingNameDraft = nameField.text()
-        newName = EnvState.editingNameDraft.trim()
-        val nameErr = envelopeNameError(newName)
-        if (nameErr != "") {
-            EnvState.formError = nameErr
-            mountScreen(w)
-            return
-        }
+    EnvState.editingNameDraft = nameField.text()
+    var newName = EnvState.editingNameDraft.trim()
+    if (newName == "") {
+        newName = EnvState.editingName
+    }
+    val nameErr = envelopeNameError(newName)
+    if (nameErr != "") {
+        EnvState.formError = nameErr
+        mountScreen(w)
+        return
     }
     var amount = 0.0
     try {
@@ -487,32 +487,18 @@ View newEnvelopeModal(Window w, List<String> groups) {
     return overlay
 }
 
-// Edição: o limite muda em todas; o nome só nas caixinhas livres. As de
-// categoria são automáticas: aparecem como rótulo, sem edição.
+// Edição de caixinha: nome e limite editáveis em todas as caixinhas.
 View editEnvelopeModal(Window w) {
-    val auto = isCategoryName(EnvState.editingName)
     var title = Label("Editar caixinha")
     title.setStyle(envModalTitleCss())
-    var sub = Label("Atualize o limite mensal de " + envelopeLabel(EnvState.editingName) + ".")
-    if (!auto) {
-        sub = Label("Atualize o nome e o limite mensal da caixinha.")
-    }
+    var sub = Label("Atualize o nome e o limite mensal da caixinha.")
     sub.setStyle(envModalSubCss())
     var nameField = Input(EnvState.editingNameDraft)
     nameField.setId("env-edit-name")
     nameField.setType("text")
-    nameField.setPlaceholder("Ex.: Viagem ao Japão")
+    nameField.setPlaceholder("Ex.: Moradia, Supermercado")
     nameField.setStyle(envInputCss())
     var nameView: View = nameField
-    if (auto) {
-        var fixed = Label(envelopeLabel(EnvState.editingName))
-        fixed.setId("env-edit-name-fixed")
-        fixed.setStyle(envFixedNameCss())
-        var autoHint = Label("Caixinha automática")
-        autoHint.setId("env-edit-auto")
-        autoHint.setStyle(envModalSubCss())
-        nameView = Column(listOf(fixed, autoHint))
-    }
     var limit = moneyFieldWith(EnvState.editingLimit, "0,00", "env-edit-limit")
     limit.setStyle(envInputCss())
     var items: List<View> = listOf()
