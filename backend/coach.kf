@@ -10,7 +10,10 @@
 
 record BucketBalanceDTO(String name, Int percentage, Double plannedAmount, Double spentAmount, Double remainingAmount)
 
-record GetDailyPulseOutput(Double pulse, Int daysRemaining, Double totalSpent, Double salary, String? message)
+// pulse = Pulso Diario; economicPulse = Pulso Economico (75% do diario, truncado no centavo);
+// pulseText/economicPulseText ja formatados em R$ X.XXX,XX para o coach nunca calcular nem formatar valor.
+record GetDailyPulseOutput(Double pulse, Int daysRemaining, Double totalSpent, Double salary, String? message,
+    Double economicPulse, String pulseText, String economicPulseText)
 
 record GetBalanceOutput(String model, List<BucketBalanceDTO> buckets, Double totalSpent, Double notAllocated)
 
@@ -89,13 +92,13 @@ String? planBucketForTx(BudgetModelType model, List<BucketSummaryDTO> plan, Cate
         return plan.get(0).name
     }
     if (toStandardBucket(category) == Bucket.NEEDS) {
-        var needsName = findPlanBucketName(plan, listOf("Necessidades", "Essencial", "Viver", "Pró-labore"))
+        var needsName = findPlanBucketName(plan, listOf("Necessidades", "Essencial", "Viver"))
         if (needsName != null) {
             return needsName
         }
         return plan.get(0).name
     }
-    var wantsName = findPlanBucketName(plan, listOf("Desejos", "Folga", "Pessoal", "Lazer", "Viver", "Pró-labore"))
+    var wantsName = findPlanBucketName(plan, listOf("Desejos", "Folga", "Pessoal", "Lazer", "Viver"))
     if (wantsName != null) {
         return wantsName
     }
@@ -131,6 +134,17 @@ Bucket toBucket(BudgetModelType model, Category? category) {
 // GetDailyPulseFunction -> calculateDailyPulse
 // =========================================================
 
+// Pulso Economico = 75% do Pulso Diario, truncado no centavo (R$ 187,50 -> R$ 140,62, secao 4.2 da diretriz).
+Long economicPulseCents(Long pulseCents) {
+    return pulseCents * 75 / 100
+}
+
+GetDailyPulseOutput pulseOutput(Double pulse, Int daysRemaining, Double totalSpent, Double salary, String? message) {
+    var pc = toCents(pulse)
+    var ec = economicPulseCents(pc)
+    return GetDailyPulseOutput(pulse, daysRemaining, totalSpent, salary, message, centsToReais(ec), formatBrl(pc), formatBrl(ec))
+}
+
 GetDailyPulseOutput calculateDailyPulse(String userId, Int daysRemaining, String fromIso) {
     var user = findUserById(userId)
     if (user != null) {
@@ -140,11 +154,11 @@ GetDailyPulseOutput calculateDailyPulse(String userId, Int daysRemaining, String
 
         var remaining = salary - totalSpent
         if (remaining <= 0.0) {
-            return GetDailyPulseOutput(0.0, daysRemaining, totalSpent, salary, "Você já comprometeu todo o salário deste mês.")
+            return pulseOutput(0.0, daysRemaining, totalSpent, salary, "Você já comprometeu todo o salário deste mês.")
         }
 
         var pulse = math.roundTo(remaining / (daysRemaining * 1.0), 2)
-        return GetDailyPulseOutput(pulse, daysRemaining, totalSpent, salary, null)
+        return pulseOutput(pulse, daysRemaining, totalSpent, salary, null)
     }
     throw "Usuário não encontrado."
 }
@@ -172,7 +186,7 @@ GetBalanceOutput calculateBalance(String userId, String fromIso) {
             resultBuckets.add(BucketBalanceDTO(b.name, b.percentage, b.amount, spent, rem))
         }
 
-        // O legado devolve null nos dois campos fora do Base Zero; aqui vao o gasto do mes e o que sobra do salario.
+        // O legado devolve null nos dois campos fora dos modelos com buckets; aqui vao o gasto do mes e o que sobra do salario.
         var monthSpent = centsToReais(sumAmountCents(monthTransactions))
         return GetBalanceOutput(model.name(), resultBuckets, monthSpent, salary - monthSpent)
     }
@@ -198,9 +212,9 @@ RegisterIncomeOutput registerUserIncome(String userId, Double amount, String sou
     }
 
     var user = findUserById(userId)
-    var modelName = "STANDARD_503020"
+    var modelName = coachModelLabel(BudgetModelType.STANDARD_503020)
     if (user != null) {
-        modelName = user.budgetModel.name()
+        modelName = coachModelLabel(user.budgetModel)
     }
 
     return RegisterIncomeOutput(saved.destination.name(), "Sua reserva de emergência já está completa, então distribuí esse valor pelo seu modelo de orçamento (" + modelName + ").")
@@ -214,10 +228,15 @@ SuggestModelChangeOutput suggestModelChange(String userId) {
     var user = findUserById(userId)
     if (user != null) {
         var currentModel = user.budgetModel
-        if (currentModel == BudgetModelType.ANTI_DEBT_701020 && !user.hasDebt) {
-            return SuggestModelChangeOutput(true, BudgetModelType.STANDARD_503020.name(), "Seu modelo atual é o Anti-Dívida, mas você não tem nenhuma dívida registrada. Faz mais sentido migrar para o modelo Padrão 50/30/20.")
+        var salary = userSalary(user)
+        // Tabela oficial (docs/DATA_MODEL.md): o modelo atual deixou de valer para a renda/divida -> sugere o da selecao.
+        if (budgetModelEligibilityError(currentModel, salary, user.hasDebt) != null) {
+            var suggested = suggestBudgetModel(salary, user.incomeType, user.hasDebt, user.savesMonthly)
+            if (suggested != currentModel) {
+                return SuggestModelChangeOutput(true, suggested.name(), "Seu modelo atual é o " + coachModelLabel(currentModel) + ", mas ele não combina mais com a sua renda e as suas dívidas registradas. Faz mais sentido migrar para o " + coachModelLabel(suggested) + ".")
+            }
         }
-        return SuggestModelChangeOutput(false, currentModel.name(), "Seus gastos atuais estão aderentes ao modelo " + currentModel.name() + ".")
+        return SuggestModelChangeOutput(false, currentModel.name(), "Seus gastos atuais estão aderentes ao modelo " + coachModelLabel(currentModel) + ".")
     }
     throw "Usuário não encontrado."
 }
@@ -256,6 +275,50 @@ KakeiboReflectionEntity recordKakeiboReflection(String userId, String weekStart,
         return saveKakeiboReflection(reflection)
     }
     throw "Usuário não encontrado: " + userId
+}
+
+// Nome da categoria em portugues para qualquer texto ao usuario (nunca o codigo interno).
+String categoryLabel(Category? category) {
+    if (category == null) {
+        return "Outros"
+    }
+    return switch (category) {
+        case GROCERIES -> "Mercado"
+        case LEISURE -> "Lazer"
+        case FOOD -> "Alimentação"
+        case PHARMA -> "Farmácia"
+        case HEALTH -> "Saúde"
+        case AUTO -> "Carro"
+        case TRANSPORT -> "Transporte"
+        case HOUSING -> "Moradia"
+        case EDUCATION -> "Educação"
+        case SHOPPING -> "Compras"
+        case SUBSCRIPTIONS -> "Assinaturas"
+        case OTHER -> "Outros"
+    }
+}
+
+String categoryLabelFromCode(String code) {
+    var c = categoryOrNull(code)
+    return categoryLabel(c)
+}
+
+// Saudacao inicial exata da secao 4.1 da diretriz.
+String coachGreeting(UserEntity? user) {
+    var name = ""
+    if (user != null) {
+        name = firstNameOf(user.name)
+    }
+    var hello = "Oi!"
+    if (name != "") {
+        hello = "Oi, " + name + "!"
+    }
+    return hello + " Me fala seus gastos aí. Você pode digitar, falar por voz ou enviar sua fatura por aqui que eu leio e organizo tudo pra você."
+}
+
+Bool isGreetingMessage(String lower) {
+    var t = lower.trim().replace("!", "").replace(".", "").replace(",", "").trim()
+    return t == "" || t == "oi" || t == "olá" || t == "ola" || t == "oie" || t == "bom dia" || t == "boa tarde" || t == "boa noite" || t == "e aí" || t == "e ai"
 }
 
 String coachModelLabel(BudgetModelType model) {
@@ -463,6 +526,48 @@ String buildGroundedDocumentReply(String userId, UserEntity? user, FinancialDocu
 
 // Resposta determinística / offline alinhada ao Tópico 10 (ChatWin)
 String coachReplyOffline(String userId, String rawMsg, String monthStart) {
+    return coachReplyOfflineWithSource(userId, rawMsg, monthStart, Source.MANUAL)
+}
+
+EnvelopeEntity? findMentionedEnvelopeInPart(String userId, String lowerPart) {
+    var envs = findEnvelopesByUserId(userId)
+    for (var env in envs) {
+        var disp = envelopeDisplayName(env).trim().toLowerCase()
+        var code = env.categoryName.trim().toLowerCase()
+        if (disp.length() >= 3 && lowerPart.contains(disp)) {
+            return env
+        }
+        if (code.length() >= 3 && lowerPart.contains(code)) {
+            return env
+        }
+    }
+    return null
+}
+
+Double parseChatAmountPart(String part) {
+    var words = part.trim().split(" ")
+    var amt = 0.0
+    for (var w in words) {
+        var clean = w.replace("r$", "").replace("$", "").replace("reais", "").trim()
+        while (clean.endsWith(",") || clean.endsWith(".") || clean.endsWith("!") || clean.endsWith("?") || clean.endsWith(";")) {
+            clean = clean.substring(0, clean.length() - 1)
+        }
+        if (clean.contains(",")) {
+            clean = clean.replace(".", "").replace(",", ".")
+        }
+        if (clean.length() > 0 && strings.isNumeric(clean.replace(".", ""))) {
+            try {
+                var parsed = clean.toDouble()
+                if (parsed > 0.0) {
+                    amt = parsed
+                }
+            } catch (Exception e) {}
+        }
+    }
+    return amt
+}
+
+String coachReplyOfflineWithSource(String userId, String rawMsg, String monthStart, Source source) {
     var msg = rawMsg.trim()
     var lower = msg.toLowerCase()
     var user = findUserById(userId)
@@ -494,7 +599,13 @@ String coachReplyOffline(String userId, String rawMsg, String monthStart) {
         return "Recebi o arquivo " + failName + ", mas a extração identificou 0 lançamentos com segurança. Por segurança, bloqueei a análise financeira para não estimar nem inventar nenhum valor. Envie um PDF digital com texto selecionável ou me informe os lançamentos por texto."
     }
 
-    // 1. Confirmação final após o Passo 2 (antes de salvar nas caixinhas)
+    // 0b. Pedidos de caixinha pelo chat (criar, renomear, limite, excluir com confirmacao, consultar)
+    var envReply = envelopeChatCommand(userId, msg, lastAssistantMsg)
+    if (envReply != "") {
+        return envReply
+    }
+
+    // 1. Confirmação final após o Passo 2 (salva de forma idempotente no KofDB antes de responder)
     if (lastAssistantMsg.contains("Antes de eu salvar nas suas caixinhas") || lastAssistantMsg.contains("distribua esses gastos na regra") || lastAssistantMsg.contains("Quer que eu distribua")) {
         var canceled = lower == "não" || lower == "nao" || lower.contains("cancela") || lower.contains("não salva") || lower.contains("nao salva") || lower.contains("não salvar") || lower.contains("nao salvar")
         if (canceled) {
@@ -502,9 +613,13 @@ String coachReplyOffline(String userId, String rawMsg, String monthStart) {
         }
         var confirmed = lower == "sim" || lower == "sim!" || lower.startsWith("sim,") || lower.startsWith("sim ") || lower.contains("confirm") || lower.contains("foram") || lower.contains("despesa") || lower.contains("pode salvar") || lower.contains("organizar") || lower.contains("distribua") || lower.contains("50/30/20") || lower.contains("70/20/10") || lower.contains("quero") || lower.contains("pode") || lower.contains("ok") || lastAssistantMsg.contains("Antes de eu salvar nas suas caixinhas")
         if (confirmed) {
+            var persistedReply = confirmDocumentFromChat(userId, null)
+            if (persistedReply != null) {
+                return persistedReply
+            }
             var salStr = formatBrl(toCents(salary))
             var divisionText = buildBucketDivisionLines(model, salary)
-            return "Perfeito! Com a sua confirmação, salvei seus lançamentos confirmados nas caixinhas usando o modelo " + modelLabel + " para a renda base de " + salStr + ":\n\n" + divisionText + "\nOs valores foram organizados sem misturar faturas antigas nem transferências pessoais sem comprovação."
+            return "Conferi que não há documento pendente para salvar no momento. Seu modelo atual é " + modelLabel + " para a renda base de " + salStr + ":\n\n" + divisionText
         }
     }
 
@@ -523,7 +638,7 @@ String coachReplyOffline(String userId, String rawMsg, String monthStart) {
             var catLines = ""
             for (var cname in groups.keys()) {
                 var cCents = sumAmountCents(groups.getOrDefault(cname, listOf()))
-                catLines = catLines + "- " + cname + ": " + formatBrl(cCents) + "\n"
+                catLines = catLines + "- " + categoryLabelFromCode(cname) + ": " + formatBrl(cCents) + "\n"
             }
             var numCats = groups.keys().size
             return "Conferi seus lançamentos confirmados no histórico e encontrei " + String.valueOf(numCats) + " grupos:\n\n" + catLines + "\nAntes de eu salvar nas suas caixinhas e distribuir no modelo " + modelLabel + ", você confirma se essas categorias estão certinhas?"
@@ -598,63 +713,429 @@ String coachReplyOffline(String userId, String rawMsg, String monthStart) {
         return "Nos lançamentos confirmados " + periodLabel + " em " + catPt + ", você gastou " + formatBrl(queried.totalMinor()) + " distribuídos em " + queried.count() + " registro(s)."
     }
 
-    // 4. Registro de gastos por texto / voz
-    if (lower.contains("gastei") || lower.contains("gasto") || lower.contains("comprei") || lower.contains("paguei")) {
+    // 4. Registro de gastos por texto / voz (todas as 12 categorias + caixinha explicitamente citada + Source.VOICE)
+    var isQuestionQuery = lower.contains("?") || lower.contains("quanto ") || lower.contains("qual o pulso") || lower.contains("saldo") || lower.contains("disponível para") || lower.contains("disponivel para")
+    var isExpenseVerb = !isQuestionQuery && (lower.contains("gastei") || lower.contains("gasto") || lower.contains("comprei") || lower.contains("paguei") || lower.contains("pague") || lower.contains("lança") || lower.contains("lanca") || lower.contains("registra") || lower.contains("coloca"))
+    var isVoiceExpenseCandidate = source == Source.VOICE && !isQuestionQuery && !lower.contains("pulso") && parseChatAmountPart(lower) > 0.0
+    if (isExpenseVerb || isVoiceExpenseCandidate) {
         var registeredCats: List<String> = listOf()
+        var createdBoxes: List<String> = listOf()
+        var linkedBoxes: List<String> = listOf()
+        var bucketNotes: List<String> = listOf()
+        var controlWarnings: List<String> = listOf()
         var parts = lower.split(" e ")
         for (var part in parts) {
-            var words = part.trim().split(" ")
-            var amt = 0.0
-            var catName = ""
+            var amt = parseChatAmountPart(part)
+            var matchedEnv = findMentionedEnvelopeInPart(userId, part)
+            var matchedEnvId: String? = textOrNull("")
+            var catName = "outros"
             var catEnum = Category.OTHER
-            for (var w in words) {
-                var clean = w.replace("r$", "").replace("$", "").replace(",", ".").trim()
-                if (clean.length() > 0 && strings.isNumeric(clean.replace(".", ""))) {
-                    try {
-                        amt = clean.toDouble()
-                    } catch (Exception e) {}
-                }
-            }
-            if (part.contains("almoço") || part.contains("almoco") || part.contains("restaurante") || part.contains("lanche") || part.contains("comida") || part.contains("food")) {
+            if (part.contains("almoço") || part.contains("almoco") || part.contains("jantar") || part.contains("café") || part.contains("cafe") || part.contains("restaurante") || part.contains("lanche") || part.contains("comida") || part.contains("ifood") || part.contains("delivery") || part.contains("padaria") || part.contains("lanchonete") || part.contains("food")) {
                 catName = "alimentação"
                 catEnum = Category.FOOD
-            } else if (part.contains("mercado") || part.contains("supermercado") || part.contains("feira") || part.contains("hortifruti")) {
+            } else if (part.contains("mercado") || part.contains("supermercado") || part.contains("feira") || part.contains("hortifruti") || part.contains("atacadao") || part.contains("atacadão") || part.contains("acougue") || part.contains("açougue")) {
                 catName = "mercado"
                 catEnum = Category.GROCERIES
-            } else if (part.contains("farmacia") || part.contains("farmácia") || part.contains("drogaria") || part.contains("remedio")) {
+            } else if (part.contains("farmacia") || part.contains("farmácia") || part.contains("drogaria") || part.contains("remedio") || part.contains("remédio") || part.contains("medicamento")) {
                 catName = "farmácia"
                 catEnum = Category.PHARMA
-            } else if (part.contains("uber") || part.contains("99") || part.contains("transporte") || part.contains("onibus")) {
+            } else if (part.contains("uber") || part.contains("99") || part.contains("taxi") || part.contains("táxi") || part.contains("transporte") || part.contains("onibus") || part.contains("ônibus") || part.contains("metro") || part.contains("metrô") || part.contains("passagem") || part.contains("trem")) {
                 catName = "transporte"
                 catEnum = Category.TRANSPORT
-            } else if (part.contains("gasolina") || part.contains("combustivel") || part.contains("posto")) {
+            } else if (part.contains("gasolina") || part.contains("combustivel") || part.contains("combustível") || part.contains("etanol") || part.contains("diesel") || part.contains("posto") || part.contains("estacionamento") || part.contains("pedagio") || part.contains("pedágio") || part.contains("oficina") || part.contains("ipva")) {
                 catName = "combustível"
                 catEnum = Category.AUTO
+            } else if (part.contains("aluguel") || part.contains("condominio") || part.contains("condomínio") || part.contains("iptu") || part.contains("energia") || part.contains("luz") || part.contains("agua") || part.contains("água") || part.contains("internet") || part.contains("moradia") || part.contains("casa")) {
+                catName = "moradia"
+                catEnum = Category.HOUSING
+            } else if (part.contains("medico") || part.contains("médico") || part.contains("consulta") || part.contains("dentista") || part.contains("exame") || part.contains("clinica") || part.contains("clínica") || part.contains("hospital") || part.contains("psicologo") || part.contains("psicólogo") || part.contains("saude") || part.contains("saúde") || part.contains("academia")) {
+                catName = "saúde"
+                catEnum = Category.HEALTH
+            } else if (part.contains("curso") || part.contains("faculdade") || part.contains("escola") || part.contains("livro") || part.contains("livros") || part.contains("apostila") || part.contains("ingles") || part.contains("inglês") || part.contains("educacao") || part.contains("educação")) {
+                catName = "educação"
+                catEnum = Category.EDUCATION
+            } else if (part.contains("cinema") || part.contains("teatro") || part.contains("show") || part.contains("viagem") || part.contains("bar") || part.contains("festa") || part.contains("lazer") || part.contains("passeio") || part.contains("ingresso") || part.contains("parque")) {
+                catName = "lazer"
+                catEnum = Category.LEISURE
+            } else if (part.contains("roupa") || part.contains("tenis") || part.contains("tênis") || part.contains("sapato") || part.contains("loja") || part.contains("shopping") || part.contains("presente") || part.contains("amazon") || part.contains("shopee") || part.contains("mercadolivre") || part.contains("compra")) {
+                catName = "compras"
+                catEnum = Category.SHOPPING
+            } else if (part.contains("netflix") || part.contains("spotify") || part.contains("youtube") || part.contains("disney") || part.contains("icloud") || part.contains("assinatura") || part.contains("streaming")) {
+                catName = "assinaturas"
+                catEnum = Category.SUBSCRIPTIONS
+            }
+            if (matchedEnv != null) {
+                matchedEnvId = matchedEnv.id
+                if (catEnum == Category.OTHER) {
+                    var envCat = resolveCategoryForEnvelopeName(matchedEnv.categoryName)
+                    if (envCat != null) {
+                        catEnum = envCat
+                        catName = categoryLabel(envCat).toLowerCase()
+                    } else {
+                        catName = envelopeDisplayName(matchedEnv).toLowerCase()
+                    }
+                }
             }
             if (amt > 0.0) {
-                insertTransaction(TransactionEntity("", catName, toCents(amt), catEnum, "BRL", userId, Bucket.NEEDS, Source.MANUAL, nowIso(), null))
+                var txRes = persistTransactionWithSource(catName, amt, catEnum, "BRL", matchedEnvId, userId, source)
+                var boxLabel = categoryLabel(catEnum)
+                if (matchedEnv != null) {
+                    boxLabel = envelopeDisplayName(matchedEnv)
+                }
+                if (txRes.envelopeCreated) {
+                    if (!createdBoxes.contains(boxLabel)) {
+                        createdBoxes.add(boxLabel)
+                    }
+                } else if (!linkedBoxes.contains(boxLabel)) {
+                    linkedBoxes.add(boxLabel)
+                }
+                var bucketVal = txRes.bucket
+                if (bucketVal != null && !bucketNotes.contains(bucketVal)) {
+                    bucketNotes.add(bucketVal)
+                }
+                if (txRes.controlStatus == "ESTOURADO" && !controlWarnings.contains("a caixinha " + boxLabel + " passou do limite planejado no seu onboarding")) {
+                    controlWarnings.add("a caixinha " + boxLabel + " passou do limite planejado no seu onboarding")
+                } else if (txRes.controlStatus == "ALERTA" && !controlWarnings.contains("a caixinha " + boxLabel + " já passou de 80% do limite planejado")) {
+                    controlWarnings.add("a caixinha " + boxLabel + " já passou de 80% do limite planejado")
+                }
                 if (catName.length() > 0 && !registeredCats.contains(catName)) {
                     registeredCats.add(catName)
                 }
             }
         }
-        var updatedPulse = calculateDailyPulse(userId, daysRemainingInMonth(), monthStart)
-        var pNow = formatBrl(toCents(updatedPulse.pulse))
-        var pEco = formatBrl(toCents(updatedPulse.pulse * 0.75))
-        var catsText = "alimentação, mercado"
-        if (registeredCats.size > 0) {
-            catsText = ""
+        if (registeredCats.size == 0) {
+            if (isExpenseVerb) {
+                return "Não consegui identificar o valor desse gasto. Me fala de novo com o valor, por exemplo: gastei R$ 35 no almoço."
+            }
+        } else {
+            var updatedPulse = calculateDailyPulse(userId, daysRemainingInMonth(), monthStart)
+            var pNow = updatedPulse.pulseText
+            var pEco = updatedPulse.economicPulseText
+            var catsText = ""
             var ci = 0
             while (ci < registeredCats.size) {
                 if (ci > 0) { catsText = catsText + ", " }
                 catsText = catsText + registeredCats.get(ci)
                 ci = ci + 1
             }
+            var boxText = ""
+            if (createdBoxes.size == 1) {
+                boxText = " Criei a caixinha " + createdBoxes.get(0) + " para acompanhar esse gasto."
+            } else if (createdBoxes.size > 1) {
+                var bi = 1
+                var names = createdBoxes.get(0)
+                while (bi < createdBoxes.size) {
+                    names = names + ", " + createdBoxes.get(bi)
+                    bi = bi + 1
+                }
+                boxText = " Criei as caixinhas " + names + " para acompanhar esses gastos."
+            } else if (source == Source.VOICE && linkedBoxes.size > 0) {
+                var li = 1
+                var linkedNames = linkedBoxes.get(0)
+                while (li < linkedBoxes.size) {
+                    linkedNames = linkedNames + ", " + linkedBoxes.get(li)
+                    li = li + 1
+                }
+                boxText = " Categorizei na caixinha " + linkedNames + "."
+            }
+            var warnText = ""
+            if (!controlWarnings.isEmpty()) {
+                warnText = " Atenção: " + controlWarnings.get(0) + "."
+            }
+            return "Beleza! Seus gastos (" + catsText + ") foram registrados." + boxText + warnText + " Seu pulso atual para terminar o mês no azul é de " + pNow + "/dia. Se quiser dar uma economizada, seu pulso é de " + pEco + "/dia."
         }
-        return "Beleza! Seus gastos (" + catsText + ") foram registrados. Seu pulso atual para terminar o mês no azul é de " + pNow + "/dia. Se quiser dar uma economizada, seu pulso é de " + pEco + "/dia."
     }
 
-    // 5. Fallback com o tom do Organiza AI
-    return "Olá! Seu pulso diário disponível hoje é " + formatBrl(toCents(pulse.pulse)) + ". Me fala seus gastos aí. Você pode digitar, falar por voz ou enviar sua fatura por aqui que eu leio e organizo tudo pra você."
+    // 5. Saudacao inicial (secao 4.1 da diretriz)
+    if (isGreetingMessage(lower)) {
+        return coachGreeting(user)
+    }
+
+    // 6. Fallback com o tom do Organiza AI
+    return "Olá! Seu pulso diário disponível hoje é " + pulse.pulseText + ". Se quiser dar uma economizada, seu pulso é de " + pulse.economicPulseText + "/dia. Me fala seus gastos aí. Você pode digitar, falar por voz ou enviar sua fatura por aqui que eu leio e organizo tudo pra você."
 }
 
+// =========================================================
+// Pedidos de caixinha pelo chat (LLM via tools e offline): criar, renomear, alterar limite,
+// excluir (com confirmacao) e consultar. Sempre no userId do token; limites em centavos;
+// nomes em portugues; pedido ambiguo = pergunta, nunca adivinha.
+// =========================================================
+
+// Nome mostrado ao usuario: caixinha automatica antiga (codigo da categoria) sai em portugues.
+String envelopeDisplayName(EnvelopeEntity e) {
+    var c = categoryOrNull(e.categoryName)
+    if (c != null) {
+        return categoryLabel(c)
+    }
+    return e.categoryName
+}
+
+// Acha a caixinha pelo nome dito no chat: nome exato normalizado ou nome em portugues da categoria.
+EnvelopeEntity? findEnvelopeForChat(String userId, String name) {
+    var direct = findEnvelopeByName(userId, name, "")
+    if (direct != null) {
+        return direct
+    }
+    var key = envelopeNameKey(name)
+    for (var c in Category.values()) {
+        if (envelopeNameKey(categoryLabel(c)) == key) {
+            var byCode = findEnvelopeByUserIdAndCategoryName(userId, c.name())
+            if (byCode != null) {
+                return byCode
+            }
+        }
+    }
+    return null
+}
+
+String missingEnvelopeReply(String userId, String name) {
+    var names = findEnvelopesByUserId(userId).map((e: EnvelopeEntity) -> envelopeDisplayName(e))
+    if (names.isEmpty()) {
+        return "Não achei a caixinha " + name + ". Você ainda não tem caixinhas. Quer que eu crie essa?"
+    }
+    var text = ""
+    for (var n in names) {
+        if (text != "") {
+            text = text + ", "
+        }
+        text = text + n
+    }
+    return "Não achei a caixinha " + name + ". Suas caixinhas: " + text + ". Qual delas você quis dizer?"
+}
+
+String chatCreateEnvelope(String userId, String name, Long limitCents) {
+    var clean = name.trim()
+    var nameErr = envelopeNameError(clean)
+    if (nameErr != null) {
+        return nameErr
+    }
+    if (limitCents < 0) {
+        return "Qual limite você quer para a caixinha " + clean + "?"
+    }
+    if (findEnvelopeForChat(userId, clean) != null) {
+        return "Você já tem uma caixinha com esse nome."
+    }
+    createEnvelope(EnvelopeEntity("", userId, clean, centsToReais(limitCents), 0.0, EnvelopeLimitType.FIXED, 0, nowIso(), null))
+    return "Pronto! Criei a caixinha " + clean + " com limite de " + formatBrl(limitCents) + "."
+}
+
+String chatRenameEnvelope(String userId, String oldName, String newName) {
+    var env = findEnvelopeForChat(userId, oldName.trim())
+    if (env == null) {
+        return missingEnvelopeReply(userId, oldName.trim())
+    }
+    if (!isFreeEnvelopeName(env.categoryName)) {
+        return "Esta caixinha é automática e não pode ser renomeada."
+    }
+    var clean = newName.trim()
+    var nameErr = envelopeNameError(clean)
+    if (nameErr != null) {
+        return nameErr
+    }
+    if (findEnvelopeByName(userId, clean, env.id) != null) {
+        return "Você já tem uma caixinha com esse nome."
+    }
+    var oldDisplay = envelopeDisplayName(env)
+    updateEnvelope(userId, env.id, EnvelopeEntity(env.id, userId, clean, env.limitAmount, env.currentSpent, env.limitType, env.movingAverageMonths, env.createdAt, env.bucket))
+    return "Pronto! A caixinha " + oldDisplay + " agora se chama " + clean + "."
+}
+
+String chatSetEnvelopeLimit(String userId, String name, Long limitCents) {
+    var env = findEnvelopeForChat(userId, name.trim())
+    if (env == null) {
+        return missingEnvelopeReply(userId, name.trim())
+    }
+    if (limitCents < 0) {
+        return "Qual o novo limite da caixinha " + envelopeDisplayName(env) + "?"
+    }
+    updateEnvelope(userId, env.id, EnvelopeEntity(env.id, userId, env.categoryName, centsToReais(limitCents), env.currentSpent, env.limitType, env.movingAverageMonths, env.createdAt, env.bucket))
+    return "Pronto! O limite da caixinha " + envelopeDisplayName(env) + " agora é " + formatBrl(limitCents) + "."
+}
+
+String deleteEnvelopeQuestionPrefix() {
+    return "Confirma que quer apagar a caixinha "
+}
+
+String chatDeleteEnvelope(String userId, String name, Bool confirmed) {
+    var env = findEnvelopeForChat(userId, name.trim())
+    if (env == null) {
+        return missingEnvelopeReply(userId, name.trim())
+    }
+    var display = envelopeDisplayName(env)
+    if (!confirmed) {
+        return deleteEnvelopeQuestionPrefix() + display + "? Os gastos já registrados continuam salvos. Responda sim para apagar."
+    }
+    deleteEnvelope(userId, env.id)
+    return "Pronto! Apaguei a caixinha " + display + "."
+}
+
+String chatEnvelopeStatus(String userId, String name) {
+    var env = findEnvelopeForChat(userId, name.trim())
+    if (env == null) {
+        return missingEnvelopeReply(userId, name.trim())
+    }
+    var user = findUserById(userId)
+    if (user == null) {
+        return "Não encontrei sua conta."
+    }
+    var found = envelopesOverview(user).filter((o: EnvelopeOverview) -> o.id == env.id)
+    if (found.isEmpty()) {
+        return missingEnvelopeReply(userId, name.trim())
+    }
+    var o = found.get(0)
+    var limit = toCents(o.limitAmount)
+    var spent = toCents(o.spentThisMonth)
+    var statusText = "Em dia"
+    if (o.status == "ALERTA") {
+        statusText = "Alerta"
+    } else if (o.status == "ESTOURADA") {
+        statusText = "Estourada"
+    }
+    var display = envelopeDisplayName(env)
+    if (spent > limit) {
+        return "Na caixinha " + display + " você gastou " + formatBrl(spent) + " de " + formatBrl(limit) + " neste mês e passou " + formatBrl(spent - limit) + " do limite (" + statusText + ")."
+    }
+    return "Na caixinha " + display + " você gastou " + formatBrl(spent) + " de " + formatBrl(limit) + " neste mês. Sobram " + formatBrl(limit - spent) + " (" + statusText + ")."
+}
+
+// ---------- leitura determinista do pedido (offline) ----------
+
+// Primeiro valor em reais do texto, em centavos ("R$ 1.234,56", "300", "35,50"); nenhum = -1.
+Long chatAmountCents(String text) {
+    var none: Long = -1
+    for (var w in text.toLowerCase().split(" ")) {
+        var clean = w.replace("r$", "").replace("$", "").replace("?", "").replace("!", "").trim()
+        if (clean.endsWith(".")) {
+            clean = clean.substring(0, clean.length() - 1)
+        }
+        if (clean.contains(",")) {
+            clean = clean.replace(".", "").replace(",", ".")
+        }
+        if (clean.length() > 0 && strings.isNumeric(clean.replace(".", ""))) {
+            try {
+                return toCents(clean.toDouble())
+            } catch (Exception e) {}
+        }
+    }
+    return none
+}
+
+String cleanEnvelopeName(String raw) {
+    var t = raw.trim()
+    var stop = true
+    while (stop && t.length() > 0) {
+        var last = t.substring(t.length() - 1)
+        if (last == "?" || last == "." || last == "!" || last == "\"" || last == "'") {
+            t = t.substring(0, t.length() - 1).trim()
+        } else {
+            stop = false
+        }
+    }
+    if (t.startsWith("\"") || t.startsWith("'")) {
+        t = t.substring(1).trim()
+    }
+    for (var art in listOf("de ", "do ", "da ", "a ", "o ")) {
+        if (t.toLowerCase().startsWith(art)) {
+            t = t.substring(art.length()).trim()
+        }
+    }
+    if (t.length() > 0) {
+        t = t.substring(0, 1).toUpperCase() + t.substring(1)
+    }
+    return t
+}
+
+// Trecho de `msg` depois de `marker` (procurado em minusculas) ate o primeiro `ends` encontrado.
+String textAfter(String msg, String marker, List<String> ends) {
+    var lower = msg.toLowerCase()
+    var i = lower.indexOf(marker)
+    if (i < 0) {
+        return ""
+    }
+    var start = i + marker.length()
+    var end = msg.length()
+    for (var e in ends) {
+        var j = lower.indexOf(e, start)
+        if (j >= 0 && j < end) {
+            end = j
+        }
+    }
+    return msg.substring(start, end)
+}
+
+Bool lowerHasAny(String lower, List<String> words) {
+    return words.any((w: String) -> lower.contains(w))
+}
+
+// Resposta para um pedido de caixinha, ou "" quando a mensagem nao e um pedido de caixinha.
+String envelopeChatCommand(String userId, String msg, String lastAssistantMsg) {
+    var lower = msg.toLowerCase().trim()
+    var prefix = deleteEnvelopeQuestionPrefix()
+    var qi = lastAssistantMsg.indexOf(prefix)
+    if (qi >= 0) {
+        var qEnd = lastAssistantMsg.indexOf("?", qi)
+        if (qEnd > qi) {
+            var pending = lastAssistantMsg.substring(qi + prefix.length(), qEnd)
+            if (lower == "sim" || lower == "sim!" || lower.startsWith("sim,") || lower.startsWith("sim ") || lower.startsWith("pode apagar") || lower.startsWith("confirmo")) {
+                return chatDeleteEnvelope(userId, pending, true)
+            }
+            if (lower == "não" || lower == "nao" || lower.startsWith("não ") || lower.startsWith("nao ") || lower.contains("cancela")) {
+                return "Combinado, não apaguei a caixinha " + pending + "."
+            }
+        }
+    }
+    if (!lower.contains("caixinha") && !lower.contains("limite")) {
+        return ""
+    }
+    var ends = listOf(" com ", " de r$", " por r$", " para r$", " pra r$", " no valor", " em r$", "?", ",")
+    if (lowerHasAny(lower, listOf("cria ", "criar ", "crie ", "nova caixinha", "abre uma caixinha", "abrir uma caixinha"))) {
+        var name = cleanEnvelopeName(textAfter(msg, "caixinha ", ends))
+        if (name == "") {
+            return "Qual nome você quer dar para a nova caixinha?"
+        }
+        return chatCreateEnvelope(userId, name, chatAmountCents(textAfter(msg, "caixinha ", listOf())))
+    }
+    if (lowerHasAny(lower, listOf("renomeia", "renomear", "renomeie", "muda o nome", "mudar o nome", "troca o nome", "trocar o nome", "altera o nome"))) {
+        var oldName = cleanEnvelopeName(textAfter(msg, "caixinha ", listOf(" para ", " pra ")))
+        var newName = cleanEnvelopeName(textAfter(msg.substring(msg.toLowerCase().indexOf("caixinha ")), " para ", listOf()))
+        if (newName == "") {
+            newName = cleanEnvelopeName(textAfter(msg.substring(msg.toLowerCase().indexOf("caixinha ")), " pra ", listOf()))
+        }
+        if (oldName == "" || newName == "") {
+            return "Me diz qual caixinha e o novo nome, por exemplo: muda o nome da caixinha Lazer para Rolês."
+        }
+        return chatRenameEnvelope(userId, oldName, newName)
+    }
+    if (lower.contains("limite")) {
+        var lname = cleanEnvelopeName(textAfter(msg, "caixinha ", listOf(" para ", " pra ", " em r$", "?")))
+        if (lname == "") {
+            var afterLimit = textAfter(msg, "limite d", listOf(" para ", " pra ", " em r$", "?"))
+            if (afterLimit.length() > 1) {
+                lname = cleanEnvelopeName(afterLimit.substring(1))
+            }
+        }
+        if (lname == "") {
+            return "De qual caixinha você quer mudar o limite?"
+        }
+        var cents = chatAmountCents(textAfter(msg, lname.toLowerCase(), listOf()))
+        if (lowerHasAny(lower, listOf("quanto", "qual"))) {
+            return chatEnvelopeStatus(userId, lname)
+        }
+        return chatSetEnvelopeLimit(userId, lname, cents)
+    }
+    if (lowerHasAny(lower, listOf("apaga", "apague", "apagar", "exclui", "excluir", "exclua", "remove", "remover", "deleta", "deletar"))) {
+        var dname = cleanEnvelopeName(textAfter(msg, "caixinha ", ends))
+        if (dname == "") {
+            return "Qual caixinha você quer apagar?"
+        }
+        return chatDeleteEnvelope(userId, dname, false)
+    }
+    if (lowerHasAny(lower, listOf("quanto sobra", "quanto resta", "quanto falta", "quanto tem", "quanto ainda", "como está", "como esta", "saldo", "quanto gastei"))) {
+        var sname = cleanEnvelopeName(textAfter(msg, "caixinha ", ends))
+        if (sname == "") {
+            return "De qual caixinha você quer saber o saldo?"
+        }
+        return chatEnvelopeStatus(userId, sname)
+    }
+    return ""
+}

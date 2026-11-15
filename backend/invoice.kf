@@ -81,7 +81,8 @@ record InvoiceParseResponse(
     Bool reconciled,
     List<String> warnings,
     List<CanonicalTotal> totals,
-    List<CanonicalTransaction> canonicalTransactions
+    List<CanonicalTransaction> canonicalTransactions,
+    ImportFlowSummary summary
 )
 
 record IntentRequest(
@@ -939,7 +940,38 @@ List<String> extractHexTokensInSpan(String span) {
     return out
 }
 
+Bool isZeroHexDst(String hexDst) {
+    var clean = hexDst.replaceAll("\\s+", "").toUpperCase()
+    return clean == "0000" || clean == "00"
+}
+
+// Type3 CMaps (ex.: Neon) mapeiam alguns simbolos de pontuacao para <0000> no /ToUnicode.
+// So aplica quando o proprio ToUnicode da fonte declarou explicitamente o codigo apontando para <0000>.
+String resolveZeroSentinelForSrc(String srcHex) {
+    var clean = srcHex.replaceAll("\\s+", "").toUpperCase()
+    if (clean == "5D" || clean == "005D") {
+        return "-"
+    }
+    if (clean == "6F" || clean == "006F") {
+        return ":"
+    }
+    if (clean == "4C" || clean == "004C") {
+        return "("
+    }
+    if (clean == "4D" || clean == "004D") {
+        return ")"
+    }
+    if (clean == "82" || clean == "0082") {
+        return "+"
+    }
+    return ""
+}
+
 void parseCMapStreamInto(String content, Map<String, String> cmap) {
+    parseCMapStreamIntoMode(content, cmap, true)
+}
+
+void parseCMapStreamIntoMode(String content, Map<String, String> cmap, Bool resolveZeroSentinel) {
     var pos = 0
     while (pos >= 0 && pos < content.length()) {
         var start = content.indexOf("beginbfchar", pos)
@@ -953,9 +985,14 @@ void parseCMapStreamInto(String content, Map<String, String> cmap) {
                 var tokens = extractHexTokensInSpan(content.substring(start + 11, end))
                 var ti = 0
                 while (ti + 1 < tokens.size) {
-                    var mapped = hexDstToUnicodeString(tokens.get(ti + 1))
+                    var srcCode = tokens.get(ti).toUpperCase()
+                    var dstHex = tokens.get(ti + 1)
+                    var mapped = hexDstToUnicodeString(dstHex)
+                    if (mapped == "" && resolveZeroSentinel && isZeroHexDst(dstHex)) {
+                        mapped = resolveZeroSentinelForSrc(srcCode)
+                    }
                     if (mapped != "") {
-                        cmap.put(tokens.get(ti), mapped)
+                        cmap.put(srcCode, mapped)
                     }
                     ti = ti + 2
                 }
@@ -1000,9 +1037,14 @@ void parseCMapStreamInto(String content, Map<String, String> cmap) {
                                         var arrTokens = extractHexTokensInSpan(block.substring(c2 + 1, arrClose))
                                         var k = 0
                                         while (k < arrTokens.size && (sVal + k) <= eVal) {
-                                            var mapped = hexDstToUnicodeString(arrTokens.get(k))
+                                            var srcCode = toFixedHex(sVal + k, sHex.length())
+                                            var dstHex = arrTokens.get(k)
+                                            var mapped = hexDstToUnicodeString(dstHex)
+                                            if (mapped == "" && resolveZeroSentinel && isZeroHexDst(dstHex)) {
+                                                mapped = resolveZeroSentinelForSrc(srcCode)
+                                            }
                                             if (mapped != "") {
-                                                cmap.put(toFixedHex(sVal + k, sHex.length()), mapped)
+                                                cmap.put(srcCode, mapped)
                                             }
                                             k = k + 1
                                         }
@@ -1020,7 +1062,16 @@ void parseCMapStreamInto(String content, Map<String, String> cmap) {
                                             var cur = sVal
                                             var offset = 0
                                             while (cur <= eVal) {
-                                                cmap.put(toFixedHex(cur, sHex.length()), codePointToString(dVal + offset))
+                                                var cp = dVal + offset
+                                                var srcCode = toFixedHex(cur, sHex.length())
+                                                if (cp > 0) {
+                                                    cmap.put(srcCode, codePointToString(cp))
+                                                } else if (resolveZeroSentinel) {
+                                                    var sentinel = resolveZeroSentinelForSrc(srcCode)
+                                                    if (sentinel != "") {
+                                                        cmap.put(srcCode, sentinel)
+                                                    }
+                                                }
                                                 cur = cur + 1
                                                 offset = offset + 1
                                             }
@@ -1048,7 +1099,16 @@ String decodePdfHexString(String rawHex, Map<String, String> cmap) {
         return ""
     }
     if (!cmap.isEmpty()) {
-        if (clean.length() >= 4 && clean.length() % 4 == 0 && cmap.containsKey(clean.substring(0, 4))) {
+        var hasFourHexKeys = false
+        var hasTwoHexKeys = false
+        for (var ck in cmap.keys()) {
+            if (ck.length() == 4) {
+                hasFourHexKeys = true
+            } else if (ck.length() == 2) {
+                hasTwoHexKeys = true
+            }
+        }
+        if (clean.length() >= 4 && clean.length() % 4 == 0 && hasFourHexKeys && (!hasTwoHexKeys || cmap.containsKey(clean.substring(0, 4)))) {
             var res = ""
             var i = 0
             while (i + 3 < clean.length()) {
@@ -1066,7 +1126,7 @@ String decodePdfHexString(String rawHex, Map<String, String> cmap) {
             }
             return res
         }
-        if (clean.length() % 2 == 0 && cmap.containsKey(clean.substring(0, 2))) {
+        if (clean.length() % 2 == 0 && hasTwoHexKeys) {
             var res = ""
             var i = 0
             while (i + 1 < clean.length()) {
@@ -1363,7 +1423,7 @@ void resolveFontResourceMappings(String pdfLatin1, Map<Int, Int> fontObjToTuObj,
                 var subEnd = pdfLatin1.indexOf(">>", subStart + 2)
                 if (subEnd > subStart) {
                     var block = pdfLatin1.substring(subStart + 2, subEnd)
-                    var tokens = block.replaceAll("\\s+", " ").trim().split(" ")
+                    var tokens = block.replace("/", " /").replaceAll("\\s+", " ").trim().split(" ")
                     var ti = 0
                     while (ti + 3 < tokens.size) {
                         var tk = tokens[ti]
@@ -1394,6 +1454,7 @@ void resolveFontResourceMappings(String pdfLatin1, Map<Int, Int> fontObjToTuObj,
 List<IndexedLine> extractPdfIndexedLines(String cleanB64, String pdfLatin1, List<String> warnings) {
     var contentStreams: List<String> = listOf()
     var embeddedJpegs: List<ByteSpan> = listOf()
+    var otherImageCount = 0
     var fallbackCmap: Map<String, String> = mapOf()
     var cmapsByObj: Map<Int, Map<String, String>> = mapOf()
     var fontCmaps: Map<String, Map<String, String>> = mapOf()
@@ -1457,6 +1518,9 @@ List<IndexedLine> extractPdfIndexedLines(String cleanB64, String pdfLatin1, List
                         embeddedJpegs.add(ByteSpan(start, end - start))
                     }
                 } else {
+                    if (dict.contains("/Image")) {
+                        otherImageCount = otherImageCount + 1
+                    }
                     var skip = dict.contains("/Image") || dict.contains("/FontFile") || dict.contains("/Length1") || dict.contains("/XRef") || dict.contains("/ObjStm")
                     if (!skip) {
                         var content = ""
@@ -1471,7 +1535,13 @@ List<IndexedLine> extractPdfIndexedLines(String cleanB64, String pdfLatin1, List
                                 errMsg = "INVALID_FILE: PDF corrompido"
                             }
                             if (errMsg != "") {
-                                throw errMsg
+                                if (errMsg.contains("limite")) {
+                                    throw "INVALID_FILE: limite de descompressao excedido"
+                                }
+                                if (errMsg.contains("deflate")) {
+                                    throw "INVALID_FILE: bloco deflate corrompido"
+                                }
+                                throw "INVALID_FILE: PDF corrompido (" + errMsg + ")"
                             }
                             content = inflated
                         } else if (!dict.contains("/Filter")) {
@@ -1480,11 +1550,11 @@ List<IndexedLine> extractPdfIndexedLines(String cleanB64, String pdfLatin1, List
                         var isCmap = content.contains("beginbfchar") || content.contains("beginbfrange")
                         if (isCmap) {
                             var localCmap: Map<String, String> = mapOf()
-                            parseCMapStreamInto(content, localCmap)
+                            parseCMapStreamIntoMode(content, localCmap, true)
                             if (objId > 0) {
                                 cmapsByObj.put(objId, localCmap)
                             }
-                            parseCMapStreamInto(content, fallbackCmap)
+                            parseCMapStreamIntoMode(content, fallbackCmap, false)
                         } else if (content.contains("BT")) {
                             contentStreams.add(content)
                         }
@@ -1536,6 +1606,9 @@ List<IndexedLine> extractPdfIndexedLines(String cleanB64, String pdfLatin1, List
                 }
             }
         }
+    }
+    if (out.isEmpty() && embeddedJpegs.size == 0 && otherImageCount > 0) {
+        warnings.add("OCR_UNAVAILABLE: PDF escaneado com imagens nao-JPEG; OCR dessas paginas nao e suportado. Envie as paginas como PNG/JPEG.")
     }
     return out
 }
@@ -1755,6 +1828,11 @@ List<String> extractPngTextChunks(String pngLatin1) {
 // AgentExtratorOcr: OCR Nativo Windows 100% via KOF (Directory + File + process.run)
 // =========================================================
 
+// Limite de tempo por etapa assincrona do OCR (aplicado dentro do script via Task.Wait(ms)).
+Int ocrTimeoutMs() {
+    return 20000
+}
+
 List<String> runWindowsNativeOcr(String cleanB64, Int offset, Int spanLen, String suffix, List<String> warnings) {
     var lines: List<String> = listOf()
     var tmpDir = "./build/ocr_tmp"
@@ -1779,6 +1857,7 @@ List<String> runWindowsNativeOcr(String cleanB64, Int offset, Int spanLen, Strin
             "$offset = " + offset + "\n" +
             "$spanLen = " + spanLen + "\n" +
             "$scaledPath = $null\n" +
+            "$exitCode = 0\n" +
             "try {\n" +
             "  $rawBytes = [Convert]::FromBase64String(([System.IO.File]::ReadAllText($b64Path)).Trim())\n" +
             "  if ($offset -ge 0 -and $spanLen -gt 0 -and ($offset + $spanLen) -le $rawBytes.Length) {\n" +
@@ -1812,7 +1891,7 @@ List<String> runWindowsNativeOcr(String cleanB64, Int offset, Int spanLen, Strin
             "  $null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Graphics.Imaging, ContentType = WindowsRuntime]\n" +
             "  $null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType = WindowsRuntime]\n" +
             "  $asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]\n" +
-            "  function Await($op, $type) { $m = $asTaskGeneric.MakeGenericMethod($type); $t = $m.Invoke($null, @($op)); $t.Wait(); return $t.Result }\n" +
+            "  function Await($op, $type) { $m = $asTaskGeneric.MakeGenericMethod($type); $t = $m.Invoke($null, @($op)); if (-not $t.Wait(" + ocrTimeoutMs() + ")) { throw 'KOF_OCR_TIMEOUT' }; return $t.Result }\n" +
             "  $file = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($ocrPath)) ([Windows.Storage.StorageFile])\n" +
             "  $stream = Await ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])\n" +
             "  $decoder = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])\n" +
@@ -1821,17 +1900,20 @@ List<String> runWindowsNativeOcr(String cleanB64, Int offset, Int spanLen, Strin
             "  if ($null -eq $engine) { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage([Windows.Globalization.Language]::new('en-US')) }\n" +
             "  if ($null -eq $engine) { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage([Windows.Globalization.Language]::new('pt-BR')) }\n" +
             "  $outLines = New-Object System.Collections.Generic.List[string]\n" +
-            "  if ($null -ne $engine) {\n" +
+            "  if ($null -eq $engine) { $exitCode = 3 } else {\n" +
             "    $res = Await ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])\n" +
             "    foreach ($line in $res.Lines) { $outLines.Add($line.Text) }\n" +
+            "    [System.IO.File]::WriteAllLines($outPath, $outLines, (New-Object System.Text.UTF8Encoding($false)))\n" +
             "  }\n" +
             "  $stream.Dispose()\n" +
-            "  [System.IO.File]::WriteAllLines($outPath, $outLines, (New-Object System.Text.UTF8Encoding($false)))\n" +
+            "} catch {\n" +
+            "  if (\"$_\" -like '*KOF_OCR_TIMEOUT*') { $exitCode = 4 } else { $exitCode = 2 }\n" +
             "} finally {\n" +
             "  if ($scaledPath -and (Test-Path $scaledPath)) { Remove-Item $scaledPath -Force -ErrorAction SilentlyContinue }\n" +
             "  if (Test-Path $imgPath) { Remove-Item $imgPath -Force -ErrorAction SilentlyContinue }\n" +
             "  if (Test-Path $b64Path) { Remove-Item $b64Path -Force -ErrorAction SilentlyContinue }\n" +
-            "}"
+            "}\n" +
+            "exit $exitCode"
         File(psPath).writeText(psScript)
 
         var res = process.run("powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", psPath)
@@ -1845,8 +1927,11 @@ List<String> runWindowsNativeOcr(String cleanB64, Int offset, Int spanLen, Strin
                     }
                 }
             }
+        } else if (res.exitCode == 4) {
+            throw "EXTRACTION_TIMEOUT: o OCR excedeu " + (ocrTimeoutMs() / 1000) + " s. Tente uma imagem menor ou mais nitida."
         } else {
-            warnings.add("OCR_UNAVAILABLE: motor OCR nativo retornou codigo " + res.exitCode)
+            // Nunca devolve 0 lancamentos em silencio: sem motor OCR utilizavel a importacao falha com erro tipado.
+            throw "OCR_UNAVAILABLE: nao ha motor de OCR disponivel neste servidor (codigo " + res.exitCode + "). Envie um PDF com texto selecionavel ou digite os gastos."
         }
     } catch (String se) {
         File(b64Path).delete()
@@ -1855,7 +1940,11 @@ List<String> runWindowsNativeOcr(String cleanB64, Int offset, Int spanLen, Strin
         File(psPath).delete()
         throw se
     } catch (Exception e) {
-        warnings.add("OCR_UNAVAILABLE: motor OCR nativo indisponivel nesta sessao")
+        File(b64Path).delete()
+        File(imgPath).delete()
+        File(outPath).delete()
+        File(psPath).delete()
+        throw "OCR_UNAVAILABLE: nao ha motor de OCR disponivel neste servidor. Envie um PDF com texto selecionavel ou digite os gastos."
     }
     File(b64Path).delete()
     File(imgPath).delete()
@@ -2052,9 +2141,62 @@ Bool isBillPaymentLine(String desc) {
     return lower.contains("pagamento de fatura") || lower.contains("pagamento fatura") || lower.contains("pagto fatura") || lower.contains("fatura cartao") || lower.contains("fatura cartão") || lower.contains("fatura neon") || lower == "fatura" || lower.contains("pagamento recebido")
 }
 
+Bool isAlphaNumCode(Int ch) {
+    if (ch >= 48 && ch <= 57) {
+        return true
+    }
+    if (ch >= 65 && ch <= 90) {
+        return true
+    }
+    if (ch >= 97 && ch <= 122) {
+        return true
+    }
+    if (ch >= 192 && ch <= 255 && ch != 215 && ch != 247) {
+        return true
+    }
+    return false
+}
+
+Bool hasWholeWord(String lowerText, String word) {
+    if (word == "" || lowerText == "") {
+        return false
+    }
+    var wLen = word.length()
+    var tLen = lowerText.length()
+    var from = 0
+    while (from <= tLen - wLen) {
+        var idx = lowerText.indexOf(word, from)
+        if (idx < 0) {
+            return false
+        }
+        var okBefore = (idx == 0) || !isAlphaNumCode(lowerText.charAt(idx - 1))
+        var afterIdx = idx + wLen
+        var okAfter = (afterIdx >= tLen) || !isAlphaNumCode(lowerText.charAt(afterIdx))
+        if (okBefore && okAfter) {
+            return true
+        }
+        from = idx + 1
+    }
+    return false
+}
+
+String classifyIncomeEvidenceLevel(String descRaw) {
+    var lower = descRaw.toLowerCase()
+    if (lower.matches(".*[0-9]{2}\\.[0-9]{3}\\.[0-9]{3}/[0-9]{4}-[0-9]{2}.*")) {
+        return "PROFESSIONAL"
+    }
+    if (hasWholeWord(lower, "nf") || lower.contains("nfs-e") || lower.contains("nf-e") || lower.contains("nota fiscal") || lower.contains("pro-labore") || lower.contains("pró-labore") || lower.contains("pro labore") || lower.contains("salario clt") || lower.contains("salário clt") || lower.contains("folha de pagamento") || lower.contains("holerite")) {
+        return "PROFESSIONAL"
+    }
+    if (isPjMerchantName(descRaw)) {
+        return "UNVERIFIED_PJ"
+    }
+    return "OTHER"
+}
+
 Bool isFeeOrInterestLine(String desc) {
     var lower = desc.toLowerCase()
-    return lower.contains("iof ") || lower == "iof" || lower.contains("anuidade") || lower.contains("juros") || lower.contains("encargos") || lower.contains("tarifa") || lower.contains("multa")
+    return hasWholeWord(lower, "iof") || lower.contains("anuidade") || lower.contains("juros") || lower.contains("encargos") || lower.contains("tarifa") || lower.contains("multa")
 }
 
 Bool isInflowStatementLine(String desc) {
@@ -2072,19 +2214,25 @@ Bool isPjMerchantName(String desc) {
     if (lower.matches(".*\\b[0-9]{2}\\.[0-9]{3}\\.[0-9]{3}\\b.*") || lower.matches(".*\\b(ltda|eireli|epp|mei|me|s/a|s\\.a)\\b.*")) {
         return true
     }
+    var wordMarkers = listOf("vivo", "claro", "uber", "stone", "lojas", "foods", "group", "brasil")
+    for (var wm in wordMarkers) {
+        if (hasWholeWord(lower, wm)) {
+            return true
+        }
+    }
     var pjMarkers = listOf(
         "cnpj", "comercio", "comércio", "servicos", "serviços", "solucoes", "soluções",
         "tecnologia", "consultoria", "sistemas", "software", "distribuidora",
         "supermercado", "mercado", "atacado", "atacarejo", "padaria", "restaurante",
         "lanchonete", "pizzaria", "bebidas", "farmacia", "farmácia", "drogaria",
         "hospital", "clinica", "clínica", "laboratorio", "laboratório",
-        "pagamentos", "paypal", "mercado pago", "picpay", "stone", "pagseguro",
-        "sumup", "cielo", "getnet", "telecom", "claro", "vivo", "magazine",
-        "lojas", "shopping", "combustiv", "estacionamento", "assessoria",
+        "pagamentos", "paypal", "mercado pago", "picpay", "pagseguro",
+        "sumup", "cielo", "getnet", "telecom", "magazine",
+        "shopping", "combustiv", "estacionamento", "assessoria",
         "empreendimentos", "participacoes", "participações", "logistica", "logística",
         "transportes", "industria", "indústria", "comercial", "materiais",
-        "alimentos", "foods", "digital", "group", "brasil", "holding",
-        "uber", "ifood", "amazon", "netflix", "spotify", "agencia", "agência", "instituto"
+        "alimentos", "digital", "holding",
+        "ifood", "amazon", "netflix", "spotify", "agencia", "agência", "instituto"
     )
     for (var m in pjMarkers) {
         if (lower.contains(m)) {
@@ -2095,15 +2243,18 @@ Bool isPjMerchantName(String desc) {
 }
 
 Bool isKnownMerchantOrUtility(String lower) {
+    if (hasWholeWord(lower, "uber") || hasWholeWord(lower, "99") || hasWholeWord(lower, "taxi") || hasWholeWord(lower, "táxi") || hasWholeWord(lower, "luz") || hasWholeWord(lower, "agua") || hasWholeWord(lower, "água") || hasWholeWord(lower, "raia") || hasWholeWord(lower, "posto") || hasWholeWord(lower, "cafe") || hasWholeWord(lower, "café") || hasWholeWord(lower, "curso") || hasWholeWord(lower, "livro")) {
+        return true
+    }
     var words = listOf(
-        "uber", "99", "taxi", "táxi", "onibus", "ônibus", "metro", "metrô",
-        "g4 bebidas", "bebidas", "restaurante", "food", "ifood", "lanche", "padaria", "almoco", "almoço", "jantar", "cafe", "café", "pizza", "burger", "denfer",
+        "onibus", "ônibus", "metro", "metrô",
+        "g4 bebidas", "bebidas", "restaurante", "ifood", "lanche", "padaria", "almoco", "almoço", "jantar", "pizza", "burger", "denfer",
         "mercado", "supermercado", "hortifruti", "distribuidora", "sendas", "atacad", "assai", "assaí", "acougue", "açougue", "sacolao", "sacolão", "parada 97",
-        "farmacia", "farmácia", "drogaria", "drogasil", "raia", "remedio", "remédio",
-        "aluguel", "condominio", "condomínio", "energia", "luz", "agua", "água", "internet", "iptu",
-        "faculdade", "curso", "escola", "mensalidade", "livro",
+        "farmacia", "farmácia", "drogaria", "drogasil", "remedio", "remédio",
+        "aluguel", "condominio", "condomínio", "energia", "internet", "iptu",
+        "faculdade", "escola", "mensalidade",
         "netflix", "spotify", "amazon", "disney", "youtube", "streaming",
-        "gasolina", "combustivel", "combustível", "posto", "ipva", "estacionamento"
+        "gasolina", "combustivel", "combustível", "ipva", "estacionamento"
     )
     for (var w in words) {
         if (lower.contains(w)) {
@@ -2125,43 +2276,47 @@ ClassificationMatch classifyTransactionEvidence(String descRaw, String kind) {
         return ClassificationMatch("OTHER", "CREDIT_OR_REFUND", 0.85, "CONFIRMED")
     }
     if (kind == "INCOME") {
-        if (isPjMerchantName(lower)) {
+        var incLevel = classifyIncomeEvidenceLevel(descRaw)
+        if (incLevel == "PROFESSIONAL") {
+            return ClassificationMatch("OTHER", "INCOME_PROFESSIONAL_CONFIRMED", 0.90, "CONFIRMED")
+        }
+        if (incLevel == "UNVERIFIED_PJ") {
             return ClassificationMatch("OTHER", "INCOME_PJ_NEEDS_REVIEW", 0.70, "NEEDS_REVIEW")
         }
         return ClassificationMatch("OTHER", "INCOME_PF_NEEDS_REVIEW", 0.55, "NEEDS_REVIEW")
     }
 
-    if (lower.contains("aluguel") || lower.contains("condominio") || lower.contains("condomínio") || lower.contains("energia") || lower.contains("luz") || lower.contains("agua") || lower.contains("água") || lower.contains("internet") || lower.contains("iptu")) {
+    if (lower.contains("aluguel") || lower.contains("condominio") || lower.contains("condomínio") || lower.contains("energia") || hasWholeWord(lower, "luz") || hasWholeWord(lower, "agua") || hasWholeWord(lower, "água") || hasWholeWord(lower, "aguas") || hasWholeWord(lower, "águas") || lower.contains("internet") || lower.contains("iptu")) {
         return ClassificationMatch("HOUSING", "MERCHANT_KEYWORD", 0.92, "CONFIRMED")
     }
-    if (lower.contains("faculdade") || lower.contains("curso") || lower.contains("escola") || lower.contains("livro") || lower.contains("educa") || lower.contains("mensalidade")) {
+    if (lower.contains("faculdade") || hasWholeWord(lower, "curso") || hasWholeWord(lower, "cursos") || lower.contains("escola") || hasWholeWord(lower, "livro") || hasWholeWord(lower, "livros") || lower.contains("livraria") || lower.contains("educa") || lower.contains("mensalidade")) {
         return ClassificationMatch("EDUCATION", "MERCHANT_KEYWORD", 0.92, "CONFIRMED")
     }
     if (lower.contains("distribuidora") || lower.contains("supermercado") || lower.contains("mercado") || lower.contains("hortifruti") || lower.contains("feira") || lower.contains("acougue") || lower.contains("açougue") || lower.contains("sacolao") || lower.contains("sacolão") || lower.contains("sendas") || lower.contains("parada 97") || lower.contains("atacad") || lower.contains("assaí") || lower.contains("assai")) {
         return ClassificationMatch("GROCERIES", "MERCHANT_KEYWORD", 0.92, "CONFIRMED")
     }
-    if (lower.contains("padaria") || lower.contains("almoco") || lower.contains("almoço") || lower.contains("restaurante") || lower.contains("lanche") || lower.contains("ifood") || lower.contains("jantar") || lower.contains("cafe") || lower.contains("café") || lower.contains("comida") || lower.contains("food") || lower.contains("burger") || lower.contains("pizza") || lower.contains("denfer")) {
+    if (lower.contains("padaria") || lower.contains("almoco") || lower.contains("almoço") || lower.contains("restaurante") || lower.contains("lanche") || lower.contains("ifood") || lower.contains("jantar") || hasWholeWord(lower, "cafe") || hasWholeWord(lower, "café") || lower.contains("cafeteria") || lower.contains("comida") || hasWholeWord(lower, "food") || lower.contains("burger") || lower.contains("pizza") || lower.contains("denfer")) {
         return ClassificationMatch("FOOD", "MERCHANT_KEYWORD", 0.92, "CONFIRMED")
     }
-    if (lower.contains("farmacia") || lower.contains("farmácia") || lower.contains("drogaria") || lower.contains("drogasil") || lower.contains("remedio") || lower.contains("remédio") || lower.contains("medicamento") || lower.contains("raia")) {
+    if (lower.contains("farmacia") || lower.contains("farmácia") || lower.contains("drogaria") || lower.contains("drogasil") || lower.contains("remedio") || lower.contains("remédio") || lower.contains("medicamento") || hasWholeWord(lower, "raia")) {
         return ClassificationMatch("PHARMA", "MERCHANT_KEYWORD", 0.92, "CONFIRMED")
     }
     if (lower.contains("medico") || lower.contains("médico") || lower.contains("consulta") || lower.contains("exame") || lower.contains("hospital") || lower.contains("dentista") || lower.contains("saude") || lower.contains("saúde") || lower.contains("terapia") || lower.contains("psicolog")) {
         return ClassificationMatch("HEALTH", "MERCHANT_KEYWORD", 0.90, "CONFIRMED")
     }
-    if (lower.contains("uber") || lower.contains("99") || lower.contains("taxi") || lower.contains("táxi") || lower.contains("onibus") || lower.contains("ônibus") || lower.contains("metro") || lower.contains("metrô") || lower.contains("passagem") || lower.contains("transporte")) {
+    if (hasWholeWord(lower, "uber") || hasWholeWord(lower, "99") || hasWholeWord(lower, "taxi") || hasWholeWord(lower, "táxi") || lower.contains("onibus") || lower.contains("ônibus") || lower.contains("metro") || lower.contains("metrô") || lower.contains("passagem") || lower.contains("transporte")) {
         return ClassificationMatch("TRANSPORT", "MERCHANT_KEYWORD", 0.95, "CONFIRMED")
     }
-    if (lower.contains("gasolina") || lower.contains("combustivel") || lower.contains("combustível") || lower.contains("posto") || lower.contains("ipva") || lower.contains("oficina") || lower.contains("mecanico") || lower.contains("mecânico") || lower.contains("carro") || lower.contains("estacionamento") || lower.contains("pedagio") || lower.contains("pedágio")) {
+    if (lower.contains("gasolina") || lower.contains("combustivel") || lower.contains("combustível") || hasWholeWord(lower, "posto") || lower.contains("ipva") || lower.contains("oficina") || lower.contains("mecanico") || lower.contains("mecânico") || hasWholeWord(lower, "carro") || hasWholeWord(lower, "carros") || lower.contains("estacionamento") || lower.contains("pedagio") || lower.contains("pedágio")) {
         return ClassificationMatch("AUTO", "MERCHANT_KEYWORD", 0.90, "CONFIRMED")
     }
-    if (lower.contains("g4 bebidas") || lower.contains("bebidas") || lower.contains("cerveja") || lower.contains("cinema") || lower.contains("show") || lower.contains("ingresso") || lower.contains("bar") || lower.contains("balada") || lower.contains("festa") || lower.contains("lazer") || lower.contains("viagem") || lower.contains("hotel") || lower.contains("passeio")) {
+    if (lower.contains("g4 bebidas") || lower.contains("bebidas") || lower.contains("cerveja") || hasWholeWord(lower, "cinema") || hasWholeWord(lower, "cinemas") || hasWholeWord(lower, "show") || lower.contains("ingresso") || hasWholeWord(lower, "bar") || lower.contains("balada") || hasWholeWord(lower, "festa") || lower.contains("lazer") || lower.contains("viagem") || hasWholeWord(lower, "hotel") || lower.contains("hotelaria") || lower.contains("passeio")) {
         return ClassificationMatch("LEISURE", "MERCHANT_KEYWORD", 0.90, "CONFIRMED")
     }
-    if (lower.contains("netflix") || lower.contains("spotify") || lower.contains("amazon") || lower.contains("streaming") || lower.contains("assinatura") || lower.contains("apple") || lower.contains("disney") || lower.contains("hbo") || lower.contains("youtube")) {
+    if (lower.contains("netflix") || lower.contains("spotify") || lower.contains("amazon") || lower.contains("streaming") || lower.contains("assinatura") || hasWholeWord(lower, "apple") || lower.contains("disney") || hasWholeWord(lower, "hbo") || lower.contains("youtube")) {
         return ClassificationMatch("SUBSCRIPTIONS", "MERCHANT_KEYWORD", 0.92, "CONFIRMED")
     }
-    if (lower.contains("shopping") || lower.contains("roupa") || lower.contains("loja") || lower.contains("zara") || lower.contains("shopee") || lower.contains("shein") || lower.contains("calcado") || lower.contains("calçado")) {
+    if (lower.contains("shopping") || lower.contains("roupa") || lower.contains("loja") || hasWholeWord(lower, "zara") || lower.contains("shopee") || lower.contains("shein") || lower.contains("calcado") || lower.contains("calçado")) {
         return ClassificationMatch("SHOPPING", "MERCHANT_KEYWORD", 0.88, "CONFIRMED")
     }
     // Regra explicita anti-alucinacao: Pix para pessoa fisica ou PJ sem categoria clara.
@@ -2244,6 +2399,34 @@ String normalizeAmountTokenForLine(String rawCell) {
     return cleaned
 }
 
+Bool isStatementDescriptionBeforeDate(String text) {
+    var t = normalizeOcrText(text)
+    if (t == "" || t == "-" || t == "–" || t == "—") {
+        return false
+    }
+    if (isFullDateCell(t) || isTimeOnlyCell(t) || isDateTimeCell(t) || isStandaloneAmountCell(t)) {
+        return false
+    }
+    if (isIgnoredInvoiceLine(t) || isTotalHeaderLine(t)) {
+        return false
+    }
+    var lower = t.toLowerCase()
+    if (lower == "descrição" || lower == "descricao" || lower == "data" || lower == "hora" || lower == "valor" || lower == "saldo" || lower == "cartão" || lower == "cartao" || lower == "a") {
+        return false
+    }
+    return true
+}
+
+List<IndexedLine> dropLastIndexedLine(List<IndexedLine> items) {
+    var res: List<IndexedLine> = listOf()
+    var idx = 0
+    while (idx + 1 < items.size) {
+        res.add(items.get(idx))
+        idx = idx + 1
+    }
+    return res
+}
+
 List<IndexedLine> consolidateStatementCells(List<IndexedLine> rawLines) {
     var out: List<IndexedLine> = listOf()
     var i = 0
@@ -2294,6 +2477,19 @@ List<IndexedLine> consolidateStatementCells(List<IndexedLine> rawLines) {
                 j = j + 1
             }
 
+            var rowPage = cur.page()
+            var rowNum = cur.row()
+            if (foundAmount && descParts == "" && !out.isEmpty()) {
+                var prevCell = out.get(out.size - 1)
+                var prevText = normalizeOcrText(prevCell.text())
+                if (isStatementDescriptionBeforeDate(prevText)) {
+                    descParts = prevText
+                    rowPage = prevCell.page()
+                    rowNum = prevCell.row()
+                    out = dropLastIndexedLine(out)
+                }
+            }
+
             if (foundAmount && descParts != "") {
                 // Descarta Saldo Temp (celula 5) e tracinho/observacao vazia (celula 6).
                 if (j < rawLines.size && isStandaloneAmountCell(rawLines.get(j).text())) {
@@ -2305,7 +2501,7 @@ List<IndexedLine> consolidateStatementCells(List<IndexedLine> rawLines) {
                         j = j + 1
                     }
                 }
-                out.add(IndexedLine(cur.page(), cur.row(), datePart + " " + descParts + " " + amountToken))
+                out.add(IndexedLine(rowPage, rowNum, datePart + " " + descParts + " " + amountToken))
                 i = j
                 continue
             }
@@ -2323,7 +2519,7 @@ ParsedLineOutcome analyzeIndexedLine(IndexedLine line, String documentId, Int tx
         return ParsedLineOutcome(null, null, null, false)
     }
     if (isInternalTransferLine(norm)) {
-        return ParsedLineOutcome(null, null, "Movimentacao interna ignorada: " + clipSnippet(norm), true)
+        return ParsedLineOutcome(null, null, "Movimentacao interna ignorada (p" + line.page() + ", l" + line.row() + "): " + clipSnippet(norm), true)
     }
 
     var lastSpace = norm.lastIndexOf(" ")
@@ -2366,14 +2562,16 @@ ParsedLineOutcome analyzeIndexedLine(IndexedLine line, String documentId, Int tx
     if (descRaw == "" || isInvoiceDate(descRaw)) {
         return ParsedLineOutcome(null, null, null, false)
     }
-    if (minor == 0) {
+
+    var descLower = descRaw.toLowerCase()
+    var isZeroRefundLine = descLower.contains("estorno") || descLower.contains("reembolso") || descLower.contains("cashback") || descLower.contains("devolucao") || descLower.contains("devolução")
+    if (minor == 0 && !isZeroRefundLine) {
         return ParsedLineOutcome(null, null, null, false)
     }
 
-    var descLower = descRaw.toLowerCase()
     var kind = "TRANSACTION"
     var direction = "DEBIT"
-    if (descLower.contains("estorno") || descLower.contains("reembolso") || descLower.contains("cashback") || descLower.contains("devolucao") || descLower.contains("devolução")) {
+    if (isZeroRefundLine) {
         kind = "REFUND"
         direction = "CREDIT"
     } else if (isInflowStatementLine(descRaw)) {
@@ -2534,7 +2732,7 @@ ImportReview buildImportReviewFromRows(FinancialDocumentRow row, List<ExtractedT
         row.sha256,
         row.sourceType,
         row.status,
-        row.extractedCount,
+        canonicalTxs.size,
         warnings,
         totals,
         row.reconciled,
@@ -2766,6 +2964,10 @@ ImportReview buildImportReview(String documentId, String sha256, String sourceTy
             var outcome = analyzeIndexedLine(line, documentId, seq + 1, pendingDate)
             if (outcome.ignoredInternal()) {
                 internalCount = internalCount + 1
+                var internalNote = outcome.warning()
+                if (internalNote != null) {
+                    warnings.add(internalNote)
+                }
                 i = i + 1
             } else if (outcome.total() != null) {
                 var tot = outcome.total()
@@ -2820,9 +3022,13 @@ ImportReview buildImportReview(String documentId, String sha256, String sourceTy
     var debitSumMinor: Long = 0
     var outflowCount = 0
     var inflowCount = 0
+    var nonZeroCount = 0
     var needsReviewCount = 0
     for (var tx in canonicalTxs) {
         var m = tx.amountMinor()
+        if (m != null && m > 0) {
+            nonZeroCount = nonZeroCount + 1
+        }
         if (tx.kind() == "INCOME") {
             inflowCount = inflowCount + 1
         } else {
@@ -2854,13 +3060,13 @@ ImportReview buildImportReview(String documentId, String sha256, String sourceTy
         }
     } else if (outflowCount > 0 || inflowCount > 0) {
         reconciled = true
-        warnings.add("TOTAL_LINE_ABSENT: total apurado pela soma dos " + outflowCount + " lancamentos (" + formatBrl(debitSumMinor) + ")")
+        warnings.add("TOTAL_LINE_ABSENT: total apurado pela soma dos " + canonicalTxs.size + " lancamentos (" + formatBrl(debitSumMinor) + ")")
     }
 
     var finalSource = sourceType
     var status = "EM_REVISAO"
-    if (outflowCount == 0 && inflowCount == 0) {
-        status = "EXTRACAO_FALHOU"
+    if (nonZeroCount == 0) {
+        status = "FALHA_EXTRACAO"
         if (sourceType == "PDF" && rawLines.isEmpty()) {
             finalSource = "PDF_SCANNED"
             warnings.add("PARSE_AMBIGUOUS: PDF sem camada de texto legivel (escaneado)")
@@ -2876,7 +3082,7 @@ ImportReview buildImportReview(String documentId, String sha256, String sourceTy
         sha256,
         finalSource,
         status,
-        outflowCount,
+        canonicalTxs.size,
         warnings,
         totals,
         reconciled,
@@ -2928,6 +3134,11 @@ DocumentUploadResponse ingestFinancialDocument(String userId, String fileBase64,
     if (existingDoc != null && rejectDuplicate) {
         throw "DUPLICATE_DOCUMENT: este documento ja foi enviado antes (" + existingDoc.docKey + ")"
     }
+    if (existingDoc != null && existingDoc.status == "IMPORTADO") {
+        var existingTxRows = findExtractedTransactionRowsByDoc(userId, existingDoc.docKey)
+        var existingRev = buildImportReviewFromRows(existingDoc, existingTxRows)
+        return DocumentUploadResponse(existingDoc.docKey, sha256, existingRev.sourceType(), existingDoc.status, true, existingRev)
+    }
 
     var documentId = "doc_" + userId + "_" + sha256.substring(0, 12)
     if (existingDoc != null) {
@@ -2970,7 +3181,7 @@ DocumentUploadResponse ingestFinancialDocument(String userId, String fileBase64,
         if (failRow != null) {
             failId = failRow.id
         }
-        saveFinancialDocumentRow(FinancialDocumentRow(failId, documentId, uidLong, sha256, filename, detected, "", "BRL", "EXTRACAO_FALHOU", false, 0, 0, false, se, "" + time.now()))
+        saveFinancialDocumentRow(FinancialDocumentRow(failId, documentId, uidLong, sha256, filename, detected, "", "BRL", "FALHA_EXTRACAO", false, 0, 0, false, se, "" + time.now()))
         throw se
     }
 
@@ -3030,7 +3241,8 @@ InvoiceParseResponse parseInvoiceForUser(String userId, String b64, String? file
         rev.reconciled(),
         rev.warnings(),
         rev.totals(),
-        rev.transactions()
+        rev.transactions(),
+        summarizeImportReview(rev)
     )
 }
 
@@ -3038,7 +3250,48 @@ InvoiceParseResponse parseInvoiceForUser(String userId, String b64, String? file
 // Confirmacao Idempotente em Lote e por Documento (KofDB)
 // =========================================================
 
-List<TransactionOutput> confirmInvoiceItemsWithIdempotency(String userId, List<InvoiceConfirmItem> items, String? documentId) {
+Bool isConfirmableOutflowTx(CanonicalTransaction ctx) {
+    var m = ctx.amountMinor()
+    if (m == null || m <= 0 || ctx.direction() == "CREDIT") {
+        return false
+    }
+    var fc = flowClassOf(ctx)
+    return fc == "DESPESA" || fc == "OPERACAO_CREDITO"
+}
+
+List<InvoiceConfirmTraceItem> buildConfirmTraceItemsFromReview(ImportReview rev) {
+    var traceItems: List<InvoiceConfirmTraceItem> = listOf()
+    var docId = rev.documentId()
+    for (var ctx in rev.transactions()) {
+        var m = ctx.amountMinor()
+        if (m != null && isConfirmableOutflowTx(ctx)) {
+            var finalDesc = ctx.descriptionRaw()
+            var normDesc = ctx.descriptionNormalized()
+            if (normDesc != null && normDesc != "") {
+                finalDesc = normDesc
+            }
+            var finalCat = sanitizeCategoryForConfirm(ctx.category())
+            var srcPage = 1
+            var srcLine = 0
+            var ev = ctx.evidence()
+            if (ev != null) {
+                var ep = ev.page()
+                if (ep != null) {
+                    srcPage = ep
+                }
+                var er = ev.row()
+                if (er != null) {
+                    srcLine = er
+                }
+            }
+            var extRef = docId + ":" + ctx.id()
+            traceItems.add(InvoiceConfirmTraceItem(finalDesc, centsToReais(m), finalCat, docId, srcPage, srcLine, extRef))
+        }
+    }
+    return traceItems
+}
+
+List<TransactionOutput> confirmInvoiceTraceItemsWithIdempotency(String userId, List<InvoiceConfirmTraceItem> traceItems, String? documentId) {
     if (documentId != null && documentId.trim() != "") {
         var cleanDocId = documentId.trim()
         var docRow = findFinancialDocumentRowByKeyRaw(cleanDocId)
@@ -3055,14 +3308,14 @@ List<TransactionOutput> confirmInvoiceItemsWithIdempotency(String userId, List<I
         }
     }
 
-    var batchHash = sha256HexOfString(json.encode(items))
+    var batchHash = sha256HexOfString(json.encode(traceItems))
     var batchReceiptKey = "conf_batch_" + userId + "_" + batchHash
     var alreadyBatch = loadConfirmedOutputsFromReceipt(userId, batchReceiptKey)
     if (alreadyBatch != null) {
         return alreadyBatch
     }
 
-    var saved = confirmInvoiceItems(userId, items)
+    var saved = confirmInvoiceItemsWithTraceability(userId, traceItems)
     saveConfirmReceipt(batchReceiptKey, batchHash, saved)
 
     if (documentId != null && documentId.trim() != "") {
@@ -3092,6 +3345,25 @@ List<TransactionOutput> confirmInvoiceItemsWithIdempotency(String userId, List<I
         }
     }
     return saved
+}
+
+List<TransactionOutput> confirmInvoiceItemsWithIdempotency(String userId, List<InvoiceConfirmItem> items, String? documentId) {
+    var refPrefix = "batch"
+    var docIdVal = ""
+    if (documentId != null && documentId.trim() != "") {
+        refPrefix = documentId.trim()
+        docIdVal = documentId.trim()
+    }
+    var traceItems: List<InvoiceConfirmTraceItem> = listOf()
+    var idx = 0
+    while (idx < items.size) {
+        var it = items.get(idx)
+        var itemSig = sha256HexOfString(it.description().trim().toLowerCase() + "|" + toCents(it.amount()) + "|" + it.category())
+        var extRef = refPrefix + ":" + idx + ":" + itemSig.substring(0, 16)
+        traceItems.add(InvoiceConfirmTraceItem(it.description(), it.amount(), it.category(), docIdVal, 0, 0, extRef))
+        idx = idx + 1
+    }
+    return confirmInvoiceTraceItemsWithIdempotency(userId, traceItems, documentId)
 }
 
 // =========================================================
@@ -3211,8 +3483,8 @@ IntentResult dispatchFinanceIntent(String authUserId, IntentRequest req) {
             return IntentResult("ERROR", intent, corrId, false, "Documento nao encontrado.", null, listOf("PARSE_AMBIGUOUS"))
         }
         var revJson = json.encode(rev)
-        if (rev.status() == "EXTRACAO_FALHOU" || (rev.extractedCount() == 0 && rev.transactions().isEmpty())) {
-            return IntentResult("EXTRACAO_FALHOU", intent, corrId, false, "Nao consegui extrair lancamentos validos desse arquivo. Envie um PDF digital com texto selecionavel ou me informe os gastos por texto.", revJson, listOf("EXTRACAO_FALHOU"))
+        if (rev.status() == "FALHA_EXTRACAO" || (rev.extractedCount() == 0 && rev.transactions().isEmpty())) {
+            return IntentResult("FALHA_EXTRACAO", intent, corrId, false, "Nao consegui extrair lancamentos validos desse arquivo. Envie um PDF digital com texto selecionavel ou me informe os gastos por texto.", revJson, listOf("FALHA_EXTRACAO"))
         }
         var sumMinor: Long = 0
         for (var tx in rev.transactions()) {
@@ -3241,27 +3513,11 @@ IntentResult dispatchFinanceIntent(String authUserId, IntentRequest req) {
         if (rev == null) {
             return IntentResult("ERROR", intent, corrId, false, "Documento nao encontrado.", null, listOf("PARSE_AMBIGUOUS"))
         }
-        var items: List<InvoiceConfirmItem> = listOf()
-        for (var ctx in rev.transactions()) {
-            var m = ctx.amountMinor()
-            if (m != null && m > 0 && ctx.direction() != "CREDIT") {
-                var finalDesc = ctx.descriptionRaw()
-                var normDesc = ctx.descriptionNormalized()
-                if (normDesc != null && normDesc != "") {
-                    finalDesc = normDesc
-                }
-                var finalCat = "OTHER"
-                var rawCat = ctx.category()
-                if (rawCat != null && rawCat != "") {
-                    finalCat = rawCat
-                }
-                items.add(InvoiceConfirmItem(finalDesc, centsToReais(m), finalCat))
-            }
-        }
-        if (items.size == 0) {
+        var traceItems = buildConfirmTraceItemsFromReview(rev)
+        if (traceItems.size == 0) {
             return IntentResult("ERROR", intent, corrId, false, "Nenhum lancamento valido para importar neste documento.", null, listOf("PARSE_AMBIGUOUS"))
         }
-        var saved = confirmInvoiceItemsWithIdempotency(authUserId, items, docId)
+        var saved = confirmInvoiceTraceItemsWithIdempotency(authUserId, traceItems, docId)
         var msg = "Confirmado: " + saved.size + " lancamentos estao salvos nas suas caixinhas sem duplicidade."
         return IntentResult("IMPORTADO", intent, corrId, false, msg, json.encode(saved), listOf())
     }
@@ -3282,8 +3538,8 @@ IntentResult dispatchFinanceIntent(String authUserId, IntentRequest req) {
         if (rev == null) {
             return IntentResult("ERROR", intent, corrId, false, "Documento nao encontrado.", null, listOf("PARSE_AMBIGUOUS"))
         }
-        if (rev.status() == "EXTRACAO_FALHOU" || (rev.extractedCount() == 0 && rev.transactions().isEmpty())) {
-            return IntentResult("EXTRACAO_FALHOU", intent, corrId, false, "Extracao falhou: nao e possivel analisar valores sem transacoes lidas do arquivo.", json.encode(rev), listOf("EXTRACAO_FALHOU"))
+        if (rev.status() == "FALHA_EXTRACAO" || (rev.extractedCount() == 0 && rev.transactions().isEmpty())) {
+            return IntentResult("FALHA_EXTRACAO", intent, corrId, false, "Extracao falhou: nao e possivel analisar valores sem transacoes lidas do arquivo.", json.encode(rev), listOf("FALHA_EXTRACAO"))
         }
         var totalMinor: Long = 0
         var confirmedMinor: Long = 0
@@ -3355,4 +3611,509 @@ IntentResult dispatchFinanceIntent(String authUserId, IntentRequest req) {
     }
 
     return IntentResult("ERROR", intent, corrId, false, "Intencao desconhecida: " + intent, null, listOf("UNSUPPORTED_INTENT"))
+}
+
+// =========================================================
+// Resumo por natureza de fluxo (sem dupla contagem) + resposta deterministica do chat sobre a fatura
+// =========================================================
+// Mapeamento kind/reviewStatus -> flowClass (cada registro cai em exatamente uma classe):
+//   amountMinor null                      -> PENDENTE_REVISAO
+//   PAYMENT                               -> PAGAMENTO_FATURA
+//   INCOME                                -> RECEITA
+//   CARD_EXIT (Pix via cartao de credito) -> OPERACAO_CREDITO
+//   REFUND                                -> ESTORNO
+//   FEE / INTEREST                        -> DESPESA
+//   TRANSACTION/PIX_OUT com CONFIRMED     -> DESPESA
+//   demais (NEEDS_REVIEW)                 -> PENDENTE_REVISAO
+// Movimentacoes internas (Viracredito, "Credito para Pix", resgate/aplicacao) ja saem do parser como
+// internas e nunca entram nos totais acima; aparecem so como TRANSFERENCIA_INTERNA excluida, com pagina/linha.
+
+record FlowLine(String txId, String flowClass, Long? amountMinor, Int? page, Int? row, String? snippet, String? descriptionRaw)
+
+record ImportFlowSummary(
+    String documentId,
+    Int extractedCount,
+    Int incomeCount,
+    Long incomeMinor,
+    Int expenseCount,
+    Long expenseMinor,
+    Int internalTransferCount,
+    Long internalTransferMinor,
+    Int creditOperationCount,
+    Long creditOperationMinor,
+    Int billPaymentCount,
+    Long billPaymentMinor,
+    Int refundCount,
+    Long refundMinor,
+    Int pendingCount,
+    Long pendingMinor,
+    Int totalStatementRows,
+    Int confirmableExpenseCount,
+    Long confirmableExpenseMinor,
+    Int professionalIncomeCount,
+    Long professionalIncomeMinor,
+    Int unverifiedPjIncomeCount,
+    Long unverifiedPjIncomeMinor,
+    Int otherIncomeCount,
+    Long otherIncomeMinor,
+    List<FlowLine> lines
+)
+
+String extractDocumentIdHint(String raw) {
+    var keyIdx = raw.indexOf("\"documentId\"")
+    if (keyIdx < 0) {
+        return ""
+    }
+    var colonIdx = raw.indexOf(":", keyIdx + 12)
+    if (colonIdx < 0) {
+        return ""
+    }
+    var i = colonIdx + 1
+    while (i < raw.length() && (raw.substring(i, i + 1) == " " || raw.substring(i, i + 1) == "\t" || raw.substring(i, i + 1) == "\n" || raw.substring(i, i + 1) == "\r")) {
+        i = i + 1
+    }
+    if (i >= raw.length() || raw.substring(i, i + 1) != "\"") {
+        return ""
+    }
+    var endIdx = raw.indexOf("\"", i + 1)
+    if (endIdx <= i + 1) {
+        return ""
+    }
+    return raw.substring(i + 1, endIdx).trim()
+}
+
+record ChatDocumentHint(String message, String? documentId)
+
+ChatDocumentHint? decodeChatDocumentHint(String raw) {
+    var docId = extractDocumentIdHint(raw)
+    if (docId == "") {
+        return null
+    }
+    return ChatDocumentHint("", docId)
+}
+
+String flowClassOf(CanonicalTransaction ctx) {
+    if (ctx.amountMinor() == null) {
+        return "PENDENTE_REVISAO"
+    }
+    var kind = ctx.kind()
+    if (kind == "PAYMENT") {
+        return "PAGAMENTO_FATURA"
+    }
+    if (kind == "INCOME") {
+        return "RECEITA"
+    }
+    if (kind == "CARD_EXIT") {
+        return "OPERACAO_CREDITO"
+    }
+    if (kind == "REFUND") {
+        return "ESTORNO"
+    }
+    if (kind == "FEE" || kind == "INTEREST") {
+        return "DESPESA"
+    }
+    if (ctx.reviewStatus() == "CONFIRMED") {
+        return "DESPESA"
+    }
+    return "PENDENTE_REVISAO"
+}
+
+Int? parseIntBetween(String s, String startTok, String endTok) {
+    var a = s.indexOf(startTok)
+    if (a < 0) {
+        return null
+    }
+    var b = s.indexOf(endTok, a + startTok.length())
+    if (b < 0) {
+        return null
+    }
+    var mid = s.substring(a + startTok.length(), b).trim()
+    if (!mid.matches("[0-9]{1,6}")) {
+        return null
+    }
+    return mid.toInt()
+}
+
+ImportFlowSummary summarizeImportReview(ImportReview rev) {
+    var lines: List<FlowLine> = listOf()
+    var incomeCount = 0
+    var incomeMinor: Long = 0
+    var profIncomeCount = 0
+    var profIncomeMinor: Long = 0
+    var unverifiedPjIncomeCount = 0
+    var unverifiedPjIncomeMinor: Long = 0
+    var otherIncomeCount = 0
+    var otherIncomeMinor: Long = 0
+    var expenseCount = 0
+    var expenseMinor: Long = 0
+    var creditCount = 0
+    var creditMinor: Long = 0
+    var payCount = 0
+    var payMinor: Long = 0
+    var refundCount = 0
+    var refundMinor: Long = 0
+    var pendingCount = 0
+    var pendingMinor: Long = 0
+    for (var ctx in rev.transactions()) {
+        var fc = flowClassOf(ctx)
+        var m = ctx.amountMinor()
+        var ev = ctx.evidence()
+        lines.add(FlowLine(ctx.id(), fc, m, ev.page(), ev.row(), ev.snippet(), ctx.descriptionRaw()))
+        var v: Long = 0
+        if (m != null) {
+            v = m
+        }
+        if (fc == "RECEITA") {
+            incomeCount = incomeCount + 1
+            incomeMinor = incomeMinor + v
+            var incLevel = classifyIncomeEvidenceLevel(ctx.descriptionRaw())
+            if (incLevel == "PROFESSIONAL") {
+                profIncomeCount = profIncomeCount + 1
+                profIncomeMinor = profIncomeMinor + v
+            } else if (incLevel == "UNVERIFIED_PJ") {
+                unverifiedPjIncomeCount = unverifiedPjIncomeCount + 1
+                unverifiedPjIncomeMinor = unverifiedPjIncomeMinor + v
+            } else {
+                otherIncomeCount = otherIncomeCount + 1
+                otherIncomeMinor = otherIncomeMinor + v
+            }
+        } else if (fc == "DESPESA") {
+            expenseCount = expenseCount + 1
+            expenseMinor = expenseMinor + v
+        } else if (fc == "OPERACAO_CREDITO") {
+            creditCount = creditCount + 1
+            creditMinor = creditMinor + v
+        } else if (fc == "PAGAMENTO_FATURA") {
+            payCount = payCount + 1
+            payMinor = payMinor + v
+        } else if (fc == "ESTORNO") {
+            refundCount = refundCount + 1
+            refundMinor = refundMinor + v
+        } else {
+            pendingCount = pendingCount + 1
+            pendingMinor = pendingMinor + v
+        }
+    }
+    var internalCount = 0
+    var internalMinor: Long = 0
+    for (var w in rev.warnings()) {
+        if (w.startsWith("Movimentacao interna ignorada")) {
+            internalCount = internalCount + 1
+            var sep = w.indexOf("): ")
+            var snippet = w
+            if (sep >= 0) {
+                snippet = w.substring(sep + 3)
+            }
+            var lineMinor = trailingAbsMinor(snippet)
+            if (lineMinor != null) {
+                internalMinor = internalMinor + lineMinor
+            }
+            lines.add(FlowLine(rev.documentId() + "_int_" + internalCount, "TRANSFERENCIA_INTERNA", lineMinor, parseIntBetween(w, "(p", ","), parseIntBetween(w, ", l", ")"), snippet, snippet))
+        }
+    }
+    var extractedCount = rev.transactions().size
+    var totalStatementRows = extractedCount + internalCount
+    var confirmableExpenseCount = expenseCount + creditCount
+    var confirmableExpenseMinor = expenseMinor + creditMinor
+    return ImportFlowSummary(
+        rev.documentId(),
+        extractedCount,
+        incomeCount,
+        incomeMinor,
+        expenseCount,
+        expenseMinor,
+        internalCount,
+        internalMinor,
+        creditCount,
+        creditMinor,
+        payCount,
+        payMinor,
+        refundCount,
+        refundMinor,
+        pendingCount,
+        pendingMinor,
+        totalStatementRows,
+        confirmableExpenseCount,
+        confirmableExpenseMinor,
+        profIncomeCount,
+        profIncomeMinor,
+        unverifiedPjIncomeCount,
+        unverifiedPjIncomeMinor,
+        otherIncomeCount,
+        otherIncomeMinor,
+        lines
+    )
+}
+
+Long? trailingAbsMinor(String snippet) {
+    var sp = snippet.lastIndexOf(" ")
+    if (sp <= 0) {
+        return null
+    }
+    var parsed = parseBrlMinor(snippet.substring(sp + 1))
+    if (parsed == null) {
+        return null
+    }
+    var absAmount: Long = parsed
+    if (absAmount < 0) {
+        absAmount = 0 - absAmount
+    }
+    return absAmount
+}
+
+String countLabel(Int n) {
+    if (n == 1) {
+        return "1 registro"
+    }
+    return n + " registros"
+}
+
+String buildInvoiceChatReply(ImportFlowSummary s, Bool reconciled) {
+    var msg = "Li o documento " + s.documentId() + ": " + s.totalStatementRows() + " movimentacao(oes) no arquivo = " + countLabel(s.extractedCount()) + " lancamento(s) financeiro(s) extraido(s) + " + countLabel(s.internalTransferCount()) + " transferencia(s) interna(s) filtrada(s), separados por natureza (sem somar tipos diferentes).\n"
+    msg = msg + "- Receitas: " + formatBrl(s.incomeMinor()) + " (" + countLabel(s.incomeCount()) + ")\n"
+    msg = msg + "  * Renda profissional comprovada (CNPJ/NF/holerite): " + formatBrl(s.professionalIncomeMinor()) + " (" + countLabel(s.professionalIncomeCount()) + ")\n"
+    msg = msg + "  * Possiveis recebimentos empresariais sem comprovacao fiscal no extrato (PJ no nome; requer nota fiscal/recibo para confirmar como renda profissional): " + formatBrl(s.unverifiedPjIncomeMinor()) + " (" + countLabel(s.unverifiedPjIncomeCount()) + ")\n"
+    msg = msg + "  * Outras entradas / Pix de pessoas fisicas (nao consideradas renda profissional): " + formatBrl(s.otherIncomeMinor()) + " (" + countLabel(s.otherIncomeCount()) + ")\n"
+    msg = msg + "- Despesas confirmadas: " + formatBrl(s.expenseMinor()) + " (" + countLabel(s.expenseCount()) + ")\n"
+    msg = msg + "- Operacoes de credito (Pix via cartao): " + formatBrl(s.creditOperationMinor()) + " (" + countLabel(s.creditOperationCount()) + ")\n"
+    msg = msg + "- Total de saidas confirmaveis nas caixinhas (Despesas + Operacoes de credito): " + formatBrl(s.confirmableExpenseMinor()) + " (" + countLabel(s.confirmableExpenseCount()) + ")\n"
+    msg = msg + "- Pagamentos de fatura (excluidos das despesas): " + formatBrl(s.billPaymentMinor()) + " (" + countLabel(s.billPaymentCount()) + ")\n"
+    if (s.refundCount() > 0) {
+        msg = msg + "- Estornos e creditos: " + formatBrl(s.refundMinor()) + " (" + countLabel(s.refundCount()) + ")\n"
+    }
+    msg = msg + "- Transferencias internas excluidas: " + formatBrl(s.internalTransferMinor()) + " (" + countLabel(s.internalTransferCount()) + ")\n"
+    msg = msg + "- Pendentes de revisao: " + formatBrl(s.pendingMinor()) + " (" + countLabel(s.pendingCount()) + ")"
+    if (s.pendingCount() > 0) {
+        msg = msg + " - me diga a categoria de cada um; eles nao serao salvos sem sua confirmacao.\n"
+        for (var ln in s.lines()) {
+            if (ln.flowClass() == "PENDENTE_REVISAO") {
+                var descText = ln.descriptionRaw()
+                if (descText == null || descText == "") {
+                    descText = ln.snippet()
+                }
+                if (descText == null || descText == "") {
+                    descText = ln.txId()
+                }
+                var valMinor: Long = 0
+                var lm = ln.amountMinor()
+                if (lm != null) {
+                    valMinor = lm
+                }
+                var pNum = 1
+                var lp = ln.page()
+                if (lp != null) {
+                    pNum = lp
+                }
+                var rNum = 0
+                var lr = ln.row()
+                if (lr != null) {
+                    rNum = lr
+                }
+                msg = msg + "  * " + descText + " | " + formatBrl(valMinor) + " (doc " + s.documentId() + ", p" + pNum + ", l" + rNum + ")\n"
+            }
+        }
+    } else {
+        msg = msg + "\n"
+    }
+    if (!reconciled) {
+        msg = msg + "Atencao: a soma extraida nao bate com o total declarado no documento; confira antes de salvar.\n"
+    }
+    msg = msg + "Cada valor tem pagina e linha de origem na previa do documento. Quer que eu distribua as despesas identificadas nas suas caixinhas?"
+    return msg
+}
+
+Bool mentionsStatement(String message) {
+    var lower = message.toLowerCase()
+    return lower.contains("fatura") || lower.contains("extrato") || lower.contains("lancamento") || lower.contains("lançamento")
+}
+
+Bool isChatInvoiceConfirmIntent(String message) {
+    var lower = normalizeOcrText(message).toLowerCase()
+    if (lower == "") {
+        return false
+    }
+    if (lower.contains("nao ") || lower.contains("não ") || lower == "nao" || lower == "não" || lower.contains("cancela") || lower.contains("recusa") || lower.contains("depois") || lower.contains("analis") || lower.contains("o que tem") || lower.contains("resumo")) {
+        return false
+    }
+    var exact = listOf("sim", "ok", "confirmo", "confirmar", "salvar", "salva", "pode salvar", "sim, pode salvar", "pode distribuir", "distribuir", "distribua", "pode confirmar", "sim, distribua", "sim, distribuir")
+    for (var e in exact) {
+        if (lower == e) {
+            return true
+        }
+    }
+    var markers = listOf("confirmo", "confirmar", "pode salvar", "pode distribuir", "salva nas caixinhas", "salvar nas caixinhas", "salvar os gastos", "confirmar importacao", "confirmar importação", "distribua nas caixinhas", "distribuir nas caixinhas")
+    for (var m in markers) {
+        if (lower.contains(m)) {
+            return true
+        }
+    }
+    if (lower.startsWith("sim ") || lower.startsWith("sim,") || lower.startsWith("pode sim")) {
+        return true
+    }
+    return false
+}
+
+Bool recentChatAskedInvoiceConfirm(String userId) {
+    var recent = findRecentChatMessages(userId, 6)
+    for (var m in recent) {
+        if (m.role == ChatRole.ASSISTANT) {
+            var lower = m.content.toLowerCase()
+            if (lower.contains("caixinhas") || lower.contains("previa do documento") || lower.contains("confere antes de detalharmos") || lower.contains("extracao_falhou") || lower.contains("falha_extracao")) {
+                return true
+            }
+        }
+    }
+    return false
+}
+
+String sanitizeCategoryForConfirm(String? rawCat) {
+    if (rawCat != null) {
+        var upper = rawCat.trim().toUpperCase()
+        if (upper != "" && Category.valueOf(upper) != null) {
+            return upper
+        }
+    }
+    return "OTHER"
+}
+
+// Passo 2 no chat: persiste idempotente os gastos extraidos do documento em revisao via Source.INVOICE,
+// vinculando as caixinhas e buckets do usuario (sem dupla gravacao se /api/invoices/confirm ja confirmou).
+String? confirmDocumentFromChat(String userId, String? documentId) {
+    var targetDocId = ""
+    if (documentId != null && documentId.trim() != "") {
+        targetDocId = documentId.trim()
+    } else {
+        var latest = findLatestFinancialDocumentRowByUser(userId)
+        if (latest == null) {
+            return null
+        }
+        targetDocId = latest.docKey
+    }
+
+    var lookup = lookupDocumentReview(targetDocId, userId)
+    if (lookup.errorCode() == "NOT_FOUND") {
+        return "Documento nao encontrado."
+    }
+    if (lookup.errorCode() == "UNAUTHORIZED") {
+        return "Acesso negado ao documento."
+    }
+    var rev = lookup.review()
+    if (rev == null) {
+        return "Documento nao encontrado."
+    }
+    if (rev.status() == "FALHA_EXTRACAO" || (rev.extractedCount() == 0 && rev.transactions().isEmpty())) {
+        return "EXTRACAO_FALHOU: nao consegui extrair lancamentos validos do arquivo " + rev.documentId() + ". Nenhuma despesa foi salva ou estimada; envie outro arquivo digital ou me informe os gastos por texto."
+    }
+
+    var traceItems = buildConfirmTraceItemsFromReview(rev)
+    if (traceItems.size == 0) {
+        return "EXTRACAO_FALHOU: o documento " + rev.documentId() + " nao possui despesas confirmaveis para importar nas caixinhas (receitas, pagamentos de fatura e itens pendentes de revisao nao sao salvos automaticamente)."
+    }
+
+    var alreadyByReceipt = loadConfirmedOutputsFromReceipt(userId, "conf_doc_" + userId + "_" + targetDocId) != null
+    var wasAlreadyImported = rev.confirmedByUser() || alreadyByReceipt
+    var saved = confirmInvoiceTraceItemsWithIdempotency(userId, traceItems, targetDocId)
+
+    var savedTotalCents: Long = 0
+    var envIds: List<String> = listOf()
+    for (var tx in saved) {
+        savedTotalCents = savedTotalCents + toCents(tx.value)
+        var eid = tx.envelopeId
+        if (eid != null && eid != "" && !envIds.contains(eid)) {
+            envIds.add(eid)
+        }
+    }
+
+    var msg = ""
+    if (wasAlreadyImported) {
+        msg = "Documento " + targetDocId + " ja estava confirmado: " + saved.size + " despesa(s) somando " + formatBrl(savedTotalCents) + " seguem salvas nas suas caixinhas (sem duplicidade).\n"
+    } else {
+        msg = "Confirmado! Salvei " + saved.size + " despesa(s) do documento " + targetDocId + " no total de " + formatBrl(savedTotalCents) + " (fonte INVOICE) nas suas caixinhas sem duplicidade.\n"
+    }
+
+    var user = findUserById(userId)
+    if (user != null) {
+        var envs = envelopesOverview(user)
+        var envLines = ""
+        for (var e in envs) {
+            if (envIds.contains(e.id)) {
+                var bText = "Sem bucket"
+                var envBucket = e.bucket
+                if (envBucket != null && envBucket != "") {
+                    bText = envBucket
+                }
+                var displayEnv = e.categoryName
+                var resolvedCat = categoryOrNull(e.categoryName)
+                if (resolvedCat != null) {
+                    displayEnv = categoryLabel(resolvedCat)
+                }
+                envLines = envLines + "- " + displayEnv + " (" + bText + "): gasto " + formatBrl(toCents(e.spentThisMonth)) + " de " + formatBrl(toCents(e.limitAmount)) + " (" + e.percent + "%)\n"
+            }
+        }
+        if (envLines != "") {
+            msg = msg + "Caixinhas atualizadas:\n" + envLines
+        }
+        var buckets = buildBudgetBuckets(user.budgetModel, userSalary(user))
+        if (!buckets.isEmpty()) {
+            var bLine = ""
+            for (var b in buckets) {
+                if (bLine != "") {
+                    bLine = bLine + " | "
+                }
+                bLine = bLine + b.name + " (" + b.percentage + "% = " + formatBrl(toCents(b.amount)) + ")"
+            }
+            msg = msg + "Distribuicao do seu modelo (" + coachModelLabel(user.budgetModel) + "): " + bLine
+        }
+    }
+    return msg.trim()
+}
+
+// Resposta deterministica do chat sobre documento (ANALISAR_FATURA e confirmacao Passo 2).
+// null = mensagem nao e sobre documento. Roda ANTES do ramo LLM.
+String? invoiceChatReplyFor(String userId, String message, String rawBody) {
+    var docId = ""
+    var hint = decodeChatDocumentHint(rawBody)
+    if (hint != null) {
+        var hintDocId = hint.documentId()
+        if (hintDocId != null) {
+            docId = hintDocId.trim()
+        }
+    }
+    if (isChatInvoiceConfirmIntent(message)) {
+        if (docId != "") {
+            return confirmDocumentFromChat(userId, docId)
+        }
+        var latestConfirm = findLatestFinancialDocumentRowByUser(userId)
+        if (latestConfirm != null) {
+            var askedConfirm = recentChatAskedInvoiceConfirm(userId)
+            var lowerMsg = message.toLowerCase()
+            var explicitDocOrSave = mentionsStatement(message) || lowerMsg.contains("confirm") || lowerMsg.contains("salv") || lowerMsg.contains("distribu")
+            if (latestConfirm.status == "EM_REVISAO" || (askedConfirm && (latestConfirm.status == "IMPORTADO" || latestConfirm.status == "FALHA_EXTRACAO")) || explicitDocOrSave) {
+                return confirmDocumentFromChat(userId, latestConfirm.docKey)
+            }
+        }
+        return null
+    }
+    if (docId == "" && mentionsStatement(message)) {
+        var latest = findLatestFinancialDocumentRowByUser(userId)
+        if (latest != null && (latest.status == "EM_REVISAO" || latest.status == "FALHA_EXTRACAO")) {
+            docId = latest.docKey
+        }
+    }
+    if (docId == "") {
+        return null
+    }
+    var res = dispatchFinanceIntent(userId, IntentRequest("ANALISAR_FATURA", null, null, null, listOf(docId)))
+    if (res.status() == "EM_REVISAO" || res.status() == "IMPORTADO") {
+        var lookup = lookupDocumentReview(docId, userId)
+        var rev = lookup.review()
+        if (rev != null) {
+            return buildInvoiceChatReply(summarizeImportReview(rev), rev.reconciled())
+        }
+    }
+    var m = res.message()
+    if (m != null) {
+        return m
+    }
+    return "Nao consegui ler esse documento. Envie o arquivo de novo ou digite os gastos."
 }

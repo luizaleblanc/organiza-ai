@@ -99,6 +99,25 @@ List<ToolDef> coachTools() {
     income.put("amount", ToolProperty("number", "Valor em reais, maior que zero"))
     income.put("source", ToolProperty("string", "Origem da renda (freela, show, mentoria, salario...)"))
 
+    var envName: Map<String, ToolProperty> = mapOf()
+    envName.put("name", ToolProperty("string", "Nome da caixinha como o usuário disse (em português)"))
+
+    var envCreate: Map<String, ToolProperty> = mapOf()
+    envCreate.put("name", ToolProperty("string", "Nome da nova caixinha, em português"))
+    envCreate.put("limit", ToolProperty("number", "Limite mensal em reais dito pelo usuário. Se ele não disse, não chame a tool: pergunte."))
+
+    var envRename: Map<String, ToolProperty> = mapOf()
+    envRename.put("name", ToolProperty("string", "Nome atual da caixinha"))
+    envRename.put("newName", ToolProperty("string", "Novo nome, em português"))
+
+    var envLimit: Map<String, ToolProperty> = mapOf()
+    envLimit.put("name", ToolProperty("string", "Nome da caixinha"))
+    envLimit.put("limit", ToolProperty("number", "Novo limite mensal em reais dito pelo usuário"))
+
+    var envDelete: Map<String, ToolProperty> = mapOf()
+    envDelete.put("name", ToolProperty("string", "Nome da caixinha"))
+    envDelete.put("confirmed", ToolProperty("string", "sim SOMENTE depois que o usuário confirmou explicitamente que quer apagar; senão nao"))
+
     var kakeibo: Map<String, ToolProperty> = mapOf()
     kakeibo.put("answers", ToolProperty("string", "As 4 respostas da reflexao, na ordem, separadas por ' | '"))
 
@@ -110,6 +129,11 @@ List<ToolDef> coachTools() {
         toolDef("getDailyPulse", "Calcula quanto o usuário ainda pode gastar por dia até o fim do mês", none, noRequired),
         toolDef("getBalance", "Retorna o resumo dos buckets do modelo de orçamento: planejado, gasto e restante", none, noRequired),
         toolDef("suggestModelChange", "Verifica se o modelo de orçamento atual ainda faz sentido", none, noRequired),
+        toolDef("createEnvelope", "Cria uma caixinha do usuário com o limite mensal informado", envCreate, listOf("name", "limit")),
+        toolDef("renameEnvelope", "Renomeia uma caixinha do usuário (caixinhas automáticas não podem ser renomeadas)", envRename, listOf("name", "newName")),
+        toolDef("setEnvelopeLimit", "Altera o limite mensal de uma caixinha do usuário", envLimit, listOf("name", "limit")),
+        toolDef("deleteEnvelope", "Apaga uma caixinha do usuário; sem confirmed=sim só devolve a pergunta de confirmação", envDelete, listOf("name", "confirmed")),
+        toolDef("getEnvelopeStatus", "Consulta quanto foi gasto, o limite, quanto sobra e o status de uma caixinha neste mês", envName, listOf("name")),
         toolDef("answerKakeiboReflection", "Registra as 4 respostas da reflexão semanal do Kakeibo", kakeibo, listOf("answers"))
     )
 }
@@ -151,6 +175,74 @@ String envelopeNamesText(String userId) {
     return text
 }
 
+// Comportamento da IA por modelo (secao 2 de docs/AI_FINANCIAL_COACH_GUIDELINE.md).
+String modelBehaviorForPrompt(BudgetModelType model) {
+    return switch (model) {
+        case ANTI_DEBT_701020 -> "Priorize a quitação da dívida acima de qualquer outra sugestão, sugira renegociar e oriente a não usar o rotativo do cartão nem o cheque especial."
+        case SURVIVAL_702010 -> "Parabenize o usuário por guardar mesmo valores pequenos e incentive o foco no essencial; se ele tiver dívida, oriente a renegociar."
+        case SIMPLE_8020 -> "Mantenha tudo simples: um teto único de 80% para viver e 20% guardados automaticamente, sem rastrear subcategorias."
+        case KAKEIBO -> "Agrupe os gastos em Essencial, Lazer, Cultura e Extras e conduza a reflexão semanal com as 4 perguntas."
+        case STANDARD_503020 -> "Mostre como os compromissos fixos cabem nos 50% de necessidades, mantendo o lazer consciente nos 30% e 20% para o futuro."
+    }
+}
+
+String categoryNamesForPrompt() {
+    var text = ""
+    for (var c in Category.values()) {
+        if (text != "") {
+            text = text + ", "
+        }
+        text = text + c.name() + " = " + categoryLabel(c)
+    }
+    return text
+}
+
+// =========================================================
+// Saida ao usuario: nunca expor codigos internos (secao 1.2 / regra 10 do prompt)
+// =========================================================
+
+Bool isWordChar(String ch) {
+    return "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_".contains(ch)
+}
+
+// Troca `word` por `repl` so quando aparece como palavra inteira (case-sensitive).
+String replaceWord(String text, String word, String repl) {
+    var out = ""
+    var rest = text
+    var idx = rest.indexOf(word)
+    while (idx >= 0) {
+        var end = idx + word.length()
+        var beforeOk = idx == 0 || !isWordChar(rest.substring(idx - 1, idx))
+        var afterOk = end >= rest.length() || !isWordChar(rest.substring(end, end + 1))
+        if (beforeOk && afterOk) {
+            out = out + rest.substring(0, idx) + repl
+        } else {
+            out = out + rest.substring(0, end)
+        }
+        rest = rest.substring(end)
+        idx = rest.indexOf(word)
+    }
+    return out + rest
+}
+
+String sanitizeCoachReply(String text) {
+    var out = text
+    for (var m in BudgetModelType.values()) {
+        out = replaceWord(out, m.name(), coachModelLabel(m))
+    }
+    for (var c in Category.values()) {
+        out = replaceWord(out, c.name(), categoryLabel(c))
+    }
+    out = replaceWord(out, "NEEDS", "Necessidades")
+    out = replaceWord(out, "WANTS", "Desejos")
+    out = replaceWord(out, "SAVINGS", "Poupança")
+    out = replaceWord(out, "DEBT_PAYMENT", "Quitação de Dívida")
+    out = replaceWord(out, "CULTURAL", "Cultura")
+    out = replaceWord(out, "EXTRAS", "Extras")
+    out = replaceWord(out, "EMERGENCY_FUND", "reserva de emergência")
+    return out
+}
+
 String coachSystemPrompt(UserEntity user, Bool kakeiboPending) {
     var today = localTodayIso()
     var dow = time.dayOfWeek(today.substring(0, 4).toInt(), today.substring(5, 7).toInt(), today.substring(8, 10).toInt())
@@ -166,15 +258,18 @@ String coachSystemPrompt(UserEntity user, Bool kakeiboPending) {
         "7. Em extratos e faturas, NUNCA classifique pagamentos de fatura como moradia ou contas fixas sem conhecer os itens da fatura.\n" +
         "8. NUNCA presuma que transferências Pix para pessoas físicas são despesas sem perguntar antes ao usuário, e SEMPRE peça confirmação dos valores antes de distribuir nas regras 70/20/10 ou 50/30/20.\n\n" +
         "REGRAS DE REGISTRO:\n" +
-        "6. Ao registrar um gasto, SEMPRE confirme: valor, categoria e envelope. Ex: \"Registrei R$35,00 em Alimentação (Necessidades). Certo?\"\n" +
+        "6. Quando o usuário informar um gasto com valor e categoria ou caixinha (por texto ou voz, ex: 'gastei 45 no uber'), chame a tool persistTransaction IMEDIATAMENTE para categorizar e atualizar as caixinhas antes de responder; depois confirme valor, categoria e caixinha. Nunca peça confirmação prévia se o valor e o gasto já foram informados.\n" +
         "7. Ao registrar renda variável, pergunte a origem. Ex: \"De onde veio essa renda? Freela, show, mentoria?\"\n" +
-        "8. Valores monetários SEMPRE no formato R$X.XXX,XX.\n\n" +
+        "8. Valores monetários SEMPRE no formato R$ X.XXX,XX. Use os campos pulseText e economicPulseText da tool getDailyPulse exatamente como vierem; nunca calcule, arredonde nem estime valores por conta própria.\n" +
+        "9. Pulso Diário é o quanto dá para gastar por dia até o fim do mês; Pulso Econômico é a sugestão para economizar (75% do diário, já calculado pela tool). Depois de registrar gastos, responda no formato: \"Beleza! Seus gastos (alimentação, mercado) foram registrados. Seu pulso atual para terminar o mês no azul é de R$ X/dia. Se quiser dar uma economizada, seu pulso é de R$ Y/dia.\"\n" +
+        "10. NUNCA mostre ao usuário códigos internos (nomes de categoria em inglês, nomes de modelo, nomes de tools ou campos). Os códigos servem só para os argumentos das tools; para o usuário, diga o nome em português: " + categoryNamesForPrompt() + ".\n" +
+        "11. Ao registrar um gasto, confirme com o valor e a categoria em português que a tool persistTransaction devolver (campos valor e categoria). Se ela devolver caixinhaCriada, diga ao usuário em linguagem simples que a caixinha foi criada.\n" +
+        "12a. Pedidos de caixinha (criar, renomear, mudar limite, apagar, consultar saldo) usam as tools createEnvelope, renameEnvelope, setEnvelopeLimit, deleteEnvelope e getEnvelopeStatus. Se faltar o nome da caixinha ou o valor, pergunte antes de chamar a tool. Para apagar, chame deleteEnvelope com confirmed=nao, mostre a pergunta de confirmação e só chame com confirmed=sim depois de um sim explícito. Responda de forma curta repetindo o campo resposta da tool.\n" +
+        "12. Status de caixinha: abaixo de 80% do limite é Em dia; de 80% a 100% é Alerta; acima de 100% é Estourada.\n\n" +
         "REGRAS DE MODELO:\n" +
-        "9. O modelo de orçamento do usuário é " + user.budgetModel.name() + ". Respeite os percentuais dele.\n" +
-        "10. Se o modelo for ANTI_DEBT_701020, priorize orientação sobre quitação de dívida.\n" +
-        "11. Se o modelo for KAKEIBO, faça as 4 perguntas reflexivas no final da semana.\n" +
-        "12. Se o usuário estiver em KAKEIBO e ainda não tiver respondido a reflexão semanal desta semana, pergunte as 4 perguntas em sequência e, após o usuário responder, chame a tool answerKakeiboReflection com as 4 respostas na ordem correta.\n" +
-        "13. Se detectar que os gastos essenciais passaram do percentual do modelo por 3 meses seguidos, sugira trocar de modelo (tool suggestModelChange).\n\n" +
+        "13. O modelo de orçamento do usuário é o " + coachModelLabel(user.budgetModel) + " (" + describeBudgetModel(user.budgetModel) + "). Respeite os percentuais dele. " + modelBehaviorForPrompt(user.budgetModel) + "\n" +
+        "14. Se o modelo for Kakeibo e ainda não houver reflexão semanal desta semana, faça as 4 perguntas em sequência e, após o usuário responder, chame a tool answerKakeiboReflection com as 4 respostas na ordem correta.\n" +
+        "15. Se detectar que os gastos essenciais passaram do percentual do modelo por 3 meses seguidos, sugira trocar de modelo (tool suggestModelChange).\n\n" +
         "REGRAS DE CATEGORIZAÇÃO:\n" +
         "Para cada transação, use OBRIGATORIAMENTE um destes valores exatos: GROCERIES (mercado, feira, padaria), LEISURE (cinema, show, viagem, passeio, ingresso), " +
         "FOOD (restaurante, lanche, delivery, café, almoço, jantar fora), PHARMA (farmácia, remédio), HEALTH (consulta, exame, dentista, plano de saúde, psicólogo), " +
@@ -201,7 +296,33 @@ record ExpenseArgs(Double? amount, String? category, String? description, String
 record CategoryArgs(String? category)
 record IncomeArgs(Double? amount, String? source)
 record KakeiboArgs(String? answers)
+record EnvelopeArgs(String? name, String? newName, Double? limit, String? confirmed)
+record EnvelopeToolReply(String resposta)
+
+String envelopeToolReply(String text) {
+    return json.encode(EnvelopeToolReply(text))
+}
+
+Long limitArgCents(Double? limit) {
+    var none: Long = -1
+    if (limit == null) {
+        return none
+    }
+    if (limit < 0.0) {
+        return none
+    }
+    return toCents(limit)
+}
 record ToolError(String error)
+// Resultado do registro para o modelo: categoria ja em portugues e aviso de caixinha criada.
+record ToolExpenseResult(String id, String description, String categoria, String valor, String? caixinhaCriada)
+
+String expenseToolResult(TransactionOutput saved, Category category, Bool boxExisted) {
+    if (boxExisted) {
+        return json.encode(ToolExpenseResult(saved.id(), saved.description(), categoryLabel(category), formatBrl(toCents(saved.value())), null))
+    }
+    return json.encode(ToolExpenseResult(saved.id(), saved.description(), categoryLabel(category), formatBrl(toCents(saved.value())), "Criei a caixinha " + categoryLabel(category) + " para esse gasto."))
+}
 
 String toolError(String message) {
     return json.encode(ToolError(message))
@@ -214,7 +335,7 @@ Category? parseCategory(String? raw) {
     return Category.valueOf(raw.trim().toUpperCase())
 }
 
-String runCoachTool(String userId, String name, String arguments) {
+String runCoachToolWithSource(String userId, String name, String arguments, Source chatSource) {
     try {
         if (name == "getDailyPulse") {
             return json.encode(calculateDailyPulse(userId, daysRemainingInMonth(), monthStartIso()))
@@ -231,7 +352,7 @@ String runCoachTool(String userId, String name, String arguments) {
             var category = parseCategory(a.category())
             var boxName = a.caixinha()
             if (boxName != null && boxName.trim() != "") {
-                var box = findEnvelopeByName(userId, boxName, "")
+                var box = findEnvelopeForChat(userId, boxName)
                 if (box == null) {
                     return toolError("Não achei a caixinha " + boxName.trim() + ". Suas caixinhas: " + envelopeNamesText(userId) + ".")
                 }
@@ -241,15 +362,20 @@ String runCoachTool(String userId, String name, String arguments) {
                 var boxCategory = Category.OTHER
                 if (category != null) {
                     boxCategory = category
+                } else {
+                    var inferredCat = resolveCategoryForEnvelopeName(box.categoryName)
+                    if (inferredCat != null) {
+                        boxCategory = inferredCat
+                    }
                 }
                 var boxDescription = box.categoryName
                 var boxGiven = a.description()
                 if (boxGiven != null && boxGiven.trim() != "") {
                     boxDescription = boxGiven.trim()
                 }
-                var boxSaved = persistTransactionAmount(boxDescription, amount, boxCategory, "BRL", box.id, userId)
+                var boxSaved = persistTransactionWithSource(boxDescription, amount, boxCategory, "BRL", box.id, userId, chatSource)
                 notifyEnvelopeCrossing(userId, box.id, toCents(amount))
-                return json.encode(boxSaved)
+                return expenseToolResult(boxSaved.transaction, boxCategory, !boxSaved.envelopeCreated)
             }
             if (amount != null) {
                 if (category != null) {
@@ -258,7 +384,8 @@ String runCoachTool(String userId, String name, String arguments) {
                     if (given != null && given.trim() != "") {
                         description = given.trim()
                     }
-                    return json.encode(persistTransactionAmount(description, amount, category, "BRL", null, userId))
+                    var res = persistTransactionWithSource(description, amount, category, "BRL", null, userId, chatSource)
+                    return expenseToolResult(res.transaction, category, !res.envelopeCreated)
                 }
             }
             return toolError("amount e category (" + categoryHelp() + ") sao obrigatorios")
@@ -284,6 +411,43 @@ String runCoachTool(String userId, String name, String arguments) {
             }
             return toolError("amount (> 0) e source sao obrigatorios")
         }
+        if (name == "createEnvelope" || name == "renameEnvelope" || name == "setEnvelopeLimit" || name == "deleteEnvelope" || name == "getEnvelopeStatus") {
+            var ea = json.decode<EnvelopeArgs>(arguments)
+            var boxArg = ""
+            var rawBox = ea.name()
+            if (rawBox != null) {
+                boxArg = rawBox.trim()
+            }
+            if (boxArg == "") {
+                return toolError("name é obrigatório: pergunte ao usuário qual caixinha")
+            }
+            if (name == "createEnvelope") {
+                return envelopeToolReply(chatCreateEnvelope(userId, boxArg, limitArgCents(ea.limit())))
+            }
+            if (name == "renameEnvelope") {
+                var nn = ""
+                var rawNew = ea.newName()
+                if (rawNew != null) {
+                    nn = rawNew.trim()
+                }
+                if (nn == "") {
+                    return toolError("newName é obrigatório: pergunte ao usuário o novo nome")
+                }
+                return envelopeToolReply(chatRenameEnvelope(userId, boxArg, nn))
+            }
+            if (name == "setEnvelopeLimit") {
+                return envelopeToolReply(chatSetEnvelopeLimit(userId, boxArg, limitArgCents(ea.limit())))
+            }
+            if (name == "deleteEnvelope") {
+                var ok = false
+                var conf = ea.confirmed()
+                if (conf != null) {
+                    ok = conf.trim().toLowerCase() == "sim"
+                }
+                return envelopeToolReply(chatDeleteEnvelope(userId, boxArg, ok))
+            }
+            return envelopeToolReply(chatEnvelopeStatus(userId, boxArg))
+        }
         if (name == "answerKakeiboReflection") {
             var raw = json.decode<KakeiboArgs>(arguments).answers()
             if (raw == null) {
@@ -303,6 +467,10 @@ String runCoachTool(String userId, String name, String arguments) {
     } catch (Exception e) {
         return toolError("dados invalidos para " + name)
     }
+}
+
+String runCoachTool(String userId, String name, String arguments) {
+    return runCoachToolWithSource(userId, name, arguments, Source.MANUAL)
 }
 
 // =========================================================
@@ -359,14 +527,18 @@ String clipForHistory(String text) {
 
 // Resposta final do coach, ou throw "coach indisponivel" (rede, timeout, 4xx/5xx, resposta invalida).
 // Nunca registra a chave nem o corpo da resposta no log; so o status.
-String askCoach(UserEntity user, String userText) {
+String askCoachWithSource(UserEntity user, String userText, Source chatSource) {
     var weekStart = time.startOf(localTodayIso(), "week")
     var messages: List<String> = listOf()
     messages.add(json.encode(ChatTextMessage("system", coachSystemPrompt(user, shouldAskKakeiboReflection(user.id, weekStart)))))
     for (var h in chatHistoryJson(user.id)) {
         messages.add(h)
     }
-    messages.add(json.encode(ChatTextMessage("user", userText)))
+    var promptUserText = userText
+    if (chatSource == Source.VOICE) {
+        promptUserText = "[Mensagem enviada por VOZ: se houver gasto com valor claro, chame persistTransaction IMEDIATAMENTE categorizando na(s) caixinha(s) certa(s) sem pedir confirmação prévia.]\n" + userText
+    }
+    messages.add(json.encode(ChatTextMessage("user", promptUserText)))
     var tools = json.encode(coachTools())
     var headers = jsonBearerHeaders(secrets.secret("OPENAI_API_KEY").reveal())
     var url = openAiBaseUrl() + "/chat/completions"
@@ -389,16 +561,20 @@ String askCoach(UserEntity user, String userText) {
         if (calls != null && !calls.isEmpty()) {
             messages.add(json.encode(message))
             for (var call in calls) {
-                messages.add(json.encode(ChatToolResultMessage("tool", call.id(), runCoachTool(user.id, call.function().name(), call.function().arguments()))))
+                messages.add(json.encode(ChatToolResultMessage("tool", call.id(), runCoachToolWithSource(user.id, call.function().name(), call.function().arguments(), chatSource))))
             }
         } else {
             var content = message.content()
             if (content != null && content.trim() != "") {
-                return content
+                return sanitizeCoachReply(content)
             }
             throw "coach indisponivel"
         }
     }
     log.warn("coach: mais de 5 rodadas de tools; conversa interrompida")
     throw "coach indisponivel"
+}
+
+String askCoach(UserEntity user, String userText) {
+    return askCoachWithSource(user, userText, Source.MANUAL)
 }
