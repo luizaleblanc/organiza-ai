@@ -607,10 +607,30 @@ main() {
                 if (user == null) {
                     return status(404, json.encode(ApiError("Usuário não encontrado.")))
                 }
+                var isRealOpenAi = openAiBaseUrl() == "https://api.openai.com/v1"
+                var msgLower = msgReq.message.trim().toLowerCase()
+                var detIntent = planChatIntentDeterministic(msgReq.message).intencao()
+                var isDetExpense = detIntent == "registrar_gasto" || (!msgLower.contains("?") && parseChatAmountPart(msgLower) > 0.0 && (classifyChatExpenseCategory(msgLower) != Category.OTHER || msgLower.contains(" em ") || msgLower.contains(" no ") || msgLower.contains(" na ") || msgLower.contains(" com ")))
+                if (isRealOpenAi && (detIntent == "fora_de_escopo" || detIntent == "auditar_fatura" || detIntent == "gerenciar_caixinha" || isDetExpense || isAmbiguousBillPaymentOrPersonalPix(userId, msgLower))) {
+                    saveChatMessage(ChatMessageEntity("", userId, ChatRole.USER, msgReq.message, nowIso()))
+                    var safeReply = coachReplyOfflineWithSource(userId, msgReq.message, monthStart, chatSource)
+                    saveChatMessage(ChatMessageEntity("", userId, ChatRole.ASSISTANT, clipForHistory(safeReply), nowIso()))
+                    return chatReplyJson(userId, safeReply, monthStart)
+                }
                 var answer = ""
+                var llmFailed = false
                 try {
                     answer = askCoachWithSource(user, msgReq.message, chatSource)
                 } catch (String e) {
+                    llmFailed = true
+                }
+                if (llmFailed) {
+                    if (isRealOpenAi) {
+                        saveChatMessage(ChatMessageEntity("", userId, ChatRole.USER, msgReq.message, nowIso()))
+                        var fbReply = coachReplyOfflineWithSource(userId, msgReq.message, monthStart, chatSource)
+                        saveChatMessage(ChatMessageEntity("", userId, ChatRole.ASSISTANT, clipForHistory(fbReply), nowIso()))
+                        return chatReplyJson(userId, fbReply, monthStart)
+                    }
                     return status(503, json.encode(ApiError("O coach está indisponível no momento. Tente de novo em instantes.")))
                 }
                 saveChatMessage(ChatMessageEntity("", userId, ChatRole.USER, msgReq.message, nowIso()))

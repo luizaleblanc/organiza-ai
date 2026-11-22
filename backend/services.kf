@@ -400,19 +400,25 @@ VariableIncomeEntity saveVariableIncome(VariableIncomeEntity income) {
 // Envelope da transacao: o informado no corpo so vale se for do proprio usuario (PERS-11);
 // senao, o envelope do usuario com o nome da categoria; nenhum = auto-cria caixinha da categoria.
 String? resolveEnvelopeId(String userId, String? given, Category category) {
-    if (given != null) {
+    if (given != null && given.trim() != "") {
         var owned = findEnvelopeById(userId, given)
         if (owned != null) {
+            if (categoryOrNull(owned.categoryName) != null) {
+                var ptOwned = categoryLabel(categoryOrNull(owned.categoryName))
+                updateEnvelope(userId, owned.id, EnvelopeEntity(owned.id, userId, ptOwned, owned.limitAmount, owned.currentSpent, owned.limitType, owned.movingAverageMonths, owned.createdAt, owned.bucket))
+            }
             return owned.id
         }
     }
-    var env = findEnvelopeByUserIdAndCategoryName(userId, category.name())
-    if (env != null) {
-        return env.id
-    }
-    var labeled = findEnvelopeByName(userId, categoryLabel(category), "")
+    var ptLabel = categoryLabel(category)
+    var labeled = findEnvelopeByName(userId, ptLabel, "")
     if (labeled != null) {
         return labeled.id
+    }
+    var env = findEnvelopeByUserIdAndCategoryName(userId, category.name())
+    if (env != null) {
+        updateEnvelope(userId, env.id, EnvelopeEntity(env.id, userId, ptLabel, env.limitAmount, env.currentSpent, env.limitType, env.movingAverageMonths, env.createdAt, env.bucket))
+        return env.id
     }
     var created = autoCreateCategoryEnvelope(userId, category)
     if (created != null) {
@@ -500,7 +506,7 @@ Bool isAutoCreatedCategoryEnvelope(EnvelopeEntity e, List<OnboardingChipAllocati
     }
     var byLabel = categoryByPortugueseLabel(e.categoryName)
     if (byLabel == null) {
-        return false
+        return isFreeEnvelopeName(e.categoryName) && !isReserveEnvelopeName(e.categoryName)
     }
     var chipCats = chips.map((c: OnboardingChipAllocationRow) -> c.category())
     return !chipCats.contains(byLabel.name())
@@ -762,6 +768,58 @@ EnvelopeEntity? autoCreateCategoryEnvelope(String userId, Category category) {
         }
     }
     var created = createEnvelope(EnvelopeEntity("", userId, categoryLabel(category), perAutoReais, 0.0, EnvelopeLimitType.FIXED, 0, nowIso(), textOrNull(bucket)))
+    saveOnboardingControlForUser(user)
+    return created
+}
+
+// Gasto com assunto/categoria falado diferente das caixinhas do onboarding: cria automaticamente
+// uma nova caixinha 100% editável (nome livre em português) no bucket correspondente do modelo.
+EnvelopeEntity? autoCreateCustomEditableEnvelope(String userId, String customTopic, Category fallbackCategory) {
+    var cleanTopic = customTopic.trim()
+    if (cleanTopic == "" || envelopeNameError(cleanTopic) != null) {
+        return autoCreateCategoryEnvelope(userId, fallbackCategory)
+    }
+    var existing = findEnvelopeForChat(userId, cleanTopic)
+    if (existing != null) {
+        return existing
+    }
+    var user = findUserById(userId)
+    if (user == null) {
+        return null
+    }
+    var model = user.budgetModel
+    var plan = buildBudgetBuckets(model, userSalary(user))
+    var bucket = nullToText(planBucketFor(model, plan, fallbackCategory))
+    if (!onboardingCompleted(user)) {
+        var share = 1 + findEnvelopesByUserId(userId).filter((e: EnvelopeEntity) -> nullToText(e.bucket) == bucket).size
+        var limit = chipLimit(plan, bucket, share)
+        return createEnvelope(EnvelopeEntity("", userId, cleanTopic, limit, 0.0, EnvelopeLimitType.FIXED, 0, nowIso(), textOrNull(bucket)))
+    }
+
+    var ceilingCents = bucketCeilingCents(plan, bucket)
+    var chips = listOnboardingChipsByUser(userId)
+    var inBucket = findEnvelopesByUserId(userId).filter((e: EnvelopeEntity) -> envelopePlanBucket(e, model, plan) == bucket)
+    var autoEnvs: List<EnvelopeEntity> = listOf()
+    var fixedCents: Long = 0
+    for (var e in inBucket) {
+        if (isAutoCreatedCategoryEnvelope(e, chips)) {
+            autoEnvs.add(e)
+        } else {
+            fixedCents = fixedCents + toCents(e.limitAmount)
+        }
+    }
+    var availableCents = ceilingCents - fixedCents
+    if (availableCents < 0) {
+        availableCents = 0
+    }
+    var perAutoCents = availableCents / (autoEnvs.size + 1)
+    var perAutoReais = centsToReais(perAutoCents)
+    for (var ae in autoEnvs) {
+        if (toCents(ae.limitAmount) != perAutoCents) {
+            saveEnvelope(EnvelopeEntity(ae.id, ae.userId, ae.categoryName, perAutoReais, ae.currentSpent, ae.limitType, ae.movingAverageMonths, ae.createdAt, ae.bucket))
+        }
+    }
+    var created = createEnvelope(EnvelopeEntity("", userId, cleanTopic, perAutoReais, 0.0, EnvelopeLimitType.FIXED, 0, nowIso(), textOrNull(bucket)))
     saveOnboardingControlForUser(user)
     return created
 }

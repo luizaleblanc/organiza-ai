@@ -593,6 +593,30 @@ void cleanupStaleHallucinatedChat(String conn) {
     }
 }
 
+void migrateEnglishCategoryCodeInDb(String conn, String code, String ptLabel) {
+    try {
+        db.execute(conn, "UPDATE \"enveloperow\" SET \"categoryName\" = '" + ptLabel + "' WHERE UPPER(\"categoryName\") = '" + code + "'")
+        db.execute(conn, "UPDATE \"transactionrow\" SET \"description\" = '" + ptLabel + "' WHERE UPPER(\"description\") = '" + code + "'")
+    } catch (String e) {
+    } catch (Exception e) {
+    }
+}
+
+void migrateEnglishCategoriesToPortuguese(String conn) {
+    migrateEnglishCategoryCodeInDb(conn, "FOOD", "Alimentação")
+    migrateEnglishCategoryCodeInDb(conn, "GROCERIES", "Mercado")
+    migrateEnglishCategoryCodeInDb(conn, "HOUSING", "Moradia")
+    migrateEnglishCategoryCodeInDb(conn, "TRANSPORT", "Transporte")
+    migrateEnglishCategoryCodeInDb(conn, "LEISURE", "Lazer")
+    migrateEnglishCategoryCodeInDb(conn, "PHARMA", "Farmácia")
+    migrateEnglishCategoryCodeInDb(conn, "HEALTH", "Saúde")
+    migrateEnglishCategoryCodeInDb(conn, "AUTO", "Carro")
+    migrateEnglishCategoryCodeInDb(conn, "EDUCATION", "Educação")
+    migrateEnglishCategoryCodeInDb(conn, "SHOPPING", "Compras")
+    migrateEnglishCategoryCodeInDb(conn, "SUBSCRIPTIONS", "Assinaturas")
+    migrateEnglishCategoryCodeInDb(conn, "OTHER", "Outros")
+}
+
 // Cria as tabelas que faltam (PERS-22): orm.create e idempotente (medido: 3x no mesmo banco = true).
 // Banco novo: orm.create ja cria userrow com name e a migracao nao faz nada.
 void ensureSchema(String db) {
@@ -618,6 +642,7 @@ void ensureSchema(String db) {
     orm.create<OnboardingExpenseControlRow>(db)
     orm.create<OnboardingChipAllocationRow>(db)
     cleanupStaleHallucinatedChat(db)
+    migrateEnglishCategoriesToPortuguese(db)
 }
 
 // Abre uma conexao nova com a URL final (DbConn.url) e as credenciais separadas. Falha de rede ou de

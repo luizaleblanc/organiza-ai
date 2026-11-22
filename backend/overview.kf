@@ -77,12 +77,13 @@ EnvelopeOverview overviewOf(EnvelopeEntity e, BudgetModelType model, List<Bucket
         if (isReserveEnvelopeName(e.categoryName)) {
             bucket = planReserveBucket(model)
         } else {
-            if (!isFreeEnvelopeName(e.categoryName)) {
-                bucket = planBucketFor(model, plan, categoryOrNull(e.categoryName))
+            var resolvedCat = resolveCategoryForEnvelopeName(e.categoryName)
+            if (resolvedCat != null) {
+                bucket = planBucketFor(model, plan, resolvedCat)
             }
         }
     }
-    return EnvelopeOverview(e.id, e.categoryName, bucket,
+    return EnvelopeOverview(e.id, envelopeDisplayName(e), bucket,
         e.limitAmount, centsToReais(spent), percentOf(spent, limit), envelopeStatus(spent, limit))
 }
 
@@ -159,17 +160,19 @@ List<EnvelopeEntity> createEnvelopesFromChips(UserEntity user, List<String> chip
     var plan = buildBudgetBuckets(model, userSalary(user))
     var categories = chips.map((c: String) -> chipCategories().getOrDefault(c, "OTHER")).distinct()
     var byBucket = categories.groupBy((c: String) -> nullToText(planBucketFor(model, plan, categoryOrNull(c))))
-    var existing = findEnvelopesByUserId(user.id).map((e: EnvelopeEntity) -> e.categoryName)
-    var created = categories.filter((c: String) -> !existing.contains(c))
+    var existing = findEnvelopesByUserId(user.id).map((e: EnvelopeEntity) -> envelopeNameKey(envelopeDisplayName(e)))
+    var created = categories.filter((c: String) -> !existing.contains(envelopeNameKey(categoryLabel(categoryOrNull(c)))))
         .map((c: String) -> createChipEnvelope(user, plan, byBucket, c))
     saveChipListAllocationsForUser(user, chips)
     return created
 }
 
 EnvelopeEntity createChipEnvelope(UserEntity user, List<BucketSummaryDTO> plan, Map<String, List<String>> byBucket, String category) {
-    var bucket = nullToText(planBucketFor(user.budgetModel, plan, categoryOrNull(category)))
+    var catObj = categoryOrNull(category)
+    var ptName = categoryLabel(catObj)
+    var bucket = nullToText(planBucketFor(user.budgetModel, plan, catObj))
     var limit = chipLimit(plan, bucket, byBucket.getOrDefault(bucket, listOf()).size)
-    return createEnvelope(EnvelopeEntity("", user.id, category, limit, 0.0, EnvelopeLimitType.FIXED, 0, nowIso(), textOrNull(bucket)))
+    return createEnvelope(EnvelopeEntity("", user.id, ptName, limit, 0.0, EnvelopeLimitType.FIXED, 0, nowIso(), textOrNull(bucket)))
 }
 
 // =========================================================
