@@ -21,6 +21,118 @@ record RegisterIncomeOutput(String destination, String message)
 
 record SuggestModelChangeOutput(Bool shouldChange, String suggestedModel, String reason)
 
+// Catalogo declarativo de agentes (agents/*.md, padrao wshobson/agents + VoltAgent agent-organizer)
+record OrganizaAgentSpec(String name, String description, String model, Double temperature, String systemPrompt)
+record OrganizerPlan(String intencao, List<String> agentes)
+
+List<String> officialDomainAgentNames() {
+    return listOf("triador-gastos", "auditor-faturas", "gestor-caixinhas", "consultor-pulso")
+}
+
+OrganizaAgentSpec parseOrganizaAgentMarkdown(String rawMd, String defaultName, String defaultDesc, Double defaultTemp) {
+    var trimmed = rawMd.trim()
+    var name = defaultName
+    var desc = defaultDesc
+    var model = "gpt-4o-mini"
+    var temp = defaultTemp
+    var body = trimmed
+    if (trimmed.startsWith("---")) {
+        var secondDash = trimmed.indexOf("---", 3)
+        if (secondDash > 3) {
+            var fm = trimmed.substring(3, secondDash).trim()
+            body = trimmed.substring(secondDash + 3).trim()
+            for (var line in fm.split("\n")) {
+                var l = line.trim()
+                if (l.startsWith("name:")) {
+                    name = l.substring(5).trim()
+                } else if (l.startsWith("description:")) {
+                    desc = l.substring(12).trim()
+                } else if (l.startsWith("model:")) {
+                    model = l.substring(6).trim()
+                } else if (l.startsWith("temperature:")) {
+                    var tRaw = l.substring(12).trim()
+                    try {
+                        temp = tRaw.toDouble()
+                    } catch (Exception e) {}
+                }
+            }
+        }
+    }
+    return OrganizaAgentSpec(name, desc, model, temp, body)
+}
+
+OrganizaAgentSpec loadSingleAgentSpec(String path, String defaultName, String defaultDesc, Double defaultTemp) {
+    try {
+        if (File(path).exists()) {
+            var content = File(path).readText()
+            if (content != null && content.trim() != "") {
+                return parseOrganizaAgentMarkdown(content, defaultName, defaultDesc, defaultTemp)
+            }
+        }
+    } catch (String e) {
+    } catch (Exception e) {
+    }
+    return OrganizaAgentSpec(defaultName, defaultDesc, "gpt-4o-mini", defaultTemp, defaultDesc)
+}
+
+List<OrganizaAgentSpec> loadOrganizaAgentsCatalog() {
+    return listOf(
+        loadSingleAgentSpec("agents/organizer.md", "agent-organizer", "Planejador central que classifica a intenção da mensagem e seleciona quais agentes do catálogo do Organiza AI devem atuar, sem executar ferramentas.", 0.0),
+        loadSingleAgentSpec("agents/triador-gastos.md", "triador-gastos", "Identifica gastos, entradas e temas falados pelo usuário sem estimar valores ausentes e exige perguntas de segurança em lançamentos ambíguos.", 0.0),
+        loadSingleAgentSpec("agents/auditor-faturas.md", "auditor-faturas", "Audita faturas e extratos a partir do parser determinístico KOF, reconcilia contadores e formula perguntas de segurança antes de persistir.", 0.0),
+        loadSingleAgentSpec("agents/gestor-caixinhas.md", "gestor-caixinhas", "Gerencia caixinhas e cria automaticamente uma nova caixinha editável sempre que um gasto tiver categoria ou assunto diferente do onboarding do usuário.", 0.1),
+        loadSingleAgentSpec("agents/consultor-pulso.md", "consultor-pulso", "Calcula e comunica Pulso Diário, Pulso Econômico, Reserva Acumulada e divisão do modelo de orçamento com base exclusiva no KofDB e no tom de voz da marca.", 0.2)
+    )
+}
+
+Bool isOutOfScopeFinanceMessage(String lower) {
+    return lower.contains("criptomoeda") || lower.contains("bitcoin") || lower.contains("qual ação comprar") || lower.contains("qual acao comprar") || lower.contains("bolsa de valores") || lower.contains("day trade") || lower.contains("aposta") || hasWholeWord(lower, "bet")
+}
+
+// Fallback F1: Roteamento determinístico em KOF quando o organizer falha ou opera offline.
+OrganizerPlan planChatIntentDeterministic(String rawMsg) {
+    var lower = rawMsg.trim().toLowerCase()
+    if (isOutOfScopeFinanceMessage(lower)) {
+        return OrganizerPlan("fora_de_escopo", listOf())
+    }
+    if (lower.contains("fatura") || lower.contains("extrato") || lower.contains(".pdf") || lower.contains(".docx") || lower.contains(".png") || lower.contains(".jpg") || lower.contains(".jpeg")) {
+        return OrganizerPlan("auditar_fatura", listOf("auditor-faturas", "gestor-caixinhas", "consultor-pulso"))
+    }
+    if ((lower.contains("caixinha") || lower.contains("limite")) && lowerHasAny(lower, listOf("cria ", "criar ", "crie ", "nova caixinha", "renome", "muda o nome", "mudar o nome", "troca o nome", "apaga", "apagar", "exclui", "excluir", "remove", "deleta", "quanto sobra", "quanto resta", "saldo"))) {
+        return OrganizerPlan("gerenciar_caixinha", listOf("gestor-caixinhas", "consultor-pulso"))
+    }
+    if (lower.contains("recebi") || lower.contains("ganhei") || lower.contains("freela") || lower.contains("renda extra")) {
+        return OrganizerPlan("registrar_renda", listOf("triador-gastos", "consultor-pulso"))
+    }
+    if (lower.contains("gastei") || lower.contains("gasto") || lower.contains("comprei") || lower.contains("paguei") || lower.contains("pague") || lower.contains("lança") || lower.contains("lanca") || lower.contains("registra") || lower.contains("coloca")) {
+        return OrganizerPlan("registrar_gasto", listOf("triador-gastos", "gestor-caixinhas", "consultor-pulso"))
+    }
+    return OrganizerPlan("consultar_pulso_ou_gastos", listOf("consultor-pulso"))
+}
+
+// Fallback F3: Valida o plano contra os 4 agentes oficiais, descartando qualquer agente inventado.
+OrganizerPlan validateOrganizerPlan(OrganizerPlan plan) {
+    var allowed = officialDomainAgentNames()
+    var validAgents: List<String> = listOf()
+    for (var ag in plan.agentes()) {
+        if (allowed.contains(ag) && !validAgents.contains(ag)) {
+            validAgents.add(ag)
+        }
+    }
+    if (plan.intencao() == "fora_de_escopo") {
+        return OrganizerPlan("fora_de_escopo", listOf())
+    }
+    if (validAgents.isEmpty()) {
+        return OrganizerPlan(plan.intencao(), listOf("consultor-pulso"))
+    }
+    return OrganizerPlan(plan.intencao(), validAgents)
+}
+
+// Fallback F2: Resposta de proteção quando a intenção está fora do escopo seguro do Organiza AI.
+String outOfScopeFallbackReply(UserEntity? user, GetDailyPulseOutput pulse) {
+    return "Esse assunto está fora do escopo do Organiza AI. Por segurança e para evitar recomendações arriscadas, eu não indico investimentos específicos, criptomoedas nem apostas. Meu foco é organizar seu orçamento e suas caixinhas: hoje seu pulso diário seguro é de " + pulse.pulseText + "/dia (ou " + pulse.economicPulseText + "/dia no modo econômico)."
+}
+
 // =========================================================
 // CategoryBucketMapper (Mapeamento de Categoria para Bucket)
 // =========================================================
@@ -492,7 +604,7 @@ String buildGroundedDocumentReply(String userId, UserEntity? user, FinancialDocu
     }
 
     // Passo 2: Analise assertiva com rastreabilidade documental e pedido de confirmacao
-    var analysis = "Conferi cada lançamento extraído de " + docRow.filename + ". O total de saídas fechou em " + formatBrl(outflowTotalMinor) + " (" + String.valueOf(outflowCount) + " lançamentos), mas prefiro não adivinhar categorias sem sua confirmação:\n\n"
+    var analysis = "Conferi cada lançamento extraído de " + docRow.filename + ". O total de saídas fechou em " + formatBrl(outflowTotalMinor) + " (" + String.valueOf(outflowCount) + " lançamentos). Perguntas de segurança antes de salvar nas caixinhas (para não adivinhar categorias sem sua confirmação):\n\n"
     if (confirmedMerchantMinor > 0) {
         analysis = analysis + "- Gastos confirmados em estabelecimentos: " + merchantExamples + " (total confirmado: " + formatBrl(confirmedMerchantMinor) + ").\n"
     }
@@ -567,6 +679,110 @@ Double parseChatAmountPart(String part) {
     return amt
 }
 
+Category classifyChatExpenseCategory(String part) {
+    if (part.contains("almoço") || part.contains("almoco") || part.contains("jantar") || part.contains("café") || part.contains("cafe") || part.contains("restaurante") || part.contains("lanche") || part.contains("comida") || part.contains("ifood") || part.contains("delivery") || part.contains("padaria") || part.contains("lanchonete") || part.contains("food")) {
+        return Category.FOOD
+    }
+    if (part.contains("mercado") || part.contains("supermercado") || part.contains("feira") || part.contains("hortifruti") || part.contains("atacadao") || part.contains("atacadão") || part.contains("acougue") || part.contains("açougue")) {
+        return Category.GROCERIES
+    }
+    if (part.contains("farmacia") || part.contains("farmácia") || part.contains("drogaria") || part.contains("remedio") || part.contains("remédio") || part.contains("medicamento")) {
+        return Category.PHARMA
+    }
+    if (part.contains("uber") || part.contains("99") || part.contains("taxi") || part.contains("táxi") || part.contains("transporte") || part.contains("onibus") || part.contains("ônibus") || part.contains("metro") || part.contains("metrô") || part.contains("passagem") || part.contains("trem")) {
+        return Category.TRANSPORT
+    }
+    if (part.contains("gasolina") || part.contains("combustivel") || part.contains("combustível") || part.contains("etanol") || part.contains("diesel") || part.contains("posto") || part.contains("estacionamento") || part.contains("pedagio") || part.contains("pedágio") || part.contains("oficina") || part.contains("ipva")) {
+        return Category.AUTO
+    }
+    if (part.contains("aluguel") || part.contains("condominio") || part.contains("condomínio") || part.contains("iptu") || part.contains("energia") || part.contains("luz") || part.contains("agua") || part.contains("água") || part.contains("internet") || part.contains("moradia") || part.contains("casa")) {
+        return Category.HOUSING
+    }
+    if (part.contains("medico") || part.contains("médico") || part.contains("consulta") || part.contains("dentista") || part.contains("exame") || part.contains("clinica") || part.contains("clínica") || part.contains("hospital") || part.contains("psicologo") || part.contains("psicólogo") || part.contains("saude") || part.contains("saúde") || part.contains("academia")) {
+        return Category.HEALTH
+    }
+    if (part.contains("curso") || part.contains("faculdade") || part.contains("escola") || part.contains("livro") || part.contains("livros") || part.contains("apostila") || part.contains("ingles") || part.contains("inglês") || part.contains("educacao") || part.contains("educação")) {
+        return Category.EDUCATION
+    }
+    if (part.contains("cinema") || part.contains("teatro") || part.contains("show") || part.contains("viagem") || part.contains("bar") || part.contains("festa") || part.contains("lazer") || part.contains("passeio") || part.contains("ingresso") || part.contains("parque")) {
+        return Category.LEISURE
+    }
+    if (part.contains("roupa") || part.contains("tenis") || part.contains("tênis") || part.contains("sapato") || part.contains("loja") || part.contains("shopping") || part.contains("presente") || part.contains("amazon") || part.contains("shopee") || part.contains("mercadolivre") || part.contains("compra")) {
+        return Category.SHOPPING
+    }
+    if (part.contains("netflix") || part.contains("spotify") || part.contains("youtube") || part.contains("disney") || part.contains("icloud") || part.contains("assinatura") || part.contains("streaming")) {
+        return Category.SUBSCRIPTIONS
+    }
+    return Category.OTHER
+}
+
+String extractCustomExpenseTopic(String rawPart) {
+    var lower = rawPart.trim().toLowerCase()
+    var markers = listOf("na caixinha ", "no ", "na ", "em ", "com ", "de ", "pro ", "pra ", "para ")
+    var extracted = ""
+    for (var m in markers) {
+        var idx = lower.indexOf(m)
+        if (idx >= 0) {
+            var cand = rawPart.trim().substring(idx + m.length()).trim()
+            if (cand != "") {
+                extracted = cand
+                break
+            }
+        }
+    }
+    if (extracted == "") {
+        return ""
+    }
+    var words = extracted.split(" ")
+    var kept: List<String> = listOf()
+    for (var w in words) {
+        var cl = w.trim()
+        while (cl.endsWith(".") || cl.endsWith(",") || cl.endsWith("!") || cl.endsWith("?") || cl.endsWith(";") || cl.endsWith("\"") || cl.endsWith("'")) {
+            cl = cl.substring(0, cl.length() - 1).trim()
+        }
+        while (cl.startsWith("\"") || cl.startsWith("'")) {
+            cl = cl.substring(1).trim()
+        }
+        var wl = cl.toLowerCase()
+        var isMoneyToken = wl == "r$" || wl == "$" || wl == "reais" || wl == "real" || wl == "conto" || wl == "contos" || wl == "pila" || wl == "hoje" || wl == "ontem" || wl == "agora"
+        var numCheck = wl.replace("r$", "").replace("$", "").replace(".", "").replace(",", "")
+        if (numCheck.length() > 0 && strings.isNumeric(numCheck)) {
+            isMoneyToken = true
+        }
+        if (!isMoneyToken && cl.length() > 0) {
+            kept.add(cl)
+        }
+    }
+    var joined = ""
+    for (var kw in kept) {
+        if (joined != "") {
+            joined = joined + " "
+        }
+        joined = joined + kw
+    }
+    var cleaned = cleanEnvelopeName(joined)
+    if (cleaned.length() < 2 || cleaned.length() > 40) {
+        return ""
+    }
+    var clLower = cleaned.toLowerCase()
+    if (clLower == "algo" || clLower == "coisa" || clLower == "coisas" || clLower == "gasto" || clLower == "gastos" || clLower == "conta" || clLower == "contas" || clLower == "cartao" || clLower == "cartão" || clLower == "pix" || clLower == "dinheiro") {
+        return ""
+    }
+    return cleaned
+}
+
+Bool isAmbiguousBillPaymentOrPersonalPix(String userId, String lower) {
+    if (lower.contains("pagamento de fatura") || lower.contains("paguei a fatura") || lower.contains("paguei fatura") || lower.contains("pagar fatura") || lower.contains("pagar a fatura")) {
+        return true
+    }
+    if (lower.contains("pix para ") || lower.contains("pix pro ") || lower.contains("pix pra ") || lower.contains("transferi para ") || lower.contains("transferência para ") || lower.contains("transferencia para ")) {
+        if (!lower.contains("caixinha") && classifyChatExpenseCategory(lower) == Category.OTHER && findMentionedEnvelopeInPart(userId, lower) == null) {
+            return true
+        }
+    }
+    return false
+}
+
 String coachReplyOfflineWithSource(String userId, String rawMsg, String monthStart, Source source) {
     var msg = rawMsg.trim()
     var lower = msg.toLowerCase()
@@ -588,6 +804,13 @@ String coachReplyOfflineWithSource(String userId, String rawMsg, String monthSta
         if (m.role == "ASSISTANT") {
             lastAssistantMsg = m.content
         }
+    }
+
+    // Orquestrador determinístico KOF (Fallbacks F1, F2 e F3 sobre o catálogo agents/*.md)
+    var catalog = loadOrganizaAgentsCatalog()
+    var plan = validateOrganizerPlan(planChatIntentDeterministic(msg))
+    if (plan.intencao() == "fora_de_escopo" && catalog.size > 0) {
+        return outOfScopeFallbackReply(user, pulse)
     }
 
     // Bloqueio imediato quando o upload registrou falha de extracao / 0 lancamentos.
@@ -715,19 +938,26 @@ String coachReplyOfflineWithSource(String userId, String rawMsg, String monthSta
 
     // 4. Registro de gastos por texto / voz (todas as 12 categorias + caixinha explicitamente citada + Source.VOICE)
     var isQuestionQuery = lower.contains("?") || lower.contains("quanto ") || lower.contains("qual o pulso") || lower.contains("saldo") || lower.contains("disponível para") || lower.contains("disponivel para")
-    var isExpenseVerb = !isQuestionQuery && (lower.contains("gastei") || lower.contains("gasto") || lower.contains("comprei") || lower.contains("paguei") || lower.contains("pague") || lower.contains("lança") || lower.contains("lanca") || lower.contains("registra") || lower.contains("coloca"))
+    var isExpenseVerb = !isQuestionQuery && (lower.contains("gastei") || lower.contains("gasto") || lower.contains("comprei") || lower.contains("paguei") || lower.contains("pague") || lower.contains("lança") || lower.contains("lanca") || lower.contains("registra") || lower.contains("coloca") || lower.contains("fiz um pix") || lower.contains("transferi"))
+    var isImplicitTextExpense = !isQuestionQuery && !lower.contains("fatura") && !lower.contains("extrato") && !lower.contains("caixinha") && !lower.contains("limite") && !lower.contains("recebi") && !lower.contains("ganhei") && parseChatAmountPart(lower) > 0.0 && (classifyChatExpenseCategory(lower) != Category.OTHER || lower.contains(" em ") || lower.contains(" no ") || lower.contains(" na ") || lower.contains(" com "))
     var isVoiceExpenseCandidate = source == Source.VOICE && !isQuestionQuery && !lower.contains("pulso") && parseChatAmountPart(lower) > 0.0
-    if (isExpenseVerb || isVoiceExpenseCandidate) {
+    if ((isExpenseVerb || isImplicitTextExpense || isVoiceExpenseCandidate) && isAmbiguousBillPaymentOrPersonalPix(userId, lower)) {
+        return "Pergunta de segurança antes de lançar nas suas caixinhas: esse valor foi um gasto de consumo deste mês ou uma transferência pessoal / pagamento de fatura anterior? Se foi um gasto do mês, me diga em qual caixinha ou categoria quer registrar."
+    }
+    if (isExpenseVerb || isImplicitTextExpense || isVoiceExpenseCandidate) {
         var registeredCats: List<String> = listOf()
         var createdBoxes: List<String> = listOf()
+        var editableCreatedBoxes: List<String> = listOf()
         var linkedBoxes: List<String> = listOf()
         var bucketNotes: List<String> = listOf()
         var controlWarnings: List<String> = listOf()
-        var parts = lower.split(" e ")
-        for (var part in parts) {
+        var rawParts = msg.split(" e ")
+        for (var rawPart in rawParts) {
+            var part = rawPart.toLowerCase()
             var amt = parseChatAmountPart(part)
             var matchedEnv = findMentionedEnvelopeInPart(userId, part)
             var matchedEnvId: String? = textOrNull("")
+            var customBoxCreatedNow = false
             var catName = "outros"
             var catEnum = Category.OTHER
             if (part.contains("almoço") || part.contains("almoco") || part.contains("jantar") || part.contains("café") || part.contains("cafe") || part.contains("restaurante") || part.contains("lanche") || part.contains("comida") || part.contains("ifood") || part.contains("delivery") || part.contains("padaria") || part.contains("lanchonete") || part.contains("food")) {
@@ -764,6 +994,17 @@ String coachReplyOfflineWithSource(String userId, String rawMsg, String monthSta
                 catName = "assinaturas"
                 catEnum = Category.SUBSCRIPTIONS
             }
+            if (matchedEnv == null && amt > 0.0) {
+                var explicitBoxRequest = part.contains("caixinha ")
+                var customTopic = extractCustomExpenseTopic(rawPart)
+                if ((explicitBoxRequest || catEnum == Category.OTHER) && customTopic != "") {
+                    var autoCustom = autoCreateCustomEditableEnvelope(userId, customTopic, catEnum)
+                    if (autoCustom != null) {
+                        matchedEnv = autoCustom
+                        customBoxCreatedNow = true
+                    }
+                }
+            }
             if (matchedEnv != null) {
                 matchedEnvId = matchedEnv.id
                 if (catEnum == Category.OTHER) {
@@ -782,9 +1023,12 @@ String coachReplyOfflineWithSource(String userId, String rawMsg, String monthSta
                 if (matchedEnv != null) {
                     boxLabel = envelopeDisplayName(matchedEnv)
                 }
-                if (txRes.envelopeCreated) {
+                if (txRes.envelopeCreated || customBoxCreatedNow) {
                     if (!createdBoxes.contains(boxLabel)) {
                         createdBoxes.add(boxLabel)
+                    }
+                    if (customBoxCreatedNow && !editableCreatedBoxes.contains(boxLabel)) {
+                        editableCreatedBoxes.add(boxLabel)
                     }
                 } else if (!linkedBoxes.contains(boxLabel)) {
                     linkedBoxes.add(boxLabel)
@@ -805,7 +1049,7 @@ String coachReplyOfflineWithSource(String userId, String rawMsg, String monthSta
         }
         if (registeredCats.size == 0) {
             if (isExpenseVerb) {
-                return "Não consegui identificar o valor desse gasto. Me fala de novo com o valor, por exemplo: gastei R$ 35 no almoço."
+                return "Para eu não estimar nem inventar nenhum valor: quanto você gastou exatamente? Me diga com o valor em reais, por exemplo: gastei R$ 35 no almoço."
             }
         } else {
             var updatedPulse = calculateDailyPulse(userId, daysRemainingInMonth(), monthStart)
@@ -820,7 +1064,12 @@ String coachReplyOfflineWithSource(String userId, String rawMsg, String monthSta
             }
             var boxText = ""
             if (createdBoxes.size == 1) {
-                boxText = " Criei a caixinha " + createdBoxes.get(0) + " para acompanhar esse gasto."
+                var singleBox = createdBoxes.get(0)
+                if (editableCreatedBoxes.contains(singleBox)) {
+                    boxText = " Criei a caixinha editável " + singleBox + " para acompanhar esse gasto."
+                } else {
+                    boxText = " Criei a caixinha " + singleBox + " para acompanhar esse gasto."
+                }
             } else if (createdBoxes.size > 1) {
                 var bi = 1
                 var names = createdBoxes.get(0)
@@ -828,7 +1077,11 @@ String coachReplyOfflineWithSource(String userId, String rawMsg, String monthSta
                     names = names + ", " + createdBoxes.get(bi)
                     bi = bi + 1
                 }
-                boxText = " Criei as caixinhas " + names + " para acompanhar esses gastos."
+                if (!editableCreatedBoxes.isEmpty()) {
+                    boxText = " Criei as caixinhas editáveis " + names + " para acompanhar esses gastos."
+                } else {
+                    boxText = " Criei as caixinhas " + names + " para acompanhar esses gastos."
+                }
             } else if (source == Source.VOICE && linkedBoxes.size > 0) {
                 var li = 1
                 var linkedNames = linkedBoxes.get(0)

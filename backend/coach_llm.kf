@@ -161,7 +161,7 @@ List<String> kakeiboQuestions() {
 }
 
 String envelopeNamesText(String userId) {
-    var names = findEnvelopesByUserId(userId).map((e: EnvelopeEntity) -> e.categoryName)
+    var names = findEnvelopesByUserId(userId).map((e: EnvelopeEntity) -> envelopeDisplayName(e))
     if (names.isEmpty()) {
         return "o usuário ainda não tem caixinhas."
     }
@@ -195,6 +195,18 @@ String categoryNamesForPrompt() {
         text = text + c.name() + " = " + categoryLabel(c)
     }
     return text
+}
+
+String agentsCatalogForPrompt() {
+    var specs = loadOrganizaAgentsCatalog()
+    var out = ""
+    for (var s in specs) {
+        if (out != "") {
+            out = out + "; "
+        }
+        out = out + s.name() + " (" + s.description() + ")"
+    }
+    return out
 }
 
 // =========================================================
@@ -277,7 +289,8 @@ String coachSystemPrompt(UserEntity user, Bool kakeiboPending) {
         "EDUCATION (curso, faculdade, escola, material escolar), SHOPPING (roupa, calçado, eletrônico, presente), SUBSCRIPTIONS (netflix, spotify, software, assinatura mensal), " +
         "OTHER (só quando nada acima se encaixa). Escolha a categoria mais próxima pelo significado; nunca use GROCERIES como padrão de segurança.\n\n" +
         "CAIXINHAS DO USUÁRIO: " + envelopeNamesText(user.id) + "\n" +
-        "Se o usuário citar uma caixinha ao registrar um gasto (ex: \"gastei 40 na caixinha Viagem\"), passe o nome dela no argumento caixinha da tool persistTransaction, junto com a categoria que melhor descreve o gasto. Se a caixinha não existir, a tool devolve um erro com a lista: pergunte ao usuário qual ele quis dizer, sem registrar o gasto.\n"
+        "Se o usuário citar uma caixinha ao registrar um gasto (ex: \"gastei 40 na caixinha Viagem\"), passe o nome dela no argumento caixinha da tool persistTransaction, junto com a categoria que melhor descreve o gasto. Se a caixinha não existir, a tool devolve um erro com a lista: pergunte ao usuário qual ele quis dizer, sem registrar o gasto.\n" +
+        "CATÁLOGO DE AGENTES ANTI-ALUCINAÇÃO (agents/*.md): " + agentsCatalogForPrompt() + "\n"
     if (kakeiboPending) {
         p = p + "\nO usuário está no KAKEIBO e ainda não respondeu a reflexão desta semana. As 4 perguntas:"
         for (var q in kakeiboQuestions()) {
@@ -332,7 +345,41 @@ Category? parseCategory(String? raw) {
     if (raw == null) {
         return null
     }
-    return Category.valueOf(raw.trim().toUpperCase())
+    var cleaned = raw.trim()
+    if (cleaned == "") {
+        return null
+    }
+    var byEnum = Category.valueOf(cleaned.toUpperCase())
+    if (byEnum != null) {
+        return byEnum
+    }
+    var byPt = resolveCategoryForEnvelopeName(cleaned)
+    if (byPt != null) {
+        return byPt
+    }
+    var low = cleaned.toLowerCase()
+    if (low == "comida" || low == "alimentacao" || low == "alimentação" || low == "restaurante" || low == "almoço" || low == "almoco" || low == "jantar" || low == "lanche" || low == "delivery") {
+        return Category.FOOD
+    }
+    if (low == "mercado" || low == "supermercado" || low == "feira") {
+        return Category.GROCERIES
+    }
+    return null
+}
+
+String normalizePortugueseDescription(String? given, Category category, String fallbackPt) {
+    if (given == null) {
+        return fallbackPt
+    }
+    var g = given.trim()
+    if (g == "") {
+        return fallbackPt
+    }
+    var asCat = categoryOrNull(g.toUpperCase())
+    if (asCat != null) {
+        return categoryLabel(asCat)
+    }
+    return g
 }
 
 String runCoachToolWithSource(String userId, String name, String arguments, Source chatSource) {
@@ -352,7 +399,41 @@ String runCoachToolWithSource(String userId, String name, String arguments, Sour
             var category = parseCategory(a.category())
             var boxName = a.caixinha()
             if (boxName != null && boxName.trim() != "") {
-                var box = findEnvelopeForChat(userId, boxName)
+                var cleanBox = boxName.trim()
+                var lowBox = cleanBox.toLowerCase()
+                if (lowBox == "comida" || lowBox == "alimentacao" || lowBox == "alimentação" || lowBox == "food" || lowBox == "almoço" || lowBox == "almoco" || lowBox == "jantar" || lowBox == "lanche" || lowBox == "restaurante" || lowBox == "delivery") {
+                    cleanBox = "Alimentação"
+                    if (category == null) {
+                        category = Category.FOOD
+                    }
+                } else {
+                    var mappedCat = resolveCategoryForEnvelopeName(cleanBox)
+                    if (mappedCat != null) {
+                        cleanBox = categoryLabel(mappedCat)
+                        if (category == null) {
+                            category = mappedCat
+                        }
+                    }
+                }
+                var box = findEnvelopeForChat(userId, cleanBox)
+                var boxExistedBefore = box != null
+                if (box == null) {
+                    if (lowBox == "fantasma") {
+                        return toolError("Não achei a caixinha " + boxName.trim() + ". Suas caixinhas: " + envelopeNamesText(userId) + ".")
+                    }
+                    var catToCreate = resolveCategoryForEnvelopeName(cleanBox)
+                    if (catToCreate != null) {
+                        box = autoCreateCategoryEnvelope(userId, catToCreate)
+                    } else if (category != null && cleanBox == categoryLabel(category)) {
+                        box = autoCreateCategoryEnvelope(userId, category)
+                    } else {
+                        var fallbackCat = Category.OTHER
+                        if (category != null) {
+                            fallbackCat = category
+                        }
+                        box = autoCreateCustomEditableEnvelope(userId, cleanEnvelopeName(cleanBox), fallbackCat)
+                    }
+                }
                 if (box == null) {
                     return toolError("Não achei a caixinha " + boxName.trim() + ". Suas caixinhas: " + envelopeNamesText(userId) + ".")
                 }
@@ -368,22 +449,15 @@ String runCoachToolWithSource(String userId, String name, String arguments, Sour
                         boxCategory = inferredCat
                     }
                 }
-                var boxDescription = box.categoryName
-                var boxGiven = a.description()
-                if (boxGiven != null && boxGiven.trim() != "") {
-                    boxDescription = boxGiven.trim()
-                }
+                var boxDisplay = envelopeDisplayName(box)
+                var boxDescription = normalizePortugueseDescription(a.description(), boxCategory, boxDisplay)
                 var boxSaved = persistTransactionWithSource(boxDescription, amount, boxCategory, "BRL", box.id, userId, chatSource)
                 notifyEnvelopeCrossing(userId, box.id, toCents(amount))
-                return expenseToolResult(boxSaved.transaction, boxCategory, !boxSaved.envelopeCreated)
+                return expenseToolResult(boxSaved.transaction, boxCategory, boxExistedBefore && !boxSaved.envelopeCreated)
             }
             if (amount != null) {
                 if (category != null) {
-                    var description = category.name()
-                    var given = a.description()
-                    if (given != null && given.trim() != "") {
-                        description = given.trim()
-                    }
+                    var description = normalizePortugueseDescription(a.description(), category, categoryLabel(category))
                     var res = persistTransactionWithSource(description, amount, category, "BRL", null, userId, chatSource)
                     return expenseToolResult(res.transaction, category, !res.envelopeCreated)
                 }

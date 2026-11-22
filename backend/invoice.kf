@@ -3918,7 +3918,7 @@ String buildInvoiceChatReply(ImportFlowSummary s, Bool reconciled) {
     if (!reconciled) {
         msg = msg + "Atencao: a soma extraida nao bate com o total declarado no documento; confira antes de salvar.\n"
     }
-    msg = msg + "Cada valor tem pagina e linha de origem na previa do documento. Quer que eu distribua as despesas identificadas nas suas caixinhas?"
+    msg = msg + "Perguntas de segurança antes de salvar nas caixinhas: cada valor tem pagina e linha de origem na previa do documento (nenhum Pix para pessoa fisica, pagamento de fatura ou entrada PJ sem comprovacao fiscal e salvo como gasto ou renda profissional sem sua confirmacao). Quer que eu distribua as despesas identificadas nas suas caixinhas?"
     return msg
 }
 
