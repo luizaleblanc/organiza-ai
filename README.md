@@ -439,6 +439,14 @@ O Organiza IA usa a linguagem **KOF** -- uma linguagem de programação geral, f
 
 MIT License. Veja [LICENSE](LICENSE).
 
+## Créditos e Referências de Padrão (MIT)
+
+A arquitetura do catálogo declarativo de subagentes anti-alucinação (`agents/*.md`) e o protocolo de meta-orquestração determinística em KOF foram adaptados e inspirados nos seguintes projetos open-source sob licença MIT:
+
+- **[wshobson/agents](https://github.com/wshobson/agents)** (MIT License) — pelo formato declarativo de catálogo de agentes em arquivos Markdown (`agents/*.md`) com cabeçalho YAML frontmatter (`name`, `description`, `model`, `temperature`) e prompts de sistema focados em responsabilidade única.
+- **[VoltAgent/awesome-claude-code-subagents](https://github.com/VoltAgent/awesome-claude-code-subagents)** (`agent-organizer`, MIT License) — pelo padrão de meta-orquestração em que o agente planejador (`agents/organizer.md`) apenas classifica a intenção e decompõe o plano `{intencao, agentes[]}` sem executar ferramentas diretamente, delegando ao código determinístico em KOF (`backend/coach.kf` e `backend/coach_llm.kf`) a validação estrita do catálogo e a execução segura dos Fallbacks F1 (roteamento determinístico), F2 (`fora_de_escopo`) e F3 (descarte de agentes não catalogados).
+- **[KofLang/kof-agent](https://github.com/KofLang/kof-agent)** (MIT License) — pelo protocolo de programação orientada à intenção em Markdown estruturado (`@task`, `@requirement`, `@explanation`, `instructions:`, `constraint:`, `state:`) e pelas diretrizes de migração 100% KOF sem Java manual (`corpus/`).
+
 ## Comunidade e Evolução KOF (Sugestões de PRs)
 
 Sendo o Organiza AI um dos projetos pioneiros a implementar a arquitetura **Full-Stack KofLith (`backend/*.kf` + `frontend/*.kf`)** em escala real, somos os principais *beta testers* empíricos da linguagem criada pela Melissa. 
