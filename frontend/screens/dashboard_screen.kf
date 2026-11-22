@@ -316,15 +316,36 @@ View tile(String key, String label, String value, Style valueStyle, String sub, 
     return col
 }
 
-Double displayedSpent(DashboardResponse d) = d.totalSpent
-Double displayedPulse(DashboardResponse d) = d.pulse
-String displayedSpentSub(DashboardResponse d) = "de " + brl(d.salary)
+Double onboardingPlannedSpendable(DashboardResponse d) {
+    var sum = 0.0
+    for (var b in d.buckets) {
+        if (b.name != "Poupança" && b.name != "Futuro" && b.name != "Guardar") {
+            sum = sum + b.plannedAmount
+        }
+    }
+    if (sum <= 0.0) {
+        return d.salary
+    }
+    return sum
+}
+
+Double displayedSpent(DashboardResponse d) = d.salary
+
+Double displayedPulse(DashboardResponse d) {
+    if (d.salary > 0.0 && d.daysRemaining > 0) {
+        return math.roundTo(d.salary / (d.daysRemaining * 1.0), 2)
+    }
+    return d.pulse
+}
+
+String displayedSpentSub(DashboardResponse d) = "Modelo " + modelFriendlyName(d.budgetModel)
 Double displayedReserve(DashboardResponse d) = d.reserve.accumulated
 
 View tiles(DashboardResponse d) {
     val currentSpent = displayedSpent(d)
     val currentPulse = displayedPulse(d)
     val spentSub = displayedSpentSub(d)
+    val pulseSub = "Baseado no seu planejamento inicial · " + daysRemainingText(d.daysRemaining)
     var reserveSub = "Sem meta definida"
     if (d.reserve.hasGoal && d.reserve.goal > 0.0) {
         reserveSub = "Meta: " + brlShort(brl(d.reserve.goal)) + " — " + String.valueOf(d.reserve.percent) + "%"
@@ -333,16 +354,16 @@ View tiles(DashboardResponse d) {
     }
     if (AppState.isDesktop) {
         var row = Row(listOf(
-            tile("pulse", "Pode gastar hoje", brl(currentPulse), tileAccentCss(), daysRemainingText(d.daysRemaining), dashPulseCardCss(), tileLabelCss(), tileSubCss()),
-            tile("spent", spentLabel(DashState.period), brl(currentSpent), tileValueCss(), spentSub, dashPulseCardCss(), tileLabelCss(), tileSubCss()),
+            tile("pulse", "Pode gastar hoje (prévia)", brl(currentPulse), tileAccentCss(), pulseSub, dashPulseCardCss(), tileLabelCss(), tileSubCss()),
+            tile("spent", "Orçamento planejado", brl(currentSpent), tileValueCss(), spentSub, dashPulseCardCss(), tileLabelCss(), tileSubCss()),
             tile("reserve", "Reserva acumulada", brl(displayedReserve(d)), tileSuccessCss(), reserveSub, dashPulseCardCss(), tileLabelCss(), tileSubCss())))
         row.setId("dash-tiles")
         row.setStyle(dashGridG3Css())
         return row
     }
-    var hero = tile("pulse", "Pode gastar hoje", brl(currentPulse), tileHeroValueCss(), daysRemainingText(d.daysRemaining), dashPulseHeroCss(), tileHeroLabelCss(), tileHeroSubCss())
+    var hero = tile("pulse", "Pode gastar hoje (prévia)", brl(currentPulse), tileHeroValueCss(), pulseSub, dashPulseHeroCss(), tileHeroLabelCss(), tileHeroSubCss())
     var pair = Row(listOf(
-        tile("spent", spentLabel(DashState.period), brl(currentSpent), tileMobileValueCss(), spentSub, dashCardMobileCss(), tileMobileLabelCss(), tileSubCss()),
+        tile("spent", "Orçamento planejado", brl(currentSpent), tileMobileValueCss(), spentSub, dashCardMobileCss(), tileMobileLabelCss(), tileSubCss()),
         tile("reserve", "Reserva acumulada", brl(displayedReserve(d)), tileMobileSuccessCss(), reserveSub, dashCardMobileCss(), tileMobileLabelCss(), tileSubCss())))
     pair.setStyle(dashMobileG2Css())
     var col = Column(listOf(hero, pair))
@@ -734,7 +755,7 @@ View distributionCard(Window w, DashboardResponse d) {
         cardCss = dashCardCss()
     }
     var heading = Column(listOf(
-        idLabel("Modelo de Economia", "dist-title", titleCss),
+        idLabel("Prévia do Modelo de Economia", "dist-title", titleCss),
         idLabel(modelFriendlyName(d.budgetModel), "dist-model", distributionModelCss())))
     heading.setStyle(distributionHeadingCss())
     var card = Column(listOf(heading, chartWrap, explain))
@@ -753,15 +774,15 @@ Canvas dotCanvas(Color color) {
     return c
 }
 
-View txRow(TransactionOutput t, Int i, Bool isLast) {
+View onboardingBucketPreviewRow(BucketBalanceDTO b, Int i, Bool isLast) {
     var dot = View(screenStyle())
     dot.setStyle(canvasZoomCss())
-    dot.bind(dotCanvas(categoryColor(t.category)))
+    dot.bind(dotCanvas(sliceColor(i)))
     var text = Column(listOf(
-        idLabel(t.description, "tx-" + i + "-name", txNameCss()),
-        idLabel(categoryLabel(t.category), "tx-" + i + "-cat", txCatCss())))
+        idLabel(b.name + " (" + String.valueOf(b.percentage) + "% do salário)", "tx-" + i + "-name", txNameCss()),
+        idLabel("Ritmo sugerido: " + brl(math.roundTo(b.plannedAmount / 30.0, 2)) + "/dia", "tx-" + i + "-cat", txCatCss())))
     text.setStyle(txTextCss())
-    var row = Row(listOf(dot, text, idLabel(brl(0.0 - t.value), "tx-" + i + "-value", txValueCss())))
+    var row = Row(listOf(dot, text, idLabel(brl(b.plannedAmount), "tx-" + i + "-value", txValueCss())))
     row.setId("tx-" + i)
     if (isLast) {
         row.setStyle(txRowLastCss())
@@ -779,18 +800,21 @@ View transactionsCard(DashboardResponse d) {
         cardCss = dashCardCss()
     }
     var rows: List<View> = listOf()
-    val total = d.recentTransactions.size
+    val total = d.buckets.size
     var i = 0
-    for (var t in d.recentTransactions) {
-        rows.add(txRow(t, i, i == total - 1))
+    for (var b in d.buckets) {
+        rows.add(onboardingBucketPreviewRow(b, i, i == total - 1))
         i = i + 1
     }
     if (i == 0) {
-        rows.add(idLabel("Nenhuma transação no período.", "tx-empty", tileSubCss()))
+        rows.add(idLabel("Complete a configuração inicial para visualizar a prévia do seu orçamento.", "tx-empty", tileSubCss()))
     }
     var list = Column(rows)
     list.setStyle(txListCss())
-    var card = Column(listOf(idLabel("Últimas transações", "tx-title", titleCss), list))
+    var noteBox = Column(listOf(
+        idLabel("Este painel é uma prévia fixa do seu planejamento inicial. Seus gastos reais e faturas ficam organizados nas suas Caixinhas editáveis.", "tx-onboarding-note", distExplainLineCss())))
+    noteBox.setStyle(distExplainBoxCss())
+    var card = Column(listOf(idLabel("Resumo do seu Planejamento", "tx-title", titleCss), list, noteBox))
     card.setId("card-transactions")
     card.setStyle(cardCss)
     return card
@@ -799,15 +823,15 @@ View transactionsCard(DashboardResponse d) {
 // Mês: "Novembro 2026"; Semana: mês-ano do início da semana; Ano: "2026".
 String dashSubtitle(DashboardResponse? d) {
     if (d == null) {
-        return ""
+        return "Prévia do Planejamento"
     }
     if (d.from.length < 7) {
-        return ""
+        return "Prévia do Planejamento"
     }
     if (DashState.period == "year") {
-        return d.from.substring(0, 4)
+        return "Prévia do Planejamento · " + d.from.substring(0, 4)
     }
-    return monthYearFromIso(d.from)
+    return "Prévia do Planejamento · " + monthYearFromIso(d.from)
 }
 
 // ---------------------------------------------------------------- tela
