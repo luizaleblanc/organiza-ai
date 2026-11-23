@@ -1165,11 +1165,8 @@ main() {
         // um dia com o app antigo depois de cada deploy. O index.html sai por esta rota, sem cache, e
         // aponta para Default.mjs?v=<inicio do servidor>, entao cada novo boot invalida o bundle.
         app.get("/") {
-            setKofUiDocumentHeaders()
-            setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
-            setHeader("Content-Type", "text/html; charset=utf-8")
-            setHeader("Vary", "User-Agent")
-            return indexHtmlForClient(webOut, buildTag, isMobileUserAgent(header("User-Agent")))
+            setHeader("Location", "/organizaai")
+            return status(302, "")
         }
         // Unico caminho que expoe o controle manual Desktop/Mobile.
         app.get("/dev") {
