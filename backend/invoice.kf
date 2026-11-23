@@ -4930,19 +4930,37 @@ String invoiceEducationTipForSummary(ImportFlowSummary s) {
     return "Separar seus gastos em caixinhas ajuda a acompanhar seu mês com calma antes de o limite apertar."
 }
 
-ChatInteractionPayload buildInvoiceInteractionPayload(ImportReview rev, ImportFlowSummary s, String filename) {
+String cleanInteractionFilename(String filename, String docId) {
     var cleanName = filename.trim()
     if (cleanName == "" || cleanName.startsWith("doc_")) {
-        cleanName = humanFilenameForDocId(rev.documentId())
+        cleanName = humanFilenameForDocId(docId)
     }
-    var statementPeriod = lookupStatementPeriod(rev.documentId())
-    var periodPt = formatPeriodPt(statementPeriod)
-    var summaryPeriodLabel = "Período a confirmar"
-    if (periodPt != "") {
-        summaryPeriodLabel = periodPt
-    }
-    var tip = invoiceEducationTipForSummary(s)
+    return cleanName
+}
 
+Int minorToIntCents(Long minor) {
+    if (minor > 2000000000) {
+        return 2000000000
+    }
+    if (minor < -2000000000) {
+        return -2000000000
+    }
+    return minor as Int
+}
+
+String canonicalTxDisplayDesc(CanonicalTransaction ctx, String fallbackDesc) {
+    var norm = ctx.descriptionNormalized()
+    if (norm != null && norm.trim() != "") {
+        return norm.trim()
+    }
+    var raw = ctx.descriptionRaw().trim()
+    if (raw != "") {
+        return raw
+    }
+    return fallbackDesc
+}
+
+ChatInteractionSummary buildInvoiceInteractionSummary(ImportFlowSummary s, String periodLabel) {
     var entradas: List<ChatFlowLineItem> = listOf()
     if (s.professionalIncomeCount() > 0) {
         entradas.add(ChatFlowLineItem("Renda profissional", formatBrl(s.professionalIncomeMinor()), s.professionalIncomeCount(), null))
@@ -4966,8 +4984,8 @@ ChatInteractionPayload buildInvoiceInteractionPayload(ImportReview rev, ImportFl
         saidas.add(ChatFlowLineItem("Aguardando sua revisão", formatBrl(s.pendingMinor()), s.pendingCount(), "Não entra nos gastos sem sua confirmação"))
     }
 
-    var summary = ChatInteractionSummary(
-        summaryPeriodLabel,
+    return ChatInteractionSummary(
+        periodLabel,
         formatBrl(s.incomeMinor()),
         s.incomeCount() + s.refundCount(),
         entradas,
@@ -4977,7 +4995,9 @@ ChatInteractionPayload buildInvoiceInteractionPayload(ImportReview rev, ImportFl
         formatBrl(s.pendingMinor()),
         s.pendingCount()
     )
+}
 
+ChatInteractionDetails buildInvoiceInteractionDetails(ImportReview rev, ImportFlowSummary s, String cleanName) {
     var detailItems: List<String> = listOf()
     detailItems.add("Arquivo analisado: " + cleanName)
     detailItems.add("Movimentações lidas no documento: " + s.totalStatementRows() + " (" + countLabel(s.extractedCount()) + " identificados)")
@@ -5013,7 +5033,20 @@ ChatInteractionPayload buildInvoiceInteractionPayload(ImportReview rev, ImportFl
             detailItems.add("Pendente: " + descText + " · " + formatBrl(valMinor) + " (página " + pNum + ", linha " + rNum + ")")
         }
     }
-    var details = ChatInteractionDetails("Detalhes da análise", detailItems)
+    return ChatInteractionDetails("Detalhes da análise", detailItems)
+}
+
+ChatInteractionPayload buildInvoiceInteractionPayload(ImportReview rev, ImportFlowSummary s, String filename) {
+    var cleanName = cleanInteractionFilename(filename, rev.documentId())
+    var statementPeriod = lookupStatementPeriod(rev.documentId())
+    var periodPt = formatPeriodPt(statementPeriod)
+    var summaryPeriodLabel = "Período a confirmar"
+    if (periodPt != "") {
+        summaryPeriodLabel = periodPt
+    }
+    var tip = invoiceEducationTipForSummary(s)
+    var summary = buildInvoiceInteractionSummary(s, summaryPeriodLabel)
+    var details = buildInvoiceInteractionDetails(rev, s, cleanName)
 
     var options: List<ChatInteractionOption> = listOf(
         ChatInteractionOption("opt_view_expenses", "Ver meus gastos", "VIEW_EXPENSES", "CONSULTAR_GASTOS", "chart", 0),
@@ -5024,7 +5057,7 @@ ChatInteractionPayload buildInvoiceInteractionPayload(ImportReview rev, ImportFl
 
     var headline = "Consegui organizar seu extrato de " + periodPt.toLowerCase() + "!"
     if (periodPt == "") {
-        headline = "Li o documento. Vamos confirmar o periodo antes de salvar."
+        headline = "Li o documento. Vamos confirmar o período antes de salvar."
     }
 
     return ChatInteractionPayload(
@@ -5037,7 +5070,204 @@ ChatInteractionPayload buildInvoiceInteractionPayload(ImportReview rev, ImportFl
         tip,
         summary,
         details,
-        options
+        options,
+        listOf()
+    )
+}
+
+ChatInteractionPayload buildInvoiceRegisterPayload(ImportReview rev, ImportFlowSummary s, String filename) {
+    var cleanName = cleanInteractionFilename(filename, rev.documentId())
+    var statementPeriod = lookupStatementPeriod(rev.documentId())
+    var periodPt = formatPeriodPt(statementPeriod)
+    var summaryPeriodLabel = "Período a confirmar"
+    if (periodPt != "") {
+        summaryPeriodLabel = periodPt
+    }
+    var summary = buildInvoiceInteractionSummary(s, summaryPeriodLabel)
+    var details = buildInvoiceInteractionDetails(rev, s, cleanName)
+
+    var selectable: List<ChatSelectableItem> = listOf()
+    for (var ctx in rev.transactions()) {
+        var fc = flowClassOf(ctx)
+        var m = ctx.amountMinor()
+        if ((fc == "DESPESA" || fc == "OPERACAO_CREDITO") && m != null && m > 0) {
+            var catCode = sanitizeCategoryForConfirm(ctx.category())
+            var ptLabel = categoryLabel(categoryOrNull(catCode))
+            var desc = canonicalTxDisplayDesc(ctx, "Despesa")
+            var sub = "Caixinha " + ptLabel
+            var txDate = ctx.date()
+            if (txDate != null && txDate.trim() != "") {
+                sub = txDate.trim() + " · " + sub
+            }
+            if (fc == "OPERACAO_CREDITO") {
+                sub = sub + " · Cartão de crédito"
+            }
+            selectable.add(ChatSelectableItem(ctx.id(), desc, ptLabel, catCode, formatBrl(m), minorToIntCents(m), sub, true))
+        }
+    }
+
+    var options: List<ChatInteractionOption> = listOf()
+    if (s.pendingCount() > 0) {
+        options.add(ChatInteractionOption("opt_review_movements", "Revisar movimentações", "REVIEW_MOVEMENTS", "RECLASSIFICAR_MOVIMENTACOES", "checklist", s.pendingCount()))
+    }
+
+    var headline = "Confira e registre os gastos da sua fatura"
+    if (periodPt != "") {
+        headline = "Registre sua fatura de " + periodPt.toLowerCase() + " nas caixinhas"
+    }
+
+    return ChatInteractionPayload(
+        "INVOICE_REGISTER",
+        "Marque os lançamentos que deseja registrar nas suas caixinhas",
+        textOrNull(rev.documentId()),
+        textOrNull(statementPeriod),
+        textOrNull(periodPt),
+        headline,
+        "Escolher cada gasto antes de salvar ajuda você a separar compras reais de pagamentos de fatura e transferências, mantendo suas caixinhas fiéis ao mês.",
+        summary,
+        details,
+        options,
+        selectable
+    )
+}
+
+ChatInteractionPayload buildReviewChecklistPayload(ImportReview rev, ImportFlowSummary s, String filename) {
+    var cleanName = cleanInteractionFilename(filename, rev.documentId())
+    var statementPeriod = lookupStatementPeriod(rev.documentId())
+    var periodPt = formatPeriodPt(statementPeriod)
+    var summaryPeriodLabel = "Período a confirmar"
+    if (periodPt != "") {
+        summaryPeriodLabel = periodPt
+    }
+    var summary = buildInvoiceInteractionSummary(s, summaryPeriodLabel)
+    var details = buildInvoiceInteractionDetails(rev, s, cleanName)
+
+    var selectable: List<ChatSelectableItem> = listOf()
+    for (var ctx in rev.transactions()) {
+        var fc = flowClassOf(ctx)
+        var m = ctx.amountMinor()
+        if (fc == "PENDENTE_REVISAO" && m != null && m > 0) {
+            var pNum = 1
+            var rNum = 0
+            var ev = ctx.evidence()
+            if (ev != null) {
+                var ep = ev.page()
+                if (ep != null) { pNum = ep }
+                var er = ev.row()
+                if (er != null) { rNum = er }
+            }
+            var sub = "Página " + pNum + ", linha " + rNum
+            var txDate = ctx.date()
+            if (txDate != null && txDate.trim() != "") {
+                sub = txDate.trim() + " · " + sub
+            }
+            selectable.add(ChatSelectableItem(ctx.id(), canonicalTxDisplayDesc(ctx, "Movimentação pendente"), "Pendente de revisão", "OTHER", formatBrl(m), minorToIntCents(m), sub, false))
+        }
+    }
+
+    var options: List<ChatInteractionOption> = listOf(
+        ChatInteractionOption("opt_organize_caixinhas", "Organizar caixinhas", "ORGANIZE_CAIXINHAS", "CONFIRMAR_IMPORTACAO", "wallet", 0)
+    )
+
+    return ChatInteractionPayload(
+        "REVIEW_CHECKLIST",
+        "Selecione as movimentações pendentes e escolha a caixinha",
+        textOrNull(rev.documentId()),
+        textOrNull(statementPeriod),
+        textOrNull(periodPt),
+        "Movimentações aguardando sua confirmação",
+        "Itens sem estabelecimento claro (como Pix para pessoas) ficam fora dos seus gastos até você confirmar a categoria, evitando distorções no seu planejamento.",
+        summary,
+        details,
+        options,
+        selectable
+    )
+}
+
+ChatInteractionPayload buildViewCategoriesPayload(ImportReview rev, ImportFlowSummary s, String filename) {
+    var cleanName = cleanInteractionFilename(filename, rev.documentId())
+    var statementPeriod = lookupStatementPeriod(rev.documentId())
+    var periodPt = formatPeriodPt(statementPeriod)
+    var summaryPeriodLabel = "Período a confirmar"
+    if (periodPt != "") {
+        summaryPeriodLabel = periodPt
+    }
+    var summary = buildInvoiceInteractionSummary(s, summaryPeriodLabel)
+    var details = buildInvoiceInteractionDetails(rev, s, cleanName)
+
+    var orderedCodes: List<String> = listOf()
+    var totalsByCode: Map<String, Long> = mapOf()
+    var countsByCode: Map<String, Int> = mapOf()
+    var zero: Long = 0
+    for (var ctx in rev.transactions()) {
+        var fc = flowClassOf(ctx)
+        var m = ctx.amountMinor()
+        if ((fc == "DESPESA" || fc == "OPERACAO_CREDITO") && m != null && m > 0) {
+            var code = sanitizeCategoryForConfirm(ctx.category())
+            if (!orderedCodes.contains(code)) {
+                orderedCodes.add(code)
+            }
+            totalsByCode.put(code, totalsByCode.getOrDefault(code, zero) + m)
+            countsByCode.put(code, countsByCode.getOrDefault(code, 0) + 1)
+        }
+    }
+
+    var selectable: List<ChatSelectableItem> = listOf()
+    for (var code in orderedCodes) {
+        var ptName = categoryLabel(categoryOrNull(code))
+        var catMinor = totalsByCode.getOrDefault(code, zero)
+        var cnt = countsByCode.getOrDefault(code, 0)
+        var sub = cnt + " lançamentos"
+        if (cnt == 1) {
+            sub = "1 lançamento"
+        }
+        selectable.add(ChatSelectableItem(code, ptName, ptName, code, formatBrl(catMinor), minorToIntCents(catMinor), sub, true))
+    }
+
+    var options: List<ChatInteractionOption> = listOf(
+        ChatInteractionOption("opt_organize_caixinhas", "Organizar caixinhas", "ORGANIZE_CAIXINHAS", "CONFIRMAR_IMPORTACAO", "wallet", 0)
+    )
+
+    return ChatInteractionPayload(
+        "VIEW_CATEGORIES",
+        "Marque as categorias que você quer visualizar",
+        textOrNull(rev.documentId()),
+        textOrNull(statementPeriod),
+        textOrNull(periodPt),
+        "Gastos da fatura por categoria",
+        "Ver seus gastos separados por categoria ajuda a enxergar onde o dinheiro mais pesa no mês e onde dá para ajustar sem aperto.",
+        summary,
+        details,
+        options,
+        selectable
+    )
+}
+
+ChatInteractionPayload buildInvoiceRegisteredPayload(String docId, String period, String periodLabel, Int savedCount, Long savedTotalCents, Bool wasDuplicate) {
+    var pLabel = periodLabel
+    if (pLabel == "") {
+        pLabel = period
+    }
+    var headline = "Fatura registrada nas suas caixinhas!"
+    var itemNote = "Atualizadas nas suas caixinhas sem duplicidade"
+    if (wasDuplicate) {
+        headline = "Fatura já estava registrada sem duplicidade"
+        itemNote = "Registros preservados sem duplicidade"
+    }
+    var line = ChatFlowLineItem("Despesas registradas", formatBrl(savedTotalCents), savedCount, itemNote)
+    var summary = ChatInteractionSummary(pLabel, "R$ 0,00", 0, listOf(), formatBrl(savedTotalCents), savedCount, listOf(line), "R$ 0,00", 0)
+    return ChatInteractionPayload(
+        "INVOICE_REGISTERED",
+        "O que você quer acompanhar agora?",
+        textOrNull(docId),
+        textOrNull(period),
+        textOrNull(pLabel),
+        headline,
+        "Com seus gastos confirmados no mês certo, suas caixinhas e o painel Gastos Calculados passam a refletir seu orçamento real.",
+        summary,
+        null,
+        listOf(),
+        listOf()
     )
 }
 
@@ -5168,7 +5398,7 @@ String sanitizeCategoryForConfirm(String? rawCat) {
 
 // Passo 2 no chat: persiste idempotente os gastos extraidos do documento em revisao via Source.INVOICE,
 // vinculando as caixinhas e buckets do usuario (sem dupla gravacao se /api/invoices/confirm ja confirmou).
-String? confirmDocumentFromChatWithPeriod(String userId, String? documentId, String? explicitPeriod) {
+InvoiceChatTurnResult? confirmDocumentFromChatTurnWithPeriod(String userId, String? documentId, String? explicitPeriod) {
     var targetDocId = ""
     if (documentId != null && documentId.trim() != "") {
         targetDocId = documentId.trim()
@@ -5182,18 +5412,18 @@ String? confirmDocumentFromChatWithPeriod(String userId, String? documentId, Str
 
     var lookup = lookupDocumentReview(targetDocId, userId)
     if (lookup.errorCode() == "NOT_FOUND") {
-        return "Documento nao encontrado."
+        return InvoiceChatTurnResult("Documento nao encontrado.", null)
     }
     if (lookup.errorCode() == "UNAUTHORIZED") {
-        return "Acesso negado ao documento."
+        return InvoiceChatTurnResult("Acesso negado ao documento.", null)
     }
     var rev = lookup.review()
     if (rev == null) {
-        return "Documento nao encontrado."
+        return InvoiceChatTurnResult("Documento nao encontrado.", null)
     }
     var docFilename = humanFilenameForDocId(rev.documentId())
     if (rev.status() == "FALHA_EXTRACAO" || (rev.extractedCount() == 0 && rev.transactions().isEmpty())) {
-        return catalogDocumentoIlegivel(docFilename)
+        return InvoiceChatTurnResult(catalogDocumentoIlegivel(docFilename), null)
     }
 
     var docRow = findFinancialDocumentRowByKeyRaw(targetDocId)
@@ -5211,12 +5441,12 @@ String? confirmDocumentFromChatWithPeriod(String userId, String? documentId, Str
         }
     }
     if (effectivePeriod == "") {
-        return "Não consegui identificar o mês e o ano com segurança neste documento. De qual mês e ano são esses gastos? (Exemplo: novembro de 2026)"
+        return InvoiceChatTurnResult("Não consegui identificar o mês e o ano com segurança neste documento. De qual mês e ano são esses gastos? (Exemplo: novembro de 2026)", null)
     }
 
     var traceItems = buildConfirmTraceItemsFromReviewFiltered(rev, listOf(), effectivePeriod)
     if (traceItems.size == 0) {
-        return "No arquivo " + docFilename + " ainda não há despesas confirmadas prontas para entrar nas caixinhas (receitas, pagamentos de fatura e itens aguardando sua confirmação não são salvos automaticamente)."
+        return InvoiceChatTurnResult("No arquivo " + docFilename + " ainda não há despesas confirmadas prontas para entrar nas caixinhas (receitas, pagamentos de fatura e itens aguardando sua confirmação não são salvos automaticamente).", null)
     }
 
     var alreadyByReceipt = loadConfirmedOutputsFromReceipt(userId, "conf_doc_" + userId + "_" + targetDocId) != null
@@ -5265,10 +5495,27 @@ String? confirmDocumentFromChatWithPeriod(String userId, String? documentId, Str
             modelLine = "Distribuição do seu modelo (" + coachModelLabel(user.budgetModel) + "): " + bLine
         }
     }
-    if (wasAlreadyImported) {
-        return catalogDuplicidadeDetectada(docFilename, saved.size, savedTotalCents, envLines, modelLine, effectivePeriod)
+    var periodPt = formatPeriodPt(effectivePeriod)
+    if (periodPt == "") {
+        periodPt = effectivePeriod
     }
-    return catalogImportacaoConcluida(docFilename, saved.size, savedTotalCents, envLines, modelLine, effectivePeriod)
+    var registeredInteraction = buildInvoiceRegisteredPayload(targetDocId, effectivePeriod, periodPt, saved.size, savedTotalCents, wasAlreadyImported)
+    if (wasAlreadyImported) {
+        return InvoiceChatTurnResult(catalogDuplicidadeDetectada(docFilename, saved.size, savedTotalCents, envLines, modelLine, effectivePeriod), registeredInteraction)
+    }
+    return InvoiceChatTurnResult(catalogImportacaoConcluida(docFilename, saved.size, savedTotalCents, envLines, modelLine, effectivePeriod), registeredInteraction)
+}
+
+String? confirmDocumentFromChatWithPeriod(String userId, String? documentId, String? explicitPeriod) {
+    var turn = confirmDocumentFromChatTurnWithPeriod(userId, documentId, explicitPeriod)
+    if (turn != null) {
+        return turn.reply()
+    }
+    return null
+}
+
+InvoiceChatTurnResult? confirmDocumentFromChatTurn(String userId, String? documentId) {
+    return confirmDocumentFromChatTurnWithPeriod(userId, documentId, null)
 }
 
 String? confirmDocumentFromChat(String userId, String? documentId) {
@@ -5345,7 +5592,7 @@ InvoiceChatTurnResult? reclassifyPendingDocumentItemTurnFromChat(String userId, 
     if (rev != null) {
         var s = summarizeImportReview(rev)
         var msg = catalogConfirmacaoCategoria(updatedDesc, updatedMinor, latest.filename, updatedPage, updatedRow, categoryLabel(targetCat), s.confirmableExpenseMinor())
-        return InvoiceChatTurnResult(msg, buildInvoiceInteractionPayload(rev, s, latest.filename))
+        return InvoiceChatTurnResult(msg, buildInvoiceRegisterPayload(rev, s, latest.filename))
     }
     var fallbackMsg = catalogConfirmacaoCategoria(updatedDesc, updatedMinor, latest.filename, updatedPage, updatedRow, categoryLabel(targetCat), updatedMinor)
     return InvoiceChatTurnResult(fallbackMsg, null)
@@ -5399,7 +5646,7 @@ InvoiceChatTurnResult? buildCategoryPreviewTurnBeforeSave(String userId, String?
     }
     var fname = humanFilenameForDocId(rev.documentId())
     var msg = catalogConfirmacaoCaixinhas(fname, catLines, s.expenseMinor(), s.creditOperationMinor(), s.billPaymentMinor(), s.pendingCount(), s.pendingMinor())
-    return InvoiceChatTurnResult(msg, buildInvoiceInteractionPayload(rev, s, fname))
+    return InvoiceChatTurnResult(msg, buildInvoiceRegisterPayload(rev, s, fname))
 }
 
 String? buildCategoryPreviewBeforeSave(String userId, String? documentId) {
@@ -5418,6 +5665,27 @@ Bool isExplicitStatementAnalysisRequest(String message) {
     return lower.contains("minha fatura") || lower.contains("meu extrato") || lower.contains("analise o documento") || lower.contains("analise a fatura") || lower.contains("fatura enviada") || (lower.contains("fatura ") && lower.contains("enviada:")) || lower.contains("resumo da fatura") || lower.contains("o que tem na fatura")
 }
 
+Bool isSoftInvoiceRegisterReply(String lowerMsg) {
+    return lowerMsg == "sim" || lowerMsg == "sim!" || lowerMsg == "ok" || lowerMsg == "quero" || lowerMsg == "pode ser" || lowerMsg == "vamos lá" || lowerMsg == "vamos la" || lowerMsg == "vamos" || lowerMsg == "continuar"
+}
+
+Bool isExplicitSaveCommand(String lowerMsg) {
+    return lowerMsg.contains("pode distribuir") || lowerMsg.contains("pode salvar") || lowerMsg.contains("salva nas caixinhas") || lowerMsg.contains("salvar nas caixinhas") || lowerMsg.contains("salvar os gastos") || lowerMsg.contains("distribua nas caixinhas") || lowerMsg.contains("distribuir nas caixinhas") || lowerMsg.contains("pode confirmar") || lowerMsg == "confirmo" || lowerMsg == "confirmar"
+}
+
+Bool recentAssistantAskedExplicitSave(String userId) {
+    var recent = findRecentChatMessages(userId, 4)
+    for (var m in recent) {
+        if (m.role == ChatRole.ASSISTANT) {
+            var lower = m.content.toLowerCase()
+            if (lower.contains("posso guardar esses valores nas suas caixinhas") || lower.contains("sim, pode distribuir")) {
+                return true
+            }
+        }
+    }
+    return false
+}
+
 // Resposta deterministica do chat sobre documento (ANALISAR_FATURA e confirmacao Passo 2).
 // null = mensagem nao e sobre documento. Roda ANTES do ramo LLM.
 InvoiceChatTurnResult? invoiceChatTurnFor(String userId, String message, String rawBody) {
@@ -5434,7 +5702,7 @@ InvoiceChatTurnResult? invoiceChatTurnFor(String userId, String message, String 
         return InvoiceChatTurnResult(catalogDocumentoNaoFatura(), null)
     }
 
-    // 2. Reclassificação conversacional de item pendente (ex.: "esse Pix foi alimentação" -> CONFIRMACAO_CATEGORIA).
+    // 2. Reclassificação conversacional de item pendente (ex.: "esse Pix foi alimentação" -> CONFIRMACAO_CATEGORIA + template INVOICE_REGISTER).
     var reclassTurn = reclassifyPendingDocumentItemTurnFromChat(userId, message)
     if (reclassTurn != null) {
         return reclassTurn
@@ -5449,20 +5717,27 @@ InvoiceChatTurnResult? invoiceChatTurnFor(String userId, String message, String 
         }
     }
 
-    // 3. Opções interativas do final da análise:
-    if (lowerMsg == "organizar meus gastos nas caixinhas" || lowerMsg == "organizar nas caixinhas" || lowerMsg == "mostrar categorias antes de salvar") {
+    // 3. Templates interativos após a resposta do usuário sobre a fatura:
+    if (lowerMsg == "organizar caixinhas" || lowerMsg == "organizar meus gastos nas caixinhas" || lowerMsg == "organizar nas caixinhas" || lowerMsg == "mostrar categorias antes de salvar" || lowerMsg == "registrar fatura" || lowerMsg == "registrar minha fatura" || lowerMsg == "quero registrar" || lowerMsg == "quero registrar a fatura" || lowerMsg == "registrar os gastos" || lowerMsg == "organizar fatura" || lowerMsg == "pode organizar" || lowerMsg == "selecionar gastos" || lowerMsg == "escolher gastos") {
         var previewTurn = buildCategoryPreviewTurnBeforeSave(userId, docId)
         if (previewTurn != null) {
             return previewTurn
         }
     }
-    if (lowerMsg == "corrigir uma informação" || lowerMsg == "corrigir uma informacao" || lowerMsg == "corrigir informação" || lowerMsg == "corrigir informacao") {
-        var latestEdit = findLatestFinancialDocumentRowByUser(userId)
-        if (latestEdit != null && latestEdit.status == "EM_REVISAO") {
-            var lookupEdit = lookupDocumentReview(latestEdit.docKey, userId)
+    if (lowerMsg == "revisar movimentações" || lowerMsg == "revisar movimentacoes" || lowerMsg == "corrigir uma informação" || lowerMsg == "corrigir uma informacao" || lowerMsg == "corrigir informação" || lowerMsg == "corrigir informacao" || lowerMsg == "ver pendentes") {
+        var targetEditDocId = docId
+        if (targetEditDocId == "") {
+            var latestEdit = findLatestFinancialDocumentRowByUser(userId)
+            if (latestEdit != null && latestEdit.status != "FALHA_EXTRACAO" && latestEdit.status != "EXTRACAO_FALHOU") {
+                targetEditDocId = latestEdit.docKey
+            }
+        }
+        if (targetEditDocId != "") {
+            var lookupEdit = lookupDocumentReview(targetEditDocId, userId)
             var revEdit = lookupEdit.review()
-            if (revEdit != null) {
+            if (revEdit != null && revEdit.status() != "FALHA_EXTRACAO") {
                 var sEdit = summarizeImportReview(revEdit)
+                var editFilename = cleanInteractionFilename("", targetEditDocId)
                 var pendList = ""
                 for (var ln in sEdit.lines()) {
                     if (ln.flowClass() == "PENDENTE_REVISAO") {
@@ -5482,43 +5757,64 @@ InvoiceChatTurnResult? invoiceChatTurnFor(String userId, String message, String 
                 }
                 if (pendList != "") {
                     return InvoiceChatTurnResult(
-                        catalogTransacaoPendente(latestEdit.filename, sEdit.pendingCount(), pendList),
-                        buildInvoiceInteractionPayload(revEdit, sEdit, latestEdit.filename)
+                        catalogTransacaoPendente(editFilename, sEdit.pendingCount(), pendList),
+                        buildReviewChecklistPayload(revEdit, sEdit, editFilename)
+                    )
+                }
+                if (sEdit.confirmableExpenseCount() > 0) {
+                    return InvoiceChatTurnResult(
+                        "Todas as movimentações deste arquivo já estão classificadas! Selecione abaixo os lançamentos que deseja registrar nas suas caixinhas.",
+                        buildInvoiceRegisterPayload(revEdit, sEdit, editFilename)
                     )
                 }
             }
         }
         return InvoiceChatTurnResult("Para corrigir um item pendente da fatura, basta me dizer a categoria dele (por exemplo: \"esse Pix foi alimentação\" ou \"foi transporte\"). Se quiser ajustar uma caixinha, diga por exemplo: \"muda o limite da caixinha Alimentação para R$ 500\".", null)
     }
+    if (lowerMsg == "ver meus gastos" || lowerMsg == "ver gastos da fatura" || lowerMsg == "ver por categoria") {
+        var targetViewDocId = docId
+        if (targetViewDocId == "") {
+            var latestView = findLatestFinancialDocumentRowByUser(userId)
+            if (latestView != null && (latestView.status == "EM_REVISAO" || latestView.status == "IMPORTADO")) {
+                targetViewDocId = latestView.docKey
+            }
+        }
+        if (targetViewDocId != "") {
+            var lookupView = lookupDocumentReview(targetViewDocId, userId)
+            var revView = lookupView.review()
+            if (revView != null && revView.status() != "FALHA_EXTRACAO") {
+                var sView = summarizeImportReview(revView)
+                var fnameView = cleanInteractionFilename("", targetViewDocId)
+                var viewReply = "No extrato " + fnameView + ", você tem " + formatBrl(sView.confirmableExpenseMinor()) + " em despesas distribuídas por categoria. Selecione as categorias abaixo para visualizar ou avançar para o registro."
+                return InvoiceChatTurnResult(viewReply, buildViewCategoriesPayload(revView, sView, fnameView))
+            }
+        }
+    }
 
     var periodReply = parsePeriodParam(message)
     if (periodReply != "" && recentChatAskedPeriodConfirm(userId)) {
-        var periodConfirmMsg = confirmDocumentFromChatWithPeriod(userId, textOrNull(docId), periodReply)
-        if (periodConfirmMsg != null) {
-            return InvoiceChatTurnResult(periodConfirmMsg, null)
+        return confirmDocumentFromChatTurnWithPeriod(userId, textOrNull(docId), periodReply)
+    }
+
+    // 3b. Resposta afirmativa inicial após a análise da fatura -> abre template de registro com checkboxes antes de salvar.
+    if (isSoftInvoiceRegisterReply(lowerMsg) && !isExplicitSaveCommand(lowerMsg) && !recentAssistantAskedExplicitSave(userId)) {
+        var regOpenTurn = buildCategoryPreviewTurnBeforeSave(userId, textOrNull(docId))
+        if (regOpenTurn != null) {
+            return regOpenTurn
         }
-        return null
     }
 
     // 4. Confirmação explícita de distribuição/salvamento nas caixinhas (ex.: "sim, pode distribuir")
     if (isChatInvoiceConfirmIntent(message)) {
         if (docId != "") {
-            var explicitConfirmMsg = confirmDocumentFromChat(userId, docId)
-            if (explicitConfirmMsg != null) {
-                return InvoiceChatTurnResult(explicitConfirmMsg, null)
-            }
-            return null
+            return confirmDocumentFromChatTurn(userId, docId)
         }
         var latestConfirm = findLatestFinancialDocumentRowByUser(userId)
         if (latestConfirm != null) {
             var askedConfirm = recentChatAskedInvoiceConfirm(userId)
-            var explicitSave = lowerMsg.contains("pode distribuir") || lowerMsg.contains("pode salvar") || lowerMsg.contains("salva nas caixinhas") || lowerMsg.contains("salvar nas caixinhas") || lowerMsg.contains("distribua nas caixinhas") || lowerMsg.contains("distribuir nas caixinhas")
+            var explicitSave = isExplicitSaveCommand(lowerMsg)
             if ((latestConfirm.status == "EM_REVISAO" && (askedConfirm || explicitSave)) || (latestConfirm.status == "IMPORTADO" && (askedConfirm || explicitSave))) {
-                var latestConfirmMsg = confirmDocumentFromChat(userId, latestConfirm.docKey)
-                if (latestConfirmMsg != null) {
-                    return InvoiceChatTurnResult(latestConfirmMsg, null)
-                }
-                return null
+                return confirmDocumentFromChatTurn(userId, latestConfirm.docKey)
             }
         }
         return null
