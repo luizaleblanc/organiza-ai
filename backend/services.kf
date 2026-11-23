@@ -1313,3 +1313,22 @@ InitialSavingsResult recordInitialSavings(String userId, Double amount) {
         DbConn.lock.send(token)
     }
 }
+
+// Registra somente a diferenca de um saldo de reserva informado e confirmado
+// no chat. O valor alimenta o Dashboard sem criar ou alterar uma Caixinha.
+VariableIncomeEntity recordReserveDashboardDelta(String userId, Long amountCents) {
+    if (amountCents <= 0 || amountCents > 100000000000) {
+        throw "O valor da reserva deve ser maior que zero."
+    }
+    var user = findUserById(userId)
+    if (user == null) {
+        throw "User not found."
+    }
+    var token = DbConn.lock.receive()
+    try {
+        var item = VariableIncomeEntity("", user.id, centsToReais(amountCents), "Saldo inicial da reserva informado no chat", VariableIncomeDestination.EMERGENCY_FUND, nowIso())
+        return saveVariableIncomeEntity(item)
+    } finally {
+        DbConn.lock.send(token)
+    }
+}

@@ -5374,30 +5374,37 @@ String latestAssistantChatReply(String userId) {
 InvoiceChatTurnResult? reserveContributionChatTurn(String userId, String rawMsg) {
     var lower = rawMsg.trim().toLowerCase()
     var lastAssistant = latestAssistantChatReply(userId)
-    var promptStart = lastAssistant.toLowerCase().indexOf("quer adicionar ")
+    var lastLower = lastAssistant.toLowerCase()
+    var promptStart = lastLower.indexOf("voce mencionou ")
+    if (promptStart < 0) { promptStart = lastLower.indexOf("você mencionou ") }
     var pendingCents: Long = 0
     if (promptStart >= 0) {
-        var promptEnd = lastAssistant.toLowerCase().indexOf(" à sua caixinha reserva", promptStart)
-        if (promptEnd < 0) { promptEnd = lastAssistant.toLowerCase().indexOf(" a sua caixinha reserva", promptStart) }
-        if (promptEnd > promptStart) {
-            pendingCents = parseReserveAmountCents(lastAssistant.substring(promptStart + 15, promptEnd))
+        var amountStart = lastLower.indexOf("r$", promptStart)
+        var promptEnd = lastLower.indexOf(" como o saldo total atual da sua reserva", amountStart)
+        if (amountStart >= 0 && promptEnd > amountStart) {
+            pendingCents = parseReserveAmountCents(lastAssistant.substring(amountStart, promptEnd))
         }
     }
     if (pendingCents > 0) {
-        var rejected = lower == "não" || lower == "nao" || lower.contains("cancela") || lower.contains("saldo total") || lower.contains("não adicionar") || lower.contains("nao adicionar")
+        var rejected = lower == "não" || lower == "nao" || lower.contains("cancela") || lower.contains("não quero") || lower.contains("nao quero")
         if (rejected) {
-            if (lower.contains("saldo total")) {
-                return InvoiceChatTurnResult("Entendi: você está falando do saldo total, não de um depósito novo. Não fiz nenhuma alteração na caixinha Reserva. O saldo registrado continua em " + formatBrl(reserveCents(userId)) + ".", null)
-            }
-            return InvoiceChatTurnResult("Combinado. Não adicionei esse valor à caixinha Reserva; seu saldo permaneceu em " + formatBrl(reserveCents(userId)) + ".", null)
+            return InvoiceChatTurnResult("Combinado. Não alterei a Reserva acumulada do Dashboard e não criei nenhuma caixinha.", null)
         }
-        var confirmed = lower == "sim" || lower == "sim!" || lower == "confirmo" || lower.contains("pode adicionar") || lower.contains("pode depositar") || lower.contains("confirmo o depósito") || lower.contains("confirmo o deposito")
+        var confirmed = lower == "sim" || lower == "sim!" || lower == "confirmo" || lower.contains("pode registrar") || lower.contains("pode adicionar ao dashboard") || lower.contains("confirmo o saldo")
         if (confirmed) {
+            var currentCents = reserveCents(userId)
+            if (pendingCents == currentCents) {
+                return InvoiceChatTurnResult("Esse saldo já aparece na Reserva acumulada do Dashboard. Não criei nenhuma caixinha. Quer conferir sua meta?", null)
+            }
+            if (pendingCents < currentCents) {
+                return InvoiceChatTurnResult("O Dashboard já registra " + formatBrl(currentCents) + " na Reserva acumulada, acima dos " + formatBrl(pendingCents) + " que você informou. Não alterei os valores nem criei uma caixinha. Quer revisar os registros da reserva?", null)
+            }
+            var deltaCents = pendingCents - currentCents
             try {
-                recordInitialSavings(userId, centsToReais(pendingCents))
-                return InvoiceChatTurnResult("Adicionei " + formatBrl(pendingCents) + " à caixinha Reserva. Agora o saldo registrado é " + formatBrl(reserveCents(userId)) + ".", null)
+                recordReserveDashboardDelta(userId, deltaCents)
+                return InvoiceChatTurnResult("Pronto. A Reserva acumulada do Dashboard agora mostra " + formatBrl(reserveCents(userId)) + ". Não criei uma caixinha nova.", null)
             } catch (String e) {
-                return InvoiceChatTurnResult("Não consegui adicionar o depósito à caixinha Reserva. Por favor, tente novamente.", null)
+                return InvoiceChatTurnResult("Não consegui atualizar a Reserva acumulada do Dashboard. Nenhuma caixinha foi criada; tente novamente.", null)
             }
         }
     }
@@ -5410,11 +5417,11 @@ InvoiceChatTurnResult? reserveContributionChatTurn(String userId, String rawMsg)
     if (amountCents == currentCents) {
         return InvoiceChatTurnResult("Esse saldo de " + formatBrl(amountCents) + " já está registrado na caixinha Reserva. Não fiz nenhuma alteração. Quer conferir sua meta?", null)
     }
-    var note = " Esse valor ainda não aparece na caixinha Reserva."
+    var note = " Esse valor ainda não aparece na Reserva acumulada do Dashboard."
     if (currentCents > 0) {
-        note = " Hoje há " + formatBrl(currentCents) + " registrados; ao confirmar, o novo valor será somado a esse saldo."
+        note = " O Dashboard mostra " + formatBrl(currentCents) + "; ao confirmar, registro apenas a diferença para o total chegar ao valor informado."
     }
-    return InvoiceChatTurnResult("Você mencionou " + formatBrl(amountCents) + " de reserva." + note + " Quer adicionar " + formatBrl(amountCents) + " à sua caixinha Reserva como um novo depósito?", null)
+    return InvoiceChatTurnResult("Você mencionou " + formatBrl(amountCents) + " como o saldo total atual da sua reserva." + note + " Quer que eu registre esse valor para aparecer no Dashboard? Não vou criar uma caixinha nova.", null)
 }
 
 InvoiceChatTurnResult? answerEducationalFinanceTurn(String userId, String rawMsg) {
