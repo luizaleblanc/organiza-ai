@@ -1188,16 +1188,8 @@ String indexHtmlWithBundle(String webOut, String tag, String bundle) {
     } else if (html.indexOf("assets/voice_bridge.js?v=") < 0) {
         html = html.replace("assets/voice_bridge.js", "assets/voice_bridge.js?v=" + tag)
     }
-    if (html.indexOf("assets/dashboard_charts.js") < 0) {
-        html = html.replace("</body>", "<script src=\"assets/dashboard_charts.js?v=" + tag + "\"></script></body>")
-    } else if (html.indexOf("assets/dashboard_charts.js?v=") < 0) {
-        html = html.replace("assets/dashboard_charts.js", "assets/dashboard_charts.js?v=" + tag)
-    }
     // Estilos externos da camada HTML do chat e dos gráficos: CSP permite a mesma origem,
     // mas bloqueia os <style> criados por scripts. O KofUI e o design da marca ficam na origem local.
-    if (html.indexOf("id=\"organiza-chat-interactions-css\"") < 0) {
-        html = html.replace("</head>", "<link id=\"organiza-chat-interactions-css\" rel=\"stylesheet\" href=\"/assets/chat_interactions.css?v=" + tag + "\"><link id=\"organiza-calc-styles\" rel=\"stylesheet\" href=\"/assets/dashboard_charts.css?v=" + tag + "\"></head>")
-    }
     html = html.replace("<div id=\"kof-titlebar\">", "<div id=\"kof-titlebar\" hidden>")
     html = html.replace("<div id=\"kof-status\">", "<div id=\"kof-status\" hidden>")
     return replaceDefaultBundle(html, bundle + "?v=" + tag)

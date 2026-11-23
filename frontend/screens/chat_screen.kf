@@ -1,6 +1,7 @@
 package screens
 
 import kof.ui
+import kof.json
 import core.theme
 import core.app_state
 import core.chat_api
@@ -49,6 +50,13 @@ Style chatCounterCss()       = themed(Style("color: #6B7280; font-size: 0.8125re
 Style chatNewTopBtnCss()     = themed(Style("outline: none; display: inline-flex; align-items: center; justify-content: center; height: 40; padding: 0 16px; box-sizing: border-box; border: 1px solid rgba(37,99,235,.45); border-radius: 10; background: rgba(37,99,235,.08); cursor: pointer; flex-shrink: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; display: inline-flex; align-items: center; justify-content: center; height: 40; padding: 0 16px; box-sizing: border-box; border: 1px solid rgba(0,212,255,.45); border-radius: 10; background: rgba(0,212,255,.1); cursor: pointer; flex-shrink: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style chatNewTopRowCss()     = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 8; background: transparent; padding: 0")
 Style chatNewTopLabelCss()   = themed(Style("color: #2563EB; font-size: 0.875rem; font-weight: 700; line-height: 1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #00D4FF; font-size: 0.875rem; font-weight: 700; line-height: 1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style chatInteractionCardCss() = themed(Style("display: flex; flex-direction: column; align-self: flex-start; width: 100%; max-width: 760; box-sizing: border-box; gap: 14; padding: 20; background: #FFFFFF; color: #1A1D2E; border: 1px solid #E5E7EB; border-radius: 16; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("display: flex; flex-direction: column; align-self: flex-start; width: 100%; max-width: 760; box-sizing: border-box; gap: 14; padding: 20; background: #12162A; color: #F0F0F0; border: 1px solid rgba(0,212,255,.18); border-radius: 16; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style chatInteractionHeaderCss() = Style("display: flex; flex-direction: row; align-items: center; gap: 10; width: 100%")
+Style chatInteractionTitleCss() = themed(Style("color: #1A1D2E; font-size: 1rem; font-weight: 700; margin: 0"), Style("color: #F0F0F0; font-size: 1rem; font-weight: 700; margin: 0"))
+Style chatInteractionTextCss() = themed(Style("color: #374151; font-size: 0.9375rem; line-height: 1.5em; margin: 0"), Style("color: #D4D9E5; font-size: 0.9375rem; line-height: 1.5em; margin: 0"))
+Style chatInteractionDividerCss() = themed(Style("height: 1; width: 100%; background: #E5E7EB"), Style("height: 1; width: 100%; background: rgba(255,255,255,.1)"))
+Style chatInteractionActionCss() = themed(Style("outline: none; display: flex; align-items: center; justify-content: center; width: 100%; min-height: 42; box-sizing: border-box; padding: 10px 14px; background: #FFFFFF; color: #4B5563; border: 1px solid #D1D5DB; border-radius: 999; font-size: 0.875rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; display: flex; align-items: center; justify-content: center; width: 100%; min-height: 42; box-sizing: border-box; padding: 10px 14px; background: #12162A; color: #D4D9E5; border: 1px solid rgba(255,255,255,.2); border-radius: 999; font-size: 0.875rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style chatInteractionDetailCss() = themed(Style("outline: none; display: flex; align-items: center; width: 100%; padding: 8px 0; background: transparent; color: #2563EB; border: none; font-size: 0.875rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; display: flex; align-items: center; width: 100%; padding: 8px 0; background: transparent; color: #00D4FF; border: none; font-size: 0.875rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 
 View newChatTopButton(Window w) {
     var txt = Label("Novo chat")
@@ -91,6 +99,122 @@ Label chatBubble(String role, String text, String id) {
         b.setStyle(chatBubbleAiCss())
     }
     return b
+}
+
+submitInteractionPrompt(Window w, String prompt) {
+    var text = prompt.trim()
+    if (text == "" || ChatUi.blocked) { return }
+    queueChatMessage(text)
+    ChatUi.draft = ""
+    ChatUi.error = ""
+    mountScreen(w)
+    spawn {
+        sendChatMessage(text)
+        invalidateFinancialCaches()
+        mountScreen(w)
+    }
+}
+
+View interactionFlowLine(String label, String amount, String id) {
+    var left = Label(label)
+    left.setStyle(chatInteractionTextCss())
+    var right = Label(amount)
+    right.setStyle(chatInteractionTextCss())
+    var row = Row(listOf(left, right))
+    row.setId(id)
+    row.setStyle(Style("display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 12; width: 100%"))
+    return row
+}
+
+View chatInteractionCard(Window w) {
+    val interaction = json.decode<ChatInteractionResponse>(ChatUi.interactionJson)
+    var content: List<View> = listOf()
+    var brand = Row(listOf(brandMark(24, "chat-interaction-brand"), Label("Organiza AI")))
+    brand.setId("chat-interaction-header")
+    brand.setStyle(chatInteractionHeaderCss())
+    content.add(brand)
+    var headline = interaction.headline()
+    if (headline != null && headline.trim() != "") {
+        var title = Label(headline)
+        title.setStyle(chatInteractionTitleCss())
+        content.add(title)
+    }
+    val summary = interaction.summary()
+    if (summary != null) {
+        var period = summary.periodLabel()
+        if (period != "") {
+            var label = Label("Resumo de " + period.toLowerCase())
+            label.setStyle(chatInteractionTextCss())
+            content.add(label)
+        }
+        for (var entry in summary.entradas()) {
+            content.add(interactionFlowLine(entry.label(), entry.formattedAmount(), "chat-flow-in-" + entry.label()))
+        }
+        for (var expense in summary.saidas()) {
+            content.add(interactionFlowLine(expense.label(), expense.formattedAmount(), "chat-flow-out-" + expense.label()))
+        }
+        if (summary.pendingText() != "") {
+            var pending = Label(summary.pendingText())
+            pending.setStyle(chatInteractionTextCss())
+            content.add(pending)
+        }
+    }
+    var tip = interaction.educationTip()
+    if (tip != null && tip.trim() != "") {
+        var note = Label("💡 " + tip)
+        note.setStyle(chatInteractionTextCss())
+        content.add(note)
+    }
+    var divider = View(screenStyle())
+    divider.setStyle(chatInteractionDividerCss())
+    content.add(divider)
+    var prompt = Label(interaction.prompt())
+    prompt.setStyle(chatInteractionTitleCss())
+    content.add(prompt)
+    val details = interaction.details()
+    if (details != null) {
+        var detailLabel = "Detalhes da análise"
+        if (ChatUi.interactionDetailsOpen) { detailLabel = "Ocultar detalhes da análise" }
+        var detailButton = Button(detailLabel, () -> {
+            ChatUi.interactionDetailsOpen = !ChatUi.interactionDetailsOpen
+            mountScreen(w)
+        })
+        detailButton.setId("chat-interaction-details-toggle")
+        detailButton.setStyle(chatInteractionDetailCss())
+        content.add(detailButton)
+        if (ChatUi.interactionDetailsOpen) {
+            for (var item in details.items()) {
+                var detail = Label(item)
+                detail.setStyle(chatInteractionTextCss())
+                content.add(detail)
+            }
+        }
+    }
+    var actions: List<View> = listOf()
+    var index = 0
+    for (var option in interaction.options()) {
+        val actionPrompt = option.label()
+        var label = actionPrompt
+        if (option.badgeCount() > 0) {
+            label = label + " (" + String.valueOf(option.badgeCount()) + ")"
+        }
+        var action = Button(label, () -> submitInteractionPrompt(w, actionPrompt))
+        action.setId("chat-interaction-option-" + option.id())
+        action.setAccessibleName(option.label())
+        action.setStyle(chatInteractionActionCss())
+        actions.add(action)
+        index = index + 1
+    }
+    if (actions.size > 0) {
+        var stack = Column(actions)
+        stack.setId("chat-interaction-options")
+        stack.setStyle(Style("display: flex; flex-direction: column; gap: 8; width: 100%"))
+        content.add(stack)
+    }
+    var card = Column(content)
+    card.setId("chat-interaction-card")
+    card.setStyle(chatInteractionCardCss())
+    return card
 }
 
 // Bolhas da mais nova para a mais antiga (a lista usa column-reverse).
@@ -186,7 +310,12 @@ ensureChatLoaded(Window w) {
 View chatScreen(Window w) {
     ensureChatLoaded(w)
 
-    var list = Column(chatBubblesNewestFirst())
+    var messages: List<View> = listOf()
+    if (ChatUi.interactionJson != "") {
+        messages.add(chatInteractionCard(w))
+    }
+    messages.addAll(chatBubblesNewestFirst())
+    var list = Column(messages)
     list.setId("chat-messages")
     list.setStyle(chatListCss())
 

@@ -50,6 +50,9 @@ class ChatUi {
     static String loadedFor = ""
     static Bool loading = false
     static String error = ""
+    // Payload tipado da última resposta interativa; renderizado em KOF UI.
+    static String interactionJson = ""
+    static Bool interactionDetailsOpen = false
     // Contador "N de M"; usageKnown = false até a 1ª leitura. limit -1 = Pro.
     static Bool usageKnown = false
     static Int used = 0
@@ -174,6 +177,11 @@ sendChatMessage(String text) {
             val r = json.decode<ChatReplyResponse>(body)
             chatAppend("USER", chatEncode(text))
             chatAppend("ASSISTANT", chatEncode(r.reply()))
+            ChatUi.interactionJson = ""
+            ChatUi.interactionDetailsOpen = false
+            if (r.interaction() != null) {
+                ChatUi.interactionJson = json.encode(r.interaction())
+            }
             ChatUi.used = r.messagesUsed()
             ChatUi.limit = r.messagesLimit()
             ChatUi.usageKnown = true
@@ -208,6 +216,8 @@ clearChatHistory() {
             return
         }
         ChatState.messages = ""
+        ChatUi.interactionJson = ""
+        ChatUi.interactionDetailsOpen = false
         ChatUi.draft = ""
         ChatUi.pending = ""
         ChatUi.pendingQueue = ""

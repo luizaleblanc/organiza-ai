@@ -189,12 +189,10 @@ Pares que falham e como foram resolvidos: `muted` como texto (virou `secondary`)
 
 Referencia: artefato oficial `JVjueTmHeJsnHLsow3LDVb` e tokens em `frontend/core/theme.kf`.
 
-O cartao de resumo financeiro e as etapas de selecao usam `frontend/assets/chat_interactions.css`, incluido como folha local pelo shell em `backend/main.kf`; `frontend/assets/voice_bridge.js` mantem o carregamento de fallback. O template segue os tokens existentes de fundo, superficie, texto, borda, destaque, tipografia e foco. A marca usa `frontend/assets/brand/organiza-simbolo.svg` ou sua variante clara; nao recriar o simbolo com SVG inline.
+O template de interacao e renderizado por `frontend/screens/chat_screen.kf` com `Button`, `Row`, `Column` e `Label` do KOF UI. O contrato tipado vem de `ChatInteractionResponse` em `frontend/core/chat_api.kf`. A marca usa `frontend/assets/brand/organiza-simbolo.svg` ou sua variante clara; nao recriar o simbolo com SVG inline.
 
-Acoes individuais usam botoes HTML com raio de 10 px, borda e estados de foco/hover. Selecao multipla usa checkboxes reais dentro de cards; a confirmacao e explicita e o cancelamento nao persiste selecoes. Informacoes de auditoria ficam em `Detalhes da analise`, recolhidas por padrao.
-
-Toda mudanca visual neste template deve atualizar o CSS e permanecer dentro da paleta oficial listada nas secoes 2 e 8.
+Os controles usam os tokens de fundo, superficie, texto, borda, destaque e raio definidos nas secoes 2 e 8. Informacoes tecnicas ficam sob o botao KOF UI `Detalhes da analise`, recolhidas por padrao.
 
 ## 10. Graficos de Gastos Calculados
 
-O painel usa `frontend/assets/dashboard_charts.css`, carregado pelo mesmo shell local antes do script `dashboard_charts.js`. O JavaScript nao injeta regras `<style>`; isso preserva a CSP padrao do Kof. As cores dos graficos e controles usam somente os tokens de `frontend/core/theme.kf`, incluindo as variantes claro/escuro documentadas nas secoes 2 e 8. Raios seguem os tokens de card (14 px), card pequeno/botao (10 px), campo (8 px) e choice card (12 px).
+O Dashboard e seus graficos sao montados em `frontend/screens/dashboard_screen.kf` com componentes KOF UI (`View`, `Row`, `Column`, `Button` e `Canvas`). A personalizacao dos graficos fica no header quando o periodo Ano esta ativo. Use os tokens de `frontend/core/theme.kf`, incluindo variantes claro/escuro das secoes 2 e 8; nao criar controles de dashboard em HTML ou folhas de estilo paralelas.

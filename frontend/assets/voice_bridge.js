@@ -1560,10 +1560,8 @@
   }
 
   function shouldShowInteractivePanel() {
-    if (!document.getElementById("chat-messages")) return false;
-    if (panelState.activeCard === "confirmed" && panelState.confirmedSummary) return true;
-    if (activeInteraction && Array.isArray(activeInteraction.options) && activeInteraction.options.length > 0) return true;
-    if (latestDocReview && latestDocReview.status === "EM_REVISAO") return true;
+    // Os controles da conversa são renderizados pelos widgets KOF em chat_screen.kf.
+    // A ponte do navegador fica responsável por voz/anexos e sincronização de dados.
     return false;
   }
 
