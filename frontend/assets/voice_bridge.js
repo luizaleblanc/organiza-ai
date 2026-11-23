@@ -3517,6 +3517,46 @@
     syncInteractiveChatPanel();
   }
 
-  new MutationObserver(onDomMutated).observe(document.documentElement, { childList: true, subtree: true });
+  // ---- Responsividade automática ------------------------------------------
+  // O KofUI escolhe Mobile/Desktop pelo estático AppState.isDesktop, alternado
+  // pelo botão #dev-viewport. Aqui o layout acompanha a largura real da janela:
+  // >= 1024px usa Desktop (sidebar); abaixo disso, Mobile (nav inferior).
+  // Breakpoints seguem docs/DESIGN_SYSTEM.md (mobile-first: 600 tablet, 1024 desktop).
+  const DESKTOP_MIN_WIDTH = 1024;
+  let viewportSyncQueued = false;
+  function currentLayoutIsDesktop() {
+    const knob = document.getElementById("dev-viewport");
+    if (!knob) return null;
+    const img = knob.querySelector("img");
+    const alt = (img && img.getAttribute("alt")) || "";
+    // No Desktop o botão oferece "Ver como Mobile"; no Mobile, "Ver como Desktop".
+    if (alt.indexOf("Mobile") >= 0) return true;
+    if (alt.indexOf("Desktop") >= 0) return false;
+    return null;
+  }
+  function syncViewportLayout() {
+    viewportSyncQueued = false;
+    const isDesktopLayout = currentLayoutIsDesktop();
+    if (isDesktopLayout === null) return;
+    const wantDesktop = window.innerWidth >= DESKTOP_MIN_WIDTH;
+    document.documentElement.setAttribute("data-organiza-layout", wantDesktop ? "desktop" : "mobile");
+    if (isDesktopLayout !== wantDesktop) {
+      document.getElementById("dev-viewport").click();
+    }
+  }
+  function queueViewportSync() {
+    if (viewportSyncQueued) return;
+    viewportSyncQueued = true;
+    window.requestAnimationFrame(syncViewportLayout);
+  }
+  window.addEventListener("resize", queueViewportSync);
+  window.addEventListener("orientationchange", queueViewportSync);
+
+  new MutationObserver(() => {
+    onDomMutated();
+    queueViewportSync();
+  }).observe(document.documentElement, { childList: true, subtree: true });
+  ensureWaveAnimStyle();
   onDomMutated();
+  queueViewportSync();
 })();

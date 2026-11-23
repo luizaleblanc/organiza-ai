@@ -20,6 +20,28 @@ record DashboardResponse(String period, String from, Double totalSpent, String c
     Double pulse, Int daysRemaining, String budgetModel, List<BucketBalanceDTO> buckets, ReserveSummary reserve,
     List<CategoryTotal> categories, List<TransactionOutput> recentTransactions)
 
+// Aba Ano personalizada: espelha GET /api/dashboard/calculated?period=year
+// (backend/overview.kf, calculatedDashboardOf). Só transações confirmadas e
+// faturas/extratos lidos no chat; pendências e fluxos que não são gasto
+// (pagamento de fatura, crédito, transferência interna) vêm separados.
+record YearMonthItem(String key, String label, Int confirmedCount, Int pendingCount)
+record YearTopCategory(String code, String label, Double total, Double percentage, Int count)
+record YearCategoryItem(String code, String label, Double total, Double percentage, Int count)
+record YearEvolutionPoint(String key, String label, Double total, Int count)
+record YearFlows(Double creditOperationsTotal, Int creditOperationsCount, Double billPaymentsTotal, Int billPaymentsCount, Double internalTransfersTotal, Int internalTransfersCount, Double pendingReviewTotal, Int pendingReviewCount)
+record YearDashboard(String state, String period, String selectedMonthLabel, String rangeStart,
+    List<YearMonthItem> availableMonths, Double confirmedTotal, Int confirmedCount, YearTopCategory? topCategory,
+    YearFlows flows, List<YearCategoryItem> categories, List<YearEvolutionPoint> evolution)
+
+String fetchYearDashboard() = getOrThrow("/api/dashboard/calculated?period=year")
+
+YearDashboard? yearDashboardData() {
+    if (DashState.yearRaw == "") {
+        return null
+    }
+    return json.decode<YearDashboard>(DashState.yearRaw)
+}
+
 // Estado da tela. period: "week" | "month" | "year". raw: JSON do último GET
 // ("" = nada carregado). loaded: o último GET terminou (com dado ou erro).
 // fresh: o GET acabou de chegar e o próximo render só mostra; qualquer outro
@@ -28,12 +50,14 @@ class DashState {
     static String period = "month"
     static String selectedMonth = ""
     static String raw = ""
+    static String yearRaw = ""
     static Bool loaded = false
     static Bool fresh = false
     static Int selectedSlice = -1
     static Bool chartPreferencesOpen = false
     static Bool showBudgetChart = true
     static Bool showCategoryChart = true
+    static Bool showSummaryCard = true
     // Impede que o clique em uma legenda seja interpretado como clique na área
     // vazia do cartão quando o evento propaga para o contêiner.
     static Bool keepSliceSelection = false

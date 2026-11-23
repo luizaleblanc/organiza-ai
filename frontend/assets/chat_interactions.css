@@ -798,3 +798,116 @@
           padding: 10px 12px;
         }
       }
+
+/* ==========================================================================
+   Camada responsiva global (mobile-first)
+   Breakpoints: base 320–599 · tablet >= 600 · desktop >= 1024.
+   O KofUI só emite estilos inline; estas regras usam IDs estáveis das telas
+   e !important apenas onde precisam vencer o inline. Cores vêm dos tokens
+   já usados em frontend/core/theme.kf (não há cores novas aqui).
+   ========================================================================== */
+
+/* O layout segue a largura real (voice_bridge.js); o botão manual vira redundante. */
+#dev-viewport { display: none !important; }
+
+/* Telas dentro do #shell-main rolável não podem encolher: era isso que
+   sobrepunha os cards do Dashboard em janelas baixas. */
+#shell-main > *,
+#screen-dashboard, #screen-dashboard > *,
+#screen-envelopes, #screen-envelopes > *,
+#dash-tiles, #dash-cards, #card-spending-calendar {
+  flex-shrink: 0 !important;
+}
+#shell-main { overflow-x: hidden !important; }
+#screen-dashboard, #screen-envelopes, #screen-settings, #screen-notifications {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+/* Valores financeiros: números tabulares, sem truncar. */
+[id^="tile-"][id$="-value"], [id^="bar-val-"], [id^="calendar-day-forecast-"],
+[id^="tx-"][id$="-value"], #chat-reg-total, #chat-cat-total {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Alvos de toque >= 44px (WCAG 2.5.8 / DS). */
+#dash-tabs button, #dash-chart-preferences-toggle,
+#dash-chart-preferences-panel button, [id^="nav-"],
+[id^="chat-interaction-option-"], #chat-new-btn {
+  min-height: 44px !important;
+}
+
+/* ---------- Base: telefone (até 599px) ---------- */
+@media (max-width: 599px) {
+  /* Abas Semana/Mês/Ano ocupam a linha inteira, botões iguais. */
+  #dash-tabs { display: flex !important; width: 100% !important; box-sizing: border-box; }
+  #dash-tabs > button { flex: 1 1 0 !important; padding-left: 6px !important; padding-right: 6px !important; }
+  #dash-chart-preferences-toggle { width: 100% !important; }
+  #dash-chart-preferences-panel { justify-content: stretch !important; }
+  #dash-chart-preferences-panel > button { flex: 1 1 100% !important; }
+
+  /* Calendário: texto dos dias sempre na horizontal. As 7 colunas mantêm
+     largura mínima legível e o cartão rola na horizontal se faltar espaço
+     (a página em si nunca rola de lado). */
+  #card-spending-calendar { padding: 16px 12px !important; gap: 12px !important; overflow-x: auto !important; }
+  #card-spending-calendar > :nth-child(2), #spending-calendar-grid {
+    min-width: 476px !important; gap: 4px !important;
+  }
+  [id^="calendar-day-"]:not([id^="calendar-day-number-"]):not([id^="calendar-day-forecast-"]) {
+    min-height: 56px !important; padding: 6px !important; gap: 4px !important;
+  }
+  [id^="calendar-day-forecast-"] { font-size: 0.625rem !important; }
+  [id^="calendar-weekday-"] { font-size: 0.625rem !important; letter-spacing: 0 !important; }
+
+  /* Gráfico de barras: rótulos não estouram em 320px. */
+  #bar-labels-row { gap: 4px !important; justify-content: space-around !important; }
+  #bar-labels-row > * { width: auto !important; flex: 1 1 0 !important; min-width: 0 !important; }
+  [id^="bar-name-"] { white-space: normal !important; }
+
+  /* Chat: bolhas e composer proporcionais ao telefone. */
+  #chat-messages { padding: 12px 4px !important; gap: 12px !important; }
+  #chat-messages > div > div[style*="max-width: 74%"],
+  #chat-messages > div > div[style*="max-width: 62%"],
+  #chat-messages div[style*="max-width: 74%"], #chat-messages div[style*="max-width: 62%"] {
+    max-width: 88% !important;
+    padding: 12px 14px !important;
+    font-size: 1rem !important;
+  }
+  [id^="chat-interaction-"][id$="-card"], #chat-interactive-panel { max-width: 100% !important; }
+  #chat-reg-actions, #chat-rev-actions { flex-direction: column !important; align-items: stretch !important; }
+  #chat-reg-actions > *, #chat-rev-actions > * { width: 100% !important; }
+}
+
+/* ---------- Tablet (600–1023px): layout Mobile mais arejado ---------- */
+@media (min-width: 600px) and (max-width: 1023px) {
+  #screen-dashboard, #screen-chat, #screen-envelopes, #screen-settings {
+    max-width: 760px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    width: 100% !important;
+  }
+  #dash-cards { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  [id^="calendar-day-forecast-"] { font-size: 0.6875rem !important; }
+}
+
+/* ---------- Desktop (>= 1024px) ---------- */
+@media (min-width: 1024px) {
+  /* Cabeçalho: abas e "Personalizar gráficos" alinhados à direita, sem colidir com o título. */
+  #dash-tabs { flex-shrink: 0 !important; }
+  /* Calendário: texto de previsão nunca quebra letra a letra. */
+  [id^="calendar-day-forecast-"] { overflow-wrap: normal !important; word-break: normal !important; white-space: nowrap; font-size: 0.6875rem !important; }
+  #dash-cards { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)) !important; }
+}
+@media (min-width: 1024px) and (max-width: 1279px) {
+  /* Sidebar + 3 tiles apertam; 2 colunas até 1280px. */
+  #dash-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  #dash-tiles > :first-child { grid-column: 1 / -1; }
+}
+@media (min-width: 1280px) {
+  #dash-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+}
+
+/* Login/Cadastro desktop entre 1024 e 1199: painel da marca não esmaga o formulário. */
+@media (min-width: 1024px) and (max-width: 1199px) {
+  [id$="-brand-panel"] { flex: 0 0 42% !important; max-width: 42% !important; padding-left: 40px !important; padding-right: 32px !important; }
+}
