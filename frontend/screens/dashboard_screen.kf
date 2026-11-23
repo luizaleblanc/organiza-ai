@@ -818,7 +818,7 @@ Style yearCategoryBar50Css() = Style("height: 10; width: 50%; border-radius: 5; 
 Style yearCategoryBar25Css() = Style("height: 10; width: 25%; border-radius: 5; background: linear-gradient(90deg, #00D4FF, #0066FF)")
 Style yearCategoryBarSmallCss() = Style("height: 10; width: 10%; min-width: 2; border-radius: 5; background: linear-gradient(90deg, #00D4FF, #0066FF)")
 
-// GrÃ¡fico anual por categoria, usado como opÃ§Ã£o de visualizaÃ§Ã£o no cabeÃ§alho Ano.
+// Gráfico anual por categoria, usado como opção de visualização no cabeçalho Ano.
 View yearCategoryChart(DashboardResponse d) {
     var rows: List<View> = listOf()
     var maxPct = 0.0
@@ -856,7 +856,7 @@ View yearCategoryChart(DashboardResponse d) {
         i = i + 1
     }
     if (rows.size == 0) {
-        rows.add(idLabel("Ainda nÃ£o hÃ¡ gastos confirmados para comparar neste ano.", "year-category-empty", tileSubCss()))
+        rows.add(idLabel("Ainda não há gastos confirmados para comparar neste ano.", "year-category-empty", tileSubCss()))
     }
     var titleCss = cardTitleMobileCss()
     var cardCss = dashCardMobileCss()

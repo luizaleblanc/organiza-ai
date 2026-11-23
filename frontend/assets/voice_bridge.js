@@ -2391,7 +2391,7 @@
 
     const summary = interaction.summary || {};
     const responseText = String(interaction.responseText || "").trim() ||
-      (summary.totalOutflowsText ? `Encontrei ${summary.totalOutflowsText} em saÃ­das identificadas neste perÃ­odo.` : "");
+      (summary.totalOutflowsText ? `Encontrei ${summary.totalOutflowsText} em saídas identificadas neste período.` : "");
     if (responseText) {
       const response = document.createElement("p");
       response.id = "chat-interaction-response";
