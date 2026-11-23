@@ -1697,7 +1697,7 @@ FinancialDocumentRow saveFinancialDocumentRow(FinancialDocumentRow row) {
         saveId, row.docKey(), row.userId(), row.sha256(), clipDbText(row.filename(), 240),
         clipDbText(row.sourceType(), 60), clipDbText(row.statementPeriod(), 240), clipDbText(row.currency(), 16),
         clipDbText(row.status(), 40), row.reconciled(), row.extractedCount(), row.declaredTotalMinor(),
-        row.hasDeclaredTotal(), clipDbText(row.warningsText(), 3800), clipDbText(row.createdAt(), 64)
+        row.hasDeclaredTotal(), clipDbText(redactSensitive(row.warningsText()), 3800), clipDbText(row.createdAt(), 64)
     ))
 }
 
@@ -1717,11 +1717,11 @@ List<ExtractedTransactionRow> findExtractedTransactionRowsByDoc(String userId, S
 ExtractedTransactionRow saveExtractedTransactionRow(ExtractedTransactionRow row) {
     return orm.save(DbConn.handle, ExtractedTransactionRow(
         row.id(), row.documentId(), row.userId(), clipDbText(row.itemKey(), 120),
-        clipDbText(row.txDate(), 32), clipDbText(row.descriptionRaw(), 3800),
-        clipDbText(row.descriptionNormalized(), 3800), row.amountMinor(), clipDbText(row.currency(), 16),
+        clipDbText(row.txDate(), 32), clipDbText(redactExtractedText(row.descriptionRaw(), row.kind(), row.categoryRule()), 3800),
+        clipDbText(redactNormalizedName(row.descriptionNormalized(), row.kind(), row.categoryRule()), 3800), row.amountMinor(), clipDbText(row.currency(), 16),
         clipDbText(row.direction(), 24), clipDbText(row.kind(), 32), clipDbText(row.installment(), 32),
         clipDbText(row.category(), 48), clipDbText(row.categoryRule(), 80), row.confidence(),
-        row.pageNum(), row.rowNum(), clipDbText(row.snippet(), 3800), clipDbText(row.reviewStatus(), 32)
+        row.pageNum(), row.rowNum(), clipDbText(redactExtractedText(row.snippet(), row.kind(), row.categoryRule()), 3800), clipDbText(row.reviewStatus(), 32)
     ))
 }
 

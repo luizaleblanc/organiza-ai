@@ -1,0 +1,118 @@
+// backend/privacy.kf
+// Censura determinística de dados sensíveis lidos de PDFs/imagens/DOCX (LGPD).
+// Aplicada ANTES de gravar no banco (saveExtractedTransactionRow e o warningsText
+// do documento): nada sensível do arquivo chega ao banco, ao chat, ao Dashboard
+// nem aos logs. A classificação (Pix para pessoa, transferência interna etc.)
+// já aconteceu antes; a censura não muda valores, datas nem categorias.
+//
+// Regras (só regex, sem LLM):
+//   CPF           123.456.789-09     -> ***.***.***-**
+//   CNPJ          12.345.678/0001-90 -> **.***.***/****-**
+//   Cartão        4111 1111 1111 1234 -> **** **** **** 1234 (mantém os 4 finais)
+//   E-mail        nome@dominio.com    -> ***@***
+//   Telefone      (11) 98765-4321     -> (**) *****-****
+//   Agência/conta, chaves e números longos (8+ dígitos) -> ****
+//   Nome de pessoa em Pix -> primeiro nome + iniciais ("Anderson B. de A.")
+
+String SENSITIVE_DATA_NOTICE() = "Todos os dados sensíveis são censurados para manter a sua segurança."
+
+String redactSensitive(String text) {
+    if (text == "") {
+        return text
+    }
+    var t = text
+    // E-mail
+    t = t.replaceAll("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}", "***@***")
+    // CNPJ (antes do CPF, que é um prefixo parecido)
+    t = t.replaceAll("\\b\\d{2}\\.?\\d{3}\\.?\\d{3}/?\\d{4}-?\\d{2}\\b", "**.***.***/****-**")
+    // CPF
+    t = t.replaceAll("\\b\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}\\b", "***.***.***-**")
+    t = t.replaceAll("\\b\\d{3}\\*{0,3}\\.?\\*{0,3}\\d{0,3}\\.?\\d{3}-\\d{2}\\b", "***.***.***-**")
+    // Cartão: 16 dígitos agrupados ou não, mantém os 4 finais
+    t = t.replaceAll("\\b(?:\\d{4}[ .-]?){3}(\\d{4})\\b", "**** **** **** $1")
+    // Telefone com DDD
+    t = t.replaceAll("\\(?\\b\\d{2}\\)?\\s?9?\\d{4}-\\d{4}\\b", "(**) *****-****")
+    // Agência/conta (ex.: 1234-5, 12345678-9) e números longos (ids, chaves aleatórias)
+    t = t.replaceAll("\\b\\d{4,}-[\\dXx]\\b", "****")
+    t = t.replaceAll("\\b\\d{8,}\\b", "****")
+    // Chave Pix aleatória (UUID)
+    t = t.replaceAll("\\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\b", "****")
+    return t
+}
+
+// Nome de pessoa física: mantém o primeiro nome (para o usuário reconhecer) e
+// troca o resto por iniciais. "Anderson Barbosa de Araújo" -> "Anderson B. de A."
+String redactPersonName(String name) {
+    var words = name.trim().split(" ")
+    var out = ""
+    var i = 0
+    var inName = true
+    for (var w in words) {
+        var word = w.trim()
+        // O nome termina na primeira palavra que não é nome (CPF, números, texto já censurado).
+        if (inName && word != "" && (!word.matches("[A-Za-zÀ-ÿ'-]+") || (i > 0 && word.matches("[A-Z]{2,5}")))) {
+            inName = false
+        }
+        if (!inName) {
+            out = out + " " + word
+        } else if (word != "") {
+            var piece = word
+            var lowerWord = word.toLowerCase()
+            var connector = lowerWord == "de" || lowerWord == "da" || lowerWord == "do" || lowerWord == "dos" || lowerWord == "das" || lowerWord == "e"
+            if (i > 0 && !connector && word.length() > 1) {
+                piece = word.substring(0, 1).toUpperCase() + "."
+            }
+            if (out == "") {
+                out = piece
+            } else {
+                out = out + " " + piece
+            }
+            i = i + 1
+        }
+    }
+    return out
+}
+
+// Descrição de Pix para/de pessoa: censura o nome depois de "para"/"de".
+// Para itens marcados como Pix a pessoa física (sem estabelecimento), o texto
+// inteiro é o nome.
+String redactPixPersonText(String text, Bool wholeIsName) {
+    if (wholeIsName) {
+        return redactPersonName(text)
+    }
+    var lower = text.toLowerCase()
+    if (!lower.contains("pix")) {
+        return text
+    }
+    for (var marker in listOf(" para ", " de ")) {
+        var idx = lower.indexOf(marker)
+        if (idx >= 0) {
+            var head = text.substring(0, idx + marker.length())
+            var tail = text.substring(idx + marker.length())
+            return head + redactPersonName(tail)
+        }
+    }
+    return text
+}
+
+// Linha extraída antes de gravar: descrição, descrição normalizada e trecho do PDF.
+String redactExtractedText(String text, String kind, String? categoryRule) {
+    var personPix = categoryRule != null && categoryRule == "PIX_PF_NEEDS_REVIEW"
+    var t = redactSensitive(text)
+    if (kind == "PIX_OUT" || kind == "PIX_IN" || personPix) {
+        t = redactPixPersonText(t, false)
+    }
+    return t
+}
+
+String redactNormalizedName(String text, String kind, String? categoryRule) {
+    var personPix = categoryRule != null && categoryRule == "PIX_PF_NEEDS_REVIEW"
+    var t = redactSensitive(text)
+    if (personPix && !t.toLowerCase().contains("pix")) {
+        return redactPersonName(t)
+    }
+    if (kind == "PIX_OUT" || kind == "PIX_IN" || personPix) {
+        t = redactPixPersonText(t, false)
+    }
+    return t
+}
