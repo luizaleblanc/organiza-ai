@@ -136,7 +136,7 @@ record IndexedLine(Int page, Int row, String text)
 record ByteSpan(Int offset, Int len)
 record ParsedLineOutcome(CanonicalTransaction? tx, CanonicalTotal? total, String? warning, Bool ignoredInternal)
 record ClassificationMatch(String category, String rule, Double confidence, String reviewStatus)
-record ReclassifyRequest(List<String> txIds, String category)
+record ReclassifyRequest(List<String> txIds, String category, String? envelopeId)
 record DocumentReclassifyResponse(String documentId, String status, ImportFlowSummary summary, ImportReview review)
 record LatestDocumentResponse(Bool hasDocument, String documentId, String filename, String statementPeriod, String periodLabel, String status, ImportFlowSummary? summary, ImportReview? review, ChatInteractionPayload? interaction)
 record InvoiceChatTurnResult(String reply, ChatInteractionPayload? interaction)
@@ -329,7 +329,38 @@ ReclassifyRequest? decodeReclassifyRequest(String raw) {
     if (!hasTxIds || !hasCategory) {
         return null
     }
-    return ReclassifyRequest(txIds, categoryVal)
+    var envId = jsonStringFieldHint(s, "envelopeId")
+    if (envId == "") {
+        return ReclassifyRequest(txIds, categoryVal, null)
+    }
+    return ReclassifyRequest(txIds, categoryVal, envId)
+}
+
+// Lê um campo string simples ("key": "valor") do corpo; "" se ausente. Mesma
+// abordagem de extractDocumentIdHint. Só aceita ids alfanuméricos.
+String jsonStringFieldHint(String raw, String key) {
+    var quoted = "\"" + key + "\""
+    var keyIdx = raw.indexOf(quoted)
+    if (keyIdx < 0) {
+        return ""
+    }
+    var colonIdx = raw.indexOf(":", keyIdx + quoted.length())
+    if (colonIdx < 0) {
+        return ""
+    }
+    var startQ = raw.indexOf("\"", colonIdx + 1)
+    if (startQ < 0) {
+        return ""
+    }
+    var endQ = raw.indexOf("\"", startQ + 1)
+    if (endQ <= startQ + 1) {
+        return ""
+    }
+    var value = raw.substring(startQ + 1, endQ).trim()
+    if (!value.matches("[A-Za-z0-9_-]{1,64}")) {
+        return ""
+    }
+    return value
 }
 
 String cleanBase64Input(String b64) {
@@ -3929,7 +3960,7 @@ List<InvoiceConfirmTraceItem> buildConfirmTraceItemsFromReviewFiltered(ImportRev
             }
             var extRef = docId + ":" + ctx.id()
             var txIso = resolveTxIsoDate(ctx.date(), statementPeriod)
-            traceItems.add(InvoiceConfirmTraceItem(finalDesc, centsToReais(m), finalCat, docId, srcPage, srcLine, extRef, txIso))
+            traceItems.add(InvoiceConfirmTraceItem(finalDesc, centsToReais(m), finalCat, docId, srcPage, srcLine, extRef, txIso, userEnvelopeFromRule(ctx.categoryRule())))
         }
     }
     return traceItems
@@ -4059,7 +4090,7 @@ List<TransactionOutput> confirmInvoiceItemsWithIdempotency(String userId, List<I
         var it = items.get(idx)
         var itemSig = sha256HexOfString(it.description().trim().toLowerCase() + "|" + toCents(it.amount()) + "|" + it.category())
         var extRef = refPrefix + ":" + idx + ":" + itemSig.substring(0, 16)
-        traceItems.add(InvoiceConfirmTraceItem(it.description(), it.amount(), it.category(), docIdVal, 0, 0, extRef, defaultIso))
+        traceItems.add(InvoiceConfirmTraceItem(it.description(), it.amount(), it.category(), docIdVal, 0, 0, extRef, defaultIso, null))
         idx = idx + 1
     }
     return confirmInvoiceTraceItemsWithIdempotency(userId, traceItems, documentId)
@@ -4418,7 +4449,27 @@ IntentResult dispatchFinanceIntent(String authUserId, IntentRequest req) {
     return IntentResult("ERROR", intent, corrId, false, "Intencao desconhecida: " + intent, null, listOf("UNSUPPORTED_INTENT"))
 }
 
+// Caixinha escolhida pelo usuário na revisão (criada por ele): gravada em
+// categoryRule como USER_ENVELOPE:<id>, só se a caixinha for deste usuário.
+// Na confirmação da fatura o item vai para essa caixinha (resolveEnvelopeId).
+String USER_ENVELOPE_RULE() = "USER_ENVELOPE:"
+
+String? userEnvelopeFromRule(String? rule) {
+    if (rule == null) {
+        return null
+    }
+    var r = rule
+    if (!r.startsWith(USER_ENVELOPE_RULE())) {
+        return null
+    }
+    return r.substring(USER_ENVELOPE_RULE().length())
+}
+
 DocumentReclassifyResponse reclassifyDocumentTransactions(String userId, String docId, List<String> txIds, String rawCategory) {
+    return reclassifyDocumentTransactionsTo(userId, docId, txIds, rawCategory, null)
+}
+
+DocumentReclassifyResponse reclassifyDocumentTransactionsTo(String userId, String docId, List<String> txIds, String rawCategory, String? envelopeId) {
     var cleanDocId = docId.trim()
     if (cleanDocId == "") {
         throw "NOT_FOUND: documento não encontrado"
@@ -4445,6 +4496,13 @@ DocumentReclassifyResponse reclassifyDocumentTransactions(String userId, String 
     if (validCat == null) {
         throw "INVALID_CATEGORY: categoria inválida: " + rawCategory
     }
+    var rule = "USER_CONFIRMED_UI"
+    if (envelopeId != null && envelopeId.trim() != "") {
+        if (findEnvelopeById(userId, envelopeId.trim()) == null) {
+            throw "NOT_FOUND: caixinha não encontrada"
+        }
+        rule = USER_ENVELOPE_RULE() + envelopeId.trim()
+    }
 
     var rows = findExtractedTransactionRowsByDoc(userId, cleanDocId)
     var matchedCount = 0
@@ -4454,7 +4512,7 @@ DocumentReclassifyResponse reclassifyDocumentTransactions(String userId, String 
             saveExtractedTransactionRow(ExtractedTransactionRow(
                 r.id, r.documentId, r.userId, r.itemKey, r.txDate, r.descriptionRaw, r.descriptionNormalized,
                 r.amountMinor, r.currency, r.direction, r.kind, r.installment,
-                validCat.name(), "USER_CONFIRMED_UI", 1.0, r.pageNum, r.rowNum, r.snippet, "CONFIRMED"
+                validCat.name(), rule, 1.0, r.pageNum, r.rowNum, r.snippet, "CONFIRMED"
             ))
         }
     }
@@ -4988,13 +5046,16 @@ ChatInteractionSummary buildInvoiceInteractionSummary(ImportFlowSummary s, Strin
         entradas.add(ChatFlowLineItem("Estornos e créditos", formatBrl(s.refundMinor()), s.refundCount(), null))
     }
 
+    // "Seus gastos do mês": três naturezas lado a lado, cada uma com o próprio
+    // valor do motor. Não há total somando naturezas diferentes (o card antigo
+    // "Saídas" somava despesas + crédito e parecia ser tudo o que saiu).
     var saidas: List<ChatFlowLineItem> = listOf()
-    saidas.add(ChatFlowLineItem("Despesas confirmadas", formatBrl(s.expenseMinor()), s.expenseCount(), "Prontas para suas caixinhas"))
+    saidas.add(ChatFlowLineItem("Gastos identificados", formatBrl(s.expenseMinor()), s.expenseCount(), "Compras em estabelecimentos, prontas para suas caixinhas"))
     if (s.creditOperationCount() > 0) {
-        saidas.add(ChatFlowLineItem("Compras e Pix no cartão de crédito", formatBrl(s.creditOperationMinor()), s.creditOperationCount(), "Separado do saldo à vista"))
+        saidas.add(ChatFlowLineItem("Operações de crédito", formatBrl(s.creditOperationMinor()), s.creditOperationCount(), "Compras e Pix no cartão: entram na fatura, separadas do saldo à vista"))
     }
     if (s.pendingCount() > 0) {
-        saidas.add(ChatFlowLineItem("Aguardando sua revisão", formatBrl(s.pendingMinor()), s.pendingCount(), "Não entra nos gastos sem sua confirmação"))
+        saidas.add(ChatFlowLineItem("Aguardando sua revisão", formatBrl(s.pendingMinor()), 0, "Não entram nos gastos até você confirmar"))
     }
 
     return ChatInteractionSummary(
@@ -5002,8 +5063,8 @@ ChatInteractionSummary buildInvoiceInteractionSummary(ImportFlowSummary s, Strin
         formatBrl(s.incomeMinor()),
         s.incomeCount() + s.refundCount(),
         entradas,
-        formatBrl(s.confirmableExpenseMinor()),
-        s.confirmableExpenseCount(),
+        "",
+        0,
         saidas,
         formatBrl(s.pendingMinor()),
         s.pendingCount()
@@ -5064,7 +5125,7 @@ ChatInteractionPayload buildInvoiceInteractionPayload(ImportReview rev, ImportFl
     var options: List<ChatInteractionOption> = listOf(
         ChatInteractionOption("opt_view_expenses", "Ver meus gastos", "VIEW_EXPENSES", "CONSULTAR_GASTOS", "chart", 0),
         ChatInteractionOption("opt_organize_caixinhas", "Organizar caixinhas", "ORGANIZE_CAIXINHAS", "CONFIRMAR_IMPORTACAO", "wallet", 0),
-        ChatInteractionOption("opt_review_movements", "Revisar movimentações", "REVIEW_MOVEMENTS", "RECLASSIFICAR_MOVIMENTACOES", "checklist", s.pendingCount()),
+        ChatInteractionOption("opt_review_movements", "Revisar movimentações", "REVIEW_MOVEMENTS", "RECLASSIFICAR_MOVIMENTACOES", "checklist", 0),
         ChatInteractionOption("opt_understand_expenses", "Entender meus gastos", "UNDERSTAND_EXPENSES", "EXPLICAR_GASTOS", "book", 0)
     )
 
@@ -5121,7 +5182,7 @@ ChatInteractionPayload buildInvoiceRegisterPayload(ImportReview rev, ImportFlowS
 
     var options: List<ChatInteractionOption> = listOf()
     if (s.pendingCount() > 0) {
-        options.add(ChatInteractionOption("opt_review_movements", "Revisar movimentações", "REVIEW_MOVEMENTS", "RECLASSIFICAR_MOVIMENTACOES", "checklist", s.pendingCount()))
+        options.add(ChatInteractionOption("opt_review_movements", "Revisar movimentações", "REVIEW_MOVEMENTS", "RECLASSIFICAR_MOVIMENTACOES", "checklist", 0))
     }
 
     var headline = "Confira e registre os gastos da sua fatura"
@@ -5814,7 +5875,10 @@ InvoiceChatTurnResult? buildCategoryPreviewTurnBeforeSave(String userId, String?
         catLines = "- Nenhuma despesa confirmada pronta para salvar ainda.\n"
     }
     var fname = humanFilenameForDocId(rev.documentId())
-    var msg = catalogConfirmacaoCaixinhas(fname, catLines, s.expenseMinor(), s.creditOperationMinor(), s.billPaymentMinor(), s.pendingCount(), s.pendingMinor())
+    // Vai direto para o card interativo: os valores, a prévia por caixinha e a
+    // confirmação ficam no card (buildInvoiceRegisterPayload). O texto longo
+    // (catalogConfirmacaoCaixinhas) repetia tudo e somava naturezas diferentes.
+    var msg = "Confira seus gastos abaixo e escolha o que vai para as suas caixinhas. Nada é salvo antes da sua confirmação."
     return InvoiceChatTurnResult(msg, buildInvoiceRegisterPayload(rev, s, fname))
 }
 
