@@ -89,24 +89,35 @@ Style chatTrashBtnCss() = themed(Style("outline: none; display: inline-flex; ali
 
 // Lixeira: apaga o histórico do chat (DELETE /api/chat/messages, o mesmo do
 // "Novo chat"). Ação destrutiva: pede confirmação no próprio cabeçalho.
+Style chatClearAskCss()    = themed(Style("color: #1A1D2E; font-size: 0.875rem; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #F0F0F0; font-size: 0.875rem; font-weight: 600; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style chatClearCancelCss() = themed(Style("outline: none; height: 40; min-width: 44; padding: 0 14px; border-radius: 10; border: 1px solid #D1D5DB; background: transparent; color: #1A1D2E; font-size: 0.875rem; font-weight: 600; cursor: pointer; flex-shrink: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; height: 40; min-width: 44; padding: 0 14px; border-radius: 10; border: 1px solid rgba(255,255,255,.2); background: transparent; color: #F0F0F0; font-size: 0.875rem; font-weight: 600; cursor: pointer; flex-shrink: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style chatClearDangerCss() = themed(Style("outline: none; height: 40; min-width: 44; padding: 0 14px; border-radius: 10; border: 1px solid #DC2626; background: #DC2626; color: #FFFFFF; font-size: 0.875rem; font-weight: 700; cursor: pointer; flex-shrink: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; height: 40; min-width: 44; padding: 0 14px; border-radius: 10; border: 1px solid #FF4A6E; background: rgba(255,74,110,.16); color: #FF4A6E; font-size: 0.875rem; font-weight: 700; cursor: pointer; flex-shrink: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+
 View chatTrashButton(Window w) {
     if (ChatUi.confirmClear) {
+        // Confirmação compacta na mesma linha do cabeçalho (mesma altura do
+        // "Novo chat"). Apagar usa o tom de perigo, não o gradiente principal.
         var ask = Label("Apagar a conversa?")
-        ask.setStyle(chatInteractionTextCss())
-        var no = secondaryButton("Cancelar", "chat-clear-cancel", false, () -> {
+        ask.setStyle(chatClearAskCss())
+        var no = Button("Cancelar", () -> {
             ChatUi.confirmClear = false
             mountScreen(w)
         })
-        var yes = primaryButton("Apagar", "chat-clear-confirm", false, () -> {
+        no.setId("chat-clear-cancel")
+        no.setStyle(chatClearCancelCss())
+        var yes = Button("Apagar", () -> {
             ChatUi.confirmClear = false
             spawn {
                 clearChatHistory()
                 mountScreen(w)
             }
         })
+        yes.setId("chat-clear-confirm")
+        yes.setStyle(chatClearDangerCss())
         var row = Row(listOf(ask, no, yes))
         row.setId("chat-clear-ask")
-        row.setStyle(Style("display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8"))
+        row.setAccessibleName("Confirmar: apagar a conversa")
+        row.setStyle(Style("display: inline-flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 8; white-space: nowrap"))
         return row
     }
     var btn = View(screenStyle())
@@ -122,7 +133,11 @@ View chatTrashButton(Window w) {
 }
 
 View chatHeaderActions(Window w) {
-    var row = Row(listOf(chatTrashButton(w), newChatTopButton(w)))
+    var actions: List<View> = listOf(chatTrashButton(w))
+    if (!ChatUi.confirmClear) {
+        actions.add(newChatTopButton(w))
+    }
+    var row = Row(actions)
     row.setId("chat-header-actions")
     row.setStyle(Style("display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8"))
     return row
