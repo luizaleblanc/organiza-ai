@@ -3862,6 +3862,27 @@ String lookupStatementPeriod(String? documentId) {
 // lidas (parser determinístico). Ex.: "Período de 01/11/2026 a 14/11/2026".
 // Evita afirmar "mês inteiro" quando o extrato cobre só parte dele. Sem datas,
 // mantém o rótulo do mês.
+String documentPeriodFromPdf(ImportReview rev) {
+    var sp = lookupStatementPeriod(rev.documentId())
+    if (sp.matches("[0-9]{4}-[0-9]{2}")) {
+        return sp
+    }
+    var minIso = ""
+    for (var ctx in rev.transactions()) {
+        var d = ctx.date()
+        if (d != null && hasExplicitYearInDate(d)) {
+            var iso = resolveTxIsoDate(d, "")
+            if (iso.length() >= 7 && (minIso == "" || iso.compareTo(minIso) < 0)) {
+                minIso = iso
+            }
+        }
+    }
+    if (minIso.length() >= 7 && minIso.substring(0, 7).matches("[0-9]{4}-[0-9]{2}")) {
+        return minIso.substring(0, 7)
+    }
+    return ""
+}
+
 String statementRangeLabel(ImportReview rev, String statementPeriod, String fallback) {
     var minIso = ""
     var maxIso = ""
@@ -5362,9 +5383,16 @@ InvoiceChatTurnResult buildAllExpensesTurn(String userId) {
 
     // Subagente auditor-faturas: faturas lidas, só o que ainda não foi registrado.
     var latestDocId = ""
+    var latestPeriod = ""
+    var latestRange = ""
     var latest = findLatestFinancialDocumentRowByUser(userId)
     if (latest != null && (latest.status == "EM_REVISAO" || latest.status == "IMPORTADO")) {
         latestDocId = latest.docKey
+        var latestRev = lookupDocumentReview(latest.docKey, userId).review()
+        if (latestRev != null) {
+            latestPeriod = documentPeriodFromPdf(latestRev)
+            latestRange = statementRangeLabel(latestRev, latestPeriod, formatPeriodPt(latestPeriod))
+        }
     }
     var docCount = 0
     for (var d in findFinancialDocumentRowsByUser(userId)) {
@@ -5434,8 +5462,8 @@ InvoiceChatTurnResult buildAllExpensesTurn(String userId) {
         "ASSIGN_CAIXINHAS",
         "Seus gastos e as caixinhas",
         textOrNull(latestDocId),
-        null,
-        null,
+        textOrNull(latestPeriod),
+        textOrNull(latestRange),
         "Todos os seus gastos",
         tip,
         null,
