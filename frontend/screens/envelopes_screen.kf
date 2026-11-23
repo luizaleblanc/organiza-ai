@@ -126,9 +126,17 @@ View envelopeCard(Window w, EnvelopeItem e) {
     badge.setId("env-badge-" + e.id())
     badge.setStyle(envBadgeCss(tone))
     var head = Row(listOf(name, badge))
-    head.setStyle(envHeadCss())
+    if (AppState.isDesktop) {
+        head.setStyle(envHeadCss())
+    } else {
+        head.setStyle(envHeadMobileCss())
+    }
     var value = Label(brl(e.spentThisMonth()))
-    value.setStyle(envValueCss(tone))
+    if (AppState.isDesktop) {
+        value.setStyle(envValueCss(tone))
+    } else {
+        value.setStyle(envValueMobileCss(tone))
+    }
     var legend = Label(String.valueOf(e.percent()) + "% · " + brl(e.spentThisMonth()) + "/" + brl(e.limitAmount()))
     legend.setId("env-legend-" + e.id())
     if (AppState.isDesktop) {
@@ -170,18 +178,33 @@ View envelopeCard(Window w, EnvelopeItem e) {
             mountScreen(w)
         })
         editBtn.setId("env-edit-" + id)
-        editBtn.setStyle(envEditCss())
+        if (AppState.isDesktop) {
+            editBtn.setStyle(envEditCss())
+        } else {
+            editBtn.setStyle(envEditMobileCss())
+        }
         var delBtn = Button("Excluir", () -> {
             EnvState.confirmDelete = id
             mountScreen(w)
         })
         delBtn.setId("env-delete-" + id)
-        delBtn.setStyle(envDeleteCss())
+        if (AppState.isDesktop) {
+            delBtn.setStyle(envDeleteCss())
+        } else {
+            delBtn.setStyle(envDeleteMobileCss())
+        }
         var actions = Row(listOf(editBtn, delBtn))
-        actions.setStyle(envActionsCss())
-        var foot = Row(listOf(legend, actions))
-        foot.setStyle(envFootRowCss())
-        rows.add(foot)
+        if (AppState.isDesktop) {
+            actions.setStyle(envActionsCss())
+            var foot = Row(listOf(legend, actions))
+            foot.setStyle(envFootRowCss())
+            rows.add(foot)
+        } else {
+            actions.setStyle(envActionsMobileCss())
+            var foot = Column(listOf(legend, actions))
+            foot.setStyle(envFootMobileCss())
+            rows.add(foot)
+        }
     }
     var col = Column(rows)
     col.setId("env-card-" + id)
@@ -549,7 +572,7 @@ View editEnvelopeModal(Window w) {
 View newEnvelopeTopButton(Window w) {
     var btnText = "Nova caixinha"
     if (!AppState.isDesktop) {
-        btnText = "Nova"
+        btnText = "Nova caixinha"
     }
     var label = Label(btnText)
     if (AppState.isDesktop) {
@@ -580,9 +603,7 @@ View newEnvelopeTopButton(Window w) {
 
 View envelopesScreen(Window w) {
     View? headerAction
-    if (AppState.isDesktop) {
-        headerAction = newEnvelopeTopButton(w)
-    }
+    headerAction = newEnvelopeTopButton(w)
     var items: List<View> = listOf(topbar("Caixinhas", "", headerAction))
 
     if (!EnvState.loaded || (EnvState.loadError == "" && EnvState.loadedFor != SessionState.token)) {
@@ -640,35 +661,45 @@ View envelopesScreen(Window w) {
 // Estilos locais (hex do design system: core/theme.kf e DESIGN_SYSTEM.md).
 Style envScreenCss()         = Style("display: flex; flex-direction: column; gap: 28; width: 100%")
 Style envGroupCss()          = Style("display: flex; flex-direction: column; gap: 14; width: 100%")
-Style envGridG3Css()         = Style("display: grid; grid-template-columns: 1fr 1fr; gap: 20; width: 100%")
+Style envGridG3Css()         = Style("display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); align-items: stretch; gap: 20; width: 100%; min-width: 0")
 Style envMobileStackCss()    = Style("display: flex; flex-direction: column; gap: 10; width: 100%")
 Style envCardDesktopCss()    = themed(Style("display: flex; flex-direction: column; justify-content: space-between; gap: 16; min-height: 196; padding: 22px 24px; box-sizing: border-box; background: #FFFFFF; border: 1px solid rgba(37,99,235,.16); border-radius: 16; min-width: 0"), Style("display: flex; flex-direction: column; justify-content: space-between; gap: 16; min-height: 196; padding: 22px 24px; box-sizing: border-box; background: #12162A; border: 1px solid rgba(0,212,255,.16); border-radius: 16; min-width: 0"))
 Style envCardMobileCss()     = themed(Style("display: flex; flex-direction: column; gap: 12; min-height: 164; padding: 18; box-sizing: border-box; background: #FFFFFF; border: 1px solid rgba(37,99,235,.16); border-radius: 14; min-width: 0"), Style("display: flex; flex-direction: column; gap: 12; min-height: 164; padding: 18; box-sizing: border-box; background: #12162A; border: 1px solid rgba(0,212,255,.16); border-radius: 14; min-width: 0"))
-Style envNameCss()           = themed(Style("color: #1A1D2E; font-size: 1.125rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #F0F0F0; font-size: 1.125rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
-Style envNameMobileCss()     = themed(Style("color: #1A1D2E; font-size: 0.875rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #F0F0F0; font-size: 0.875rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
-Style envHeadCss()           = Style("display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: space-between; align-items: center; gap: 8; width: 100%")
+Style envNameCss()           = themed(Style("color: #1A1D2E; font-size: 1.125rem; font-weight: 700; margin: 0; min-width: 0; overflow-wrap: anywhere; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #F0F0F0; font-size: 1.125rem; font-weight: 700; margin: 0; min-width: 0; overflow-wrap: anywhere; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style envNameMobileCss()     = themed(Style("color: #1A1D2E; font-size: 0.875rem; font-weight: 700; margin: 0; min-width: 0; overflow-wrap: anywhere; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #F0F0F0; font-size: 0.875rem; font-weight: 700; margin: 0; min-width: 0; overflow-wrap: anywhere; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style envHeadCss()           = Style("display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: space-between; align-items: center; gap: 8; width: 100%; min-width: 0")
+Style envHeadMobileCss()     = Style("display: flex; flex-direction: row; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8; width: 100%; min-width: 0")
 Style envGroupTitleCss()     = themed(Style("color: #6B7280; font-size: 1rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #7B8EAD; font-size: 1rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style envGroupTitleMobileCss() = themed(Style("color: #6B7280; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #7B8EAD; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style envBadgeSuccessCss()   = themed(Style("display: inline-flex; align-items: center; height: 26; padding: 0 10px; box-sizing: border-box; color: #1A1D2E; background: rgba(16,185,129,.12); border: 1px solid #10B981; border-radius: 999; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; line-height: 1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("display: inline-flex; align-items: center; height: 26; padding: 0 10px; box-sizing: border-box; color: #00E5A0; background: rgba(0,229,160,.12); border: 1px solid #00E5A0; border-radius: 999; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; line-height: 1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style envBadgeWarningCss()   = themed(Style("display: inline-flex; align-items: center; height: 26; padding: 0 10px; box-sizing: border-box; color: #1A1D2E; background: rgba(245,158,11,.12); border: 1px solid #F59E0B; border-radius: 999; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; line-height: 1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("display: inline-flex; align-items: center; height: 26; padding: 0 10px; box-sizing: border-box; color: #FFB800; background: rgba(255,184,0,.12); border: 1px solid #FFB800; border-radius: 999; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; line-height: 1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style envBadgeDangerCss()    = themed(Style("display: inline-flex; align-items: center; height: 26; padding: 0 10px; box-sizing: border-box; color: #E63946; background: rgba(230,57,70,.08); border: 1px solid #E63946; border-radius: 999; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; line-height: 1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("display: inline-flex; align-items: center; height: 26; padding: 0 10px; box-sizing: border-box; color: #FF4A6E; background: rgba(255,74,110,.12); border: 1px solid #FF4A6E; border-radius: 999; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; line-height: 1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
-Style envValueAccentCss()    = themed(Style("color: #2563EB; font-size: 2rem; font-weight: 700; line-height: 1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #00D4FF; font-size: 2rem; font-weight: 700; line-height: 1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
-Style envValueWarningCss()   = themed(Style("color: #1A1D2E; font-size: 2rem; font-weight: 700; line-height: 1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #FFB800; font-size: 2rem; font-weight: 700; line-height: 1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
-Style envValueDangerCss()    = themed(Style("color: #E63946; font-size: 2rem; font-weight: 700; line-height: 1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #FF4A6E; font-size: 2rem; font-weight: 700; line-height: 1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style envValueAccentCss()    = themed(Style("color: #2563EB; font-size: 1.75rem; font-weight: 700; line-height: 1.1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #00D4FF; font-size: 1.75rem; font-weight: 700; line-height: 1.1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style envValueWarningCss()   = themed(Style("color: #1A1D2E; font-size: 1.75rem; font-weight: 700; line-height: 1.1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #FFB800; font-size: 1.75rem; font-weight: 700; line-height: 1.1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style envValueDangerCss()    = themed(Style("color: #E63946; font-size: 1.75rem; font-weight: 700; line-height: 1.1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #FF4A6E; font-size: 1.75rem; font-weight: 700; line-height: 1.1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style envValueMobileCss(String tone) {
+    if (tone == "danger") { return themed(Style("color: #E63946; font-size: 1.5rem; font-weight: 700; line-height: 1.1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #FF4A6E; font-size: 1.5rem; font-weight: 700; line-height: 1.1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")) }
+    if (tone == "warning") { return themed(Style("color: #1A1D2E; font-size: 1.5rem; font-weight: 700; line-height: 1.1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #FFB800; font-size: 1.5rem; font-weight: 700; line-height: 1.1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif")) }
+    return themed(Style("color: #2563EB; font-size: 1.5rem; font-weight: 700; line-height: 1.1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #00D4FF; font-size: 1.5rem; font-weight: 700; line-height: 1.1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+}
 Style envTrackCss()          = themed(Style("display: flex; height: 10; width: 100%; border-radius: 5; background: #E5E7EB; overflow: hidden"), Style("display: flex; height: 10; width: 100%; border-radius: 5; background: rgba(255,255,255,.08); overflow: hidden"))
 Style envFillRowCss()        = Style("display: flex; flex-direction: row; flex-wrap: nowrap; width: 100%; height: 10; gap: 0")
 Style envFillRestCss()       = Style("height: 10; background: transparent; padding: 0; min-width: 0")
 Style envFillAccentCss()     = themed(Style("height: 10; border-radius: 5; background: #2563EB; min-width: 0"), Style("height: 10; border-radius: 5; background: #00D4FF; min-width: 0"))
 Style envFillWarningCss()    = themed(Style("height: 10; border-radius: 5; background: #F59E0B; min-width: 0"), Style("height: 10; border-radius: 5; background: #FFB800; min-width: 0"))
 Style envFillDangerCss()     = themed(Style("height: 10; border-radius: 5; background: #E63946; min-width: 0"), Style("height: 10; border-radius: 5; background: #FF4A6E; min-width: 0"))
-Style envLegendCss()         = themed(Style("color: #6B7280; font-size: 0.875rem; font-weight: 500; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #7B8EAD; font-size: 0.875rem; font-weight: 500; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
-Style envLegendMobileCss()   = themed(Style("color: #6B7280; font-size: 0.75rem; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #7B8EAD; font-size: 0.75rem; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
-Style envFootRowCss()        = Style("display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: space-between; align-items: center; gap: 8; width: 100%")
-Style envActionsCss()        = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 12")
+Style envLegendCss()         = themed(Style("color: #6B7280; font-size: 0.875rem; font-weight: 500; line-height: 1.4em; margin: 0; min-width: 0; overflow-wrap: anywhere; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #7B8EAD; font-size: 0.875rem; font-weight: 500; line-height: 1.4em; margin: 0; min-width: 0; overflow-wrap: anywhere; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style envLegendMobileCss()   = themed(Style("color: #6B7280; font-size: 0.75rem; line-height: 1.4em; margin: 0; min-width: 0; overflow-wrap: anywhere; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #7B8EAD; font-size: 0.75rem; line-height: 1.4em; margin: 0; min-width: 0; overflow-wrap: anywhere; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style envFootRowCss()        = Style("display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: space-between; align-items: center; gap: 8; width: 100%; min-width: 0")
+Style envFootMobileCss()     = Style("display: flex; flex-direction: column; flex-wrap: nowrap; justify-content: flex-start; align-items: stretch; gap: 10; width: 100%; min-width: 0")
+Style envActionsCss()        = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 12; min-width: 0")
+Style envActionsMobileCss()  = Style("display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8; width: 100%; min-width: 0")
 Style envEditCss()           = themed(Style("outline: none; background: rgba(37,99,235,.1); color: #2563EB; border: 1px solid rgba(37,99,235,.7); border-radius: 8; padding: 8px 14px; font-size: 0.875rem; font-weight: 700; cursor: pointer; flex-shrink: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; background: rgba(0,212,255,.1); color: #00D4FF; border: 1px solid rgba(0,212,255,.7); border-radius: 8; padding: 8px 14px; font-size: 0.875rem; font-weight: 700; cursor: pointer; flex-shrink: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style envEditMobileCss()     = themed(Style("outline: none; background: rgba(37,99,235,.1); color: #2563EB; border: 1px solid rgba(37,99,235,.7); border-radius: 8; padding: 8px 14px; min-height: 44; font-size: 0.875rem; font-weight: 700; cursor: pointer; flex: 1 1 104px; min-width: 104; box-sizing: border-box; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; background: rgba(0,212,255,.1); color: #00D4FF; border: 1px solid rgba(0,212,255,.7); border-radius: 8; padding: 8px 14px; min-height: 44; font-size: 0.875rem; font-weight: 700; cursor: pointer; flex: 1 1 104px; min-width: 104; box-sizing: border-box; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style envDeleteCss()         = themed(Style("outline: none; background: rgba(230,57,70,.08); color: #E63946; border: 1px solid #E63946; border-radius: 8; padding: 8px 14px; font-size: 0.875rem; font-weight: 700; cursor: pointer; flex-shrink: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; background: rgba(255,74,110,.1); color: #FF4A6E; border: 1px solid rgba(255,74,110,.65); border-radius: 8; padding: 8px 14px; font-size: 0.875rem; font-weight: 700; cursor: pointer; flex-shrink: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style envDeleteMobileCss()  = themed(Style("outline: none; background: rgba(230,57,70,.08); color: #E63946; border: 1px solid #E63946; border-radius: 8; padding: 8px 14px; min-height: 44; font-size: 0.875rem; font-weight: 700; cursor: pointer; flex: 1 1 104px; min-width: 104; box-sizing: border-box; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; background: rgba(255,74,110,.1); color: #FF4A6E; border: 1px solid rgba(255,74,110,.65); border-radius: 8; padding: 8px 14px; min-height: 44; font-size: 0.875rem; font-weight: 700; cursor: pointer; flex: 1 1 104px; min-width: 104; box-sizing: border-box; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style envNewButtonCss()      = themed(Style("outline: none; display: flex; align-items: center; justify-content: center; height: 44; padding: 0 18px; box-sizing: border-box; border: none; border-radius: 10; background: linear-gradient(90deg, #2563EB, #1D4ED8); cursor: pointer; flex-shrink: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; display: flex; align-items: center; justify-content: center; height: 44; padding: 0 18px; box-sizing: border-box; border: none; border-radius: 10; background: linear-gradient(90deg, #00D4FF, #0066FF); cursor: pointer; flex-shrink: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
-Style envNewButtonMobileCss() = themed(Style("outline: none; display: flex; align-items: center; justify-content: center; height: 34; padding: 0 14px; box-sizing: border-box; border: none; border-radius: 10; background: #2563EB; cursor: pointer; flex-shrink: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; display: flex; align-items: center; justify-content: center; height: 34; padding: 0 14px; box-sizing: border-box; border: none; border-radius: 10; background: #00D4FF; cursor: pointer; flex-shrink: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style envNewButtonMobileCss() = themed(Style("outline: none; display: flex; align-items: center; justify-content: center; height: 44; min-height: 44; padding: 0 14px; box-sizing: border-box; border: none; border-radius: 10; background: #2563EB; cursor: pointer; flex-shrink: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; display: flex; align-items: center; justify-content: center; height: 44; min-height: 44; padding: 0 14px; box-sizing: border-box; border: none; border-radius: 10; background: #00D4FF; cursor: pointer; flex-shrink: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style envNewRowCss()         = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 6; background: transparent; padding: 0")
 Style envNewLabelCss()       = themed(Style("color: #FFFFFF; font-size: 0.9375rem; font-weight: 700; line-height: 1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #06121C; font-size: 0.9375rem; font-weight: 700; line-height: 1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style envNewLabelMobileCss() = themed(Style("color: #FFFFFF; font-size: 0.8125rem; font-weight: 700; line-height: 1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #06121C; font-size: 0.8125rem; font-weight: 700; line-height: 1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
@@ -688,7 +719,7 @@ Style envModalSubCss()      = themed(Style("color: #6B7280; font-size: 0.8125rem
 Style envFieldLabelCss()    = themed(Style("color: #6B7280; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em; margin: 6px 0 0 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #7B8EAD; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em; margin: 6px 0 0 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style envFixedNameCss()     = themed(Style("color: #1A1D2E; font-size: 1rem; font-weight: 700; margin: 4px 0 0 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #F0F0F0; font-size: 1rem; font-weight: 700; margin: 4px 0 0 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style envInputCss()         = themed(Style("outline: none; background: #FFFFFF; color: #1A1D2E; height: 44; width: 100%; box-sizing: border-box; border: 1px solid #E5E7EB; border-radius: 8; padding: 0 14px; font-size: 0.875rem; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; background: rgba(255,255,255,.04); color: #F0F0F0; height: 44; width: 100%; box-sizing: border-box; border: 1px solid rgba(255,255,255,.1); border-radius: 8; padding: 0 14px; font-size: 0.875rem; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
-Style envChoiceRowCss()     = Style("display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8; width: 100%")
+Style envChoiceRowCss()     = Style("display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8; width: 100%; min-width: 0")
 Style envChoiceColCss()     = Style("display: flex; flex-direction: column; gap: 10; width: 100%")
 Style envChoiceCss()        = themed(Style("outline: none; color: #1A1D2E; height: 48; width: 100%; box-sizing: border-box; border-radius: 12; padding: 0 12px; background: #FFFFFF; border: 1px solid #E5E7EB; font-size: 0.875rem; font-weight: 500; text-align: left; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; color: #F0F0F0; height: 48; width: 100%; box-sizing: border-box; border-radius: 12; padding: 0 12px; background: #12162A; border: 1px solid rgba(255,255,255,.1); font-size: 0.875rem; font-weight: 500; text-align: left; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style envChoiceSelectedCss() = themed(Style("outline: none; color: #2563EB; height: 48; width: 100%; box-sizing: border-box; border-radius: 12; padding: 0 12px; background: rgba(37,99,235,.08); border: 1px solid #2563EB; font-size: 0.875rem; font-weight: 600; text-align: left; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; color: #00D4FF; height: 48; width: 100%; box-sizing: border-box; border-radius: 12; padding: 0 12px; background: rgba(0,212,255,.08); border: 1px solid #00D4FF; font-size: 0.875rem; font-weight: 600; text-align: left; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
