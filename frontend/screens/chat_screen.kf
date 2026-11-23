@@ -108,7 +108,7 @@ View chatTrashButton(Window w) {
         var yes = Button("Apagar", () -> {
             ChatUi.confirmClear = false
             spawn {
-                clearChatHistory()
+                clearChatHistoryWith(false)
                 mountScreen(w)
             }
         })
@@ -338,16 +338,22 @@ addDetailsBlock(Window w, List<View> content, ChatInteractionResponse interactio
 }
 
 addOptionButtons(Window w, List<View> content, List<ChatInteractionOptionResponse> options) {
+    // Education First: "Entender meus gastos" sempre primeiro, qualquer que seja
+    // a ordem enviada pelo backend. Sem contadores nos botões (só os itens).
+    var ordered: List<ChatInteractionOptionResponse> = listOf()
+    for (var o in options) {
+        if (o.id() == "opt_understand_expenses") { ordered.add(o) }
+    }
+    for (var o in options) {
+        if (o.id() != "opt_understand_expenses") { ordered.add(o) }
+    }
     var actions: List<View> = listOf()
-    for (var option in options) {
+    for (var option in ordered) {
         val actionPrompt = option.label()
         var label = actionPrompt
         // A tag é só visual: a mensagem enviada ao chat continua sendo o label.
         if (option.id() == "opt_understand_expenses") {
             label = label + " (recomendado)"
-        }
-        if (option.badgeCount() > 0) {
-            label = label + " (" + String.valueOf(option.badgeCount()) + ")"
         }
         var action = Button(label, () -> submitInteractionPrompt(w, actionPrompt))
         action.setId("chat-interaction-option-" + option.id())
@@ -1316,6 +1322,57 @@ ensureChatLoaded(Window w) {
     }
 }
 
+// Lista de conversas ("Seus chats"). No desktop é montada dentro do menu
+// lateral; no mobile, ao lado do chat.
+View chatSessionsBlock(Window w) {
+    var sideTitle = Label("Seus chats")
+    sideTitle.setStyle(chatSidebarTitleCss())
+    var c1 = Button("Chat 1 · Conversa anterior", () -> {
+        switchChatSession(1)
+        mountScreen(w)
+    })
+    c1.setId("chat-session-1")
+    if (!AppState.isDesktop && ChatUi.currentChatId == 1) {
+        c1.setStyle(chatSessionActiveMobileCss())
+    } else if (ChatUi.currentChatId == 1) {
+        c1.setStyle(chatSessionActiveCss())
+    } else if (!AppState.isDesktop) {
+        c1.setStyle(chatSessionBtnMobileCss())
+    } else {
+        c1.setStyle(chatSessionBtnCss())
+    }
+    var c2 = Button("Chat 2 · Fatura atual", () -> {
+        switchChatSession(2)
+        mountScreen(w)
+    })
+    c2.setId("chat-session-2")
+    if (!AppState.isDesktop && ChatUi.currentChatId == 2) {
+        c2.setStyle(chatSessionActiveMobileCss())
+    } else if (ChatUi.currentChatId == 2) {
+        c2.setStyle(chatSessionActiveCss())
+    } else if (!AppState.isDesktop) {
+        c2.setStyle(chatSessionBtnMobileCss())
+    } else {
+        c2.setStyle(chatSessionBtnCss())
+    }
+    var sideCol = Column(listOf(sideTitle, c2, c1))
+    sideCol.setId("chat-sessions-sidebar")
+    if (AppState.isDesktop) {
+        sideCol.setStyle(Style("display: flex; flex-direction: column; gap: 6; width: 100%; padding: 12px 0 0 0; margin-top: 8; box-sizing: border-box; border-top: 1px solid rgba(255,255,255,.1)"))
+    } else {
+        sideCol.setStyle(chatSidebarMobileCss())
+    }
+    return sideCol
+}
+
+// Menu lateral (desktop): bloco "Seus chats" quando há conversas e a tela é o chat.
+View? chatSidebarExtra(Window w) {
+    if (AppState.currentScreen == "chat" && ChatUi.totalChats >= 2) {
+        return chatSessionsBlock(w)
+    }
+    return null
+}
+
 View chatScreen(Window w) {
     ensureChatLoaded(w)
 
@@ -1406,51 +1463,11 @@ View chatScreen(Window w) {
     body.setStyle(chatBodyCss())
 
     var mainArea: View = body
-    if (ChatUi.totalChats >= 2) {
-        var sideTitle = Label("Seus chats")
-        sideTitle.setStyle(chatSidebarTitleCss())
-        var c1 = Button("Chat 1 · Conversa anterior", () -> {
-            switchChatSession(1)
-            mountScreen(w)
-        })
-        c1.setId("chat-session-1")
-        if (!AppState.isDesktop && ChatUi.currentChatId == 1) {
-            c1.setStyle(chatSessionActiveMobileCss())
-        } else if (ChatUi.currentChatId == 1) {
-            c1.setStyle(chatSessionActiveCss())
-        } else if (!AppState.isDesktop) {
-            c1.setStyle(chatSessionBtnMobileCss())
-        } else {
-            c1.setStyle(chatSessionBtnCss())
-        }
-        var c2 = Button("Chat 2 · Fatura atual", () -> {
-            switchChatSession(2)
-            mountScreen(w)
-        })
-        c2.setId("chat-session-2")
-        if (!AppState.isDesktop && ChatUi.currentChatId == 2) {
-            c2.setStyle(chatSessionActiveMobileCss())
-        } else if (ChatUi.currentChatId == 2) {
-            c2.setStyle(chatSessionActiveCss())
-        } else if (!AppState.isDesktop) {
-            c2.setStyle(chatSessionBtnMobileCss())
-        } else {
-            c2.setStyle(chatSessionBtnCss())
-        }
-        var sideCol = Column(listOf(sideTitle, c2, c1))
-        sideCol.setId("chat-sessions-sidebar")
-        if (AppState.isDesktop) {
-            sideCol.setStyle(chatSidebarColCss())
-        } else {
-            sideCol.setStyle(chatSidebarMobileCss())
-        }
-        var wsRow = Row(listOf(sideCol, body))
+    // Desktop: "Seus chats" fica no menu lateral (navigation.kf). Mobile: ao lado do chat.
+    if (ChatUi.totalChats >= 2 && !AppState.isDesktop) {
+        var wsRow = Row(listOf(chatSessionsBlock(w), body))
         wsRow.setId("chat-workspace-row")
-        if (AppState.isDesktop) {
-            wsRow.setStyle(chatWorkspaceRowCss())
-        } else {
-            wsRow.setStyle(chatWorkspaceRowMobileCss())
-        }
+        wsRow.setStyle(chatWorkspaceRowMobileCss())
         mainArea = wsRow
     }
 
