@@ -185,13 +185,15 @@ on-accent #FFFFFF sobre accent #2563EB (botões, aba ativa) 5.17
 
 Pares que falham e como foram resolvidos: `muted` como texto (virou `secondary`); `success`/`warning` como texto (viraram `text`); `danger` como texto só em erros (exceção acima); `secondary` sobre `ai-bubble` (4,36) não ocorre, porque a bolha da IA usa `text`; `accent` sobre `track` não ocorre.
 
-## 9. Template de interacao financeira do chat
+## 9. Template de interacao financeira e registro de fatura do chat
 
 Referencia: artefato oficial `JVjueTmHeJsnHLsow3LDVb` e tokens em `frontend/core/theme.kf`.
 
-O template de interacao e renderizado por `frontend/screens/chat_screen.kf` com `Button`, `Row`, `Column` e `Label` do KOF UI. O contrato tipado vem de `ChatInteractionResponse` em `frontend/core/chat_api.kf`. A marca usa `frontend/assets/brand/organiza-simbolo.svg` ou sua variante clara; nao recriar o simbolo com SVG inline.
+O template de interacao e os fluxos de selecao multipla (`SINGLE_ACTION`, `INVOICE_REGISTER`, `REVIEW_CHECKLIST`, `VIEW_CATEGORIES` e `INVOICE_REGISTERED`) sao renderizados por `frontend/screens/chat_screen.kf` com widgets KOF UI (`View`, `Button`, `Row`, `Column`, `Label`, `Input` e `icon`). O contrato tipado vem de `ChatInteractionResponse` e `ChatSelectableItemResponse` em `frontend/core/chat_api.kf`. A marca usa `frontend/assets/brand/organiza-simbolo.svg` ou sua variante clara; nao recriar o simbolo com SVG inline.
 
-Os controles usam os tokens de fundo, superficie, texto, borda, destaque e raio definidos nas secoes 2 e 8. Informacoes tecnicas ficam sob o botao KOF UI `Detalhes da analise`, recolhidas por padrao.
+A abordagem segue Education First: destaque para o resultado em linguagem simples, bloco explicativo com `icon("pulse", 16, "accent")` (zero emojis), resumo dividido em **Entradas** e **Saidas** e informacoes tecnicas recolhidas sob o botao KOF UI `Detalhes da analise`.
+
+Os checkboxes reutilizam indicadores KOF UI `20x20` (`border-radius: 6`, icone `icon("check", 13, "onaccent")` quando marcados) dentro de cards `border-radius: 12`, com atualizacao instantanea do subtotal local e confirmacao explicita antes de gravar no banco. Todos os controles usam exclusivamente os tokens claro/escuro definidos nas secoes 2 e 8. Informacoes tecnicas ficam sob o botao KOF UI `Detalhes da analise`, recolhidas por padrao.
 
 ## 10. Graficos de Gastos Calculados
 
