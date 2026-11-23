@@ -55,6 +55,8 @@ class DashState {
     static Bool fresh = false
     static Int selectedSlice = -1
     static Bool chartPreferencesOpen = false
+    // Tipo do gráfico da Prévia do Modelo de Economia: "pizza" | "vertical" | "horizontal" | "laterais".
+    static String chartType = "vertical"
     static Bool showBudgetChart = true
     static Bool showCategoryChart = true
     static Bool showSummaryCard = true

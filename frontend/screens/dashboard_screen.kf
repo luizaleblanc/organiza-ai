@@ -7,6 +7,7 @@ import core.navigation
 import core.format
 import core.dashboard_api
 import components.topbar
+import components.form_widgets
 
 // =============================================================================
 // Tela 9 Dashboard (B2 — fidelidade Desktop + Mobile e donut interativo)
@@ -30,7 +31,7 @@ Style chartPreferenceButtonCss() = themed(Style("outline: none; background: #FFF
 
 // ---- Grids & cards ----------------------------------------------------------
 Style dashGridG3Css()         = Style("display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); align-items: stretch; gap: 12; width: 100%; flex-shrink: 0")
-Style dashGridG2Css()         = Style("display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); align-items: stretch; gap: 14; width: 100%; flex-shrink: 0; min-width: 0")
+Style dashGridG2Css()         = Style("display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); align-items: start; gap: 14; width: 100%; flex-shrink: 0; min-width: 0")
 Style dashMobileStackCss()    = Style("display: flex; flex-direction: column; gap: 12; width: 100%; flex-shrink: 0")
 Style dashPulseCardCss()      = themed(Style("display: flex; flex-direction: column; justify-content: center; gap: 10; padding: 24; box-sizing: border-box; background: linear-gradient(135deg, #FFFFFF, #FFFFFF); border: 1px solid rgba(37,99,235,.15); border-radius: 14; min-width: 0; box-shadow: 0 2px 8px rgba(37,99,235,.06)"), Style("display: flex; flex-direction: column; justify-content: center; gap: 10; padding: 24; box-sizing: border-box; background: linear-gradient(135deg, #12162A, #1A1F3A); border: 1px solid rgba(0,212,255,.15); border-radius: 14; min-width: 0"))
 Style dashPulseHeroCss()      = themed(Style("display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4; padding: 18; box-sizing: border-box; background: linear-gradient(135deg, #FFFFFF, #FFFFFF); border: 1px solid rgba(37,99,235,.12); border-radius: 16; width: 100%; box-shadow: 0 2px 8px rgba(37,99,235,.06)"), Style("display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4; padding: 18; box-sizing: border-box; background: linear-gradient(135deg, #12162A, #1A1F3A); border: 1px solid rgba(0,212,255,.12); border-radius: 16; width: 100%"))
@@ -116,39 +117,18 @@ Style legendNameCss()         = themed(Style("color: #1A1D2E; font-size: 0.875re
 Style legendNameSelCss()      = themed(Style("color: #1A1D2E; font-size: 0.875rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #F0F0F0; font-size: 0.875rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style legendValCss()          = themed(Style("color: #6B7280; font-size: 0.8125rem; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #7B8EAD; font-size: 0.8125rem; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style barChartContainerCss() = Style("display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; gap: 8; padding: 16px 0; box-sizing: border-box")
-Style barChartGridCss() {
-    if (!AppState.isDesktop) { return Style("display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: space-around; align-items: flex-end; width: 100%; height: 180; gap: 4; border-bottom: 2px solid rgba(255,255,255,.14); padding-bottom: 0; box-sizing: border-box; background: transparent") }
-    return Style("display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: center; align-items: flex-end; width: 100%; height: 180; gap: 32; border-bottom: 2px solid rgba(255,255,255,.14); padding-bottom: 0; box-sizing: border-box; background: transparent")
-}
-Style barColCss() {
-    if (!AppState.isDesktop) { return Style("display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 170; width: 32%; min-width: 0; flex-shrink: 1; background: transparent; padding: 0; box-sizing: border-box") }
-    return Style("display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 170; width: 72; flex-shrink: 0; background: transparent; padding: 0; box-sizing: border-box")
-}
-Style barPillarBoxCss() {
-    if (!AppState.isDesktop) { return Style("display: flex; flex-direction: column; justify-content: flex-end; align-items: center; width: 100%; height: 160; background: transparent; padding: 0") }
-    return Style("display: flex; flex-direction: column; justify-content: flex-end; align-items: center; width: 56; height: 160; background: transparent; padding: 0")
-}
+Style barChartGridCss() = Style("display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: space-around; align-items: flex-end; width: 100%; height: 180; gap: 4; border-bottom: 2px solid rgba(255,255,255,.14); padding-bottom: 0; box-sizing: border-box; background: transparent")
+Style barColCss() = Style("display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 170; width: 32%; min-width: 0; flex-shrink: 1; background: transparent; padding: 0; box-sizing: border-box")
+Style barPillarBoxCss() = Style("display: flex; flex-direction: column; justify-content: flex-end; align-items: center; width: 100%; height: 160; background: transparent; padding: 0")
 Style barSpacerCss()         = Style("width: 100%; background: transparent; padding: 0; min-height: 0")
-Style barPillarAccentCss() {
-    if (!AppState.isDesktop) { return Style("width: 82%; border-radius: 8 8 0 0; background: linear-gradient(180deg, #00D4FF, #0066FF); min-height: 8; padding: 0") }
-    return Style("width: 56; border-radius: 8 8 0 0; background: linear-gradient(180deg, #00D4FF, #0066FF); min-height: 8; padding: 0")
-}
-Style barPillarDesCss() {
-    if (!AppState.isDesktop) { return Style("width: 82%; border-radius: 8 8 0 0; background: linear-gradient(180deg, #0066FF, #0033AA); min-height: 8; padding: 0") }
-    return Style("width: 56; border-radius: 8 8 0 0; background: linear-gradient(180deg, #0066FF, #0033AA); min-height: 8; padding: 0")
-}
-Style barPillarSuccessCss() {
-    if (!AppState.isDesktop) { return Style("width: 82%; border-radius: 8 8 0 0; background: linear-gradient(180deg, #00E5A0, #009966); min-height: 8; padding: 0") }
-    return Style("width: 56; border-radius: 8 8 0 0; background: linear-gradient(180deg, #00E5A0, #009966); min-height: 8; padding: 0")
-}
-Style barPillarWarningCss() {
-    if (!AppState.isDesktop) { return Style("width: 82%; border-radius: 8 8 0 0; background: linear-gradient(180deg, #FFB800, #CC8800); min-height: 8; padding: 0") }
-    return Style("width: 56; border-radius: 8 8 0 0; background: linear-gradient(180deg, #FFB800, #CC8800); min-height: 8; padding: 0")
-}
+Style barPillarAccentCss() = Style("width: 82%; border-radius: 8 8 0 0; background: linear-gradient(180deg, #00D4FF, #0066FF); min-height: 8; padding: 0")
+Style barPillarDesCss() = Style("width: 82%; border-radius: 8 8 0 0; background: linear-gradient(180deg, #0066FF, #0033AA); min-height: 8; padding: 0")
+Style barPillarSuccessCss() = Style("width: 82%; border-radius: 8 8 0 0; background: linear-gradient(180deg, #00E5A0, #009966); min-height: 8; padding: 0")
+Style barPillarWarningCss() = Style("width: 82%; border-radius: 8 8 0 0; background: linear-gradient(180deg, #FFB800, #CC8800); min-height: 8; padding: 0")
 Style barValLabelCss()       = themed(Style("color: #1A1D2E; font-size: 0.875rem; font-weight: 700; margin: 4px 0 0 0; text-align: center; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #F0F0F0; font-size: 0.875rem; font-weight: 700; margin: 4px 0 0 0; text-align: center; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style barNameLabelCss()      = themed(Style("color: #1A1D2E; font-size: 0.8125rem; font-weight: 600; text-align: center; margin: 2px 0 0 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #B8BCC4; font-size: 0.8125rem; font-weight: 600; text-align: center; margin: 2px 0 0 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style barPctLabelCss()       = themed(Style("color: #6B7280; font-size: 0.75rem; font-weight: 500; text-align: center; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #7B8EAD; font-size: 0.75rem; font-weight: 500; text-align: center; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
-Style barNamesRowCss()       = Style("display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: center; align-items: flex-start; width: 100%; gap: 32; padding-top: 6; box-sizing: border-box; background: transparent")
+Style barNamesRowCss()       = Style("display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: space-around; align-items: flex-start; width: 100%; gap: 4; padding-top: 6; box-sizing: border-box; background: transparent")
 
 Style sliceTrackCss()         = themed(Style("display: flex; height: 12; width: 100%; border-radius: 6; background: #E5E7EB; overflow: hidden"), Style("display: flex; height: 12; width: 100%; border-radius: 6; background: rgba(255,255,255,.08); overflow: hidden"))
 Style sliceRowCss()           = Style("display: flex; flex-direction: row; flex-wrap: nowrap; width: 100%; height: 12; gap: 0")
@@ -363,23 +343,44 @@ chartToggleAction(Window w, Int which) {
     if (which == 3) { toggleSummaryCard(w) }
 }
 
+selectChartType(Window w, String kind) {
+    DashState.chartType = kind
+    DashState.selectedSlice = -1
+    mountScreen(w)
+}
+
+View chartTypeButton(Window w, String label, String kind) {
+    var b = chip(label, "dash-chart-type-" + kind, DashState.chartType == kind, () -> selectChartType(w, kind))
+    b.setAccessibleName("Ver como " + label)
+    return b
+}
+
 // Botão "Personalizar gráficos" + painel de opções. Vive no cabeçalho do card
 // "Prévia do Modelo de Economia" (aba Mês); se o card estiver oculto, aparece
 // sozinho no lugar dele para o usuário poder reexibi-lo.
+Style chartPreferenceCompactCss() = themed(Style("outline: none; flex-shrink: 0; align-self: flex-start; white-space: nowrap; min-height: 36; background: #FFFFFF; color: #2563EB; border: 1px solid #D1D5DB; border-radius: 8; padding: 6px 10px; font-size: 0.75rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; flex-shrink: 0; align-self: flex-start; white-space: nowrap; min-height: 36; background: #111827; color: #00D4FF; border: 1px solid rgba(255,255,255,.16); border-radius: 8; padding: 6px 10px; font-size: 0.75rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+
+View chartPreferenceButton(Window w) {
+    var label = "Personalizar gráficos"
+    if (DashState.chartPreferencesOpen) { label = "Fechar" }
+    var customize = Button(label, () -> toggleChartPreferences(w))
+    customize.setId("dash-chart-preferences-toggle")
+    customize.setAccessibleName("Personalizar gráficos")
+    customize.setStyle(chartPreferenceCompactCss())
+    return customize
+}
+
 View chartPreferenceAction(Window w) {
     var controls: List<View> = listOf()
-    var customize = Button("Personalizar gráficos", () -> toggleChartPreferences(w))
-    customize.setId("dash-chart-preferences-toggle")
-    customize.setStyle(chartPreferenceButtonCss())
-    controls.add(customize)
     if (DashState.chartPreferencesOpen) {
         var options: List<View> = listOf()
-        options.add(chartToggle("dash-chart-budget-toggle", "Prévia do Modelo de Economia", DashState.showBudgetChart, w, 1))
-        options.add(chartToggle("dash-chart-category-toggle", "Gastos por categoria", DashState.showCategoryChart, w, 2))
-        options.add(chartToggle("dash-chart-summary-toggle", "Resumo do Planejamento", DashState.showSummaryCard, w, 3))
+        options.add(chartTypeButton(w, "Pizza", "pizza"))
+        options.add(chartTypeButton(w, "Barras verticais", "vertical"))
+        options.add(chartTypeButton(w, "Barras horizontais", "horizontal"))
+        options.add(chartTypeButton(w, "Barras laterais", "laterais"))
         var panel = Row(options)
         panel.setId("dash-chart-preferences-panel")
-        panel.setStyle(chartPreferencePanelCss())
+        panel.setStyle(Style("display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 8; width: 100%; padding: 0; background: transparent"))
         controls.add(panel)
     }
     var col = Column(controls)
@@ -741,7 +742,7 @@ View verticalBarLabel(BucketBalanceDTO b, Int i) {
     var name = idLabel(b.name, "bar-name-" + i, barNameLabelCss())
     var pct = idLabel(String.valueOf(b.percentage) + "%", "bar-pct-" + i, barPctLabelCss())
     var col = Column(listOf(valLabel, name, pct))
-    col.setStyle(Style("display: flex; flex-direction: column; align-items: center; width: 72; flex-shrink: 0; gap: 2"))
+    col.setStyle(Style("display: flex; flex-direction: column; align-items: center; flex: 1 1 0; min-width: 0; gap: 2"))
     return col
 }
 
@@ -831,9 +832,16 @@ View distributionCard(Window w, DashboardResponse d) {
     labelsRow.setId("bar-labels-row")
     labelsRow.setStyle(barNamesRowCss())
 
-    var chartWrap = Column(listOf(chartGrid, labelsRow))
+    var chartWrap: View = Column(listOf(chartGrid, labelsRow))
     chartWrap.setId("dash-bars")
     chartWrap.setStyle(barChartContainerCss())
+    if (DashState.chartType == "pizza") {
+        chartWrap = pizzaChart(w, d)
+    } else if (DashState.chartType == "horizontal") {
+        chartWrap = horizontalBarsChart(d)
+    } else if (DashState.chartType == "laterais") {
+        chartWrap = sideBySideChart(d)
+    }
 
     var explain = distributionExplanation(d)
 
@@ -846,11 +854,112 @@ View distributionCard(Window w, DashboardResponse d) {
     var heading = Column(listOf(
         idLabel("Prévia do Modelo de Economia", "dist-title", titleCss),
         idLabel(modelFriendlyName(d.budgetModel), "dist-model", distributionModelCss())))
-    heading.setStyle(distributionHeadingCss())
-    var card = Column(listOf(heading, chartPreferenceAction(w), chartWrap, explain))
+    heading.setStyle(Style("display: flex; flex-direction: column; gap: 2; min-width: 180; flex: 1 1 180"))
+    var headRow = Row(listOf(heading, chartPreferenceButton(w)))
+    headRow.setId("dist-head")
+    headRow.setStyle(Style("display: flex; flex-direction: row; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8 12; width: 100%"))
+    var card = Column(listOf(headRow, chartPreferenceAction(w), chartWrap, explain))
     card.setId("card-distribution")
     card.setStyle(cardCss)
     return card
+}
+
+// ---- Tipos de gráfico da Prévia do Modelo de Economia ---------------------
+// Mesmos dados (d.buckets) em quatro formas; cores = sliceColor/sliceBarCss.
+Style sideSegmentRowCss() = Style("display: flex; flex-direction: row; flex-wrap: nowrap; width: 100%; height: 28; gap: 3; border-radius: 8; overflow: hidden")
+
+View pizzaChart(Window w, DashboardResponse d) {
+    val sel = DashState.selectedSlice
+    var zoom = View(screenStyle())
+    zoom.setStyle(canvasZoomCss())
+    zoom.bind(donutCanvas(d.buckets, sel))
+    var donut = View(screenStyle())
+    donut.setId("dash-donut")
+    donut.setAccessibleName("Gráfico de pizza do modelo " + modelFriendlyName(d.budgetModel))
+    donut.setStyle(donutOuterCss())
+    donut.bind(zoom)
+    var legend: List<View> = listOf()
+    var i = 0
+    for (var b in d.buckets) {
+        legend.add(legendItem(w, b, i, sel))
+        i = i + 1
+    }
+    var legendCol = Column(legend)
+    legendCol.setStyle(legendCss())
+    var body = Column(listOf(donut, legendCol))
+    body.setId("dash-pizza")
+    body.setStyle(distBodyMobileCss())
+    return body
+}
+
+View bucketHead(BucketBalanceDTO b, Int i, String prefix) {
+    var dot = View(screenStyle())
+    dot.setStyle(sliceDotCss(i))
+    var left = Row(listOf(dot, idLabel(b.name, prefix + i + "-name", legendNameCss())))
+    left.setStyle(legendLeftCss())
+    var head = Row(listOf(left, idLabel(brlShort(brl(b.plannedAmount)) + " · " + String.valueOf(b.percentage) + "%", prefix + i + "-value", legendValCss())))
+    head.setStyle(rowBetweenCss())
+    return head
+}
+
+View horizontalBarsChart(DashboardResponse d) {
+    var maxPct = 0
+    for (var b in d.buckets) {
+        if (b.percentage > maxPct) { maxPct = b.percentage }
+    }
+    var rows: List<View> = listOf()
+    var i = 0
+    for (var b in d.buckets) {
+        var p = 0
+        if (maxPct > 0) { p = b.percentage * 100 / maxPct }
+        var fill = View(screenStyle())
+        fill.setStyle(sliceBarCss(i))
+        fill.setFlexBasis(p * 100)
+        var rest = View(screenStyle())
+        rest.setStyle(sliceRestCss())
+        rest.setFlexBasis((100 - p) * 100)
+        var parts = Row(listOf(fill, rest))
+        parts.setStyle(sliceRowCss())
+        var track = View(screenStyle())
+        track.setStyle(sliceTrackCss())
+        track.bind(parts)
+        var row = Column(listOf(bucketHead(b, i, "hbar-"), track))
+        row.setId("hbar-" + i)
+        row.setStyle(yearRowCss())
+        rows.add(row)
+        i = i + 1
+    }
+    var col = Column(rows)
+    col.setId("dash-hbars")
+    col.setStyle(Style("display: flex; flex-direction: column; gap: 6; width: 100%; padding: 8px 0"))
+    return col
+}
+
+View sideBySideChart(DashboardResponse d) {
+    var segs: List<View> = listOf()
+    var legend: List<View> = listOf()
+    var i = 0
+    for (var b in d.buckets) {
+        if (b.percentage > 0) {
+            var seg = View(screenStyle())
+            seg.setId("side-seg-" + i)
+            seg.setStyle(sliceBarCss(i))
+            seg.setFlexBasis(b.percentage * 100)
+            segs.add(seg)
+        }
+        legend.add(bucketHead(b, i, "side-"))
+        i = i + 1
+    }
+    var bar = Row(segs)
+    bar.setId("side-bar")
+    bar.setAccessibleName("Barra dividida do modelo " + modelFriendlyName(d.budgetModel))
+    bar.setStyle(sideSegmentRowCss())
+    var legendCol = Column(legend)
+    legendCol.setStyle(Style("display: flex; flex-direction: column; gap: 10; width: 100%"))
+    var col = Column(listOf(bar, legendCol))
+    col.setId("dash-side")
+    col.setStyle(Style("display: flex; flex-direction: column; gap: 16; width: 100%; padding: 12px 0"))
+    return col
 }
 
 Style yearCategoryBarFullCss() = Style("height: 10; width: 100%; border-radius: 5; background: linear-gradient(90deg, #00D4FF, #0066FF)")
@@ -1271,11 +1380,7 @@ View dashboardScreen(Window w) {
             }
         } else {
             var cardsToShow: List<View> = listOf()
-            if (DashState.showBudgetChart) {
-                cardsToShow.add(distributionCard(w, d))
-            } else {
-                items.add(chartPreferenceAction(w))
-            }
+            cardsToShow.add(distributionCard(w, d))
             if (DashState.showCategoryChart && (DashState.period == "year" || d.categories.size > 0)) {
                 cardsToShow.add(yearCategoryChart(d))
             }

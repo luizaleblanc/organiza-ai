@@ -3511,7 +3511,60 @@
     }
   });
 
+  // Chat interativo: respostas com card (checklist, revisão, caixinhas) chegam em
+  // poucos ms porque são determinísticas; o anti-flicker de 120 ms escondia as
+  // ondas. Para o QA ver o trabalho, o card só aparece após no mínimo 700 ms do
+  // envio, com as ondas + texto contextual no lugar. Respostas só de texto não
+  // esperam. Exceção registrada à regra "não atrasar artificialmente" (spec §3).
+  const INTERACTIVE_MIN_WAVES_MS = 700;
+  let interactiveHoldForRequest = 0;
+  let interactiveHoldUntil = 0;
+  let interactiveHoldTimer = null;
+  function holdInteractiveCard() {
+    const card = document.getElementById("chat-interaction-card");
+    if (!card) return;
+    const now = Date.now();
+    const started = lastChatRequestStartedAt;
+    if (started > 0 && interactiveHoldForRequest !== started && now - started < INTERACTIVE_MIN_WAVES_MS) {
+      interactiveHoldForRequest = started;
+      interactiveHoldUntil = started + INTERACTIVE_MIN_WAVES_MS;
+    }
+    const placeholderId = "chat-interaction-waves";
+    let placeholder = document.getElementById(placeholderId);
+    if (now < interactiveHoldUntil) {
+      card.style.display = "none";
+      if (!placeholder) {
+        ensureWaveAnimStyle();
+        placeholder = document.createElement("div");
+        placeholder.id = placeholderId;
+        placeholder.className = "organiza-thinking-bubble";
+        placeholder.setAttribute("role", "status");
+        placeholder.setAttribute("aria-live", "polite");
+        placeholder.style.display = "inline-flex";
+        placeholder.style.alignItems = "center";
+        placeholder.style.gap = "12px";
+        placeholder.style.alignSelf = "flex-start";
+        placeholder.appendChild(createOrganizaWaveSvg(isLightTheme(), "hold"));
+        const span = document.createElement("span");
+        span.className = "organiza-thinking-text";
+        span.textContent = resolveChatContext(lastChatRequestText, lastChatRequestSource, lastChatRequestOpType || "");
+        placeholder.appendChild(span);
+        card.parentNode.insertBefore(placeholder, card);
+      }
+      if (!interactiveHoldTimer) {
+        interactiveHoldTimer = setTimeout(() => {
+          interactiveHoldTimer = null;
+          holdInteractiveCard();
+        }, Math.max(10, interactiveHoldUntil - now));
+      }
+      return;
+    }
+    card.style.display = "";
+    if (placeholder) placeholder.remove();
+  }
+
   function onDomMutated() {
+    holdInteractiveCard();
     readNewAssistantReplies();
     enhanceChatTyping();
     syncInteractiveChatPanel();

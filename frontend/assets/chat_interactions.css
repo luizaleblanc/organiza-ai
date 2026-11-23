@@ -841,7 +841,6 @@
   /* Abas Semana/Mês/Ano ocupam a linha inteira, botões iguais. */
   #dash-tabs { display: flex !important; width: 100% !important; box-sizing: border-box; }
   #dash-tabs > button { flex: 1 1 0 !important; padding-left: 6px !important; padding-right: 6px !important; }
-  #dash-chart-preferences-toggle { width: 100% !important; }
   #dash-chart-preferences-panel { justify-content: stretch !important; }
   #dash-chart-preferences-panel > button { flex: 1 1 100% !important; }
 
@@ -895,7 +894,7 @@
   #dash-tabs { flex-shrink: 0 !important; }
   /* Calendário: texto de previsão nunca quebra letra a letra. */
   [id^="calendar-day-forecast-"] { overflow-wrap: normal !important; word-break: normal !important; white-space: nowrap; font-size: 0.6875rem !important; }
-  #dash-cards { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)) !important; }
+  #dash-cards { grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)) !important; }
 }
 @media (min-width: 1024px) and (max-width: 1279px) {
   /* Sidebar + 3 tiles apertam; 2 colunas até 1280px. */
