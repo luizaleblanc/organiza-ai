@@ -3858,6 +3858,35 @@ String lookupStatementPeriod(String? documentId) {
     return ""
 }
 
+// Período real coberto pelo documento: da menor à maior data das transações
+// lidas (parser determinístico). Ex.: "Período de 01/11/2026 a 14/11/2026".
+// Evita afirmar "mês inteiro" quando o extrato cobre só parte dele. Sem datas,
+// mantém o rótulo do mês.
+String statementRangeLabel(ImportReview rev, String statementPeriod, String fallback) {
+    var minIso = ""
+    var maxIso = ""
+    for (var ctx in rev.transactions()) {
+        var d = ctx.date()
+        if (d != null && d.trim() != "") {
+            var iso = resolveTxIsoDate(d, statementPeriod)
+            if (iso.length() >= 10 && iso.substring(0, 10).matches("[0-9]{4}-[0-9]{2}-[0-9]{2}")) {
+                var day = iso.substring(0, 10)
+                if (minIso == "" || day.compareTo(minIso) < 0) { minIso = day }
+                if (maxIso == "" || day.compareTo(maxIso) > 0) { maxIso = day }
+            }
+        }
+    }
+    if (minIso == "") {
+        return fallback
+    }
+    var from = minIso.substring(8, 10) + "/" + minIso.substring(5, 7) + "/" + minIso.substring(0, 4)
+    var to = maxIso.substring(8, 10) + "/" + maxIso.substring(5, 7) + "/" + maxIso.substring(0, 4)
+    if (from == to) {
+        return "Dia " + from
+    }
+    return "Período de " + from + " a " + to
+}
+
 String resolveTxIsoDate(String? rawDate, String statementPeriod) {
     var sp = statementPeriod.trim()
     var fallbackYear = localTodayIso().substring(0, 4)
@@ -5140,7 +5169,7 @@ ChatInteractionPayload buildInvoiceInteractionPayload(ImportReview rev, ImportFl
         "O que você quer fazer agora?",
         textOrNull(rev.documentId()),
         textOrNull(statementPeriod),
-        textOrNull(periodPt),
+        textOrNull(statementRangeLabel(rev, statementPeriod, periodPt)),
         headline,
         tip,
         summary,
@@ -5196,7 +5225,7 @@ ChatInteractionPayload buildInvoiceRegisterPayload(ImportReview rev, ImportFlowS
         "Marque os lançamentos que deseja registrar nas suas caixinhas",
         textOrNull(rev.documentId()),
         textOrNull(statementPeriod),
-        textOrNull(periodPt),
+        textOrNull(statementRangeLabel(rev, statementPeriod, periodPt)),
         headline,
         "Escolher cada gasto antes de salvar ajuda você a separar compras reais de pagamentos de fatura e transferências, mantendo suas caixinhas fiéis ao mês.",
         summary,
@@ -5249,7 +5278,7 @@ ChatInteractionPayload buildReviewChecklistPayload(ImportReview rev, ImportFlowS
         "Selecione as movimentações pendentes e escolha a caixinha",
         textOrNull(rev.documentId()),
         textOrNull(statementPeriod),
-        textOrNull(periodPt),
+        textOrNull(statementRangeLabel(rev, statementPeriod, periodPt)),
         "Movimentações aguardando sua confirmação",
         "Itens sem estabelecimento claro (como Pix para pessoas) ficam fora dos seus gastos até você confirmar a categoria, evitando distorções no seu planejamento.",
         summary,
@@ -5297,7 +5326,7 @@ ChatInteractionPayload buildExpenseListPayload(ImportReview rev, ImportFlowSumma
         "Filtrar por categoria",
         textOrNull(rev.documentId()),
         textOrNull(statementPeriod),
-        textOrNull(periodPt),
+        textOrNull(statementRangeLabel(rev, statementPeriod, periodPt)),
         "Seus gastos",
         tip,
         null,
@@ -5305,6 +5334,119 @@ ChatInteractionPayload buildExpenseListPayload(ImportReview rev, ImportFlowSumma
         options,
         items
     )
+}
+
+// =========================================================
+// CONSULTAR_GASTOS: TODOS os gastos do usuário
+// =========================================================
+// Plano KOF determinístico com dois subagentes oficiais (agents/*.md):
+//  - auditor-faturas: itens lidos pelo parser determinístico das faturas
+//    (DESPESA / OPERACAO_CREDITO), ainda não registrados;
+//  - triador-gastos: transações já registradas (chat, voz, faturas confirmadas).
+// Sem LLM: nenhum valor, data ou categoria é gerado. Itens de fatura já
+// registrados não aparecem duas vezes (externalRef = docKey:txId, mesma regra
+// do Dashboard calculado). categoryCode:
+//   "<CAT>"       gasto da fatura mais recente, ainda não registrado: o usuário escolhe a caixinha;
+//   "SAVED:<CAT>" já registrado (somente leitura);
+//   "VIEW:<CAT>"  de fatura anterior, ainda não registrado (somente leitura).
+InvoiceChatTurnResult buildAllExpensesTurn(String userId) {
+    var plan = OrganizerPlan("consultar_gastos", listOf("auditor-faturas", "triador-gastos"))
+    var items: List<ChatSelectableItem> = listOf()
+    var savedRefs: List<String> = listOf()
+    for (var pr in listTransactionsWithProvenanceByUser(userId)) {
+        var er = pr.externalRef
+        if (er != null && er.trim() != "") {
+            savedRefs.add(er.trim())
+        }
+    }
+
+    // Subagente auditor-faturas: faturas lidas, só o que ainda não foi registrado.
+    var latestDocId = ""
+    var latest = findLatestFinancialDocumentRowByUser(userId)
+    if (latest != null && (latest.status == "EM_REVISAO" || latest.status == "IMPORTADO")) {
+        latestDocId = latest.docKey
+    }
+    var docCount = 0
+    for (var d in findFinancialDocumentRowsByUser(userId)) {
+        if (d.status == "EM_REVISAO" || d.status == "IMPORTADO") {
+            var rev = lookupDocumentReview(d.docKey, userId).review()
+            if (rev != null) {
+                docCount = docCount + 1
+                for (var ctx in rev.transactions()) {
+                    var fc = flowClassOf(ctx)
+                    var m = ctx.amountMinor()
+                    var ref = d.docKey + ":" + ctx.id()
+                    if ((fc == "DESPESA" || fc == "OPERACAO_CREDITO") && m != null && m > 0 && !savedRefs.contains(ref)) {
+                        var code = sanitizeCategoryForConfirm(ctx.category())
+                        var ptName = categoryLabel(categoryOrNull(code))
+                        var sub = "Da fatura · ainda não registrado"
+                        var dt = ctx.date()
+                        if (dt != null && dt.trim() != "") {
+                            sub = dt.trim() + " · " + sub
+                        }
+                        if (fc == "OPERACAO_CREDITO") {
+                            sub = sub + " · no crédito"
+                        }
+                        var finalCode = code
+                        if (d.docKey != latestDocId) {
+                            finalCode = "VIEW:" + code
+                        }
+                        items.add(ChatSelectableItem(ctx.id(), canonicalTxDisplayDesc(ctx, "Gasto"), ptName, finalCode, formatBrl(m), minorToIntCents(m), sub, false))
+                    }
+                }
+            }
+        }
+    }
+
+    // Subagente triador-gastos: tudo o que já está registrado.
+    var registered = 0
+    for (var t in findTransactionsByUserIdAndCreatedAtAfter(userId, "2000-01-01")) {
+        if (t.amountCents > 0) {
+            var catCode = "OTHER"
+            var cat = t.category
+            if (cat != null) {
+                catCode = cat.name()
+            }
+            var boxName = categoryLabel(cat)
+            var envId = t.envelopeId
+            if (envId != null) {
+                var env = findEnvelopeById(userId, envId)
+                if (env != null) {
+                    boxName = env.categoryName
+                }
+            }
+            var sub = "Caixinha " + boxName + " · registrado"
+            var ymd = txCreatedDateOnly(t.createdAt)
+            if (ymd != null && ymd.length() >= 10) {
+                sub = ymd.substring(8, 10) + "/" + ymd.substring(5, 7) + " · " + sub
+            }
+            items.add(ChatSelectableItem("saved-" + t.id, t.description, boxName, "SAVED:" + catCode, formatBrl(t.amountCents), t.amountCents as Int, sub, false))
+            registered = registered + 1
+        }
+    }
+
+    var reply = "Aqui estão todos os seus gastos: os já registrados e os que li nas suas faturas."
+    if (items.isEmpty()) {
+        reply = "Ainda não encontrei gastos seus. Você pode me contar um gasto (ex.: \"30 reais no almoço\") ou enviar uma fatura."
+    }
+    var tip = "Gastos já registrados mostram a caixinha onde estão. Os da fatura mais recente vêm com uma caixinha sugerida: você confirma ou troca antes de registrar."
+    var payload = ChatInteractionPayload(
+        "ASSIGN_CAIXINHAS",
+        "Seus gastos e as caixinhas",
+        textOrNull(latestDocId),
+        null,
+        null,
+        "Todos os seus gastos",
+        tip,
+        null,
+        ChatInteractionDetails("Como montei esta lista", listOf(
+            "Plano: " + plan.intencao() + " com os subagentes auditor-faturas e triador-gastos.",
+            "Faturas lidas pelo parser determinístico: " + String.valueOf(docCount) + ".",
+            "Gastos já registrados: " + String.valueOf(registered) + ".",
+            "Itens de fatura já registrados aparecem uma vez só.")),
+        listOf(),
+        items)
+    return InvoiceChatTurnResult(reply, payload)
 }
 
 ChatInteractionPayload buildAssignCaixinhasPayload(ImportReview rev, ImportFlowSummary s, String filename) {
@@ -5373,7 +5515,7 @@ ChatInteractionPayload buildViewCategoriesPayload(ImportReview rev, ImportFlowSu
         "Marque as categorias que você quer visualizar",
         textOrNull(rev.documentId()),
         textOrNull(statementPeriod),
-        textOrNull(periodPt),
+        textOrNull(statementRangeLabel(rev, statementPeriod, periodPt)),
         "Gastos da fatura por categoria",
         "Ver seus gastos separados por categoria ajuda a enxergar onde o dinheiro mais pesa no mês e onde dá para ajustar sem aperto.",
         summary,
@@ -6069,7 +6211,10 @@ InvoiceChatTurnResult? invoiceChatTurnFor(String userId, String message, String 
         }
         return InvoiceChatTurnResult("Para corrigir um item pendente da fatura, basta me dizer a categoria dele (por exemplo: \"esse Pix foi alimentação\" ou \"foi transporte\"). Se quiser ajustar uma caixinha, diga por exemplo: \"muda o limite da caixinha Alimentação para R$ 500\".", null)
     }
-    if (lowerMsg == "ver meus gastos" || lowerMsg == "ver gastos da fatura" || lowerMsg == "ver por categoria") {
+    if (lowerMsg == "ver meus gastos" || lowerMsg == "ver todos os meus gastos") {
+        return buildAllExpensesTurn(userId)
+    }
+    if (lowerMsg == "ver gastos da fatura" || lowerMsg == "ver por categoria") {
         var targetViewDocId = docId
         if (targetViewDocId == "") {
             var latestView = findLatestFinancialDocumentRowByUser(userId)

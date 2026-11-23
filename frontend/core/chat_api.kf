@@ -562,12 +562,20 @@ createBoxFromReview(ChatInteractionResponse interaction) {
 }
 
 // ASSIGN_CAIXINHAS: começa com a caixinha sugerida de cada gasto.
+// Só gastos atribuíveis (fatura mais recente, ainda não registrados).
+Bool isAssignableItem(ChatSelectableItemResponse it) {
+    val c = it.categoryCode()
+    return !c.startsWith("SAVED:") && !c.startsWith("VIEW:")
+}
+
 seedSuggestedCategories(List<ChatSelectableItemResponse> items) {
     if (ChatUi.itemCategories != "") {
         return
     }
     for (var it in items) {
-        setItemCategory(it.id(), it.categoryCode())
+        if (isAssignableItem(it)) {
+            setItemCategory(it.id(), it.categoryCode())
+        }
     }
 }
 
@@ -589,7 +597,7 @@ assignAndRegisterAction(ChatInteractionResponse interaction) {
     var codes: List<String> = listOf()
     for (var it in interaction.items()) {
         val c = itemCategory(it.id())
-        if (c != "" && c != it.categoryCode() && !codes.contains(c)) {
+        if (isAssignableItem(it) && c != "" && c != it.categoryCode() && !codes.contains(c)) {
             codes.add(c)
         }
     }
@@ -599,7 +607,7 @@ assignAndRegisterAction(ChatInteractionResponse interaction) {
         for (var code in codes) {
             var ids: List<String> = listOf()
             for (var it in interaction.items()) {
-                if (itemCategory(it.id()) == code && code != it.categoryCode()) {
+                if (isAssignableItem(it) && itemCategory(it.id()) == code && code != it.categoryCode()) {
                     ids.add(it.id())
                 }
             }
@@ -621,7 +629,13 @@ assignAndRegisterAction(ChatInteractionResponse interaction) {
         return
     }
     ChatUi.interactionBusy = false
-    selectAllItems(interaction.items())
+    var buf = ""
+    for (var it in interaction.items()) {
+        if (isAssignableItem(it)) {
+            buf = buf + "|" + it.id() + "|"
+        }
+    }
+    ChatUi.selectedIds = buf
     confirmInvoiceRegistrationAction(interaction)
 }
 
@@ -807,9 +821,17 @@ sendChatMessage(String text) {
     removePendingChatMessage(text)
 }
 
+// archive = true ("Novo chat"): a conversa atual vai para o histórico.
+// archive = false (lixeira): apaga sem criar entrada no histórico.
 clearChatHistory() {
+    clearChatHistoryWith(true)
+}
+
+clearChatHistoryWith(Bool archive) {
     ChatUi.error = ""
-    if (ChatState.messages != "") {
+    if (!archive) {
+        // nada vai para o histórico; sessões já arquivadas continuam como estão
+    } else if (ChatState.messages != "") {
         ChatUi.archivedSession = ChatState.messages
         if (ChatUi.totalChats < 2) {
             ChatUi.totalChats = 2

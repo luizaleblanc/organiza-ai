@@ -716,6 +716,12 @@ View chatInteractionCard(Window w) {
                 amt.setStyle(chatInteractionAccentCss())
                 var head = Row(listOf(left, amt))
                 head.setStyle(Style("display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12; width: 100%"))
+                if (!isAssignableItem(it)) {
+                    // Já registrado ou de fatura anterior: só leitura.
+                    head.setId("chat-assign-item-" + itemId)
+                    parts.add(head)
+                    continue
+                }
                 var chips: List<View> = listOf()
                 for (var code in listOf("FOOD", "GROCERIES", "TRANSPORT", "HOUSING", "HEALTH", "LEISURE", "EDUCATION", "OTHER")) {
                     val c = code
@@ -775,7 +781,7 @@ View chatInteractionCard(Window w) {
             var groups: List<String> = listOf()
             for (var it in items) {
                 val c = itemCategory(it.id())
-                if (!groups.contains(c)) { groups.add(c) }
+                if (isAssignableItem(it) && !groups.contains(c)) { groups.add(c) }
             }
             var pv: List<View> = listOf()
             var pvTitle = Label("Prévia: como os gastos vão para as caixinhas")
@@ -784,7 +790,7 @@ View chatInteractionCard(Window w) {
             for (var g in groups) {
                 var cents = 0
                 for (var it in items) {
-                    if (itemCategory(it.id()) == g) { cents = cents + it.amountCents() }
+                    if (isAssignableItem(it) && itemCategory(it.id()) == g) { cents = cents + it.amountCents() }
                 }
                 pv.add(interactionFlowLine(categoryNamePt(g), brlFromCents(cents), "chat-assign-preview-" + g))
             }
@@ -824,7 +830,11 @@ View chatInteractionCard(Window w) {
                 mountScreen(w)
             }
         })
-        if (ChatUi.interactionBusy || items.size == 0) {
+        var assignable = 0
+        for (var it in items) {
+            if (isAssignableItem(it)) { assignable = assignable + 1 }
+        }
+        if (ChatUi.interactionBusy || assignable == 0) {
             goBtn.setDisabled(true)
         }
         var backWrap = View(screenStyle())

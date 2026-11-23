@@ -95,6 +95,9 @@ OrganizerPlan planChatIntentDeterministic(String rawMsg) {
     if (isOutOfScopeFinanceMessage(lower)) {
         return OrganizerPlan("fora_de_escopo", listOf())
     }
+    if (lower == "ver meus gastos" || lower == "ver todos os meus gastos") {
+        return OrganizerPlan("consultar_gastos", listOf("auditor-faturas", "triador-gastos"))
+    }
     if (lower.contains("fatura") || lower.contains("extrato") || lower.contains(".pdf") || lower.contains(".docx") || lower.contains(".png") || lower.contains(".jpg") || lower.contains(".jpeg")) {
         return OrganizerPlan("auditar_fatura", listOf("auditor-faturas", "gestor-caixinhas", "consultor-pulso"))
     }
@@ -513,6 +516,7 @@ String buildGroundedDocumentReply(String userId, UserEntity? user, FinancialDocu
     var pfInflowMinor: Long = 0
     var merchantExamples = ""
     var merchantCount = 0
+    var confirmedMerchantCount = 0
     var sampleLines = ""
     var sampleCount = 0
     var paymentEvidence = ""
@@ -555,6 +559,7 @@ String buildGroundedDocumentReply(String userId, UserEntity? user, FinancialDocu
                 }
             } else if (r.reviewStatus == "CONFIRMED") {
                 confirmedMerchantMinor = confirmedMerchantMinor + r.amountMinor
+                confirmedMerchantCount = confirmedMerchantCount + 1
                 if (merchantCount < 3) {
                     var mItem = formatBrl(r.amountMinor) + " em " + r.descriptionNormalized + " " + evRef
                     if (merchantExamples == "") {
@@ -606,7 +611,9 @@ String buildGroundedDocumentReply(String userId, UserEntity? user, FinancialDocu
     // Passo 2: Analise assertiva com rastreabilidade documental e pedido de confirmacao
     var analysis = "Conferi cada lançamento extraído de " + docRow.filename + ". O total de saídas fechou em " + formatBrl(outflowTotalMinor) + " (" + String.valueOf(outflowCount) + " lançamentos). Perguntas de segurança antes de salvar nas caixinhas (para não adivinhar categorias sem sua confirmação):\n\n"
     if (confirmedMerchantMinor > 0) {
-        analysis = analysis + "- Gastos confirmados em estabelecimentos: " + merchantExamples + " (total confirmado: " + formatBrl(confirmedMerchantMinor) + ").\n"
+        var gastoWord = " gastos"
+        if (confirmedMerchantCount == 1) { gastoWord = " gasto" }
+        analysis = analysis + "- " + String.valueOf(confirmedMerchantCount) + gastoWord + " em estabelecimentos, somando " + formatBrl(confirmedMerchantMinor) + ". Alguns exemplos: " + merchantExamples + ".\n"
     }
     if (paymentMinor > 0) {
         analysis = analysis + "- Pagamentos de faturas: " + formatBrl(paymentMinor) + " " + paymentEvidence + " (não dá para classificar como moradia ou contas fixas sem ver os itens dessas faturas, porque podem ser compras de meses anteriores).\n"
