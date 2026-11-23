@@ -136,6 +136,12 @@ record IndexedLine(Int page, Int row, String text)
 record ByteSpan(Int offset, Int len)
 record ParsedLineOutcome(CanonicalTransaction? tx, CanonicalTotal? total, String? warning, Bool ignoredInternal)
 record ClassificationMatch(String category, String rule, Double confidence, String reviewStatus)
+record ReclassifyRequest(List<String> txIds, String category)
+record DocumentReclassifyResponse(String documentId, String status, ImportFlowSummary summary, ImportReview review)
+record LatestDocumentResponse(Bool hasDocument, String documentId, String filename, String statementPeriod, String periodLabel, String status, ImportFlowSummary? summary, ImportReview? review, ChatInteractionPayload? interaction)
+record InvoiceChatTurnResult(String reply, ChatInteractionPayload? interaction)
+record ConfirmIntentPayload(String documentId, String period, String periodLabel, Int savedCount, Double savedTotal, List<TransactionOutput> transactions)
+record LeadingDateResult(String normalizedDate, Int consumeChars)
 
 // =========================================================
 // Persistencia 100% KofDB (FinancialDocumentRow + ExtractedTransactionRow em backend/store.kf)
@@ -148,9 +154,9 @@ record ClassificationMatch(String category, String rule, Double confidence, Stri
 //   - AgentReconciliadorAntiAlucinacao
 // =========================================================
 
-// ~2 MB binarios = ~2,8 milhoes de chars em base64. Acima disso a rota responde 413.
+// ~10 MB binarios = ~14 milhoes de chars em base64. Acima disso a rota responde 413.
 Int invoiceMaxBase64Chars() {
-    return 2800000
+    return 14000000
 }
 
 Int invoiceMaxPdfPages() {
@@ -200,6 +206,130 @@ IntentRequest? decodeIntentRequest(String raw) {
     } catch (String e) {
         return null
     }
+}
+
+ReclassifyRequest? decodeReclassifyRequest(String raw) {
+    var s = raw.trim()
+    if (!s.startsWith("{") || !s.endsWith("}")) {
+        return null
+    }
+    var categoryVal = ""
+    var hasCategory = false
+    var txIds: List<String> = listOf()
+    var hasTxIds = false
+    var i = 0
+    var n = s.length()
+    var depth = 0
+    while (i < n) {
+        var ch = s.substring(i, i + 1)
+        if (ch == "{" || ch == "[") {
+            depth = depth + 1
+            i = i + 1
+        } else if (ch == "}" || ch == "]") {
+            depth = depth - 1
+            i = i + 1
+        } else if (ch == "\"") {
+            var kStart = i + 1
+            var kEnd = kStart
+            var esc = false
+            while (kEnd < n) {
+                var c = s.substring(kEnd, kEnd + 1)
+                if (esc) {
+                    esc = false
+                    kEnd = kEnd + 1
+                } else if (c == "\\") {
+                    esc = true
+                    kEnd = kEnd + 1
+                } else if (c == "\"") {
+                    break
+                } else {
+                    kEnd = kEnd + 1
+                }
+            }
+            if (kEnd >= n) {
+                return null
+            }
+            var key = s.substring(kStart, kEnd)
+            i = kEnd + 1
+            if (depth == 1) {
+                while (i < n && (s.substring(i, i + 1) == " " || s.substring(i, i + 1) == "\t" || s.substring(i, i + 1) == "\n" || s.substring(i, i + 1) == "\r")) {
+                    i = i + 1
+                }
+                if (i < n && s.substring(i, i + 1) == ":") {
+                    i = i + 1
+                    while (i < n && (s.substring(i, i + 1) == " " || s.substring(i, i + 1) == "\t" || s.substring(i, i + 1) == "\n" || s.substring(i, i + 1) == "\r")) {
+                        i = i + 1
+                    }
+                    if (key == "category" && i < n && s.substring(i, i + 1) == "\"") {
+                        var vStart = i + 1
+                        var vEnd = vStart
+                        var vEsc = false
+                        while (vEnd < n) {
+                            var vc = s.substring(vEnd, vEnd + 1)
+                            if (vEsc) {
+                                vEsc = false
+                                vEnd = vEnd + 1
+                            } else if (vc == "\\") {
+                                vEsc = true
+                                vEnd = vEnd + 1
+                            } else if (vc == "\"") {
+                                break
+                            } else {
+                                vEnd = vEnd + 1
+                            }
+                        }
+                        if (vEnd >= n) {
+                            return null
+                        }
+                        categoryVal = s.substring(vStart, vEnd)
+                        hasCategory = true
+                        i = vEnd + 1
+                    } else if (key == "txIds" && i < n && s.substring(i, i + 1) == "[") {
+                        hasTxIds = true
+                        i = i + 1
+                        while (i < n && s.substring(i, i + 1) != "]") {
+                            var ac = s.substring(i, i + 1)
+                            if (ac == "\"") {
+                                var aStart = i + 1
+                                var aEnd = aStart
+                                var aEsc = false
+                                while (aEnd < n) {
+                                    var ac2 = s.substring(aEnd, aEnd + 1)
+                                    if (aEsc) {
+                                        aEsc = false
+                                        aEnd = aEnd + 1
+                                    } else if (ac2 == "\\") {
+                                        aEsc = true
+                                        aEnd = aEnd + 1
+                                    } else if (ac2 == "\"") {
+                                        break
+                                    } else {
+                                        aEnd = aEnd + 1
+                                    }
+                                }
+                                if (aEnd >= n) {
+                                    return null
+                                }
+                                txIds.add(s.substring(aStart, aEnd))
+                                i = aEnd + 1
+                            } else {
+                                i = i + 1
+                            }
+                        }
+                        if (i < n && s.substring(i, i + 1) == "]") {
+                            i = i + 1
+                        }
+                    }
+                }
+            }
+        } else {
+            i = i + 1
+        }
+    }
+    if (!hasTxIds || !hasCategory) {
+        return null
+    }
+    return ReclassifyRequest(txIds, categoryVal)
 }
 
 String cleanBase64Input(String b64) {
@@ -2080,28 +2210,269 @@ Double? parseBrlAmount(String raw) {
     return centsToReais(minor)
 }
 
-Bool isInvoiceDate(String s) {
-    var t = s.trim().toUpperCase()
-    if (t.matches("[0-3]?[0-9]/[01]?[0-9](/[0-9]{2}([0-9]{2})?)?")) {
-        return true
+String twoDigit(Int n) {
+    if (n < 10) {
+        return "0" + n
     }
-    if (t.matches("[0-3]?[0-9]-[01]?[0-9](-[0-9]{2}([0-9]{2})?)?")) {
-        return true
-    }
-    if (t.matches("[0-9]{4}-[01]?[0-9]-[0-3]?[0-9]")) {
-        return true
-    }
-    return false
+    return "" + n
 }
 
-String? extractLeadingDate(String line) {
+String invoiceMonthNamePt(Int m) {
+    var names = listOf("Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro")
+    if (m >= 1 && m <= 12) {
+        return names.get(m - 1)
+    }
+    return ""
+}
+
+String invoiceMonthNamePtLower(Int m) {
+    return invoiceMonthNamePt(m).toLowerCase()
+}
+
+String formatPeriodPt(String ym) {
+    var clean = ym.trim()
+    if (!clean.matches("[0-9]{4}-[0-9]{2}")) {
+        return ""
+    }
+    var yyyy = clean.substring(0, 4)
+    var mm = clean.substring(5, 7).toInt()
+    var name = invoiceMonthNamePt(mm)
+    if (name == "") {
+        return ""
+    }
+    return name + " de " + yyyy
+}
+
+Int parsePtMonthName(String tok) {
+    var t = tok.trim().toLowerCase()
+    if (t == "janeiro" || t == "jan") { return 1 }
+    if (t == "fevereiro" || t == "fev") { return 2 }
+    if (t == "março" || t == "marco" || t == "mar") { return 3 }
+    if (t == "abril" || t == "abr") { return 4 }
+    if (t == "maio" || t == "mai") { return 5 }
+    if (t == "junho" || t == "jun") { return 6 }
+    if (t == "julho" || t == "jul") { return 7 }
+    if (t == "agosto" || t == "ago") { return 8 }
+    if (t == "setembro" || t == "set") { return 9 }
+    if (t == "outubro" || t == "out") { return 10 }
+    if (t == "novembro" || t == "nov") { return 11 }
+    if (t == "dezembro" || t == "dez") { return 12 }
+    return 0
+}
+
+Bool isValidCalendarParts(Int dd, Int mm, Int yyyy) {
+    return dd >= 1 && dd <= 31 && mm >= 1 && mm <= 12 && yyyy >= 2000 && yyyy <= 2099
+}
+
+String? normalizeNumericDateToken(String rawTok) {
+    var t = rawTok.trim()
+    if (t == "") {
+        return null
+    }
+    if (t.matches("[0-9]{4}-[01]?[0-9]-[0-3]?[0-9]")) {
+        var parts = t.split("-")
+        var yyyy = parts[0].toInt()
+        var mm = parts[1].toInt()
+        var dd = parts[2].toInt()
+        if (isValidCalendarParts(dd, mm, yyyy)) {
+            return parts[0] + "-" + twoDigit(mm) + "-" + twoDigit(dd)
+        }
+        return null
+    }
+    if (t.matches("[0-3]?[0-9]/[01]?[0-9](/[0-9]{2}([0-9]{2})?)?")) {
+        var parts = t.split("/")
+        var dd = parts[0].toInt()
+        var mm = parts[1].toInt()
+        if (dd < 1 || dd > 31 || mm < 1 || mm > 12) {
+            return null
+        }
+        if (parts.size >= 3) {
+            var yRaw = parts[2]
+            if (yRaw.length() == 2) {
+                yRaw = "20" + yRaw
+            }
+            if (yRaw.length() == 4 && strings.isNumeric(yRaw)) {
+                var yyyy = yRaw.toInt()
+                if (yyyy >= 2000 && yyyy <= 2099) {
+                    return twoDigit(dd) + "/" + twoDigit(mm) + "/" + yRaw
+                }
+            }
+            return null
+        }
+        return twoDigit(dd) + "/" + twoDigit(mm)
+    }
+    if (t.matches("[0-3]?[0-9]-[01]?[0-9](-[0-9]{2}([0-9]{2})?)?")) {
+        var parts = t.split("-")
+        var dd = parts[0].toInt()
+        var mm = parts[1].toInt()
+        if (dd < 1 || dd > 31 || mm < 1 || mm > 12) {
+            return null
+        }
+        if (parts.size >= 3) {
+            var yRaw = parts[2]
+            if (yRaw.length() == 2) {
+                yRaw = "20" + yRaw
+            }
+            if (yRaw.length() == 4 && strings.isNumeric(yRaw)) {
+                var yyyy = yRaw.toInt()
+                if (yyyy >= 2000 && yyyy <= 2099) {
+                    return twoDigit(dd) + "/" + twoDigit(mm) + "/" + yRaw
+                }
+            }
+            return null
+        }
+        return twoDigit(dd) + "/" + twoDigit(mm)
+    }
+    if (t.matches("[0-3]?[0-9]/[A-Za-zÀ-ÿ]{3,9}(/[0-9]{2}([0-9]{2})?)?")) {
+        var parts = t.split("/")
+        var dd = parts[0].toInt()
+        var mm = parsePtMonthName(parts[1])
+        if (dd < 1 || dd > 31 || mm <= 0) {
+            return null
+        }
+        if (parts.size >= 3) {
+            var yRaw = parts[2]
+            if (yRaw.length() == 2) {
+                yRaw = "20" + yRaw
+            }
+            if (yRaw.length() == 4 && strings.isNumeric(yRaw)) {
+                return twoDigit(dd) + "/" + twoDigit(mm) + "/" + yRaw
+            }
+            return null
+        }
+        return twoDigit(dd) + "/" + twoDigit(mm)
+    }
+    return null
+}
+
+Bool isValidDocYearInt(Int y) {
+    return y >= 2020 && y <= 2035
+}
+
+String parsePeriodParam(String? raw) {
+    if (raw == null) {
+        return ""
+    }
+    var clean = raw.trim()
+    if (clean == "") {
+        return ""
+    }
+    if (clean.matches("[0-9]{4}-[0-9]{2}")) {
+        var yyyy = clean.substring(0, 4).toInt()
+        var mm = clean.substring(5, 7).toInt()
+        if (isValidDocYearInt(yyyy) && mm >= 1 && mm <= 12) {
+            return clean
+        }
+        return ""
+    }
+    if (clean.matches("[0-1]?[0-9]/[0-9]{4}") || clean.matches("[0-1]?[0-9]-[0-9]{4}")) {
+        var norm = clean.replace("-", "/")
+        var parts = norm.split("/")
+        var mm = parts[0].toInt()
+        var yyyy = parts[1].toInt()
+        if (isValidDocYearInt(yyyy) && mm >= 1 && mm <= 12) {
+            return parts[1] + "-" + twoDigit(mm)
+        }
+        return ""
+    }
+    var spaced = clean.toLowerCase().replace("/", " ").replace("-", " ").replace(".", " ").replace(",", " ").replaceAll("\\s+", " ").trim()
+    var toks = spaced.split(" ")
+    var foundMonth = 0
+    var foundYear = ""
+    for (var tok in toks) {
+        if (tok.matches("20[2-3][0-9]") && isValidDocYearInt(tok.toInt())) {
+            foundYear = tok
+        } else {
+            var pm = parsePtMonthName(tok)
+            if (pm > 0) {
+                foundMonth = pm
+            }
+        }
+    }
+    if (foundMonth > 0 && foundYear != "") {
+        return foundYear + "-" + twoDigit(foundMonth)
+    }
+    return ""
+}
+
+Bool isInvoiceDate(String s) {
+    return normalizeNumericDateToken(s) != null
+}
+
+LeadingDateResult? extractLeadingDateWithSpan(String line) {
     var t = line.trim()
+    if (t == "") {
+        return null
+    }
     var sp = t.indexOf(" ")
     if (sp > 0) {
         var first = t.substring(0, sp)
-        if (isInvoiceDate(first)) {
-            return first
+        var normFirst = normalizeNumericDateToken(first)
+        if (normFirst != null) {
+            return LeadingDateResult(normFirst, sp)
         }
+        var rest1 = t.substring(sp + 1).trim()
+        if (first.matches("[0-3]?[0-9]")) {
+            var dd = first.toInt()
+            if (dd >= 1 && dd <= 31) {
+                var sp2 = rest1.indexOf(" ")
+                if (sp2 > 0) {
+                    var tok2 = rest1.substring(0, sp2)
+                    var mm = parsePtMonthName(tok2)
+                    if (mm > 0) {
+                        var consumed = t.length() - rest1.substring(sp2).length()
+                        var rest2 = rest1.substring(sp2 + 1).trim()
+                        var sp3 = rest2.indexOf(" ")
+                        if (sp3 > 0) {
+                            var tok3 = rest2.substring(0, sp3)
+                            if (tok3.matches("20[2-3][0-9]")) {
+                                var consumed3 = t.length() - rest2.substring(sp3).length()
+                                return LeadingDateResult(twoDigit(dd) + "/" + twoDigit(mm) + "/" + tok3, consumed3)
+                            }
+                        }
+                        return LeadingDateResult(twoDigit(dd) + "/" + twoDigit(mm), consumed)
+                    }
+                }
+            }
+        }
+    }
+    return null
+}
+
+String? extractLeadingDate(String line) {
+    var res = extractLeadingDateWithSpan(line)
+    if (res != null) {
+        return res.normalizedDate()
+    }
+    return null
+}
+
+String? normalizeStandaloneDateLine(String line) {
+    var t = normalizeOcrText(line)
+    if (t == "") {
+        return null
+    }
+    var direct = normalizeNumericDateToken(t)
+    if (direct != null) {
+        return direct
+    }
+    var toks = t.split(" ")
+    if (toks.size == 2 && toks[0].matches("[0-3]?[0-9]")) {
+        var dd = toks[0].toInt()
+        var mm = parsePtMonthName(toks[1])
+        if (dd >= 1 && dd <= 31 && mm > 0) {
+            return twoDigit(dd) + "/" + twoDigit(mm)
+        }
+    }
+    if (toks.size == 3 && toks[0].matches("[0-3]?[0-9]") && toks[2].matches("20[2-3][0-9]")) {
+        var dd = toks[0].toInt()
+        var mm = parsePtMonthName(toks[1])
+        if (dd >= 1 && dd <= 31 && mm > 0) {
+            return twoDigit(dd) + "/" + twoDigit(mm) + "/" + toks[2]
+        }
+    }
+    if (toks.size == 2 && isTimeOnlyCell(toks[1])) {
+        return normalizeNumericDateToken(toks[0])
     }
     return null
 }
@@ -2554,12 +2925,65 @@ ParsedLineOutcome analyzeIndexedLine(IndexedLine line, String documentId, Int tx
 
     var txDate = fallbackDate
     var descRaw = left
-    var leadDate = extractLeadingDate(left)
+    var leadDate = extractLeadingDateWithSpan(left)
     if (leadDate != null) {
-        txDate = leadDate
-        descRaw = left.substring(leadDate.length()).trim()
+        txDate = leadDate.normalizedDate()
+        descRaw = left.substring(leadDate.consumeChars()).trim()
+        var spTime = descRaw.indexOf(" ")
+        if (spTime > 0 && isTimeOnlyCell(descRaw.substring(0, spTime))) {
+            var afterTime = descRaw.substring(spTime + 1).trim()
+            if (afterTime != "") {
+                descRaw = afterTime
+            }
+        }
+    } else {
+        var toksLeft = left.split(" ")
+        var rebuilt = ""
+        var foundEmbeddedDate = ""
+        var ti = 0
+        while (ti < toksLeft.size) {
+            var tk = toksLeft[ti].trim()
+            if (foundEmbeddedDate == "") {
+                var maybeYearDate = ""
+                if (tk.matches("[0-3]?[0-9]/[01]?[0-9]/20[2-3][0-9]") || tk.matches("20[2-3][0-9]-[01]?[0-9]-[0-3]?[0-9]")) {
+                    var normEmb = normalizeNumericDateToken(tk)
+                    if (normEmb != null) {
+                        maybeYearDate = normEmb
+                    }
+                } else if (tk.length() >= 10 && tk.substring(0, 10).matches("[0-3][0-9]/[01][0-9]/20[2-3][0-9]")) {
+                    var normSquashed = normalizeNumericDateToken(tk.substring(0, 10))
+                    if (normSquashed != null) {
+                        maybeYearDate = normSquashed
+                    }
+                }
+                if (maybeYearDate != "") {
+                    foundEmbeddedDate = maybeYearDate
+                    if (ti + 1 < toksLeft.size && isTimeOnlyCell(toksLeft[ti + 1].trim())) {
+                        ti = ti + 1
+                    } else if (ti + 2 < toksLeft.size && toksLeft[ti + 1].trim().matches("[0-2][0-9]") && toksLeft[ti + 2].trim().matches("[0-5][0-9]")) {
+                        ti = ti + 2
+                    }
+                    ti = ti + 1
+                    continue
+                }
+            }
+            if (tk != "") {
+                if (rebuilt == "") {
+                    rebuilt = tk
+                } else {
+                    rebuilt = rebuilt + " " + tk
+                }
+            }
+            ti = ti + 1
+        }
+        if (foundEmbeddedDate != "") {
+            txDate = foundEmbeddedDate
+            if (rebuilt != "") {
+                descRaw = rebuilt
+            }
+        }
     }
-    if (descRaw == "" || isInvoiceDate(descRaw)) {
+    if (descRaw == "" || isInvoiceDate(descRaw) || normalizeStandaloneDateLine(descRaw) != null) {
         return ParsedLineOutcome(null, null, null, false)
     }
 
@@ -2920,10 +3344,10 @@ List<TransactionOutput>? loadConfirmedOutputsFromReceipt(String userId, String r
         var wText = rec.warningsText.trim()
         if (wText != "") {
             var wantedIds = wText.split(",")
-            var allUserTxs = findTransactionsByUserIdAndCreatedAtAfter(userId, "2000-01-01")
+            var allUserTxs = listTransactionsWithProvenanceByUser(userId)
             var out: List<TransactionOutput> = listOf()
-            for (var tx in allUserTxs) {
-                var txIdStr = "" + tx.id
+            for (var p in allUserTxs) {
+                var txIdStr = "" + p.transaction().id
                 var matched = false
                 for (var w in wantedIds) {
                     if (w.trim() == txIdStr) {
@@ -2932,7 +3356,7 @@ List<TransactionOutput>? loadConfirmedOutputsFromReceipt(String userId, String r
                     }
                 }
                 if (matched) {
-                    out.add(transactionEntityToOutput(tx))
+                    out.add(transactionWithProvenanceToOutput(p))
                 }
             }
             return out
@@ -2945,7 +3369,7 @@ ImportReview buildImportReview(String documentId, String sha256, String sourceTy
     var consolidatedLines = consolidateStatementCells(rawLines)
     var canonicalTxs: List<CanonicalTransaction> = listOf()
     var totals: List<CanonicalTotal> = listOf()
-    var pendingDate = "14/11"
+    var pendingDate = ""
     var seq = 0
     var internalCount = 0
 
@@ -2953,12 +3377,9 @@ ImportReview buildImportReview(String documentId, String sha256, String sourceTy
     while (i < consolidatedLines.size) {
         var line = consolidatedLines.get(i)
         var norm = normalizeOcrText(line.text())
-        if (isInvoiceDate(norm)) {
-            if (norm.length() >= 5) {
-                pendingDate = norm.substring(0, 5)
-            } else {
-                pendingDate = norm
-            }
+        var standaloneDate = normalizeStandaloneDateLine(norm)
+        if (standaloneDate != null) {
+            pendingDate = standaloneDate
             i = i + 1
         } else {
             var outcome = analyzeIndexedLine(line, documentId, seq + 1, pendingDate)
@@ -2982,7 +3403,7 @@ ImportReview buildImportReview(String documentId, String sha256, String sourceTy
                     canonicalTxs.add(ctx)
                 }
                 i = i + 1
-            } else if (i + 2 < consolidatedLines.size && isInvoiceDate(normalizeOcrText(consolidatedLines.get(i).text()))) {
+            } else if (i + 2 < consolidatedLines.size && normalizeStandaloneDateLine(normalizeOcrText(consolidatedLines.get(i).text())) != null) {
                 var joinedText = normalizeOcrText(consolidatedLines.get(i).text()) + " " + normalizeOcrText(consolidatedLines.get(i + 1).text()) + " " + normalizeOcrText(consolidatedLines.get(i + 2).text())
                 var joinedOutcome = analyzeIndexedLine(IndexedLine(line.page(), line.row(), joinedText), documentId, seq + 1, pendingDate)
                 if (joinedOutcome.tx() != null) {
@@ -3091,24 +3512,165 @@ ImportReview buildImportReview(String documentId, String sha256, String sourceTy
     )
 }
 
-String detectStatementPeriod(List<CanonicalTransaction> txs) {
+String? extractYearFromDateText(String? rawDate) {
+    if (rawDate == null) {
+        return null
+    }
+    var d = rawDate.trim()
+    if (d == "") {
+        return null
+    }
+    var sp = d.indexOf(" ")
+    if (sp > 0) {
+        d = d.substring(0, sp).trim()
+    }
+    if (d.matches("[0-9]{4}-[01]?[0-9]-[0-3]?[0-9]")) {
+        var y = d.substring(0, 4)
+        if (isValidDocYearInt(y.toInt())) {
+            return y
+        }
+    }
+    if (d.matches("[0-3]?[0-9]/[01]?[0-9]/[0-9]{4}")) {
+        var parts = d.split("/")
+        if (parts.size >= 3 && strings.isNumeric(parts[2]) && isValidDocYearInt(parts[2].toInt())) {
+            return parts[2]
+        }
+    }
+    if (d.matches("[0-3]?[0-9]-[01]?[0-9]-[0-9]{4}")) {
+        var parts = d.split("-")
+        if (parts.size >= 3 && strings.isNumeric(parts[2]) && isValidDocYearInt(parts[2].toInt())) {
+            return parts[2]
+        }
+    }
+    return null
+}
+
+String? extractMonthFromDateText(String? rawDate) {
+    if (rawDate == null) {
+        return null
+    }
+    var d = rawDate.trim()
+    if (d == "") {
+        return null
+    }
+    var sp = d.indexOf(" ")
+    if (sp > 0) {
+        d = d.substring(0, sp).trim()
+    }
+    if (d.matches("[0-9]{4}-[01]?[0-9]-[0-3]?[0-9]")) {
+        var parts = d.split("-")
+        var mm = parts[1].toInt()
+        if (mm >= 1 && mm <= 12) {
+            return twoDigit(mm)
+        }
+    }
+    if (d.matches("[0-3]?[0-9]/[01]?[0-9](/[0-9]{2}([0-9]{2})?)?")) {
+        var parts = d.split("/")
+        var dd = parts[0].toInt()
+        var mm = parts[1].toInt()
+        if (dd >= 1 && dd <= 31 && mm >= 1 && mm <= 12) {
+            return twoDigit(mm)
+        }
+    }
+    if (d.matches("[0-3]?[0-9]-[01]?[0-9](-[0-9]{2}([0-9]{2})?)?")) {
+        var parts = d.split("-")
+        var dd = parts[0].toInt()
+        var mm = parts[1].toInt()
+        if (dd >= 1 && dd <= 31 && mm >= 1 && mm <= 12) {
+            return twoDigit(mm)
+        }
+    }
+    return null
+}
+
+String pickBestCountKey(Map<String, Int> counts) {
+    var bestKey = ""
+    var bestCount = 0
+    for (var k in counts.keys()) {
+        var c = counts.getOrDefault(k, 0)
+        if (c > bestCount || (c == bestCount && k.compareTo(bestKey) > 0)) {
+            bestCount = c
+            bestKey = k
+        }
+    }
+    return bestKey
+}
+
+String detectStatementPeriod(List<CanonicalTransaction> txs, List<IndexedLine> rawLines) {
+    var yearCounts: Map<String, Int> = mapOf()
+    var hasShortDateTx = false
+
     for (var tx in txs) {
-        var d = tx.date()
-        if (d != null && d.contains("/")) {
-            var parts = d.split("/")
-            if (parts.size >= 2) {
-                var mm = parts[1].trim()
-                if (mm.length() == 1) {
-                    mm = "0" + mm
-                }
-                if (parts.size >= 3 && parts[2].trim().length() == 4) {
-                    return parts[2].trim() + "-" + mm
-                }
-                return localTodayIso().substring(0, 4) + "-" + mm
+        var txY = extractYearFromDateText(tx.date())
+        if (txY != null) {
+            yearCounts.put(txY, yearCounts.getOrDefault(txY, 0) + 1)
+        }
+        if (extractMonthFromDateText(tx.date()) != null) {
+            hasShortDateTx = true
+        }
+    }
+
+    for (var rl in rawLines) {
+        var clean = rl.text().replaceAll("[0-9.]+,[0-9]{2}", " ")
+        var spaced = clean.replace("/", " ").replace("-", " ").replace(".", " ").replace(",", " ").replace(":", " ").replace(";", " ").replace("(", " ").replace(")", " ").replaceAll("\\s+", " ").trim()
+        for (var tok in spaced.split(" ")) {
+            if (tok.matches("20[2-3][0-9]") && isValidDocYearInt(tok.toInt())) {
+                yearCounts.put(tok, yearCounts.getOrDefault(tok, 0) + 1)
             }
         }
     }
-    return localTodayIso().substring(0, 7)
+
+    var detectedYear = pickBestCountKey(yearCounts)
+    if (detectedYear == "" && hasShortDateTx) {
+        detectedYear = localTodayIso().substring(0, 4)
+    }
+
+    var primaryMonthCounts: Map<String, Int> = mapOf()
+    var allMonthCounts: Map<String, Int> = mapOf()
+    for (var tx in txs) {
+        var txM = extractMonthFromDateText(tx.date())
+        if (txM != null) {
+            allMonthCounts.put(txM, allMonthCounts.getOrDefault(txM, 0) + 1)
+            if (isConfirmableOutflowTx(tx) || tx.reviewStatus() == "CONFIRMED") {
+                primaryMonthCounts.put(txM, primaryMonthCounts.getOrDefault(txM, 0) + 1)
+            }
+        }
+    }
+
+    var detectedMonth = pickBestCountKey(primaryMonthCounts)
+    if (detectedMonth == "") {
+        detectedMonth = pickBestCountKey(allMonthCounts)
+    }
+
+    if (detectedMonth == "") {
+        for (var rl in rawLines) {
+            var lineText = normalizeOcrText(rl.text())
+            var parsedFromText = parsePeriodParam(lineText)
+            if (parsedFromText != "") {
+                return parsedFromText
+            }
+            var low = lineText.toLowerCase()
+            if (low.contains("vencimento") || low.contains("periodo") || low.contains("período") || low.contains("referencia") || low.contains("referência") || low.contains("fatura") || low.contains("extrato")) {
+                for (var tok in lineText.split(" ")) {
+                    var ty = extractYearFromDateText(tok)
+                    var tm = extractMonthFromDateText(tok)
+                    if (ty != null && tm != null) {
+                        return ty + "-" + tm
+                    }
+                }
+            }
+        }
+        return ""
+    }
+
+    if (detectedYear != "" && detectedMonth != "") {
+        return detectedYear + "-" + detectedMonth
+    }
+    return ""
+}
+
+String detectStatementPeriod(List<CanonicalTransaction> txs) {
+    return detectStatementPeriod(txs, listOf())
 }
 
 DocumentUploadResponse ingestFinancialDocument(String userId, String fileBase64, String? rawFilename, Bool strictBinaryOnly, Bool rejectDuplicate) {
@@ -3186,7 +3748,7 @@ DocumentUploadResponse ingestFinancialDocument(String userId, String fileBase64,
     }
 
     var review = buildImportReview(documentId, sha256, detected, indexedLines, warnings)
-    var period = detectStatementPeriod(review.transactions())
+    var period = detectStatementPeriod(review.transactions(), indexedLines)
     persistDocumentAndReview(documentId, userId, sha256, filename, period, review)
 
     return DocumentUploadResponse(documentId, sha256, review.sourceType(), review.status(), existingDoc != null, review)
@@ -3197,7 +3759,7 @@ List<InvoiceTransaction> canonicalListToInvoiceTxs(List<CanonicalTransaction> ca
     for (var ctx in canonical) {
         var minor = ctx.amountMinor()
         if (minor != null && minor > 0 && ctx.direction() != "CREDIT") {
-            var finalDate = "14/11"
+            var finalDate = ""
             var rawDate = ctx.date()
             if (rawDate != null && rawDate != "") {
                 finalDate = rawDate
@@ -3250,6 +3812,85 @@ InvoiceParseResponse parseInvoiceForUser(String userId, String b64, String? file
 // Confirmacao Idempotente em Lote e por Documento (KofDB)
 // =========================================================
 
+String lookupStatementPeriod(String? documentId) {
+    if (documentId == null) {
+        return ""
+    }
+    var clean = documentId.trim()
+    if (clean == "") {
+        return ""
+    }
+    var row = findFinancialDocumentRowByKeyRaw(clean)
+    if (row != null) {
+        return row.statementPeriod.trim()
+    }
+    return ""
+}
+
+String resolveTxIsoDate(String? rawDate, String statementPeriod) {
+    var sp = statementPeriod.trim()
+    var fallbackYear = localTodayIso().substring(0, 4)
+    var stmtMonth = 0
+    if (sp.length() >= 4 && strings.isNumeric(sp.substring(0, 4))) {
+        fallbackYear = sp.substring(0, 4)
+        if (sp.length() >= 7 && strings.isNumeric(sp.substring(5, 7))) {
+            stmtMonth = sp.substring(5, 7).toInt()
+        }
+    }
+
+    if (rawDate != null && rawDate.trim() != "") {
+        var norm = normalizeStandaloneDateLine(rawDate.trim())
+        if (norm == null) {
+            norm = normalizeNumericDateToken(rawDate.trim())
+        }
+        if (norm != null) {
+            if (norm.matches("[0-9]{4}-[0-9]{2}-[0-9]{2}")) {
+                return norm + "T12:00:00Z"
+            }
+            if (norm.matches("[0-9]{2}/[0-9]{2}/[0-9]{4}")) {
+                var parts = norm.split("/")
+                return parts[2] + "-" + parts[1] + "-" + parts[0] + "T12:00:00Z"
+            }
+            if (norm.matches("[0-9]{2}/[0-9]{2}")) {
+                var parts = norm.split("/")
+                var txYear = fallbackYear.toInt()
+                var txMonth = parts[1].toInt()
+                if (stmtMonth == 1 && txMonth == 12) {
+                    txYear = txYear - 1
+                }
+                return String.valueOf(txYear) + "-" + parts[1] + "-" + parts[0] + "T12:00:00Z"
+            }
+        }
+    }
+
+    if (sp.matches("[0-9]{4}-[0-9]{2}")) {
+        return sp + "-15T12:00:00Z"
+    }
+    return nowIso()
+}
+
+void persistDocumentStatementPeriod(FinancialDocumentRow docRow, String period) {
+    saveFinancialDocumentRow(
+        FinancialDocumentRow(
+            docRow.id,
+            docRow.docKey,
+            docRow.userId,
+            docRow.sha256,
+            docRow.filename,
+            docRow.sourceType,
+            period,
+            docRow.currency,
+            docRow.status,
+            docRow.reconciled,
+            docRow.extractedCount,
+            docRow.declaredTotalMinor,
+            docRow.hasDeclaredTotal,
+            docRow.warningsText,
+            docRow.createdAt
+        )
+    )
+}
+
 Bool isConfirmableOutflowTx(CanonicalTransaction ctx) {
     var m = ctx.amountMinor()
     if (m == null || m <= 0 || ctx.direction() == "CREDIT") {
@@ -3259,12 +3900,14 @@ Bool isConfirmableOutflowTx(CanonicalTransaction ctx) {
     return fc == "DESPESA" || fc == "OPERACAO_CREDITO"
 }
 
-List<InvoiceConfirmTraceItem> buildConfirmTraceItemsFromReview(ImportReview rev) {
+List<InvoiceConfirmTraceItem> buildConfirmTraceItemsFromReviewFiltered(ImportReview rev, List<String> selectedTxIds, String statementPeriod) {
     var traceItems: List<InvoiceConfirmTraceItem> = listOf()
     var docId = rev.documentId()
+    var filterBySelection = !selectedTxIds.isEmpty()
     for (var ctx in rev.transactions()) {
+        var passesSelection = !filterBySelection || selectedTxIds.contains(ctx.id())
         var m = ctx.amountMinor()
-        if (m != null && isConfirmableOutflowTx(ctx)) {
+        if (passesSelection && m != null && isConfirmableOutflowTx(ctx)) {
             var finalDesc = ctx.descriptionRaw()
             var normDesc = ctx.descriptionNormalized()
             if (normDesc != null && normDesc != "") {
@@ -3285,13 +3928,20 @@ List<InvoiceConfirmTraceItem> buildConfirmTraceItemsFromReview(ImportReview rev)
                 }
             }
             var extRef = docId + ":" + ctx.id()
-            traceItems.add(InvoiceConfirmTraceItem(finalDesc, centsToReais(m), finalCat, docId, srcPage, srcLine, extRef))
+            var txIso = resolveTxIsoDate(ctx.date(), statementPeriod)
+            traceItems.add(InvoiceConfirmTraceItem(finalDesc, centsToReais(m), finalCat, docId, srcPage, srcLine, extRef, txIso))
         }
     }
     return traceItems
 }
 
+List<InvoiceConfirmTraceItem> buildConfirmTraceItemsFromReview(ImportReview rev) {
+    return buildConfirmTraceItemsFromReviewFiltered(rev, listOf(), lookupStatementPeriod(rev.documentId()))
+}
+
 List<TransactionOutput> confirmInvoiceTraceItemsWithIdempotency(String userId, List<InvoiceConfirmTraceItem> traceItems, String? documentId) {
+    var existingDocSaved: List<TransactionOutput> = listOf()
+    var docReceiptKey = ""
     if (documentId != null && documentId.trim() != "") {
         var cleanDocId = documentId.trim()
         var docRow = findFinancialDocumentRowByKeyRaw(cleanDocId)
@@ -3301,10 +3951,40 @@ List<TransactionOutput> confirmInvoiceTraceItemsWithIdempotency(String userId, L
         if (docRow.userId != parseUserIdLong(userId)) {
             throw "UNAUTHORIZED: voce nao tem permissao para confirmar este documento"
         }
-        var docReceiptKey = "conf_doc_" + userId + "_" + cleanDocId
+        docReceiptKey = "conf_doc_" + userId + "_" + cleanDocId
         var alreadyConfirmed = loadConfirmedOutputsFromReceipt(userId, docReceiptKey)
         if (alreadyConfirmed != null) {
-            return alreadyConfirmed
+            existingDocSaved = alreadyConfirmed
+            var existingRefs: List<String> = listOf()
+            for (var ac in alreadyConfirmed) {
+                var ar = ac.externalRef()
+                if (ar != null && ar != "") {
+                    existingRefs.add(ar)
+                }
+            }
+            var allCovered = !traceItems.isEmpty()
+            for (var ti in traceItems) {
+                if (!existingRefs.contains(ti.externalRef())) {
+                    allCovered = false
+                }
+            }
+            if (allCovered) {
+                var wantedRefs: List<String> = listOf()
+                for (var ti2 in traceItems) {
+                    wantedRefs.add(ti2.externalRef())
+                }
+                var matchedOut: List<TransactionOutput> = listOf()
+                for (var ac2 in alreadyConfirmed) {
+                    var ar2 = ac2.externalRef()
+                    if (ar2 != null && wantedRefs.contains(ar2)) {
+                        matchedOut.add(ac2)
+                    }
+                }
+                if (!matchedOut.isEmpty()) {
+                    return matchedOut
+                }
+                return alreadyConfirmed
+            }
         }
     }
 
@@ -3320,7 +4000,21 @@ List<TransactionOutput> confirmInvoiceTraceItemsWithIdempotency(String userId, L
 
     if (documentId != null && documentId.trim() != "") {
         var cleanDocId2 = documentId.trim()
-        saveConfirmReceipt("conf_doc_" + userId + "_" + cleanDocId2, batchHash, saved)
+        var mergedForReceipt: List<TransactionOutput> = listOf()
+        var seenIds: List<String> = listOf()
+        for (var ex in existingDocSaved) {
+            if (!seenIds.contains(ex.id())) {
+                seenIds.add(ex.id())
+                mergedForReceipt.add(ex)
+            }
+        }
+        for (var sv in saved) {
+            if (!seenIds.contains(sv.id())) {
+                seenIds.add(sv.id())
+                mergedForReceipt.add(sv)
+            }
+        }
+        saveConfirmReceipt("conf_doc_" + userId + "_" + cleanDocId2, batchHash, mergedForReceipt)
         var docRow2 = findFinancialDocumentRowByKeyRaw(cleanDocId2)
         if (docRow2 != null) {
             saveFinancialDocumentRow(
@@ -3354,13 +4048,18 @@ List<TransactionOutput> confirmInvoiceItemsWithIdempotency(String userId, List<I
         refPrefix = documentId.trim()
         docIdVal = documentId.trim()
     }
+    var docPeriod = lookupStatementPeriod(docIdVal)
+    var defaultIso: String? = textOrNull("")
+    if (docPeriod != "") {
+        defaultIso = resolveTxIsoDate(null, docPeriod)
+    }
     var traceItems: List<InvoiceConfirmTraceItem> = listOf()
     var idx = 0
     while (idx < items.size) {
         var it = items.get(idx)
         var itemSig = sha256HexOfString(it.description().trim().toLowerCase() + "|" + toCents(it.amount()) + "|" + it.category())
         var extRef = refPrefix + ":" + idx + ":" + itemSig.substring(0, 16)
-        traceItems.add(InvoiceConfirmTraceItem(it.description(), it.amount(), it.category(), docIdVal, 0, 0, extRef))
+        traceItems.add(InvoiceConfirmTraceItem(it.description(), it.amount(), it.category(), docIdVal, 0, 0, extRef, defaultIso))
         idx = idx + 1
     }
     return confirmInvoiceTraceItemsWithIdempotency(userId, traceItems, documentId)
@@ -3410,14 +4109,29 @@ String resolvePeriodFromIso(String period) {
     return monthStartIso()
 }
 
-ExpenseQueryResult queryConfirmedExpenses(String userId, String periodRaw, String categoryRaw) {
+String friendlyPeriodDe(String period) {
+    if (period.matches("[0-9]{4}-[0-9]{2}")) {
+        var pt = formatPeriodPt(period)
+        if (pt != "") {
+            return "de " + pt.toLowerCase()
+        }
+    }
+    if (period == "week") {
+        return "desta semana"
+    }
+    if (period == "year") {
+        return "deste ano"
+    }
+    if (period == "all") {
+        return "de todo o período"
+    }
+    return "deste mês"
+}
+
+ExpenseQueryResult queryConfirmedExpensesByCategoryList(String userId, String periodRaw, List<String> categoryCodes, String resultCategoryLabel) {
     var period = periodRaw.trim()
     if (period == "") {
         period = "month"
-    }
-    var categoryName = categoryRaw.trim().toUpperCase()
-    if (categoryName == "") {
-        categoryName = "ALL"
     }
     var fromIso = resolvePeriodFromIso(period)
     var allTxs = findTransactionsByUserIdAndCreatedAtAfter(userId, fromIso)
@@ -3426,6 +4140,7 @@ ExpenseQueryResult queryConfirmedExpenses(String userId, String periodRaw, Strin
     if (period.matches("[0-9]{4}-[0-9]{2}")) {
         filterMonthPrefix = period
     }
+    var filterByCats = !categoryCodes.isEmpty()
 
     for (var tx in allTxs) {
         var dateMatches = true
@@ -3436,8 +4151,8 @@ ExpenseQueryResult queryConfirmedExpenses(String userId, String periodRaw, Strin
             }
         }
         var catMatches = true
-        if (categoryName != "ALL") {
-            catMatches = categoryText(tx.category) == categoryName
+        if (filterByCats) {
+            catMatches = categoryCodes.contains(categoryText(tx.category))
         }
         if (dateMatches && catMatches) {
             filtered.add(tx)
@@ -3446,7 +4161,33 @@ ExpenseQueryResult queryConfirmedExpenses(String userId, String periodRaw, Strin
 
     var totalMinor = sumAmountCents(filtered)
     var outList = filtered.map((t: TransactionEntity) -> transactionEntityToOutput(t))
-    return ExpenseQueryResult(period, categoryName, outList.size, totalMinor, centsToReais(totalMinor), outList)
+    return ExpenseQueryResult(period, resultCategoryLabel, outList.size, totalMinor, centsToReais(totalMinor), outList)
+}
+
+ExpenseQueryResult queryConfirmedExpenses(String userId, String periodRaw, String categoryRaw) {
+    var categoryName = categoryRaw.trim().toUpperCase()
+    if (categoryName == "") {
+        categoryName = "ALL"
+    }
+    var codes: List<String> = listOf()
+    if (categoryName != "ALL") {
+        codes.add(categoryName)
+    }
+    return queryConfirmedExpensesByCategoryList(userId, periodRaw, codes, categoryName)
+}
+
+ExpenseQueryResult queryConfirmedExpensesByCategories(String userId, String periodRaw, List<String> categories) {
+    if (categories.isEmpty()) {
+        return queryConfirmedExpensesByCategoryList(userId, periodRaw, listOf(), "ALL")
+    }
+    var joined = ""
+    for (var c in categories) {
+        if (joined != "") {
+            joined = joined + ","
+        }
+        joined = joined + c
+    }
+    return queryConfirmedExpensesByCategoryList(userId, periodRaw, categories, joined)
 }
 
 IntentResult dispatchFinanceIntent(String authUserId, IntentRequest req) {
@@ -3513,13 +4254,50 @@ IntentResult dispatchFinanceIntent(String authUserId, IntentRequest req) {
         if (rev == null) {
             return IntentResult("ERROR", intent, corrId, false, "Documento nao encontrado.", null, listOf("PARSE_AMBIGUOUS"))
         }
-        var traceItems = buildConfirmTraceItemsFromReview(rev)
+        var docRow = findFinancialDocumentRowByKeyRaw(docId)
+        var effectivePeriod = ""
+        if (docRow != null && docRow.statementPeriod.trim().matches("[0-9]{4}-[0-9]{2}")) {
+            effectivePeriod = docRow.statementPeriod.trim()
+        }
+        var paramPeriodRaw = intentParam(req, "period")
+        if (effectivePeriod == "" && paramPeriodRaw != "") {
+            var parsedParam = parsePeriodParam(paramPeriodRaw)
+            if (parsedParam != "") {
+                effectivePeriod = parsedParam
+                if (docRow != null) {
+                    persistDocumentStatementPeriod(docRow, effectivePeriod)
+                }
+            }
+        }
+        if (effectivePeriod == "") {
+            return IntentResult("NEEDS_PERIOD", intent, corrId, true, "Não consegui identificar o mês e o ano com segurança neste documento. De qual mês e ano são esses gastos? (Exemplo: novembro de 2026)", null, listOf())
+        }
+        var selectedIdsRaw = intentParam(req, "selectedIds")
+        var selectedTxIds: List<String> = listOf()
+        if (selectedIdsRaw != "") {
+            for (var sid in selectedIdsRaw.split(",")) {
+                var cleanSid = sid.trim()
+                if (cleanSid != "" && !selectedTxIds.contains(cleanSid)) {
+                    selectedTxIds.add(cleanSid)
+                }
+            }
+        }
+        var traceItems = buildConfirmTraceItemsFromReviewFiltered(rev, selectedTxIds, effectivePeriod)
         if (traceItems.size == 0) {
             return IntentResult("ERROR", intent, corrId, false, "Nenhum lancamento valido para importar neste documento.", null, listOf("PARSE_AMBIGUOUS"))
         }
         var saved = confirmInvoiceTraceItemsWithIdempotency(authUserId, traceItems, docId)
-        var msg = "Confirmado: " + saved.size + " lancamentos estao salvos nas suas caixinhas sem duplicidade."
-        return IntentResult("IMPORTADO", intent, corrId, false, msg, json.encode(saved), listOf())
+        var savedTotalCents: Long = 0
+        for (var stx in saved) {
+            savedTotalCents = savedTotalCents + toCents(stx.value)
+        }
+        var periodLabel = formatPeriodPt(effectivePeriod)
+        if (periodLabel == "") {
+            periodLabel = effectivePeriod
+        }
+        var payload = ConfirmIntentPayload(docId, effectivePeriod, periodLabel, saved.size, centsToReais(savedTotalCents), saved)
+        var msg = "Confirmado! Guardei " + saved.size + " lançamento(s) de " + periodLabel.toLowerCase() + " nas suas caixinhas sem duplicidade. Seu Dashboard (em Gastos Calculados) e suas Caixinhas foram atualizados."
+        return IntentResult("IMPORTADO", intent, corrId, false, msg, json.encode(payload), listOf())
     }
 
     if (intent == "ANALISAR_FATURA") {
@@ -3575,6 +4353,29 @@ IntentResult dispatchFinanceIntent(String authUserId, IntentRequest req) {
 
     if (intent == "CONSULTAR_GASTOS") {
         var period = intentParam(req, "period")
+        var catsParam = intentParam(req, "categories")
+        if (catsParam != "") {
+            var catCodes: List<String> = listOf()
+            for (var rawCode in catsParam.split(",")) {
+                var cleanCode = rawCode.trim().toUpperCase()
+                if (cleanCode != "") {
+                    var validCat = categoryOrNull(cleanCode)
+                    if (validCat == null) {
+                        return IntentResult("ERROR", intent, corrId, false, "Categoria invalida: " + rawCode.trim(), null, listOf("INVALID_CATEGORY"))
+                    }
+                    if (!catCodes.contains(validCat.name())) {
+                        catCodes.add(validCat.name())
+                    }
+                }
+            }
+            if (catCodes.isEmpty()) {
+                return IntentResult("ERROR", intent, corrId, false, "Categoria invalida: " + catsParam, null, listOf("INVALID_CATEGORY"))
+            }
+            var resCats = queryConfirmedExpensesByCategories(authUserId, period, catCodes)
+            var periodPhrase = friendlyPeriodDe(resCats.period())
+            var msgCats = "Nos gastos confirmados " + periodPhrase + ", você somou " + formatBrl(resCats.totalMinor()) + " em " + resCats.count() + " lançamento(s) nas categorias selecionadas."
+            return IntentResult("OK", intent, corrId, false, msgCats, json.encode(resCats), listOf())
+        }
         var cat = intentParam(req, "category")
         if (cat != "" && cat.toUpperCase() != "ALL" && Category.valueOf(cat.toUpperCase()) == null) {
             return IntentResult("ERROR", intent, corrId, false, "Categoria invalida: " + cat, null, listOf("INVALID_CATEGORY"))
@@ -3611,6 +4412,108 @@ IntentResult dispatchFinanceIntent(String authUserId, IntentRequest req) {
     }
 
     return IntentResult("ERROR", intent, corrId, false, "Intencao desconhecida: " + intent, null, listOf("UNSUPPORTED_INTENT"))
+}
+
+DocumentReclassifyResponse reclassifyDocumentTransactions(String userId, String docId, List<String> txIds, String rawCategory) {
+    var cleanDocId = docId.trim()
+    if (cleanDocId == "") {
+        throw "NOT_FOUND: documento não encontrado"
+    }
+    var docRow = findFinancialDocumentRowByKeyRaw(cleanDocId)
+    if (docRow == null) {
+        throw "NOT_FOUND: documento não encontrado"
+    }
+    if (docRow.userId != parseUserIdLong(userId)) {
+        throw "UNAUTHORIZED: acesso negado ao documento"
+    }
+    var cleanIds: List<String> = listOf()
+    for (var idItem in txIds) {
+        var cid = idItem.trim()
+        if (cid != "" && !cleanIds.contains(cid)) {
+            cleanIds.add(cid)
+        }
+    }
+    if (cleanIds.isEmpty()) {
+        throw "INVALID_REQUEST: selecione ao menos uma transação para classificar"
+    }
+    var catUpper = rawCategory.trim().toUpperCase()
+    var validCat = Category.valueOf(catUpper)
+    if (validCat == null) {
+        throw "INVALID_CATEGORY: categoria inválida: " + rawCategory
+    }
+
+    var rows = findExtractedTransactionRowsByDoc(userId, cleanDocId)
+    var matchedCount = 0
+    for (var r in rows) {
+        if (cleanIds.contains(r.itemKey)) {
+            matchedCount = matchedCount + 1
+            saveExtractedTransactionRow(ExtractedTransactionRow(
+                r.id, r.documentId, r.userId, r.itemKey, r.txDate, r.descriptionRaw, r.descriptionNormalized,
+                r.amountMinor, r.currency, r.direction, r.kind, r.installment,
+                validCat.name(), "USER_CONFIRMED_UI", 1.0, r.pageNum, r.rowNum, r.snippet, "CONFIRMED"
+            ))
+        }
+    }
+    if (matchedCount == 0) {
+        throw "INVALID_REQUEST: nenhuma transação correspondente encontrada neste documento"
+    }
+
+    var updatedRows = findExtractedTransactionRowsByDoc(userId, cleanDocId)
+    saveFinancialDocumentRow(FinancialDocumentRow(
+        docRow.id, docRow.docKey, docRow.userId, docRow.sha256, docRow.filename, docRow.sourceType,
+        docRow.statementPeriod, docRow.currency, docRow.status, docRow.reconciled,
+        updatedRows.size, docRow.declaredTotalMinor, docRow.hasDeclaredTotal, docRow.warningsText, docRow.createdAt
+    ))
+    var updatedDocRow = findFinancialDocumentRowByKeyRaw(cleanDocId)
+    var effectiveDocRow = docRow
+    if (updatedDocRow != null) {
+        effectiveDocRow = updatedDocRow
+    }
+    var rev = buildImportReviewFromRows(effectiveDocRow, updatedRows)
+    return DocumentReclassifyResponse(cleanDocId, rev.status(), summarizeImportReview(rev), rev)
+}
+
+ChatInteractionPayload? buildLatestInteractionOrNull(FinancialDocumentRow chosen, ImportReview rev, ImportFlowSummary summary) {
+    if (chosen.status != "FALHA_EXTRACAO" && chosen.status != "EXTRACAO_FALHOU" && chosen.status != "EM_PROCESSAMENTO") {
+        return buildInvoiceInteractionPayload(rev, summary, chosen.filename)
+    }
+    return null
+}
+
+LatestDocumentResponse? latestDocumentOverviewForUser(String userId) {
+    var docs = findFinancialDocumentRowsByUser(userId)
+    if (docs.isEmpty()) {
+        return null
+    }
+    var chosenIdx = -1
+    var fallbackIdx = -1
+    var idx = 0
+    while (idx < docs.size) {
+        var d = docs.get(idx)
+        if (d.sourceType != "RECEIPT" && d.status != "CONFIRMED_RECEIPT") {
+            if (fallbackIdx < 0) {
+                fallbackIdx = idx
+            }
+            if (chosenIdx < 0 && d.status != "FALHA_EXTRACAO" && d.status != "EXTRACAO_FALHOU" && d.status != "EM_PROCESSAMENTO") {
+                chosenIdx = idx
+            }
+        }
+        idx = idx + 1
+    }
+    if (chosenIdx < 0) {
+        chosenIdx = fallbackIdx
+    }
+    if (chosenIdx < 0) {
+        return null
+    }
+    var chosen = docs.get(chosenIdx)
+    var txRows = findExtractedTransactionRowsByDoc(userId, chosen.docKey)
+    var rev = buildImportReviewFromRows(chosen, txRows)
+    var period = chosen.statementPeriod.trim()
+    var periodLabel = formatPeriodPt(period)
+    var summary = summarizeImportReview(rev)
+    var interaction = buildLatestInteractionOrNull(chosen, rev, summary)
+    return LatestDocumentResponse(true, chosen.docKey, chosen.filename, period, periodLabel, chosen.status, summary, rev, interaction)
 }
 
 // =========================================================
@@ -3868,58 +4771,345 @@ String countLabel(Int n) {
     return n + " registros"
 }
 
-String buildInvoiceChatReply(ImportFlowSummary s, Bool reconciled) {
-    var msg = "Li o documento " + s.documentId() + ": " + s.totalStatementRows() + " movimentacao(oes) no arquivo = " + countLabel(s.extractedCount()) + " lancamento(s) financeiro(s) extraido(s) + " + countLabel(s.internalTransferCount()) + " transferencia(s) interna(s) filtrada(s), separados por natureza (sem somar tipos diferentes).\n"
-    msg = msg + "- Receitas: " + formatBrl(s.incomeMinor()) + " (" + countLabel(s.incomeCount()) + ")\n"
-    msg = msg + "  * Renda profissional comprovada (CNPJ/NF/holerite): " + formatBrl(s.professionalIncomeMinor()) + " (" + countLabel(s.professionalIncomeCount()) + ")\n"
-    msg = msg + "  * Possiveis recebimentos empresariais sem comprovacao fiscal no extrato (PJ no nome; requer nota fiscal/recibo para confirmar como renda profissional): " + formatBrl(s.unverifiedPjIncomeMinor()) + " (" + countLabel(s.unverifiedPjIncomeCount()) + ")\n"
-    msg = msg + "  * Outras entradas / Pix de pessoas fisicas (nao consideradas renda profissional): " + formatBrl(s.otherIncomeMinor()) + " (" + countLabel(s.otherIncomeCount()) + ")\n"
-    msg = msg + "- Despesas confirmadas: " + formatBrl(s.expenseMinor()) + " (" + countLabel(s.expenseCount()) + ")\n"
-    msg = msg + "- Operacoes de credito (Pix via cartao): " + formatBrl(s.creditOperationMinor()) + " (" + countLabel(s.creditOperationCount()) + ")\n"
-    msg = msg + "- Total de saidas confirmaveis nas caixinhas (Despesas + Operacoes de credito): " + formatBrl(s.confirmableExpenseMinor()) + " (" + countLabel(s.confirmableExpenseCount()) + ")\n"
-    msg = msg + "- Pagamentos de fatura (excluidos das despesas): " + formatBrl(s.billPaymentMinor()) + " (" + countLabel(s.billPaymentCount()) + ")\n"
-    if (s.refundCount() > 0) {
-        msg = msg + "- Estornos e creditos: " + formatBrl(s.refundMinor()) + " (" + countLabel(s.refundCount()) + ")\n"
+String humanFilenameForDocId(String docId) {
+    if (docId.trim() == "") {
+        return "sua fatura"
     }
-    msg = msg + "- Transferencias internas excluidas: " + formatBrl(s.internalTransferMinor()) + " (" + countLabel(s.internalTransferCount()) + ")\n"
-    msg = msg + "- Pendentes de revisao: " + formatBrl(s.pendingMinor()) + " (" + countLabel(s.pendingCount()) + ")"
+    var row = findFinancialDocumentRowByKeyRaw(docId.trim())
+    if (row != null && row.filename.trim() != "") {
+        return row.filename.trim()
+    }
+    return "sua fatura"
+}
+
+String catalogActionChoicesBlock() {
+    return "Escolha uma das opções abaixo para continuar."
+}
+
+String catalogDocumentoNaoFatura() {
+    return "Esse arquivo não consta como uma fatura. Faça o upload de uma fatura para que eu organize a sua grana sem estresse."
+}
+
+String catalogDocumentoIlegivel(String filename) {
+    return catalogDocumentoNaoFatura()
+}
+
+String catalogFormatoNaoSuportado() {
+    return "Esse formato de arquivo ainda não é aceito por aqui. Envie sua fatura ou extrato em PDF, PNG, JPEG ou DOCX, ou me conte seus gastos por texto ou por voz."
+}
+
+String catalogTransacaoPendente(String filename, Int count, String itemsText) {
+    var cleanName = filename.trim()
+    if (cleanName == "" || cleanName.startsWith("doc_")) {
+        cleanName = humanFilenameForDocId(cleanName)
+    }
+    return "No arquivo " + cleanName + ", encontrei " + countLabel(count) + " que precisam da sua confirmação antes de entrar nas caixinhas:\n" + itemsText + "Me diga a qual categoria pertencem (por exemplo: \"esse Pix foi alimentação\") ou se prefere deixá-los de fora.\n\n"
+}
+
+String catalogConfirmacaoCategoria(String itemDesc, Long amountMinor, String filename, Int pageNum, Int rowNum, String categoryPt, Long newConfirmableMinor) {
+    var cleanName = filename.trim()
+    if (cleanName == "" || cleanName.startsWith("doc_")) {
+        cleanName = humanFilenameForDocId(cleanName)
+    }
+    return "Perfeito! Classifiquei \"" + itemDesc + "\" (" + formatBrl(amountMinor) + ", arquivo " + cleanName + ", página " + pageNum + ", linha " + rowNum + ") na caixinha " + categoryPt + ". Agora o total pronto para organizar nas suas caixinhas é de " + formatBrl(newConfirmableMinor) + ".\n\n"
+}
+
+String catalogConfirmacaoCaixinhas(String filename, String categoryLines, Long expenseMinor, Long creditMinor, Long billPaymentMinor, Int pendingCount, Long pendingMinor) {
+    var cleanName = filename.trim()
+    if (cleanName == "" || cleanName.startsWith("doc_")) {
+        cleanName = humanFilenameForDocId(cleanName)
+    }
+    var msg = "Vou separar seus gastos por categoria e mostrar os valores antes de salvar. Assim, você pode conferir se está tudo certo no arquivo " + cleanName + ":\n\n"
+    msg = msg + categoryLines
+    msg = msg + "\nResumo antes de guardar:\n"
+    msg = msg + "- Despesas confirmadas em estabelecimentos: " + formatBrl(expenseMinor) + "\n"
+    msg = msg + "- Compras e Pix no cartão de crédito: " + formatBrl(creditMinor) + "\n"
+    msg = msg + "- Total que será guardado nas caixinhas: " + formatBrl(expenseMinor + creditMinor) + "\n"
+    if (billPaymentMinor > 0) {
+        msg = msg + "- Pagamentos de fatura deixados de fora (para evitar dupla contagem): " + formatBrl(billPaymentMinor) + "\n"
+    }
+    if (pendingCount > 0) {
+        msg = msg + "- Itens ainda aguardando confirmação (não serão salvos sem você dizer a categoria, ex.: \"esse Pix foi alimentação\"): " + formatBrl(pendingMinor) + " (" + countLabel(pendingCount) + ")\n"
+    }
+    msg = msg + "\nPosso guardar esses valores nas suas caixinhas agora? Responda \"sim, pode distribuir\" para confirmar ou me diga se quiser corrigir uma informação."
+    return msg
+}
+
+String catalogImportacaoConcluida(String filename, Int savedCount, Long savedTotalCents, String envLines, String modelLine, String period) {
+    var cleanName = filename.trim()
+    if (cleanName == "" || cleanName.startsWith("doc_")) {
+        cleanName = humanFilenameForDocId(cleanName)
+    }
+    var periodPt = formatPeriodPt(period)
+    var msg = "Confirmado! Guardei " + savedCount + " despesa(s) do arquivo " + cleanName + " no total de " + formatBrl(savedTotalCents) + " nas suas caixinhas sem duplicidade. Seu Dashboard (em Gastos Calculados) e suas Caixinhas foram atualizados automaticamente.\n"
+    if (periodPt != "") {
+        msg = "Confirmado! Guardei " + savedCount + " despesa(s) de " + periodPt.toLowerCase() + " (" + cleanName + ") no total de " + formatBrl(savedTotalCents) + " nas suas caixinhas sem duplicidade. Seu Dashboard (em Gastos Calculados) e suas Caixinhas foram atualizados automaticamente.\n"
+    }
+    if (envLines != "") {
+        msg = msg + "Caixinhas atualizadas:\n" + envLines
+    }
+    if (modelLine != "") {
+        msg = msg + modelLine
+    }
+    return msg.trim()
+}
+
+String catalogImportacaoConcluida(String filename, Int savedCount, Long savedTotalCents, String envLines, String modelLine) {
+    return catalogImportacaoConcluida(filename, savedCount, savedTotalCents, envLines, modelLine, "")
+}
+
+String catalogDuplicidadeDetectada(String filename, Int savedCount, Long savedTotalCents, String envLines, String modelLine, String period) {
+    var cleanName = filename.trim()
+    if (cleanName == "" || cleanName.startsWith("doc_")) {
+        cleanName = humanFilenameForDocId(cleanName)
+    }
+    var periodPt = formatPeriodPt(period)
+    var periodTag = ""
+    if (periodPt != "") {
+        periodTag = " (" + periodPt.toLowerCase() + ")"
+    }
+    var msg = "O arquivo " + cleanName + periodTag + " já estava confirmado: " + savedCount + " despesa(s) somando " + formatBrl(savedTotalCents) + " seguem salvas nas suas caixinhas (sem duplicidade). Seu Dashboard (em Gastos Calculados) e suas Caixinhas já estão atualizados.\n"
+    if (envLines != "") {
+        msg = msg + "Caixinhas atualizadas:\n" + envLines
+    }
+    if (modelLine != "") {
+        msg = msg + modelLine
+    }
+    return msg.trim()
+}
+
+String catalogDuplicidadeDetectada(String filename, Int savedCount, Long savedTotalCents, String envLines, String modelLine) {
+    return catalogDuplicidadeDetectada(filename, savedCount, savedTotalCents, envLines, modelLine, "")
+}
+
+String detectEducationalFinanceTopic(String lower) {
+    if (lower == "entender melhor meus gastos" || lower == "entender meus gastos" || lower.contains("entender melhor meus gastos")) {
+        return "ENTENDER_GASTOS"
+    }
+    var isQuestion = lower.contains("?") || lower.contains("o que é") || lower.contains("o que e") || lower.contains("o que são") || lower.contains("o que sao") || lower.contains("qual a diferença") || lower.contains("qual a diferenca") || lower.contains("diferença entre") || lower.contains("diferenca entre") || lower.contains("como funciona") || lower.contains("por que") || lower.contains("porque") || lower.contains("me explica") || lower.contains("explica")
+    if (!isQuestion) {
+        return ""
+    }
+    if (lower.contains("receita") && lower.contains("despesa")) {
+        return "RECEITA_E_DESPESA"
+    }
+    if (lower.contains("o que é receita") || lower.contains("o que e receita") || lower.contains("o que é despesa") || lower.contains("o que e despesa")) {
+        return "RECEITA_E_DESPESA"
+    }
+    if (lower.contains("fixo") || lower.contains("variáve") || lower.contains("variave")) {
+        return "FIXOS_E_VARIAVEIS"
+    }
+    if (lower.contains("dupla contagem") || (lower.contains("pagamento de fatura") && isQuestion) || (lower.contains("fatura") && (lower.contains("duplic") || lower.contains("duas vezes") || lower.contains("o que é") || lower.contains("o que e") || lower.contains("como funciona") || lower.contains("por que")))) {
+        return "PAGAMENTO_FATURA_DUPLA_CONTAGEM"
+    }
+    if (lower.contains("crédito") || lower.contains("credito") || lower.contains("dinheiro disponível") || lower.contains("dinheiro disponivel") || lower.contains("débito") || lower.contains("debito")) {
+        return "CREDITO_E_DISPONIVEL"
+    }
+    if (lower.contains("reserva de emergência") || lower.contains("reserva de emergencia") || (lower.contains("reserva") && isQuestion)) {
+        return "RESERVA_EMERGENCIA"
+    }
+    if (lower.contains("caixinha") && (lower.contains("o que") || lower.contains("como funciona") || lower.contains("organiza") || lower.contains("serve"))) {
+        return "ORGANIZACAO_CAIXINHAS"
+    }
+    if (lower.contains("planejamento") || lower.contains("planejar") || lower.contains("modelo de economia") || lower.contains("50/30/20") || lower.contains("70/20/10")) {
+        return "PLANEJAMENTO_GASTOS"
+    }
+    return ""
+}
+
+String invoiceEducationTipForSummary(ImportFlowSummary s) {
+    if (s.billPaymentCount() > 0) {
+        return "Pagar uma fatura não é fazer uma nova compra. Por isso, deixei esses pagamentos separados para não contar o mesmo gasto duas vezes."
+    }
+    if (s.creditOperationCount() > 0) {
+        return "Compras no cartão comprometem o valor da próxima fatura, enquanto o dinheiro na conta continua disponível até o vencimento. Mantive tudo separado para facilitar."
+    }
     if (s.pendingCount() > 0) {
-        msg = msg + " - me diga a categoria de cada um; eles nao serao salvos sem sua confirmacao.\n"
-        for (var ln in s.lines()) {
-            if (ln.flowClass() == "PENDENTE_REVISAO") {
-                var descText = ln.descriptionRaw()
-                if (descText == null || descText == "") {
-                    descText = ln.snippet()
-                }
-                if (descText == null || descText == "") {
-                    descText = ln.txId()
-                }
-                var valMinor: Long = 0
-                var lm = ln.amountMinor()
-                if (lm != null) {
-                    valMinor = lm
-                }
-                var pNum = 1
-                var lp = ln.page()
-                if (lp != null) {
-                    pNum = lp
-                }
-                var rNum = 0
-                var lr = ln.row()
-                if (lr != null) {
-                    rNum = lr
-                }
-                msg = msg + "  * " + descText + " | " + formatBrl(valMinor) + " (doc " + s.documentId() + ", p" + pNum + ", l" + rNum + ")\n"
+        return "Deixei as movimentações sem descrição clara fora dos seus gastos até você confirmar o que foram, mantendo seus números sempre fiéis."
+    }
+    return "Separar seus gastos em caixinhas ajuda a acompanhar seu mês com calma antes de o limite apertar."
+}
+
+ChatInteractionPayload buildInvoiceInteractionPayload(ImportReview rev, ImportFlowSummary s, String filename) {
+    var cleanName = filename.trim()
+    if (cleanName == "" || cleanName.startsWith("doc_")) {
+        cleanName = humanFilenameForDocId(rev.documentId())
+    }
+    var statementPeriod = lookupStatementPeriod(rev.documentId())
+    var periodPt = formatPeriodPt(statementPeriod)
+    var summaryPeriodLabel = "Período a confirmar"
+    if (periodPt != "") {
+        summaryPeriodLabel = periodPt
+    }
+    var tip = invoiceEducationTipForSummary(s)
+
+    var entradas: List<ChatFlowLineItem> = listOf()
+    if (s.professionalIncomeCount() > 0) {
+        entradas.add(ChatFlowLineItem("Renda profissional", formatBrl(s.professionalIncomeMinor()), s.professionalIncomeCount(), null))
+    }
+    if (s.unverifiedPjIncomeCount() > 0) {
+        entradas.add(ChatFlowLineItem("Recebimentos de empresas", formatBrl(s.unverifiedPjIncomeMinor()), s.unverifiedPjIncomeCount(), "Aguardando sua confirmação"))
+    }
+    if (s.otherIncomeCount() > 0) {
+        entradas.add(ChatFlowLineItem("Outras entradas e Pix recebidos", formatBrl(s.otherIncomeMinor()), s.otherIncomeCount(), null))
+    }
+    if (s.refundCount() > 0) {
+        entradas.add(ChatFlowLineItem("Estornos e créditos", formatBrl(s.refundMinor()), s.refundCount(), null))
+    }
+
+    var saidas: List<ChatFlowLineItem> = listOf()
+    saidas.add(ChatFlowLineItem("Despesas confirmadas", formatBrl(s.expenseMinor()), s.expenseCount(), "Prontas para suas caixinhas"))
+    if (s.creditOperationCount() > 0) {
+        saidas.add(ChatFlowLineItem("Compras e Pix no cartão de crédito", formatBrl(s.creditOperationMinor()), s.creditOperationCount(), "Separado do saldo à vista"))
+    }
+    if (s.pendingCount() > 0) {
+        saidas.add(ChatFlowLineItem("Aguardando sua revisão", formatBrl(s.pendingMinor()), s.pendingCount(), "Não entra nos gastos sem sua confirmação"))
+    }
+
+    var summary = ChatInteractionSummary(
+        summaryPeriodLabel,
+        formatBrl(s.incomeMinor()),
+        s.incomeCount() + s.refundCount(),
+        entradas,
+        formatBrl(s.confirmableExpenseMinor()),
+        s.confirmableExpenseCount(),
+        saidas,
+        formatBrl(s.pendingMinor()),
+        s.pendingCount()
+    )
+
+    var detailItems: List<String> = listOf()
+    detailItems.add("Arquivo analisado: " + cleanName)
+    detailItems.add("Movimentações lidas no documento: " + s.totalStatementRows() + " (" + countLabel(s.extractedCount()) + " identificados)")
+    detailItems.add("Transferências internas deixadas de fora (sem dupla contagem): " + formatBrl(s.internalTransferMinor()) + " (" + countLabel(s.internalTransferCount()) + ")")
+    detailItems.add("Pagamentos de fatura deixados de fora (sem dupla contagem): " + formatBrl(s.billPaymentMinor()) + " (" + countLabel(s.billPaymentCount()) + ")")
+    if (!rev.reconciled()) {
+        detailItems.add("Conferência de soma: os itens lidos diferem do total impresso no documento; confira antes de salvar.")
+    }
+    for (var ln in s.lines()) {
+        if (ln.flowClass() == "PENDENTE_REVISAO") {
+            var descText = ln.descriptionRaw()
+            if (descText == null || descText == "") {
+                descText = ln.snippet()
+            }
+            if (descText == null || descText == "") {
+                descText = "Item pendente"
+            }
+            var valMinor: Long = 0
+            var lm = ln.amountMinor()
+            if (lm != null) {
+                valMinor = lm
+            }
+            var pNum = 1
+            var lp = ln.page()
+            if (lp != null) {
+                pNum = lp
+            }
+            var rNum = 0
+            var lr = ln.row()
+            if (lr != null) {
+                rNum = lr
+            }
+            detailItems.add("Pendente: " + descText + " · " + formatBrl(valMinor) + " (página " + pNum + ", linha " + rNum + ")")
+        }
+    }
+    var details = ChatInteractionDetails("Detalhes da análise", detailItems)
+
+    var options: List<ChatInteractionOption> = listOf(
+        ChatInteractionOption("opt_view_expenses", "Ver meus gastos", "VIEW_EXPENSES", "CONSULTAR_GASTOS", "chart", 0),
+        ChatInteractionOption("opt_organize_caixinhas", "Organizar caixinhas", "ORGANIZE_CAIXINHAS", "CONFIRMAR_IMPORTACAO", "wallet", 0),
+        ChatInteractionOption("opt_review_movements", "Revisar movimentações", "REVIEW_MOVEMENTS", "RECLASSIFICAR_MOVIMENTACOES", "checklist", s.pendingCount()),
+        ChatInteractionOption("opt_understand_expenses", "Entender meus gastos", "UNDERSTAND_EXPENSES", "EXPLICAR_GASTOS", "book", 0)
+    )
+
+    var headline = "Consegui organizar seu extrato de " + periodPt.toLowerCase() + "!"
+    if (periodPt == "") {
+        headline = "Li o documento. Vamos confirmar o periodo antes de salvar."
+    }
+
+    return ChatInteractionPayload(
+        "SINGLE_ACTION",
+        "O que você quer fazer agora?",
+        textOrNull(rev.documentId()),
+        textOrNull(statementPeriod),
+        textOrNull(periodPt),
+        headline,
+        tip,
+        summary,
+        details,
+        options
+    )
+}
+
+InvoiceChatTurnResult? answerEducationalFinanceTurn(String userId, String rawMsg) {
+    var lower = rawMsg.trim().toLowerCase()
+    var topic = detectEducationalFinanceTopic(lower)
+    if (topic == "") {
+        return null
+    }
+    if (topic == "RECEITA_E_DESPESA") {
+        return InvoiceChatTurnResult("De um jeito simples: receita é todo dinheiro que entra para você (como salário ou pagamento por um serviço), e despesa é o dinheiro que sai para pagar contas ou compras do dia a dia.\n\nExemplo hipotético: se uma pessoa recebe R$ 2.000,00 no mês (receita) e gasta R$ 150,00 na conta de luz (despesa), restam R$ 1.850,00 disponíveis. No Organiza AI, só consideramos renda profissional as entradas comprovadas, para você planejar seu mês com segurança.", null)
+    }
+    if (topic == "FIXOS_E_VARIAVEIS") {
+        return InvoiceChatTurnResult("Gastos fixos são aqueles compromissos que se repetem todo mês com valor parecido (como aluguel, condomínio ou internet). Já os gastos variáveis mudam conforme sua rotina (como pedidos de comida, passeios ou transporte por aplicativo).\n\nExemplo hipotético: um aluguel de R$ 1.000,00 é um gasto fixo; já gastar R$ 80,00 em lanches na semana é um gasto variável, onde geralmente é mais fácil economizar quando o mês aperta.", null)
+    }
+    if (topic == "CREDITO_E_DISPONIVEL") {
+        return InvoiceChatTurnResult("Dinheiro disponível é o saldo que você já tem na conta para usar no débito ou Pix comum: pagou, o valor sai na hora. Já o crédito (cartão ou Pix no cartão) é um valor emprestado pelo banco que só será cobrado na próxima fatura.\n\nExemplo hipotético: se você tem R$ 300,00 na conta e faz uma compra de R$ 100,00 no cartão de crédito, seus R$ 300,00 continuam na conta hoje, mas você já comprometeu R$ 100,00 da sua renda para quando a fatura vencer.", null)
+    }
+    if (topic == "PAGAMENTO_FATURA_DUPLA_CONTAGEM") {
+        return InvoiceChatTurnResult("Quando você compra algo no cartão, cada compra já é um gasto. Se depois nós somarmos também o boleto de \"Pagamento de fatura\" como se fosse uma nova despesa, o mesmo valor seria contado duas vezes (dupla contagem).\n\nExemplo hipotético: se você fez duas compras de R$ 50,00 no cartão (total de R$ 100,00) e depois pagou a fatura de R$ 100,00, seu gasto real foi R$ 100,00, e não R$ 200,00. Por isso o Organiza AI separa o pagamento da fatura das despesas do mês.", null)
+    }
+    if (topic == "ORGANIZACAO_CAIXINHAS") {
+        return InvoiceChatTurnResult("As caixinhas funcionam como envelopes separados para cada área da sua vida (como Alimentação, Moradia, Transporte ou Lazer), cada uma com um limite mensal editável. Assim você enxerga quanto já usou antes de o dinheiro acabar.\n\nExemplo hipotético: se sua caixinha Alimentação tem limite de R$ 400,00 e você registra R$ 100,00, ela fica \"Em dia\" (25%) e mostra que ainda restam R$ 300,00 para o restante do mês.", null)
+    }
+    if (topic == "RESERVA_EMERGENCIA") {
+        return InvoiceChatTurnResult("A reserva de emergência é um valor guardado aos poucos para proteger você de imprevistos (como um gasto de saúde, conserto urgente ou queda na renda), evitando depender de empréstimos ou juros do cartão.\n\nExemplo hipotético: guardar R$ 100,00 por mês constrói em um ano uma reserva de R$ 1.200,00 pronta para dar tranquilidade nos momentos inesperados.", null)
+    }
+    if (topic == "PLANEJAMENTO_GASTOS") {
+        return InvoiceChatTurnResult("Planejar os gastos significa dividir o que você ganha em três grandes partes antes de gastar: o essencial para viver (Necessidades), um espaço para aproveitar sem culpa (Folga ou Desejos) e uma parte para o seu futuro (Poupança).\n\nExemplo hipotético: com uma renda de R$ 3.000,00 na regra 70/20/10, ficam R$ 2.100,00 para necessidades, R$ 600,00 para folga e R$ 300,00 para poupança.", null)
+    }
+    if (topic == "ENTENDER_GASTOS") {
+        var latest = findLatestFinancialDocumentRowByUser(userId)
+        if (latest != null && (latest.status == "EM_REVISAO" || latest.status == "IMPORTADO")) {
+            var lookup = lookupDocumentReview(latest.docKey, userId)
+            var rev = lookup.review()
+            if (rev != null) {
+                var s = summarizeImportReview(rev)
+                var msg = "No arquivo " + latest.filename + ", encontrei " + formatBrl(s.expenseMinor()) + " em compras identificadas. O pagamento da fatura fica separado para evitar contar as compras duas vezes. Ainda há " + formatBrl(s.pendingMinor()) + " em movimentações que precisam da sua confirmação."
+                return InvoiceChatTurnResult(msg, buildInvoiceInteractionPayload(rev, s, latest.filename))
             }
         }
+        return InvoiceChatTurnResult("Planejar seus gastos ajuda a enxergar para onde o dinheiro vai sem aperto: separamos as contas essenciais (Necessidades), o lazer do dia a dia (Folga) e o valor guardado (Poupança). Você pode me contar um gasto (ex.: \"30 reais em comida\") ou enviar uma fatura para analisarmos juntos.", null)
+    }
+    return null
+}
+
+String? answerEducationalFinanceQuestion(String userId, String rawMsg) {
+    var turn = answerEducationalFinanceTurn(userId, rawMsg)
+    if (turn != null) {
+        return turn.reply()
+    }
+    return null
+}
+
+String buildInvoiceChatReplyWithFilename(ImportFlowSummary s, Bool reconciled, String filename) {
+    var statementPeriod = lookupStatementPeriod(s.documentId())
+    var periodPt = formatPeriodPt(statementPeriod)
+    var headline = ""
+    if (periodPt != "") {
+        headline = "Consegui organizar seu extrato de " + periodPt.toLowerCase() + "!"
     } else {
-        msg = msg + "\n"
+        headline = "Li o arquivo enviado, mas antes de salvar preciso confirmar com você de qual mês e ano são essas movimentações."
     }
-    if (!reconciled) {
-        msg = msg + "Atencao: a soma extraida nao bate com o total declarado no documento; confira antes de salvar.\n"
+    var outflowsLine = "Saídas: encontrei " + formatBrl(s.confirmableExpenseMinor()) + " em despesas identificadas prontas para organizar nas suas caixinhas."
+    if (s.pendingCount() > 0) {
+        outflowsLine = "Saídas: encontrei " + formatBrl(s.confirmableExpenseMinor()) + " em despesas identificadas e " + formatBrl(s.pendingMinor()) + " em movimentações que precisamos conferir antes de salvar."
     }
-    msg = msg + "Perguntas de segurança antes de salvar nas caixinhas: cada valor tem pagina e linha de origem na previa do documento (nenhum Pix para pessoa fisica, pagamento de fatura ou entrada PJ sem comprovacao fiscal e salvo como gasto ou renda profissional sem sua confirmacao). Quer que eu distribua as despesas identificadas nas suas caixinhas?"
-    return msg
+    return headline + "\n\n" + outflowsLine
+}
+
+String buildInvoiceChatReply(ImportFlowSummary s, Bool reconciled) {
+    return buildInvoiceChatReplyWithFilename(s, reconciled, humanFilenameForDocId(s.documentId()))
 }
 
 Bool mentionsStatement(String message) {
@@ -3978,7 +5168,7 @@ String sanitizeCategoryForConfirm(String? rawCat) {
 
 // Passo 2 no chat: persiste idempotente os gastos extraidos do documento em revisao via Source.INVOICE,
 // vinculando as caixinhas e buckets do usuario (sem dupla gravacao se /api/invoices/confirm ja confirmou).
-String? confirmDocumentFromChat(String userId, String? documentId) {
+String? confirmDocumentFromChatWithPeriod(String userId, String? documentId, String? explicitPeriod) {
     var targetDocId = ""
     if (documentId != null && documentId.trim() != "") {
         targetDocId = documentId.trim()
@@ -4001,13 +5191,32 @@ String? confirmDocumentFromChat(String userId, String? documentId) {
     if (rev == null) {
         return "Documento nao encontrado."
     }
+    var docFilename = humanFilenameForDocId(rev.documentId())
     if (rev.status() == "FALHA_EXTRACAO" || (rev.extractedCount() == 0 && rev.transactions().isEmpty())) {
-        return "EXTRACAO_FALHOU: nao consegui extrair lancamentos validos do arquivo " + rev.documentId() + ". Nenhuma despesa foi salva ou estimada; envie outro arquivo digital ou me informe os gastos por texto."
+        return catalogDocumentoIlegivel(docFilename)
     }
 
-    var traceItems = buildConfirmTraceItemsFromReview(rev)
+    var docRow = findFinancialDocumentRowByKeyRaw(targetDocId)
+    var effectivePeriod = ""
+    if (docRow != null && docRow.statementPeriod.trim().matches("[0-9]{4}-[0-9]{2}")) {
+        effectivePeriod = docRow.statementPeriod.trim()
+    }
+    if (effectivePeriod == "" && explicitPeriod != null) {
+        var parsedExp = parsePeriodParam(explicitPeriod)
+        if (parsedExp != "") {
+            effectivePeriod = parsedExp
+            if (docRow != null) {
+                persistDocumentStatementPeriod(docRow, effectivePeriod)
+            }
+        }
+    }
+    if (effectivePeriod == "") {
+        return "Não consegui identificar o mês e o ano com segurança neste documento. De qual mês e ano são esses gastos? (Exemplo: novembro de 2026)"
+    }
+
+    var traceItems = buildConfirmTraceItemsFromReviewFiltered(rev, listOf(), effectivePeriod)
     if (traceItems.size == 0) {
-        return "EXTRACAO_FALHOU: o documento " + rev.documentId() + " nao possui despesas confirmaveis para importar nas caixinhas (receitas, pagamentos de fatura e itens pendentes de revisao nao sao salvos automaticamente)."
+        return "No arquivo " + docFilename + " ainda não há despesas confirmadas prontas para entrar nas caixinhas (receitas, pagamentos de fatura e itens aguardando sua confirmação não são salvos automaticamente)."
     }
 
     var alreadyByReceipt = loadConfirmedOutputsFromReceipt(userId, "conf_doc_" + userId + "_" + targetDocId) != null
@@ -4024,20 +5233,14 @@ String? confirmDocumentFromChat(String userId, String? documentId) {
         }
     }
 
-    var msg = ""
-    if (wasAlreadyImported) {
-        msg = "Documento " + targetDocId + " ja estava confirmado: " + saved.size + " despesa(s) somando " + formatBrl(savedTotalCents) + " seguem salvas nas suas caixinhas (sem duplicidade).\n"
-    } else {
-        msg = "Confirmado! Salvei " + saved.size + " despesa(s) do documento " + targetDocId + " no total de " + formatBrl(savedTotalCents) + " (fonte INVOICE) nas suas caixinhas sem duplicidade.\n"
-    }
-
+    var envLines = ""
+    var modelLine = ""
     var user = findUserById(userId)
     if (user != null) {
         var envs = envelopesOverview(user)
-        var envLines = ""
         for (var e in envs) {
             if (envIds.contains(e.id)) {
-                var bText = "Sem bucket"
+                var bText = "Sem grupo"
                 var envBucket = e.bucket
                 if (envBucket != null && envBucket != "") {
                     bText = envBucket
@@ -4050,9 +5253,6 @@ String? confirmDocumentFromChat(String userId, String? documentId) {
                 envLines = envLines + "- " + displayEnv + " (" + bText + "): gasto " + formatBrl(toCents(e.spentThisMonth)) + " de " + formatBrl(toCents(e.limitAmount)) + " (" + e.percent + "%)\n"
             }
         }
-        if (envLines != "") {
-            msg = msg + "Caixinhas atualizadas:\n" + envLines
-        }
         var buckets = buildBudgetBuckets(user.budgetModel, userSalary(user))
         if (!buckets.isEmpty()) {
             var bLine = ""
@@ -4062,15 +5262,184 @@ String? confirmDocumentFromChat(String userId, String? documentId) {
                 }
                 bLine = bLine + b.name + " (" + b.percentage + "% = " + formatBrl(toCents(b.amount)) + ")"
             }
-            msg = msg + "Distribuicao do seu modelo (" + coachModelLabel(user.budgetModel) + "): " + bLine
+            modelLine = "Distribuição do seu modelo (" + coachModelLabel(user.budgetModel) + "): " + bLine
         }
     }
-    return msg.trim()
+    if (wasAlreadyImported) {
+        return catalogDuplicidadeDetectada(docFilename, saved.size, savedTotalCents, envLines, modelLine, effectivePeriod)
+    }
+    return catalogImportacaoConcluida(docFilename, saved.size, savedTotalCents, envLines, modelLine, effectivePeriod)
+}
+
+String? confirmDocumentFromChat(String userId, String? documentId) {
+    return confirmDocumentFromChatWithPeriod(userId, documentId, null)
+}
+
+Bool recentChatAskedPeriodConfirm(String userId) {
+    var recent = findRecentChatMessages(userId, 4)
+    for (var m in recent) {
+        if (m.role == ChatRole.ASSISTANT) {
+            var lower = m.content.toLowerCase()
+            if (lower.contains("de qual mês e ano são esses gastos") || lower.contains("de qual mes e ano sao esses gastos") || lower.contains("de qual mês e ano são essas movimentações") || lower.contains("de qual mes e ano sao essas movimentacoes")) {
+                return true
+            }
+        }
+    }
+    return false
+}
+
+Category? detectCategoryReclassificationFromChat(String message) {
+    var lower = message.trim().toLowerCase()
+    var hasMarker = lower.contains("esse pix foi") || lower.contains("o pix foi") || lower.contains("pix foi") || lower.contains("foi ") || lower.contains("era ") || lower.contains("classifica como") || lower.contains("classificar como") || lower.contains("categoria ")
+    if (!hasMarker) {
+        return null
+    }
+    return classifyChatExpenseCategory(lower)
+}
+
+InvoiceChatTurnResult? reclassifyPendingDocumentItemTurnFromChat(String userId, String message) {
+    var lower = message.trim().toLowerCase()
+    var looksLikeReclass = lower.contains("esse pix foi") || lower.contains("o pix foi") || lower.contains("pix foi") || lower.startsWith("foi ") || lower.contains("classifica como") || lower.contains("classificar como")
+    if (!looksLikeReclass) {
+        return null
+    }
+    var targetCat = detectCategoryReclassificationFromChat(message)
+    if (targetCat == null) {
+        return InvoiceChatTurnResult("Me diga qual categoria você quer aplicar a esse item pendente (por exemplo: \"esse Pix foi alimentação\", \"foi mercado\", \"foi transporte\" ou \"foi saúde\").", null)
+    }
+    if (targetCat == Category.OTHER) {
+        return InvoiceChatTurnResult("Me diga qual categoria você quer aplicar a esse item pendente (por exemplo: \"esse Pix foi alimentação\", \"foi mercado\", \"foi transporte\" ou \"foi saúde\").", null)
+    }
+    var latest = findLatestFinancialDocumentRowByUser(userId)
+    if (latest == null) {
+        return null
+    }
+    if (latest.status == "FALHA_EXTRACAO") {
+        return null
+    }
+    var rows = findExtractedTransactionRowsByDoc(userId, latest.docKey)
+    var updatedDesc = ""
+    var updatedMinor: Long = 0
+    var updatedPage = 1
+    var updatedRow = 1
+    var foundPending = false
+    for (var r in rows) {
+        if (!foundPending && r.direction != "CREDIT" && r.kind != "INCOME" && r.kind != "PAYMENT" && r.kind != "CARD_EXIT" && r.kind != "REFUND" && r.reviewStatus != "CONFIRMED") {
+            saveExtractedTransactionRow(ExtractedTransactionRow(
+                r.id, r.documentId, r.userId, r.itemKey, r.txDate, r.descriptionRaw, r.descriptionNormalized,
+                r.amountMinor, r.currency, r.direction, r.kind, r.installment,
+                targetCat.name(), "USER_CONFIRMED_CHAT", 1.0, r.pageNum, r.rowNum, r.snippet, "CONFIRMED"
+            ))
+            updatedDesc = r.descriptionRaw
+            updatedMinor = r.amountMinor
+            updatedPage = r.pageNum
+            updatedRow = r.rowNum
+            foundPending = true
+        }
+    }
+    if (!foundPending) {
+        return null
+    }
+    var lookup = lookupDocumentReview(latest.docKey, userId)
+    var rev = lookup.review()
+    if (rev != null) {
+        var s = summarizeImportReview(rev)
+        var msg = catalogConfirmacaoCategoria(updatedDesc, updatedMinor, latest.filename, updatedPage, updatedRow, categoryLabel(targetCat), s.confirmableExpenseMinor())
+        return InvoiceChatTurnResult(msg, buildInvoiceInteractionPayload(rev, s, latest.filename))
+    }
+    var fallbackMsg = catalogConfirmacaoCategoria(updatedDesc, updatedMinor, latest.filename, updatedPage, updatedRow, categoryLabel(targetCat), updatedMinor)
+    return InvoiceChatTurnResult(fallbackMsg, null)
+}
+
+String? reclassifyPendingDocumentItemFromChat(String userId, String message) {
+    var turn = reclassifyPendingDocumentItemTurnFromChat(userId, message)
+    if (turn != null) {
+        return turn.reply()
+    }
+    return null
+}
+
+InvoiceChatTurnResult? buildCategoryPreviewTurnBeforeSave(String userId, String? documentId) {
+    var targetDocId = ""
+    if (documentId != null && documentId.trim() != "") {
+        targetDocId = documentId.trim()
+    } else {
+        var latest = findLatestFinancialDocumentRowByUser(userId)
+        if (latest == null) {
+            return null
+        }
+        targetDocId = latest.docKey
+    }
+    var lookup = lookupDocumentReview(targetDocId, userId)
+    var rev = lookup.review()
+    if (rev == null) {
+        return null
+    }
+    if (rev.status() == "FALHA_EXTRACAO") {
+        return null
+    }
+    var s = summarizeImportReview(rev)
+    var byCat: Map<String, Long> = mapOf()
+    var zero: Long = 0
+    for (var ctx in rev.transactions()) {
+        var fc = flowClassOf(ctx)
+        var m = ctx.amountMinor()
+        if ((fc == "DESPESA" || fc == "OPERACAO_CREDITO") && m != null && m > 0) {
+            var catCode = sanitizeCategoryForConfirm(ctx.category())
+            var ptName = categoryLabel(categoryOrNull(catCode))
+            byCat.put(ptName, byCat.getOrDefault(ptName, zero) + m)
+        }
+    }
+    var catLines = ""
+    for (var ptKey in byCat.keys()) {
+        catLines = catLines + "- Caixinha " + ptKey + ": " + formatBrl(byCat.getOrDefault(ptKey, zero)) + "\n"
+    }
+    if (catLines == "") {
+        catLines = "- Nenhuma despesa confirmada pronta para salvar ainda.\n"
+    }
+    var fname = humanFilenameForDocId(rev.documentId())
+    var msg = catalogConfirmacaoCaixinhas(fname, catLines, s.expenseMinor(), s.creditOperationMinor(), s.billPaymentMinor(), s.pendingCount(), s.pendingMinor())
+    return InvoiceChatTurnResult(msg, buildInvoiceInteractionPayload(rev, s, fname))
+}
+
+String? buildCategoryPreviewBeforeSave(String userId, String? documentId) {
+    var turn = buildCategoryPreviewTurnBeforeSave(userId, documentId)
+    if (turn != null) {
+        return turn.reply()
+    }
+    return null
+}
+
+Bool isExplicitStatementAnalysisRequest(String message) {
+    var lower = message.trim().toLowerCase()
+    if (detectEducationalFinanceTopic(lower) != "") {
+        return false
+    }
+    return lower.contains("minha fatura") || lower.contains("meu extrato") || lower.contains("analise o documento") || lower.contains("analise a fatura") || lower.contains("fatura enviada") || (lower.contains("fatura ") && lower.contains("enviada:")) || lower.contains("resumo da fatura") || lower.contains("o que tem na fatura")
 }
 
 // Resposta deterministica do chat sobre documento (ANALISAR_FATURA e confirmacao Passo 2).
 // null = mensagem nao e sobre documento. Roda ANTES do ramo LLM.
-String? invoiceChatReplyFor(String userId, String message, String rawBody) {
+InvoiceChatTurnResult? invoiceChatTurnFor(String userId, String message, String rawBody) {
+    var lowerMsg = message.trim().toLowerCase()
+
+    // 1. Perguntas educativas NUNCA disparam reprocessamento de arquivo (mesmo citando "fatura" ou após falha de upload).
+    var eduTurn = answerEducationalFinanceTurn(userId, message)
+    if (eduTurn != null) {
+        return eduTurn
+    }
+
+    // 1b. Fallback determinístico quando o arquivo enviado não consta como fatura / 0 lançamentos identificados.
+    if (lowerMsg.contains("0 lançamentos") || lowerMsg.contains("0 lancamentos") || lowerMsg.contains("falha na extração") || lowerMsg.contains("falha na extracao") || (lowerMsg.startsWith("arquivo ") && lowerMsg.contains("enviado:") && lowerMsg.contains("0 "))) {
+        return InvoiceChatTurnResult(catalogDocumentoNaoFatura(), null)
+    }
+
+    // 2. Reclassificação conversacional de item pendente (ex.: "esse Pix foi alimentação" -> CONFIRMACAO_CATEGORIA).
+    var reclassTurn = reclassifyPendingDocumentItemTurnFromChat(userId, message)
+    if (reclassTurn != null) {
+        return reclassTurn
+    }
+
     var docId = ""
     var hint = decodeChatDocumentHint(rawBody)
     if (hint != null) {
@@ -4079,24 +5448,84 @@ String? invoiceChatReplyFor(String userId, String message, String rawBody) {
             docId = hintDocId.trim()
         }
     }
+
+    // 3. Opções interativas do final da análise:
+    if (lowerMsg == "organizar meus gastos nas caixinhas" || lowerMsg == "organizar nas caixinhas" || lowerMsg == "mostrar categorias antes de salvar") {
+        var previewTurn = buildCategoryPreviewTurnBeforeSave(userId, docId)
+        if (previewTurn != null) {
+            return previewTurn
+        }
+    }
+    if (lowerMsg == "corrigir uma informação" || lowerMsg == "corrigir uma informacao" || lowerMsg == "corrigir informação" || lowerMsg == "corrigir informacao") {
+        var latestEdit = findLatestFinancialDocumentRowByUser(userId)
+        if (latestEdit != null && latestEdit.status == "EM_REVISAO") {
+            var lookupEdit = lookupDocumentReview(latestEdit.docKey, userId)
+            var revEdit = lookupEdit.review()
+            if (revEdit != null) {
+                var sEdit = summarizeImportReview(revEdit)
+                var pendList = ""
+                for (var ln in sEdit.lines()) {
+                    if (ln.flowClass() == "PENDENTE_REVISAO") {
+                        var dTxt = ln.descriptionRaw()
+                        if (dTxt == null || dTxt == "") { dTxt = "Item pendente" }
+                        var vMin: Long = 0
+                        var am = ln.amountMinor()
+                        if (am != null) { vMin = am }
+                        var pN = 1
+                        var lp = ln.page()
+                        if (lp != null) { pN = lp }
+                        var rN = 0
+                        var lr = ln.row()
+                        if (lr != null) { rN = lr }
+                        pendList = pendList + dTxt + " · " + formatBrl(vMin) + " (página " + pN + ", linha " + rN + ")\n"
+                    }
+                }
+                if (pendList != "") {
+                    return InvoiceChatTurnResult(
+                        catalogTransacaoPendente(latestEdit.filename, sEdit.pendingCount(), pendList),
+                        buildInvoiceInteractionPayload(revEdit, sEdit, latestEdit.filename)
+                    )
+                }
+            }
+        }
+        return InvoiceChatTurnResult("Para corrigir um item pendente da fatura, basta me dizer a categoria dele (por exemplo: \"esse Pix foi alimentação\" ou \"foi transporte\"). Se quiser ajustar uma caixinha, diga por exemplo: \"muda o limite da caixinha Alimentação para R$ 500\".", null)
+    }
+
+    var periodReply = parsePeriodParam(message)
+    if (periodReply != "" && recentChatAskedPeriodConfirm(userId)) {
+        var periodConfirmMsg = confirmDocumentFromChatWithPeriod(userId, textOrNull(docId), periodReply)
+        if (periodConfirmMsg != null) {
+            return InvoiceChatTurnResult(periodConfirmMsg, null)
+        }
+        return null
+    }
+
+    // 4. Confirmação explícita de distribuição/salvamento nas caixinhas (ex.: "sim, pode distribuir")
     if (isChatInvoiceConfirmIntent(message)) {
         if (docId != "") {
-            return confirmDocumentFromChat(userId, docId)
+            var explicitConfirmMsg = confirmDocumentFromChat(userId, docId)
+            if (explicitConfirmMsg != null) {
+                return InvoiceChatTurnResult(explicitConfirmMsg, null)
+            }
+            return null
         }
         var latestConfirm = findLatestFinancialDocumentRowByUser(userId)
         if (latestConfirm != null) {
             var askedConfirm = recentChatAskedInvoiceConfirm(userId)
-            var lowerMsg = message.toLowerCase()
-            var explicitDocOrSave = mentionsStatement(message) || lowerMsg.contains("confirm") || lowerMsg.contains("salv") || lowerMsg.contains("distribu")
-            if (latestConfirm.status == "EM_REVISAO" || (askedConfirm && (latestConfirm.status == "IMPORTADO" || latestConfirm.status == "FALHA_EXTRACAO")) || explicitDocOrSave) {
-                return confirmDocumentFromChat(userId, latestConfirm.docKey)
+            var explicitSave = lowerMsg.contains("pode distribuir") || lowerMsg.contains("pode salvar") || lowerMsg.contains("salva nas caixinhas") || lowerMsg.contains("salvar nas caixinhas") || lowerMsg.contains("distribua nas caixinhas") || lowerMsg.contains("distribuir nas caixinhas")
+            if ((latestConfirm.status == "EM_REVISAO" && (askedConfirm || explicitSave)) || (latestConfirm.status == "IMPORTADO" && (askedConfirm || explicitSave))) {
+                var latestConfirmMsg = confirmDocumentFromChat(userId, latestConfirm.docKey)
+                if (latestConfirmMsg != null) {
+                    return InvoiceChatTurnResult(latestConfirmMsg, null)
+                }
+                return null
             }
         }
         return null
     }
-    if (docId == "" && mentionsStatement(message)) {
+    if (docId == "" && isExplicitStatementAnalysisRequest(message)) {
         var latest = findLatestFinancialDocumentRowByUser(userId)
-        if (latest != null && (latest.status == "EM_REVISAO" || latest.status == "FALHA_EXTRACAO")) {
+        if (latest != null && latest.status == "EM_REVISAO") {
             docId = latest.docKey
         }
     }
@@ -4108,12 +5537,28 @@ String? invoiceChatReplyFor(String userId, String message, String rawBody) {
         var lookup = lookupDocumentReview(docId, userId)
         var rev = lookup.review()
         if (rev != null) {
-            return buildInvoiceChatReply(summarizeImportReview(rev), rev.reconciled())
+            var s = summarizeImportReview(rev)
+            var fname = humanFilenameForDocId(rev.documentId())
+            return InvoiceChatTurnResult(
+                buildInvoiceChatReplyWithFilename(s, rev.reconciled(), fname),
+                buildInvoiceInteractionPayload(rev, s, fname)
+            )
         }
+    }
+    if (res.status() == "FALHA_EXTRACAO") {
+        return InvoiceChatTurnResult(catalogDocumentoIlegivel(humanFilenameForDocId(docId)), null)
     }
     var m = res.message()
     if (m != null) {
-        return m
+        return InvoiceChatTurnResult(m, null)
     }
-    return "Nao consegui ler esse documento. Envie o arquivo de novo ou digite os gastos."
+    return InvoiceChatTurnResult(catalogDocumentoIlegivel(humanFilenameForDocId(docId)), null)
+}
+
+String? invoiceChatReplyFor(String userId, String message, String rawBody) {
+    var turn = invoiceChatTurnFor(userId, message, rawBody)
+    if (turn != null) {
+        return turn.reply()
+    }
+    return null
 }

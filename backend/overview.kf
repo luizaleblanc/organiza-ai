@@ -242,16 +242,34 @@ Int compareTotals(CategoryTotal a, CategoryTotal b) {
     return a.category().compareTo(b.category())
 }
 
-DashboardResponse dashboardOf(UserEntity user, String period, String unit) {
+DashboardResponse dashboardOfMonth(UserEntity user, String period, String unit, String? monthParam) {
     var from = periodStartIso(unit)
-    var transactions = findTransactionsByUserIdAndCreatedAtAfter(user.id, from)
     var monthStart = monthStartIso()
+    var transactions = findTransactionsByUserIdAndCreatedAtAfter(user.id, from)
+    var recent = findRecentTransactions(user.id, from, 5).map((t: TransactionEntity) -> transactionEntityToOutput(t))
+    if (unit == "month" && monthParam != null && monthParam.trim().matches("[0-9]{4}-[0-9]{2}")) {
+        var ym = monthParam.trim()
+        from = ym + "-01T00:00:00Z"
+        monthStart = from
+        var allTxs = findTransactionsByUserIdAndCreatedAtAfter(user.id, "2000-01-01")
+        transactions = allTxs.filter((t: TransactionEntity) -> t.createdAt != null && t.createdAt.startsWith(ym))
+        var recentList: List<TransactionOutput> = listOf()
+        var ri = transactions.size - 1
+        while (ri >= 0 && recentList.size < 5) {
+            recentList.add(transactionEntityToOutput(transactions.get(ri)))
+            ri = ri - 1
+        }
+        recent = recentList
+    }
     var pulse = calculateDailyPulse(user.id, daysRemainingInMonth(), monthStart)
     var balance = calculateBalance(user.id, monthStart)
-    var recent = findRecentTransactions(user.id, from, 5).map((t: TransactionEntity) -> transactionEntityToOutput(t))
     return DashboardResponse(period, from, centsToReais(sumAmountCents(transactions)), "BRL", userSalary(user),
         pulse.pulse, pulse.economicPulse, pulse.daysRemaining, user.budgetModel.name(), balance.buckets, reserveOf(user),
         categoryTotals(transactions), recent)
+}
+
+DashboardResponse dashboardOf(UserEntity user, String period, String unit) {
+    return dashboardOfMonth(user, period, unit, null)
 }
 
 // =========================================================
@@ -467,5 +485,601 @@ OnboardingControlOverview onboardingControlOverview(UserEntity user) {
     return OnboardingControlOverview(
         true, model.name(), salary, centsToReais(totalPlannedCents), centsToReais(totalSpentCents),
         onboardingControlStatus(totalSpentCents, totalPlannedCents), bucketItems, catItems, chipItems
+    )
+}
+
+// =========================================================
+// Dashboard Calculado (Gastos Calculados por Periodo Real e Separacao de Fluxos)
+// =========================================================
+
+record AvailableMonthItem(String key, String label, Int confirmedCount, Int pendingCount)
+record CalculatedTopCategory(String code, String label, Double total, Long totalMinor, Double percentage, Int count)
+record CalculatedCategoryItem(String code, String label, Double total, Long totalMinor, Double percentage, Int count)
+record CalculatedEvolutionPoint(String key, String label, String dateIso, Double total, Long totalMinor, Int count)
+record CalculatedEnvelopeItem(String id, String name, String? bucket, Double limitAmount, Long limitMinor, Bool hasLimit, Double spentAmount, Long spentMinor, Double remainingAmount, Long remainingMinor, Int percent, Bool exceeded, String status)
+record CalculatedFlowBreakdown(Double creditOperationsTotal, Int creditOperationsCount, Double billPaymentsTotal, Int billPaymentsCount, Double internalTransfersTotal, Int internalTransfersCount, Double pendingReviewTotal, Int pendingReviewCount)
+record CalculatedComparison(Bool hasEnoughData, String currentMonth, String currentLabel, Double currentTotal, Long currentMinor, String previousMonth, String previousLabel, Double previousTotal, Long previousMinor, Double deltaAmount, Long deltaMinor, Double deltaPercent, String message)
+record CalculatedDashboardResponse(
+    String state,
+    String period,
+    String selectedMonth,
+    String selectedMonthLabel,
+    String rangeStart,
+    String rangeEnd,
+    List<AvailableMonthItem> availableMonths,
+    Double confirmedTotal,
+    Long confirmedTotalMinor,
+    Int confirmedCount,
+    CalculatedTopCategory? topCategory,
+    Bool hasPendingConfirmation,
+    String? pendingDocumentId,
+    CalculatedFlowBreakdown flows,
+    List<CalculatedCategoryItem> categories,
+    List<CalculatedEvolutionPoint> evolution,
+    List<CalculatedEnvelopeItem> envelopes,
+    CalculatedComparison comparison
+)
+
+String weekdayAbbrevPt(Int yyyy, Int mm, Int dd) {
+    var dow = time.dayOfWeek(yyyy, mm, dd)
+    var names = listOf("Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom")
+    if (dow >= 1 && dow <= 7) {
+        return names.get(dow - 1)
+    }
+    return ""
+}
+
+String previousMonthKey(String ym) {
+    if (!ym.matches("[0-9]{4}-[0-9]{2}")) {
+        return ""
+    }
+    var yyyy = ym.substring(0, 4).toInt()
+    var mm = ym.substring(5, 7).toInt()
+    if (mm <= 1) {
+        return String.valueOf(yyyy - 1) + "-12"
+    }
+    return String.valueOf(yyyy) + "-" + twoDigit(mm - 1)
+}
+
+Int compareCalculatedCategories(CalculatedCategoryItem a, CalculatedCategoryItem b) {
+    if (a.totalMinor() > b.totalMinor()) {
+        return -1
+    }
+    if (a.totalMinor() < b.totalMinor()) {
+        return 1
+    }
+    return a.code().compareTo(b.code())
+}
+
+Bool hasExplicitYearInDate(String? rawDate) {
+    if (rawDate == null) {
+        return false
+    }
+    var d = rawDate.trim()
+    return d.matches("[0-9]{4}-[0-1]?[0-9]-[0-3]?[0-9].*") || d.matches("[0-3]?[0-9]/[0-1]?[0-9]/[0-9]{4}.*")
+}
+
+String? txCreatedDateOnly(String? createdAt) {
+    if (createdAt == null) {
+        return null
+    }
+    if (createdAt.length() < 10) {
+        return null
+    }
+    var ymd = createdAt.substring(0, 10)
+    if (!ymd.matches("[0-9]{4}-[0-9]{2}-[0-9]{2}")) {
+        return null
+    }
+    return ymd
+}
+
+CalculatedTopCategory? topCategoryOf(List<CalculatedCategoryItem> categories) {
+    if (categories.isEmpty()) {
+        return null
+    }
+    var top = categories.get(0)
+    return CalculatedTopCategory(top.code(), top.label(), top.total(), top.totalMinor(), top.percentage(), top.count())
+}
+
+String shiftIsoDays(String ymd, Int deltaDays) {
+    var epochDays: Long = time.parseDateIso(ymd) + deltaDays
+    return time.formatInstantIso(epochDays * 86400000).substring(0, 10)
+}
+
+CalculatedDashboardResponse calculatedDashboardOf(UserEntity user, String periodRaw, String? monthParam) {
+    var period = "month"
+    if (periodRaw.trim().toLowerCase() == "week") {
+        period = "week"
+    } else if (periodRaw.trim().toLowerCase() == "year") {
+        period = "year"
+    }
+
+    var allTxs = findTransactionsByUserIdAndCreatedAtAfter(user.id, "2000-01-01")
+    var provRows = listTransactionsWithProvenanceByUser(user.id)
+    var savedExtRefs: List<String> = listOf()
+    for (var pr in provRows) {
+        var er = pr.externalRef
+        if (er != null && er.trim() != "" && !savedExtRefs.contains(er.trim())) {
+            savedExtRefs.add(er.trim())
+        }
+    }
+
+    var allDocs = findFinancialDocumentRowsByUser(user.id)
+    var usableDocs: List<FinancialDocumentRow> = listOf()
+    for (var d in allDocs) {
+        if (d.sourceType != "RECEIPT" && d.status != "CONFIRMED_RECEIPT" && d.status != "FALHA_EXTRACAO" && d.status != "EXTRACAO_FALHOU" && d.status != "EM_PROCESSAMENTO") {
+            usableDocs.add(d)
+        }
+    }
+
+    var monthKeys: List<String> = listOf()
+    var confirmedCountByMonth: Map<String, Int> = mapOf()
+    var pendingCountByMonth: Map<String, Int> = mapOf()
+
+    for (var t in allTxs) {
+        var ymd = txCreatedDateOnly(t.createdAt)
+        if (ymd != null) {
+            var mk = ymd.substring(0, 7)
+            if (!monthKeys.contains(mk)) {
+                monthKeys.add(mk)
+            }
+            confirmedCountByMonth.put(mk, confirmedCountByMonth.getOrDefault(mk, 0) + 1)
+        }
+    }
+
+    var docReviews: List<ImportReview> = listOf()
+    var docPeriods: List<String> = listOf()
+    var docStatuses: List<String> = listOf()
+    var docKeys: List<String> = listOf()
+
+    for (var d in usableDocs) {
+        var docPeriod = d.statementPeriod.trim()
+        if (docPeriod.matches("[0-9]{4}-[0-9]{2}") && !monthKeys.contains(docPeriod)) {
+            monthKeys.add(docPeriod)
+        }
+        var lookup = lookupDocumentReview(d.docKey, user.id)
+        var rev = lookup.review()
+        if (rev != null) {
+            docReviews.add(rev)
+            docPeriods.add(docPeriod)
+            docStatuses.add(d.status)
+            docKeys.add(d.docKey)
+            for (var ctx in rev.transactions()) {
+                var txMonth = ""
+                if (docPeriod.matches("[0-9]{4}-[0-9]{2}")) {
+                    txMonth = resolveTxIsoDate(ctx.date(), docPeriod).substring(0, 7)
+                } else if (hasExplicitYearInDate(ctx.date())) {
+                    txMonth = resolveTxIsoDate(ctx.date(), "").substring(0, 7)
+                }
+                if (txMonth.matches("[0-9]{4}-[0-9]{2}")) {
+                    if (!monthKeys.contains(txMonth)) {
+                        monthKeys.add(txMonth)
+                    }
+                    var fc = flowClassOf(ctx)
+                    var extRef = d.docKey + ":" + ctx.id()
+                    var isUnconfirmedPending = fc == "PENDENTE_REVISAO" || (d.status == "EM_REVISAO" && isConfirmableOutflowTx(ctx) && !savedExtRefs.contains(extRef))
+                    if (isUnconfirmedPending) {
+                        pendingCountByMonth.put(txMonth, pendingCountByMonth.getOrDefault(txMonth, 0) + 1)
+                    }
+                }
+            }
+        }
+    }
+
+    var sortedMonthKeys = monthKeys.sorted((a: String, b: String) -> b.compareTo(a))
+    var availableMonths: List<AvailableMonthItem> = listOf()
+    for (var mk in sortedMonthKeys) {
+        availableMonths.add(AvailableMonthItem(
+            mk,
+            formatPeriodPt(mk),
+            confirmedCountByMonth.getOrDefault(mk, 0),
+            pendingCountByMonth.getOrDefault(mk, 0)
+        ))
+    }
+
+    var today = localTodayIso()
+    var selectedMonth = today.substring(0, 7)
+    if (!sortedMonthKeys.isEmpty()) {
+        selectedMonth = sortedMonthKeys.get(0)
+    }
+    if (monthParam != null && monthParam.trim().matches("[0-9]{4}-[0-9]{2}")) {
+        selectedMonth = monthParam.trim()
+    }
+    var selectedMonthLabel = formatPeriodPt(selectedMonth)
+    if (selectedMonthLabel == "") {
+        selectedMonthLabel = selectedMonth
+    }
+    var selectedYear = selectedMonth.substring(0, 4)
+    if (period == "year") {
+        selectedMonthLabel = selectedYear
+    }
+
+    var monthTxs: List<TransactionEntity> = listOf()
+    for (var t in allTxs) {
+        var ymd = txCreatedDateOnly(t.createdAt)
+        if (ymd != null && ymd.startsWith(selectedMonth)) {
+            monthTxs.add(t)
+        }
+    }
+
+    var rangeStart = selectedMonth + "-01"
+    var rangeEnd = time.endOf(rangeStart, "month")
+    var filteredTxs: List<TransactionEntity> = monthTxs
+
+    if (period == "year") {
+        rangeStart = selectedYear + "-01-01"
+        rangeEnd = selectedYear + "-12-31"
+        filteredTxs = listOf()
+        for (var t in allTxs) {
+            var ymd = txCreatedDateOnly(t.createdAt)
+            if (ymd != null && ymd.startsWith(selectedYear)) {
+                filteredTxs.add(t)
+            }
+        }
+    } else if (period == "week") {
+        if (selectedMonth == today.substring(0, 7)) {
+            var curWkStart = time.startOf(today, "week")
+            var curWkEnd = time.endOf(today, "week")
+            var curWkTxs: List<TransactionEntity> = listOf()
+            for (var t in monthTxs) {
+                var ymd = txCreatedDateOnly(t.createdAt)
+                if (ymd != null && ymd.compareTo(curWkStart) >= 0 && ymd.compareTo(curWkEnd) <= 0) {
+                    curWkTxs.add(t)
+                }
+            }
+            if (!curWkTxs.isEmpty() || monthTxs.isEmpty()) {
+                rangeStart = curWkStart
+                rangeEnd = curWkEnd
+                filteredTxs = curWkTxs
+            } else {
+                var maxYmd = ""
+                for (var t in monthTxs) {
+                    var ymd = txCreatedDateOnly(t.createdAt)
+                    if (ymd != null && (maxYmd == "" || ymd.compareTo(maxYmd) > 0)) {
+                        maxYmd = ymd
+                    }
+                }
+                var anchorEnd = maxYmd
+                var anchorStart = shiftIsoDays(anchorEnd, -6)
+                if (anchorStart.compareTo(selectedMonth + "-01") < 0) {
+                    anchorStart = selectedMonth + "-01"
+                }
+                rangeStart = anchorStart
+                rangeEnd = anchorEnd
+                var anchoredTxs: List<TransactionEntity> = listOf()
+                for (var t in monthTxs) {
+                    var ymd = txCreatedDateOnly(t.createdAt)
+                    if (ymd != null && ymd.compareTo(rangeStart) >= 0 && ymd.compareTo(rangeEnd) <= 0) {
+                        anchoredTxs.add(t)
+                    }
+                }
+                filteredTxs = anchoredTxs
+            }
+        } else if (!monthTxs.isEmpty()) {
+            var maxYmd = ""
+            for (var t in monthTxs) {
+                var ymd = txCreatedDateOnly(t.createdAt)
+                if (ymd != null && (maxYmd == "" || ymd.compareTo(maxYmd) > 0)) {
+                    maxYmd = ymd
+                }
+            }
+            var anchorEnd = maxYmd
+            var anchorStart = shiftIsoDays(anchorEnd, -6)
+            if (anchorStart.compareTo(selectedMonth + "-01") < 0) {
+                anchorStart = selectedMonth + "-01"
+            }
+            rangeStart = anchorStart
+            rangeEnd = anchorEnd
+            var anchoredTxs: List<TransactionEntity> = listOf()
+            for (var t in monthTxs) {
+                var ymd = txCreatedDateOnly(t.createdAt)
+                if (ymd != null && ymd.compareTo(rangeStart) >= 0 && ymd.compareTo(rangeEnd) <= 0) {
+                    anchoredTxs.add(t)
+                }
+            }
+            filteredTxs = anchoredTxs
+        } else {
+            rangeStart = selectedMonth + "-01"
+            rangeEnd = selectedMonth + "-07"
+            filteredTxs = listOf()
+        }
+    }
+
+    var confirmedTotalMinor = sumAmountCents(filteredTxs)
+    var confirmedCount = filteredTxs.size
+
+    var catGroups = filteredTxs.groupBy((t: TransactionEntity) -> categoryText(t.category))
+    var rawCatItems: List<CalculatedCategoryItem> = listOf()
+    for (var codeKey in catGroups.keys()) {
+        var items = catGroups.getOrDefault(codeKey, listOf())
+        var catMinor = sumAmountCents(items)
+        var pct = 0.0
+        if (confirmedTotalMinor > 0) {
+            pct = math.roundTo(catMinor * 100.0 / confirmedTotalMinor, 2)
+        }
+        var cleanCode = codeKey
+        if (cleanCode == "") {
+            cleanCode = "OTHER"
+        }
+        rawCatItems.add(CalculatedCategoryItem(cleanCode, categoryLabelFromCode(cleanCode), centsToReais(catMinor), catMinor, pct, items.size))
+    }
+    var categories = rawCatItems.sorted((a: CalculatedCategoryItem, b: CalculatedCategoryItem) -> compareCalculatedCategories(a, b))
+
+    var topCategory = topCategoryOf(categories)
+
+    var dateGroups: Map<String, List<TransactionEntity>> = mapOf()
+    var dateKeys: List<String> = listOf()
+    for (var t in filteredTxs) {
+        var ymd = txCreatedDateOnly(t.createdAt)
+        if (ymd != null) {
+            var groupKey = ymd
+            if (period == "year") {
+                groupKey = ymd.substring(0, 7)
+            }
+            if (!dateKeys.contains(groupKey)) {
+                dateKeys.add(groupKey)
+                dateGroups.put(groupKey, listOf(t))
+            } else {
+                var curList = dateGroups.getOrDefault(groupKey, listOf())
+                var nextList: List<TransactionEntity> = listOf()
+                for (var item in curList) {
+                    nextList.add(item)
+                }
+                nextList.add(t)
+                dateGroups.put(groupKey, nextList)
+            }
+        }
+    }
+    var sortedDateKeys = dateKeys.sorted((a: String, b: String) -> a.compareTo(b))
+    var evolution: List<CalculatedEvolutionPoint> = listOf()
+    for (var dk in sortedDateKeys) {
+        var dayItems = dateGroups.getOrDefault(dk, listOf())
+        var dayMinor = sumAmountCents(dayItems)
+        var ddmm = ""
+        var pointLabel = ""
+        if (period == "year") {
+            pointLabel = dk.substring(5, 7) + "/" + dk.substring(0, 4)
+        } else {
+            ddmm = dk.substring(8, 10) + "/" + dk.substring(5, 7)
+            pointLabel = ddmm
+        }
+        if (period == "week") {
+            var yyyy = dk.substring(0, 4).toInt()
+            var mm = dk.substring(5, 7).toInt()
+            var dd = dk.substring(8, 10).toInt()
+            pointLabel = weekdayAbbrevPt(yyyy, mm, dd) + " " + ddmm
+        }
+        var pointDate = dk
+        if (period == "year") {
+            pointDate = dk + "-01"
+        }
+        evolution.add(CalculatedEvolutionPoint(dk, pointLabel, pointDate, centsToReais(dayMinor), dayMinor, dayItems.size))
+    }
+
+    var creditOpsMinor: Long = 0
+    var creditOpsCount = 0
+    var billPayMinor: Long = 0
+    var billPayCount = 0
+    var internalMinor: Long = 0
+    var internalCount = 0
+    var pendingMinor: Long = 0
+    var pendingCount = 0
+    var hasPendingConfirmation = false
+    var pendingDocumentIdStr = ""
+
+    var di = 0
+    while (di < docReviews.size) {
+        var rev = docReviews.get(di)
+        var dPeriod = docPeriods.get(di)
+        var dStatus = docStatuses.get(di)
+        var dKey = docKeys.get(di)
+        var summary = summarizeImportReview(rev)
+        var docMatchedSelected = false
+
+        for (var ctx in rev.transactions()) {
+            var txMonth = ""
+            if (dPeriod.matches("[0-9]{4}-[0-9]{2}")) {
+                txMonth = resolveTxIsoDate(ctx.date(), dPeriod).substring(0, 7)
+            } else if (hasExplicitYearInDate(ctx.date())) {
+                txMonth = resolveTxIsoDate(ctx.date(), "").substring(0, 7)
+            }
+            if ((period == "year" && txMonth.startsWith(selectedYear)) || (period != "year" && txMonth == selectedMonth)) {
+                docMatchedSelected = true
+                var fc = flowClassOf(ctx)
+                var mOpt = ctx.amountMinor()
+                var m: Long = 0
+                if (mOpt != null) {
+                    m = mOpt
+                }
+                if (fc == "OPERACAO_CREDITO") {
+                    creditOpsCount = creditOpsCount + 1
+                    creditOpsMinor = creditOpsMinor + m
+                } else if (fc == "PAGAMENTO_FATURA") {
+                    billPayCount = billPayCount + 1
+                    billPayMinor = billPayMinor + m
+                }
+                var extRef = dKey + ":" + ctx.id()
+                if (fc == "PENDENTE_REVISAO") {
+                    pendingCount = pendingCount + 1
+                    pendingMinor = pendingMinor + m
+                } else if (dStatus == "EM_REVISAO" && isConfirmableOutflowTx(ctx) && !savedExtRefs.contains(extRef)) {
+                    pendingCount = pendingCount + 1
+                    pendingMinor = pendingMinor + m
+                }
+            }
+        }
+        if ((period == "year" && dPeriod.startsWith(selectedYear)) || (period != "year" && dPeriod == selectedMonth)) {
+            docMatchedSelected = true
+            internalCount = internalCount + summary.internalTransferCount()
+            internalMinor = internalMinor + summary.internalTransferMinor()
+        }
+        if (docMatchedSelected && dStatus == "EM_REVISAO" && (summary.confirmableExpenseCount() > 0 || summary.pendingCount() > 0)) {
+            hasPendingConfirmation = true
+            if (pendingDocumentIdStr == "") {
+                pendingDocumentIdStr = dKey
+            }
+        }
+        di = di + 1
+    }
+    var pendingDocumentId = textOrNull(pendingDocumentIdStr)
+
+    var flows = CalculatedFlowBreakdown(
+        centsToReais(creditOpsMinor),
+        creditOpsCount,
+        centsToReais(billPayMinor),
+        billPayCount,
+        centsToReais(internalMinor),
+        internalCount,
+        centsToReais(pendingMinor),
+        pendingCount
+    )
+
+    var plan = buildBudgetBuckets(user.budgetModel, userSalary(user))
+    var rawEnvs = findEnvelopesByUserId(user.id)
+    var envelopes: List<CalculatedEnvelopeItem> = listOf()
+    for (var e in rawEnvs) {
+        var envelopeTxs = monthTxs
+        if (period == "year") {
+            envelopeTxs = filteredTxs
+        }
+        var envSpentMinor = sumAmountCents(envelopeTxs.filter((t: TransactionEntity) -> t.envelopeId == e.id))
+        var envLimitMinor = toCents(e.limitAmount)
+        var hasLimit = envLimitMinor > 0 && period != "year"
+        var envRemainingMinor: Long = 0
+        if (hasLimit) {
+            envRemainingMinor = envLimitMinor - envSpentMinor
+        }
+        var pct = percentOf(envSpentMinor, envLimitMinor)
+        var exceeded = hasLimit && envSpentMinor > envLimitMinor
+        var st = "EM_DIA"
+        if (hasLimit) {
+            st = envelopeStatus(envSpentMinor, envLimitMinor)
+        }
+        var bucket = e.bucket
+        if (bucket == null || bucket == "") {
+            if (isReserveEnvelopeName(e.categoryName)) {
+                bucket = planReserveBucket(user.budgetModel)
+            } else {
+                var resolvedCat = resolveCategoryForEnvelopeName(e.categoryName)
+                if (resolvedCat != null) {
+                    bucket = planBucketFor(user.budgetModel, plan, resolvedCat)
+                }
+            }
+        }
+        envelopes.add(CalculatedEnvelopeItem(
+            e.id,
+            envelopeDisplayName(e),
+            bucket,
+            e.limitAmount,
+            envLimitMinor,
+            hasLimit,
+            centsToReais(envSpentMinor),
+            envSpentMinor,
+            centsToReais(envRemainingMinor),
+            envRemainingMinor,
+            pct,
+            exceeded,
+            st
+        ))
+    }
+
+    var prevMonth = previousMonthKey(selectedMonth)
+    var prevLabel = formatPeriodPt(prevMonth)
+    if (period == "year") {
+        prevMonth = (selectedYear.toInt() - 1).toString()
+        prevLabel = prevMonth
+    }
+    if (prevLabel == "") {
+        prevLabel = prevMonth
+    }
+    var prevTxs: List<TransactionEntity> = listOf()
+    if (prevMonth != "") {
+        for (var t in allTxs) {
+            var ymd = txCreatedDateOnly(t.createdAt)
+            if (ymd != null && ymd.startsWith(prevMonth)) {
+                prevTxs.add(t)
+            }
+        }
+    }
+    var currMonthMinor = sumAmountCents(monthTxs)
+    if (period == "year") {
+        currMonthMinor = sumAmountCents(filteredTxs)
+    }
+    var prevMonthMinor = sumAmountCents(prevTxs)
+    var hasCurrentData = !monthTxs.isEmpty()
+    if (period == "year") {
+        hasCurrentData = !filteredTxs.isEmpty()
+    }
+    var hasEnoughData = hasCurrentData && !prevTxs.isEmpty()
+    var deltaMinor = currMonthMinor - prevMonthMinor
+    var deltaPercent = 0.0
+    if (prevMonthMinor > 0) {
+        deltaPercent = math.roundTo(deltaMinor * 100.0 / prevMonthMinor, 2)
+    }
+    var compMsg = "Ainda não há dados suficientes do mês anterior (" + prevLabel + ") para comparar."
+    if (period == "year") {
+        compMsg = "Ainda não há dados suficientes do ano anterior (" + prevLabel + ") para comparar."
+    }
+    if (hasEnoughData) {
+        if (deltaMinor > 0) {
+            var periodIntro = "Em " + selectedMonthLabel
+            if (period == "year") { periodIntro = "No ano de " + selectedYear }
+            compMsg = periodIntro + ", seus gastos confirmados subiram " + formatBrl(deltaMinor) + " em relação a " + prevLabel + "."
+        } else if (deltaMinor < 0) {
+            var periodIntro = "Em " + selectedMonthLabel
+            if (period == "year") { periodIntro = "No ano de " + selectedYear }
+            compMsg = periodIntro + ", você economizou " + formatBrl(0 - deltaMinor) + " em relação a " + prevLabel + "."
+        } else {
+            if (period == "year") {
+                compMsg = "Seus gastos confirmados em " + selectedYear + " ficaram iguais aos de " + prevLabel + "."
+            } else {
+                compMsg = "Seus gastos confirmados em " + selectedMonthLabel + " ficaram iguais aos de " + prevLabel + "."
+            }
+        }
+    }
+    var comparisonCurrentKey = selectedMonth
+    if (period == "year") { comparisonCurrentKey = selectedYear }
+    var comparison = CalculatedComparison(
+        hasEnoughData,
+        comparisonCurrentKey,
+        selectedMonthLabel,
+        centsToReais(currMonthMinor),
+        currMonthMinor,
+        prevMonth,
+        prevLabel,
+        centsToReais(prevMonthMinor),
+        prevMonthMinor,
+        centsToReais(deltaMinor),
+        deltaMinor,
+        deltaPercent,
+        compMsg
+    )
+
+    var state = "EMPTY"
+    if (confirmedCount > 0) {
+        state = "READY"
+    } else if (hasPendingConfirmation || pendingCount > 0) {
+        state = "PENDING_CONFIRMATION"
+    }
+
+    return CalculatedDashboardResponse(
+        state,
+        period,
+        selectedMonth,
+        selectedMonthLabel,
+        rangeStart,
+        rangeEnd,
+        availableMonths,
+        centsToReais(confirmedTotalMinor),
+        confirmedTotalMinor,
+        confirmedCount,
+        topCategory,
+        hasPendingConfirmation,
+        pendingDocumentId,
+        flows,
+        categories,
+        evolution,
+        envelopes,
+        comparison
     )
 }

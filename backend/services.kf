@@ -1138,7 +1138,7 @@ TransactionEntity invoiceItemToEntity(String userId, InvoiceConfirmItem item) {
 // Confirmacao rastreavel da fatura (proveniencia + deduplicacao por externalRef no banco)
 // =========================================================
 
-record InvoiceConfirmTraceItem(String description, Double amount, String category, String documentId, Int sourcePage, Int sourceLine, String externalRef)
+record InvoiceConfirmTraceItem(String description, Double amount, String category, String documentId, Int sourcePage, Int sourceLine, String externalRef, String? txDate)
 record InvoiceTraceRowInput(TransactionEntity txEntity, String? documentId, Int? sourcePage, Int? sourceLine, String? externalRef)
 record InvoiceTraceBatchEntry(TransactionWithProvenance item, Bool inserted)
 
@@ -1170,7 +1170,12 @@ String? invoiceTraceItemsError(List<InvoiceConfirmTraceItem> items) {
 InvoiceTraceRowInput invoiceTraceItemToInput(String userId, InvoiceConfirmTraceItem item) {
     var category = Category.valueOf(item.category())
     var envId = resolveEnvelopeId(userId, null, category)
-    var txObj = TransactionEntity("", item.description().trim(), toCents(item.amount()), category, "BRL", userId, null, Source.INVOICE, nowIso(), envId)
+    var createdAtIso = nowIso()
+    var rawTxDate = item.txDate()
+    if (rawTxDate != null && rawTxDate.trim().length() >= 10) {
+        createdAtIso = rawTxDate.trim()
+    }
+    var txObj = TransactionEntity("", item.description().trim(), toCents(item.amount()), category, "BRL", userId, null, Source.INVOICE, createdAtIso, envId)
     return InvoiceTraceRowInput(txObj, cleanOptionalText(item.documentId()), intOrNull(item.sourcePage()), intOrNull(item.sourceLine()), cleanOptionalText(item.externalRef()))
 }
 

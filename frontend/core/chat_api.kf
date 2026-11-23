@@ -24,7 +24,12 @@ import core.api_client
 // antes do envio, portanto a mesma requisição KOF valida tanto texto digitado
 // quanto fala (STT); a resposta tipada alimenta a leitura TTS no cliente.
 record ChatMessageRequest(String message)
-record ChatReplyResponse(String reply, Int messagesUsed, Int messagesLimit)
+record ChatInteractionOptionResponse(String id, String label, String action, String intent, String icon, Int badgeCount)
+record ChatFlowLineItemResponse(String label, String formattedAmount, Int count, String? note)
+record ChatInteractionSummaryResponse(String periodLabel, String totalInflowsText, Int inflowsCount, List<ChatFlowLineItemResponse> entradas, String totalOutflowsText, Int outflowsCount, List<ChatFlowLineItemResponse> saidas, String pendingText, Int pendingCount)
+record ChatInteractionDetailsResponse(String title, List<String> items)
+record ChatInteractionResponse(String type, String prompt, String? documentId, String? period, String? periodLabel, String? headline, String? educationTip, ChatInteractionSummaryResponse? summary, ChatInteractionDetailsResponse? details, List<ChatInteractionOptionResponse> options)
+record ChatReplyResponse(String reply, Int messagesUsed, Int messagesLimit, ChatInteractionResponse? interaction)
 record ChatHistoryItem(String role, String content, String createdAt)
 record ChatHistoryPage(List<ChatHistoryItem> items, Int page, Int limit, Int offset, Bool hasNext)
 record ChatApiError(String error)
@@ -51,6 +56,9 @@ class ChatUi {
     static Int limit = 0
     static Bool voiceEnabled = false
     static Bool pro = false
+    static Int currentChatId = 1
+    static Int totalChats = 1
+    static String archivedSession = ""
 }
 
 String chatLimitText() = "Você chegou ao limite de " + String.valueOf(ChatUi.limit) + " mensagens do plano Gratuito neste mês. Assine o Pro para continuar conversando."
@@ -179,4 +187,45 @@ sendChatMessage(String text) {
         ChatUi.error = chatOfflineText()
     }
     removePendingChatMessage(text)
+}
+
+clearChatHistory() {
+    ChatUi.error = ""
+    if (ChatState.messages != "") {
+        ChatUi.archivedSession = ChatState.messages
+        if (ChatUi.totalChats < 2) {
+            ChatUi.totalChats = 2
+        }
+        ChatUi.currentChatId = 2
+    } else if (ChatUi.totalChats < 2) {
+        ChatUi.totalChats = 2
+        ChatUi.currentChatId = 2
+    }
+    try {
+        val body = apiDelete("/api/chat/messages")
+        if (isApiError(body)) {
+            ChatUi.error = json.decode<ChatApiError>(body).error()
+            return
+        }
+        ChatState.messages = ""
+        ChatUi.draft = ""
+        ChatUi.pending = ""
+        ChatUi.pendingQueue = ""
+        ChatUi.activeRequests = 0
+        ChatUi.sending = false
+    } catch (String e) {
+        ChatUi.error = chatOfflineText()
+    }
+}
+
+switchChatSession(Int targetId) {
+    if (targetId == ChatUi.currentChatId) {
+        return
+    }
+    var prevMsgs = ChatState.messages
+    ChatState.messages = ChatUi.archivedSession
+    ChatUi.archivedSession = prevMsgs
+    ChatUi.currentChatId = targetId
+    ChatUi.draft = ""
+    ChatUi.error = ""
 }

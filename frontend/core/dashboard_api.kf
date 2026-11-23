@@ -26,16 +26,25 @@ record DashboardResponse(String period, String from, Double totalSpent, String c
 // render (entrar na rota, trocar viewport, login de outro usuário) busca de novo.
 class DashState {
     static String period = "month"
+    static String selectedMonth = ""
     static String raw = ""
     static Bool loaded = false
     static Bool fresh = false
     static Int selectedSlice = -1
+    static Bool chartPreferencesOpen = false
+    static Bool showBudgetChart = true
+    static Bool showCategoryChart = true
     // Impede que o clique em uma legenda seja interpretado como clique na área
     // vazia do cartão quando o evento propaga para o contêiner.
     static Bool keepSliceSelection = false
 }
 
-String dashboardPath(String period) = "/api/dashboard?period=" + period
+String dashboardPath(String period) {
+    if (period == "month" && DashState.selectedMonth != "") {
+        return "/api/dashboard?period=" + period + "&month=" + DashState.selectedMonth
+    }
+    return "/api/dashboard?period=" + period
+}
 
 // JSON cru do período ou throw com a mensagem fixa (rede / sessão expirada).
 String fetchDashboard(String period) = getOrThrow(dashboardPath(period))

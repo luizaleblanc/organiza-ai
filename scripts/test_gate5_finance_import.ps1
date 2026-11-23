@@ -346,11 +346,14 @@ Assert-Check "Intent 2 (ANALISAR_FATURA) separates confirmed merchants, payments
 }
 
 Assert-Check "Intent 3 (CONFIRMAR_IMPORTACAO) is atomic and 100% idempotent when called twice" {
-    $c1 = Invoke-Http "POST" "/api/intents/dispatch" $tokenA (@{ intent = "CONFIRMAR_IMPORTACAO"; parameters = @{ documentId = $script:docA } } | ConvertTo-Json)
-    $c2 = Invoke-Http "POST" "/api/intents/dispatch" $tokenA (@{ intent = "CONFIRMAR_IMPORTACAO"; parameters = @{ documentId = $script:docA } } | ConvertTo-Json)
+    $c1 = Invoke-Http "POST" "/api/intents/dispatch" $tokenA (@{ intent = "CONFIRMAR_IMPORTACAO"; parameters = @{ documentId = $script:docA; period = "2026-11" } } | ConvertTo-Json)
+    $c2 = Invoke-Http "POST" "/api/intents/dispatch" $tokenA (@{ intent = "CONFIRMAR_IMPORTACAO"; parameters = @{ documentId = $script:docA; period = "2026-11" } } | ConvertTo-Json)
     $txs = (Invoke-Http "GET" "/api/transactions" $tokenA).Body | ConvertFrom-Json
-    $withProv = @($txs | Where-Object { $_.documentId -eq $script:docA -and $null -ne $_.sourcePage -and $null -ne $_.sourceLine -and -not [string]::IsNullOrWhiteSpace($_.externalRef) }).Count
-    return ($c1.Status -eq 200) -and ($c2.Status -eq 200) -and ($txs.Count -eq 4) -and ($withProv -eq 4)
+    $confirmedData = (($c1.Body | ConvertFrom-Json).dataJson | ConvertFrom-Json)
+    $withProv = @($confirmedData.transactions | Where-Object { $_.documentId -eq $script:docA -and $null -ne $_.sourcePage -and $null -ne $_.sourceLine -and -not [string]::IsNullOrWhiteSpace($_.externalRef) }).Count
+    if ($c1.Status -ne 200 -or $c2.Status -ne 200) { return "c1=$($c1.Status) $($c1.Body) c2=$($c2.Status) $($c2.Body)" }
+    if ($txs.Count -ne 4 -or $withProv -ne 4) { return "transactions=$($txs.Count), withProvenance=$withProv; c1=$($c1.Body); c2=$($c2.Body)" }
+    return $true
 }
 
 Assert-Check "Intent 4 (CONSULTAR_GASTOS) returns exact minor cents (20960) for FOOD in 2026-11" {
@@ -410,20 +413,55 @@ Assert-Check "Flow summary: count, separated totals (cents), no double count, am
     return $true
 }
 
-Assert-Check "Chat with documentId answers via ANALISAR_FATURA, cites the document and never asks to retype" {
+Assert-Check "Chat with documentId returns typed actions separately from friendly copy" {
     $c = Invoke-Http "POST" "/api/chat/message" $tokenB (@{ message = "Fatura fluxo-sintetico.pdf enviada: 5 registros extraidos. Analise o documento."; documentId = $script:flowDoc } | ConvertTo-Json)
     if ($c.Status -ne 200) { return "status=$($c.Status) body=$($c.Body)" }
-    $r = ($c.Body | ConvertFrom-Json).reply
-    $ok = $r.Contains($script:flowDoc) -and $r.Contains("R$ 3.000,00") -and $r.Contains("R$ 150,00") -and $r.Contains("Pendentes de revisao") -and
-        (-not $r.ToLower().Contains("digite")) -and (-not $r.ToLower().Contains("informe os gastos"))
-    if (-not $ok) { return $r }
+    $j = $c.Body | ConvertFrom-Json
+    $actions = @($j.interaction.options | ForEach-Object { $_.action })
+    $ok = ($j.interaction.type -eq "SINGLE_ACTION") -and ($j.interaction.options.Count -eq 4) -and
+        ($actions -contains "VIEW_EXPENSES") -and ($actions -contains "ORGANIZE_CAIXINHAS") -and ($actions -contains "REVIEW_MOVEMENTS") -and ($actions -contains "UNDERSTAND_EXPENSES") -and
+        $j.interaction.summary.totalInflowsText -eq "R$ 3.000,00" -and $j.interaction.summary.totalOutflowsText -eq "R$ 230,00" -and
+        $j.interaction.details.items.Count -ge 1 -and (-not $j.reply.Contains($script:flowDoc)) -and
+        (-not $j.reply.Contains("Ver meus gastos")) -and (-not $j.reply.ToLower().Contains("digite"))
+    if (-not $ok) { return ($j | ConvertTo-Json -Depth 8 -Compress) }
     return $true
 }
-
-Assert-Check "Chat about 'fatura' without documentId uses the latest EM_REVISAO document" {
+Assert-Check "Chat about fatura without documentId uses latest review through typed interaction" {
     $c = Invoke-Http "POST" "/api/chat/message" $tokenB (@{ message = "O que tem na minha fatura?" } | ConvertTo-Json)
     if ($c.Status -ne 200) { return "status=$($c.Status)" }
-    return (($c.Body | ConvertFrom-Json).reply).Contains($script:flowDoc)
+    $j = $c.Body | ConvertFrom-Json
+    return ($j.interaction.documentId -eq $script:flowDoc) -and ($j.interaction.type -eq "SINGLE_ACTION") -and (-not $j.reply.Contains($script:flowDoc))
+}
+Assert-Check "Response 'esse Pix foi alimentação' reclassifies pending Pix to Alimentação (CONFIRMACAO_CATEGORIA)" {
+    $c = Invoke-Http "POST" "/api/chat/message" $tokenB (@{ message = "esse Pix foi alimentação" } | ConvertTo-Json)
+    if ($c.Status -ne 200) { return "status=$($c.Status) body=$($c.Body)" }
+    $r = ($c.Body | ConvertFrom-Json).reply
+    return $r.Contains("Alimentação") -and $r.Contains("Fulano Beltrano") -and $r.Contains("R$ 45,00") -and (-not $r.Contains($script:flowDoc))
+}
+
+Assert-Check "Response 'Organizar meus gastos nas caixinhas' previews categories before saving (CONFIRMACAO_CAIXINHAS)" {
+    $c = Invoke-Http "POST" "/api/chat/message" $tokenB (@{ message = "Organizar meus gastos nas caixinhas" } | ConvertTo-Json)
+    if ($c.Status -ne 200) { return "status=$($c.Status) body=$($c.Body)" }
+    $r = ($c.Body | ConvertFrom-Json).reply
+    return $r.Contains("Vou separar seus gastos por categoria e mostrar os valores antes de salvar") -and $r.Contains("Alimentação")
+}
+
+Assert-Check "Response 'sim, pode distribuir' saves confirmed items to caixinhas and re-sending detects duplicate without re-inserting" {
+    $c1 = Invoke-Http "POST" "/api/chat/message" $tokenB (@{ message = "sim, pode distribuir" } | ConvertTo-Json)
+    $c2 = Invoke-Http "POST" "/api/chat/message" $tokenB (@{ message = "sim, pode distribuir" } | ConvertTo-Json)
+    if ($c1.Status -ne 200 -or $c2.Status -ne 200) { return "c1=$($c1.Status) c2=$($c2.Status)" }
+    $r1 = ($c1.Body | ConvertFrom-Json).reply
+    $r2 = ($c2.Body | ConvertFrom-Json).reply
+    return $r1.Contains("Confirmado! Guardei") -and (-not $r1.Contains("INVOICE")) -and (-not $r1.Contains($script:flowDoc)) -and $r2.Contains("já estava confirmado")
+}
+
+Assert-Check "Educational question after upload failure is answered without re-triggering extraction (PERGUNTA_EDUCATIVA)" {
+    $cFail = Invoke-Http "POST" "/api/chat/message" $tokenB (@{ message = "Arquivo ilegivel.pdf enviado: falha na extração (0 lançamentos identificados)." } | ConvertTo-Json)
+    $cEdu = Invoke-Http "POST" "/api/chat/message" $tokenB (@{ message = "Por que o pagamento de fatura dá dupla contagem?" } | ConvertTo-Json)
+    if ($cFail.Status -ne 200 -or $cEdu.Status -ne 200) { return "fail=$($cFail.Status) edu=$($cEdu.Status)" }
+    $rFail = ($cFail.Body | ConvertFrom-Json).reply
+    $rEdu = ($cEdu.Body | ConvertFrom-Json).reply
+    return $rFail.Contains("nenhum valor foi inventado") -and $rEdu.Contains("Exemplo hipotético:") -and $rEdu.Contains("dupla contagem")
 }
 
 Assert-Check "Anti-IDOR in chat: documentId of another user is refused" {
@@ -448,7 +486,7 @@ if ($LlmBaseUrl -ne "") {
         $c = Invoke-Http "POST" "/api/chat/message" $tokenL (@{ message = "Fatura enviada"; documentId = $doc } | ConvertTo-Json)
         if ($c.Status -ne 200) { return "status=$($c.Status) body=$($c.Body)" }
         $r = ($c.Body | ConvertFrom-Json).reply
-        return $r.Contains($doc) -and $r.Contains("R$ 3.000,00")
+        return $r.Contains("fluxo-sintetico.pdf") -and (-not $r.Contains($doc)) -and $r.Contains("R$ 3.000,00")
     }
     $BaseUrl = $mainBase
 }

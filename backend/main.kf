@@ -49,9 +49,13 @@ Double extractJsonDoubleField(String raw, String field) {
 // Porta HTTP: variavel PORT (o Render injeta), padrao 3000. app.listen aceita so Int (SEM025);
 // um PORT que nao e numero derruba o boot com a excecao da conversao (nunca sobe na porta errada).
 // Resposta do chat em JSON (L3): texto + uso do plano ja contando a mensagem recem-gravada.
-String chatReplyJson(String userId, String reply, String monthStart) {
+String chatReplyJsonWithInteraction(String userId, String reply, String monthStart, ChatInteractionPayload? interaction) {
     var tier = getTierStatus(userId, monthStart)
-    return json.encode(ChatReply(reply, tier.messagesUsed(), tier.messagesLimit()))
+    return json.encode(ChatReply(reply, tier.messagesUsed(), tier.messagesLimit(), interaction))
+}
+
+String chatReplyJson(String userId, String reply, String monthStart) {
+    return chatReplyJsonWithInteraction(userId, reply, monthStart, null)
 }
 
 Int listenPort() {
@@ -141,17 +145,16 @@ main() {
 
     app.post("/api/qa/clear-chat") {
         if (!qaEnabled()) { return qaNotFound() }
-        var targetUser = findUserByEmail("luizaa.fq@gmail.com")
-        if (targetUser == null) { targetUser = findUserByEmail(qaDemoEmail()) }
-        if (targetUser != null) {
-            deleteChatMessagesByUserId(targetUser.id)
+        var allUsers = findAllUsers()
+        for (var u in allUsers) {
+            resetChatSessionAndPendingInvoicesByUser(u.id)
         }
         return json.encode(mapOf("status", "chat_cleared"))
     }
 
     app.delete("/api/chat/messages") {
         var userId = currentUserId()
-        deleteChatMessagesByUserId(userId)
+        resetChatSessionAndPendingInvoicesByUser(userId)
         return status(204, "")
     }
 
@@ -458,25 +461,29 @@ main() {
     app.post("/api/invoices/parse") {
         var raw = body()
         if (raw.length() > invoiceMaxBase64Chars() + 4096) {
-            return status(413, json.encode(ApiError("Arquivo grande demais (máximo de 2 MB).")))
+            return status(413, json.encode(ApiError("Arquivo grande demais (máximo de 10 MB).")))
         }
         var req = decodeInvoiceUploadRequest(raw)
         if (req == null) {
             return status(400, invalidBody())
         }
         if (req.fileBase64().length() > invoiceMaxBase64Chars()) {
-            return status(413, json.encode(ApiError("Arquivo grande demais (máximo de 2 MB).")))
+            return status(413, json.encode(ApiError("Arquivo grande demais (máximo de 10 MB).")))
         }
         try {
             return json.encode(parseInvoiceForUser(currentUserId(), req.fileBase64(), req.filename()))
         } catch (String e) {
+            log.warn("falha na leitura de fatura: " + e)
             if (e.startsWith("OCR_UNAVAILABLE:")) {
-                return status(422, json.encode(ApiTypedError(e, "OCR_UNAVAILABLE")))
+                return status(422, json.encode(ApiTypedError(catalogDocumentoIlegivel("enviado"), "OCR_UNAVAILABLE")))
             }
             if (e.startsWith("EXTRACTION_TIMEOUT:")) {
-                return status(408, json.encode(ApiTypedError(e, "EXTRACTION_TIMEOUT")))
+                return status(408, json.encode(ApiTypedError("A leitura do arquivo demorou mais que o esperado. Tente enviar um arquivo menor ou mais nítido.", "EXTRACTION_TIMEOUT")))
             }
-            return status(400, json.encode(ApiError("Arquivo inválido: " + e)))
+            if (e.startsWith("UNSUPPORTED_FORMAT:")) {
+                return status(400, json.encode(ApiTypedError(catalogFormatoNaoSuportado(), "UNSUPPORTED_FORMAT")))
+            }
+            return status(400, json.encode(ApiError(catalogDocumentoIlegivel("enviado"))))
         }
     }
 
@@ -543,6 +550,37 @@ main() {
         }
     }
 
+    // GATE 2/3: consulta do documento mais recente do usuario e classificacao de itens pendentes.
+    app.get("/api/documents/latest") {
+        var latestRes = latestDocumentOverviewForUser(currentUserId())
+        setHeader("Content-Type", "application/json; charset=utf-8")
+        if (latestRes == null) {
+            return "{\"hasDocument\":false}"
+        }
+        return json.encode(latestRes)
+    }
+
+    app.post("/api/documents/:id/reclassify") {
+        var docId = param("id").trim()
+        var req = decodeReclassifyRequest(body())
+        if (req == null) {
+            return status(400, invalidBody())
+        }
+        try {
+            var res = reclassifyDocumentTransactions(currentUserId(), docId, req.txIds(), req.category())
+            setHeader("Content-Type", "application/json; charset=utf-8")
+            return json.encode(res)
+        } catch (String e) {
+            if (e.startsWith("UNAUTHORIZED:")) {
+                return status(403, json.encode(ApiTypedError(e, "UNAUTHORIZED")))
+            }
+            if (e.startsWith("NOT_FOUND:")) {
+                return status(404, json.encode(ApiTypedError(e, "NOT_FOUND")))
+            }
+            return status(400, json.encode(ApiTypedError(e, "INVALID_REQUEST")))
+        }
+    }
+
     // GATE 2/3: consulta de preview/revisao por documentId com bloqueio anti-IDOR entre usuarios via KofDB.
     app.get("/api/documents/:id/review") {
         var docId = param("id").trim()
@@ -593,11 +631,11 @@ main() {
             }
             // Fatura/extrato: resposta deterministica (ANALISAR_FATURA, backend/invoice.kf) ANTES do ramo LLM.
             // documentId opcional no corpo; sem ele, usa o ultimo documento EM_REVISAO se a mensagem for sobre fatura.
-            var invoiceReply = invoiceChatReplyFor(userId, msgReq.message, chatRaw)
-            if (invoiceReply != null) {
+            var invoiceTurn = invoiceChatTurnFor(userId, msgReq.message, chatRaw)
+            if (invoiceTurn != null) {
                 saveChatMessage(ChatMessageEntity("", userId, ChatRole.USER, msgReq.message, nowIso()))
-                saveChatMessage(ChatMessageEntity("", userId, ChatRole.ASSISTANT, clipForHistory(invoiceReply), nowIso()))
-                return chatReplyJson(userId, invoiceReply, monthStart)
+                saveChatMessage(ChatMessageEntity("", userId, ChatRole.ASSISTANT, clipForHistory(invoiceTurn.reply()), nowIso()))
+                return chatReplyJsonWithInteraction(userId, invoiceTurn.reply(), monthStart, invoiceTurn.interaction())
             }
             // Coach com OpenAI (coach_llm.kf): a memoria e lida ANTES de gravar a mensagem nova. Se o
             // provedor falhar (rede, timeout, 4xx/5xx), 503 honesto e nada e gravado: a mensagem nao conta
@@ -833,11 +871,31 @@ main() {
         if (unit == null) {
             return status(400, json.encode(ApiError("Período inválido: use week, month ou year.")))
         }
+        var monthParam = query("month")
         var user = findUserById(currentUserId())
         if (user == null) {
             return status(404, json.encode(ApiError("Usuário não encontrado")))
         }
-        return json.encode(dashboardOf(user, unit, unit))
+        return json.encode(dashboardOfMonth(user, unit, unit, monthParam))
+    }
+
+    app.get("/api/dashboard/calculated") {
+        var periodRaw = query("period")
+        var p = "month"
+        if (periodRaw != null && periodRaw.trim() != "") {
+            var low = periodRaw.trim().toLowerCase()
+            if (low != "week" && low != "month" && low != "year") {
+                return status(400, json.encode(ApiError("Período inválido: use week, month ou year.")))
+            }
+            p = low
+        }
+        var monthParam = query("month")
+        var user = findUserById(currentUserId())
+        if (user == null) {
+            return status(404, json.encode(ApiError("Usuário não encontrado")))
+        }
+        setHeader("Content-Type", "application/json; charset=utf-8")
+        return json.encode(calculatedDashboardOf(user, p, monthParam))
     }
 
     // Tela 12: avisos do usuario (os do dia sao criados na primeira leitura) e "marcar todas como lidas".
@@ -1126,7 +1184,19 @@ String indexHtmlWithBundle(String webOut, String tag, String bundle) {
     // Ponte do anexo (+) e da voz: sem ela os dois botoes do chat ficam mortos. Garante a tag
     // mesmo quando o build local nao passou por scripts/prepare_qa_routes.ps1.
     if (html.indexOf("assets/voice_bridge.js") < 0) {
-        html = html.replace("</body>", "<script src=\"assets/voice_bridge.js\"></script></body>")
+        html = html.replace("</body>", "<script src=\"assets/voice_bridge.js?v=" + tag + "\"></script></body>")
+    } else if (html.indexOf("assets/voice_bridge.js?v=") < 0) {
+        html = html.replace("assets/voice_bridge.js", "assets/voice_bridge.js?v=" + tag)
+    }
+    if (html.indexOf("assets/dashboard_charts.js") < 0) {
+        html = html.replace("</body>", "<script src=\"assets/dashboard_charts.js?v=" + tag + "\"></script></body>")
+    } else if (html.indexOf("assets/dashboard_charts.js?v=") < 0) {
+        html = html.replace("assets/dashboard_charts.js", "assets/dashboard_charts.js?v=" + tag)
+    }
+    // Estilos externos da camada HTML do chat e dos gráficos: CSP permite a mesma origem,
+    // mas bloqueia os <style> criados por scripts. O KofUI e o design da marca ficam na origem local.
+    if (html.indexOf("id=\"organiza-chat-interactions-css\"") < 0) {
+        html = html.replace("</head>", "<link id=\"organiza-chat-interactions-css\" rel=\"stylesheet\" href=\"/assets/chat_interactions.css?v=" + tag + "\"><link id=\"organiza-calc-styles\" rel=\"stylesheet\" href=\"/assets/dashboard_charts.css?v=" + tag + "\"></head>")
     }
     html = html.replace("<div id=\"kof-titlebar\">", "<div id=\"kof-titlebar\" hidden>")
     html = html.replace("<div id=\"kof-status\">", "<div id=\"kof-status\" hidden>")

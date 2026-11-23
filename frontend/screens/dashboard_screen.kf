@@ -25,6 +25,8 @@ Style dashTabCss()            = themed(Style("outline: none; background: transpa
 Style dashTabActiveCss()      = themed(Style("outline: none; background: #2563EB; color: #FFFFFF; border: none; border-radius: 8; padding: 8px 16px; font-size: 0.9375rem; font-weight: 700; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; background: #00D4FF; color: #06121C; border: none; border-radius: 8; padding: 8px 16px; font-size: 0.9375rem; font-weight: 700; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style dashTabMobileCss()      = themed(Style("outline: none; background: transparent; color: #6B7280; border: none; border-radius: 8; padding: 7px 10px; font-size: 0.8125rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; background: transparent; color: #7B8EAD; border: none; border-radius: 8; padding: 7px 10px; font-size: 0.8125rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style dashTabActiveMobileCss() = themed(Style("outline: none; background: #2563EB; color: #FFFFFF; border: none; border-radius: 8; padding: 7px 10px; font-size: 0.8125rem; font-weight: 700; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; background: #00D4FF; color: #06121C; border: none; border-radius: 8; padding: 7px 10px; font-size: 0.8125rem; font-weight: 700; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style chartPreferencePanelCss() = themed(Style("display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8; padding: 8; background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 10"), Style("display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8; padding: 8; background: #111827; border: 1px solid rgba(255,255,255,.12); border-radius: 10"))
+Style chartPreferenceButtonCss() = themed(Style("outline: none; background: #FFFFFF; color: #2563EB; border: 1px solid #D1D5DB; border-radius: 8; padding: 8px 12px; font-size: 0.8125rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; background: #111827; color: #00D4FF; border: 1px solid rgba(255,255,255,.16); border-radius: 8; padding: 8px 12px; font-size: 0.8125rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 
 // ---- Grids & cards ----------------------------------------------------------
 Style dashGridG3Css()         = Style("display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: stretch; gap: 12; width: 100%; min-height: 156")
@@ -227,6 +229,7 @@ selectPeriod(Window w, String period) {
     DashState.period = period
     DashState.raw = ""
     DashState.fresh = false
+    DashState.chartPreferencesOpen = false
     DashState.selectedSlice = -1
     DashState.keepSliceSelection = false
     AppState.loadError = ""
@@ -293,10 +296,55 @@ View tabButton(Window w, String text, String period) {
 }
 
 View periodTabs(Window w) {
-    var row = Row(listOf(tabButton(w, "Semana", "week"), tabButton(w, "Mês", "month")))
+    var row = Row(listOf(tabButton(w, "Semana", "week"), tabButton(w, "Mês", "month"), tabButton(w, "Ano", "year")))
     row.setId("dash-tabs")
     row.setStyle(dashTabsCss())
     return row
+}
+
+toggleChartPreferences(Window w) {
+    DashState.chartPreferencesOpen = !DashState.chartPreferencesOpen
+    mountScreen(w)
+}
+
+toggleBudgetChart(Window w) {
+    DashState.showBudgetChart = !DashState.showBudgetChart
+    mountScreen(w)
+}
+
+toggleCategoryChart(Window w) {
+    DashState.showCategoryChart = !DashState.showCategoryChart
+    mountScreen(w)
+}
+
+View chartPreferenceAction(Window w) {
+    var controls: List<View> = listOf(periodTabs(w))
+    var customize = Button("Personalizar gráficos", () -> toggleChartPreferences(w))
+    customize.setId("dash-chart-preferences-toggle")
+    customize.setStyle(chartPreferenceButtonCss())
+    controls.add(customize)
+    if (DashState.chartPreferencesOpen) {
+        var options: List<View> = listOf()
+        var budgetLabel = "Exibir: Prévia do Modelo de Economia"
+        if (!DashState.showBudgetChart) { budgetLabel = "Oculto: Prévia do Modelo de Economia" }
+        var budget = Button(budgetLabel, () -> toggleBudgetChart(w))
+        budget.setId("dash-chart-budget-toggle")
+        budget.setStyle(chartPreferenceButtonCss())
+        options.add(budget)
+        var categoryLabel = "Exibir: Gastos por categoria"
+        if (!DashState.showCategoryChart) { categoryLabel = "Oculto: Gastos por categoria" }
+        var category = Button(categoryLabel, () -> toggleCategoryChart(w))
+        category.setId("dash-chart-category-toggle")
+        category.setStyle(chartPreferenceButtonCss())
+        options.add(category)
+        var panel = Row(options)
+        panel.setId("dash-chart-preferences-panel")
+        panel.setStyle(chartPreferencePanelCss())
+        controls.add(panel)
+    }
+    var col = Column(controls)
+    col.setStyle(Style("display: flex; flex-direction: column; align-items: flex-end; gap: 8"))
+    return col
 }
 
 Label idLabel(String text, String id, Style style) {
@@ -764,6 +812,66 @@ View distributionCard(Window w, DashboardResponse d) {
     return card
 }
 
+Style yearCategoryBarFullCss() = Style("height: 10; width: 100%; border-radius: 5; background: linear-gradient(90deg, #00D4FF, #0066FF)")
+Style yearCategoryBar75Css() = Style("height: 10; width: 75%; border-radius: 5; background: linear-gradient(90deg, #00D4FF, #0066FF)")
+Style yearCategoryBar50Css() = Style("height: 10; width: 50%; border-radius: 5; background: linear-gradient(90deg, #00D4FF, #0066FF)")
+Style yearCategoryBar25Css() = Style("height: 10; width: 25%; border-radius: 5; background: linear-gradient(90deg, #00D4FF, #0066FF)")
+Style yearCategoryBarSmallCss() = Style("height: 10; width: 10%; min-width: 2; border-radius: 5; background: linear-gradient(90deg, #00D4FF, #0066FF)")
+
+// GrÃ¡fico anual por categoria, usado como opÃ§Ã£o de visualizaÃ§Ã£o no cabeÃ§alho Ano.
+View yearCategoryChart(DashboardResponse d) {
+    var rows: List<View> = listOf()
+    var maxPct = 0.0
+    for (var item in d.categories) {
+        if (item.percentage > maxPct) { maxPct = item.percentage }
+    }
+    var i = 0
+    for (var item in d.categories) {
+        if (i < 8) {
+            var pct = 0.0
+            if (maxPct > 0.0) { pct = item.percentage * 100.0 / maxPct }
+            var bar = View(screenStyle())
+            if (pct >= 87.5) {
+                bar.setStyle(yearCategoryBarFullCss())
+            } else if (pct >= 62.5) {
+                bar.setStyle(yearCategoryBar75Css())
+            } else if (pct >= 37.5) {
+                bar.setStyle(yearCategoryBar50Css())
+            } else if (pct >= 17.5) {
+                bar.setStyle(yearCategoryBar25Css())
+            } else {
+                bar.setStyle(yearCategoryBarSmallCss())
+            }
+            var track = Row(listOf(bar))
+            track.setStyle(Style("height: 10; width: 100%; border-radius: 5; background: rgba(255,255,255,.08); overflow: hidden"))
+            var details = Column(listOf(
+                idLabel(item.category, "year-category-name-" + i, txNameCss()),
+                track))
+            details.setStyle(Style("display: flex; flex-direction: column; flex: 1 1 auto; gap: 6; min-width: 0"))
+            var row = Row(listOf(details, idLabel(brl(item.total), "year-category-value-" + i, txValueCss())))
+            row.setId("year-category-" + i)
+            row.setStyle(Style("display: flex; flex-direction: row; align-items: center; gap: 14; width: 100%; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.06)"))
+            rows.add(row)
+        }
+        i = i + 1
+    }
+    if (rows.size == 0) {
+        rows.add(idLabel("Ainda nÃ£o hÃ¡ gastos confirmados para comparar neste ano.", "year-category-empty", tileSubCss()))
+    }
+    var titleCss = cardTitleMobileCss()
+    var cardCss = dashCardMobileCss()
+    if (AppState.isDesktop) {
+        titleCss = cardTitleCss()
+        cardCss = dashCardCss()
+    }
+    var card = Column(listOf(
+        idLabel("Gastos por categoria", "year-category-title", titleCss),
+        Column(rows)))
+    card.setId("year-category-chart")
+    card.setStyle(cardCss)
+    return card
+}
+
 Canvas dotCanvas(Color color) {
     var c = Canvas(32, 32)
     c.setFill(color)
@@ -845,7 +953,11 @@ View dashboardScreen(Window w) {
     }
     var d = dashboardData()
     var items: List<View> = listOf()
-    items.add(topbar("Dashboard", dashSubtitle(d), periodTabs(w)))
+    var headerAction = periodTabs(w)
+    if (DashState.period == "year") {
+        headerAction = chartPreferenceAction(w)
+    }
+    items.add(topbar("Dashboard", dashSubtitle(d), headerAction))
     if (AppState.loadError != "") {
         items.add(idLabel(AppState.loadError, "dash-error", errorBannerCss()))
         var retry = Button("Tentar de novo", () -> retryDashboard(w))
@@ -859,13 +971,26 @@ View dashboardScreen(Window w) {
         if (DashState.period == "week") {
             items.add(spendingCalendar(d))
         } else {
+            var cardsToShow: List<View> = listOf()
+            if (DashState.period != "year" || DashState.showBudgetChart) {
+                cardsToShow.add(distributionCard(w, d))
+            }
+            if (DashState.period == "year" && DashState.showCategoryChart) {
+                cardsToShow.add(yearCategoryChart(d))
+            }
+            if (DashState.period != "year") {
+                cardsToShow.add(transactionsCard(d))
+            }
+            if (cardsToShow.size == 0) {
+                cardsToShow.add(idLabel("Nenhum gráfico selecionado. Use Personalizar gráficos no cabeçalho para escolher o que exibir.", "dash-no-charts", captionCss()))
+            }
             if (AppState.isDesktop) {
-                var cards = Row(listOf(distributionCard(w, d), transactionsCard(d)))
+                var cards = Row(cardsToShow)
                 cards.setId("dash-cards")
                 cards.setStyle(dashGridG2Css())
                 items.add(cards)
             } else {
-                var cards = Column(listOf(distributionCard(w, d), transactionsCard(d)))
+                var cards = Column(cardsToShow)
                 cards.setId("dash-cards")
                 cards.setStyle(dashMobileStackCss())
                 items.add(cards)

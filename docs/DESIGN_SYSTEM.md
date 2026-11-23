@@ -184,3 +184,17 @@ on-accent #FFFFFF sobre accent-end #1D4ED8 6.70
 on-accent #FFFFFF sobre accent #2563EB (botões, aba ativa) 5.17
 
 Pares que falham e como foram resolvidos: `muted` como texto (virou `secondary`); `success`/`warning` como texto (viraram `text`); `danger` como texto só em erros (exceção acima); `secondary` sobre `ai-bubble` (4,36) não ocorre, porque a bolha da IA usa `text`; `accent` sobre `track` não ocorre.
+
+## 9. Template de interacao financeira do chat
+
+Referencia: artefato oficial `JVjueTmHeJsnHLsow3LDVb` e tokens em `frontend/core/theme.kf`.
+
+O cartao de resumo financeiro e as etapas de selecao usam `frontend/assets/chat_interactions.css`, incluido como folha local pelo shell em `backend/main.kf`; `frontend/assets/voice_bridge.js` mantem o carregamento de fallback. O template segue os tokens existentes de fundo, superficie, texto, borda, destaque, tipografia e foco. A marca usa `frontend/assets/brand/organiza-simbolo.svg` ou sua variante clara; nao recriar o simbolo com SVG inline.
+
+Acoes individuais usam botoes HTML com raio de 10 px, borda e estados de foco/hover. Selecao multipla usa checkboxes reais dentro de cards; a confirmacao e explicita e o cancelamento nao persiste selecoes. Informacoes de auditoria ficam em `Detalhes da analise`, recolhidas por padrao.
+
+Toda mudanca visual neste template deve atualizar o CSS e permanecer dentro da paleta oficial listada nas secoes 2 e 8.
+
+## 10. Graficos de Gastos Calculados
+
+O painel usa `frontend/assets/dashboard_charts.css`, carregado pelo mesmo shell local antes do script `dashboard_charts.js`. O JavaScript nao injeta regras `<style>`; isso preserva a CSP padrao do Kof. As cores dos graficos e controles usam somente os tokens de `frontend/core/theme.kf`, incluindo as variantes claro/escuro documentadas nas secoes 2 e 8. Raios seguem os tokens de card (14 px), card pequeno/botao (10 px), campo (8 px) e choice card (12 px).

@@ -1757,6 +1757,48 @@ void deleteFinancialDocumentDataByUser(String userId) {
     }
 }
 
+void resetChatSessionAndPendingInvoicesByUser(String userId) {
+    if (!strings.isNumeric(userId)) {
+        return
+    }
+    var uid = userId.toLong()
+    deleteChatMessagesByUserId(userId)
+    deleteFinancialDocumentDataByUser(userId)
+
+    var emailLogs = EmailLogRow.query(DbConn.handle) {
+        where userId == uid
+    }
+    for (var el in emailLogs) {
+        if (el.kind() == "INVOICE_CONFIRM" || el.dayKey().startsWith("conf_doc_") || el.dayKey().startsWith("conf_batch_")) {
+            orm.delete<EmailLogRow>(DbConn.handle, el.id())
+        }
+    }
+
+    var allTx = TransactionRow.query(DbConn.handle) {
+        where userId == uid
+    }
+    for (var tr in allTx) {
+        if (tr.source() == "INVOICE") {
+            var envId = tr.envelopeId()
+            if (envId > 0) {
+                var envRow = orm.find<EnvelopeRow>(DbConn.handle, envId)
+                if (envRow != null && envRow.userId() == uid) {
+                    var nextSpent = envRow.spentCents() - tr.amountCents()
+                    if (nextSpent < 0) {
+                        nextSpent = 0
+                    }
+                    orm.save(DbConn.handle, EnvelopeRow(
+                        envRow.id(), envRow.userId(), envRow.categoryName(), envRow.limitCents(),
+                        nextSpent, envRow.limitType(), envRow.movingAverageMonths(),
+                        envRow.createdAt(), envRow.bucket()
+                    ))
+                }
+            }
+            orm.delete<TransactionRow>(DbConn.handle, tr.id())
+        }
+    }
+}
+
 // =========================================================
 // Controle de Gastos do Onboarding e Alocacoes de Chips (KofDB / kof.orm)
 // =========================================================

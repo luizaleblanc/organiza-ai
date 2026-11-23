@@ -480,8 +480,8 @@ String extractFilenameFromChatMsg(String msg) {
 // AgentConsultorFinanceiro: resposta ancorada exclusivamente no KofDB (zero valores inventados).
 String buildGroundedDocumentReply(String userId, UserEntity? user, FinancialDocumentRow docRow, Int step, Double fallbackSalary) {
     var txRows = findExtractedTransactionRowsByDoc(userId, docRow.docKey)
-    if (docRow.status == "EXTRACAO_FALHOU" || txRows.isEmpty()) {
-        return "Recebi o arquivo " + docRow.filename + ", mas a extração falhou (0 lançamentos identificados com segurança). Por segurança, bloqueei a análise financeira para não estimar nem inventar nenhum valor. Envie um PDF digital com texto selecionável ou me diga os lançamentos por texto."
+    if (docRow.status == "EXTRACAO_FALHOU" || docRow.status == "FALHA_EXTRACAO" || txRows.isEmpty()) {
+        return catalogDocumentoIlegivel(docRow.filename)
     }
 
     var firstName = ""
@@ -680,7 +680,7 @@ Double parseChatAmountPart(String part) {
 }
 
 Category classifyChatExpenseCategory(String part) {
-    if (part.contains("almoço") || part.contains("almoco") || part.contains("jantar") || part.contains("café") || part.contains("cafe") || part.contains("restaurante") || part.contains("lanche") || part.contains("comida") || part.contains("ifood") || part.contains("delivery") || part.contains("padaria") || part.contains("lanchonete") || part.contains("food")) {
+    if (part.contains("alimentação") || part.contains("alimentacao") || part.contains("almoço") || part.contains("almoco") || part.contains("jantar") || part.contains("café") || part.contains("cafe") || part.contains("restaurante") || part.contains("lanche") || part.contains("comida") || part.contains("ifood") || part.contains("delivery") || part.contains("padaria") || part.contains("lanchonete") || part.contains("food")) {
         return Category.FOOD
     }
     if (part.contains("mercado") || part.contains("supermercado") || part.contains("feira") || part.contains("hortifruti") || part.contains("atacadao") || part.contains("atacadão") || part.contains("acougue") || part.contains("açougue")) {
@@ -813,13 +813,21 @@ String coachReplyOfflineWithSource(String userId, String rawMsg, String monthSta
         return outOfScopeFallbackReply(user, pulse)
     }
 
+    // 0a. Perguntas de educação financeira (PERGUNTA_EDUCATIVA): respondidas sem acionar reprocessamento de arquivo
+    var eduOffline = answerEducationalFinanceQuestion(userId, msg)
+    if (eduOffline != null) {
+        return eduOffline
+    }
+
+    // 0a2. Reclassificação de transação pendente (ex.: "esse Pix foi alimentação" -> CONFIRMACAO_CATEGORIA)
+    var reclassOffline = reclassifyPendingDocumentItemFromChat(userId, msg)
+    if (reclassOffline != null) {
+        return reclassOffline
+    }
+
     // Bloqueio imediato quando o upload registrou falha de extracao / 0 lancamentos.
-    if (lower.contains("0 lançamentos identificados") || lower.contains("0 lancamentos identificados") || lower.contains("falha na extração") || lower.contains("falha na extracao")) {
-        var failName = extractFilenameFromChatMsg(msg)
-        if (failName == "") {
-            failName = "enviado"
-        }
-        return "Recebi o arquivo " + failName + ", mas a extração identificou 0 lançamentos com segurança. Por segurança, bloqueei a análise financeira para não estimar nem inventar nenhum valor. Envie um PDF digital com texto selecionável ou me informe os lançamentos por texto."
+    if (lower.contains("0 lançamentos") || lower.contains("0 lancamentos") || lower.contains("falha na extração") || lower.contains("falha na extracao") || (lower.startsWith("arquivo ") && lower.contains("enviado:") && lower.contains("0 "))) {
+        return catalogDocumentoNaoFatura()
     }
 
     // 0b. Pedidos de caixinha pelo chat (criar, renomear, limite, excluir com confirmacao, consultar)
@@ -882,7 +890,7 @@ String coachReplyOfflineWithSource(String userId, String rawMsg, String monthSta
         if (docRow != null) {
             return buildGroundedDocumentReply(userId, user, docRow, 1, salary)
         }
-        return "Ainda não encontrei esse arquivo processado no seu histórico de documentos. Tente enviar o anexo novamente ou informe os valores por texto."
+        return catalogDocumentoNaoFatura()
     }
 
     // 3b. GATE 4: Consulta deterministica de gastos em linguagem natural / voz (CONSULTAR_GASTOS)
@@ -960,7 +968,7 @@ String coachReplyOfflineWithSource(String userId, String rawMsg, String monthSta
             var customBoxCreatedNow = false
             var catName = "outros"
             var catEnum = Category.OTHER
-            if (part.contains("almoço") || part.contains("almoco") || part.contains("jantar") || part.contains("café") || part.contains("cafe") || part.contains("restaurante") || part.contains("lanche") || part.contains("comida") || part.contains("ifood") || part.contains("delivery") || part.contains("padaria") || part.contains("lanchonete") || part.contains("food")) {
+            if (part.contains("alimentação") || part.contains("alimentacao") || part.contains("almoço") || part.contains("almoco") || part.contains("jantar") || part.contains("café") || part.contains("cafe") || part.contains("restaurante") || part.contains("lanche") || part.contains("comida") || part.contains("ifood") || part.contains("delivery") || part.contains("padaria") || part.contains("lanchonete") || part.contains("food")) {
                 catName = "alimentação"
                 catEnum = Category.FOOD
             } else if (part.contains("mercado") || part.contains("supermercado") || part.contains("feira") || part.contains("hortifruti") || part.contains("atacadao") || part.contains("atacadão") || part.contains("acougue") || part.contains("açougue")) {
