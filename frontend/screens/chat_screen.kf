@@ -666,6 +666,76 @@ View chatInteractionCard(Window w) {
         footerBtns.setId("chat-reserve-actions")
         footerBtns.setStyle(chatFooterBtnsCss())
         content.add(footerBtns)
+    } else if (kind == "EXPENSE_LIST") {
+        ensureSelectionInitialized(interaction)
+        val items = interaction.items()
+        // Chips: "Todas" + cada categoria presente nos gastos.
+        var cats: List<String> = listOf()
+        for (var it in items) {
+            if (!cats.contains(it.groupLabel())) {
+                cats.add(it.groupLabel())
+            }
+        }
+        var filterChips: List<View> = listOf()
+        filterChips.add(chip("Todas", "chat-exp-filter-all", ChatUi.expenseFilter == "", () -> {
+            ChatUi.expenseFilter = ""
+            mountScreen(w)
+        }))
+        for (var c in cats) {
+            val cat = c
+            filterChips.add(chip(cat, "chat-exp-filter-" + cat, ChatUi.expenseFilter == cat, () -> {
+                ChatUi.expenseFilter = cat
+                mountScreen(w)
+            }))
+        }
+        content.add(chipGroup(interaction.prompt(), filterChips, "chat-exp-filters"))
+
+        var rows: List<View> = listOf()
+        var totalCents = 0
+        var shown = 0
+        for (var it in items) {
+            if (ChatUi.expenseFilter == "" || it.groupLabel() == ChatUi.expenseFilter) {
+                var name = Label(it.label())
+                name.setStyle(chatInteractionTextCss())
+                var sub = Label("")
+                val st = it.subtitle()
+                if (st != null) { sub = Label(st) }
+                sub.setStyle(chatInteractionMutedCss())
+                var left = Column(listOf(name, sub))
+                left.setStyle(Style("display: flex; flex-direction: column; gap: 2; min-width: 0; flex: 1 1 0"))
+                var amt = Label(it.formattedAmount())
+                amt.setStyle(chatInteractionAccentCss())
+                var row = Row(listOf(left, amt))
+                row.setId("chat-exp-item-" + it.id())
+                row.setStyle(Style("display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12; width: 100%; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.06)"))
+                rows.add(row)
+                totalCents = totalCents + it.amountCents()
+                shown = shown + 1
+            }
+        }
+        if (shown == 0) {
+            var none = Label("Nenhum gasto identificado neste extrato ainda.")
+            none.setStyle(chatInteractionMutedCss())
+            rows.add(none)
+        }
+        var list = Column(rows)
+        list.setId("chat-exp-list")
+        list.setStyle(Style("display: flex; flex-direction: column; width: 100%"))
+        content.add(list)
+
+        var totalLabel = "Total dos gastos listados"
+        if (ChatUi.expenseFilter != "") {
+            totalLabel = "Total em " + ChatUi.expenseFilter
+        }
+        var tl = Label(totalLabel)
+        tl.setStyle(chatInteractionMutedCss())
+        var tv = Label(brlFromCents(totalCents))
+        tv.setId("chat-exp-total")
+        tv.setStyle(chatInteractionAccentCss())
+        var totalRow = Row(listOf(tl, tv))
+        totalRow.setStyle(chatFooterRowCss())
+        content.add(totalRow)
+        addOptionButtons(w, content, interaction.options())
     } else if (kind == "REVIEW_CHECKLIST") {
         ensureSelectionInitialized(interaction)
         if (!EnvState.loaded && !EnvState.loading) {

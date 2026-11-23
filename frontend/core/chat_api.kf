@@ -4,6 +4,7 @@ import kof.json
 import core.app_state
 import core.api_client
 import core.format
+import core.envelopes_api
 
 // =============================================================================
 // Batch 3 (F2) — API e estado da Tela 10 Organiza AI (chat)
@@ -38,6 +39,7 @@ record QueryCategoriesParamsRequest(String period, String categories)
 record QueryCategoriesDispatchRequest(String intent, QueryCategoriesParamsRequest parameters)
 record IntentDispatchApiResponse(String status, String intent, String correlationId, Bool requiresConfirmation, String message, String? dataJson)
 record ReclassifyTxRequest(List<String> txIds, String category)
+record ReclassifyTxToEnvelopeRequest(List<String> txIds, String category, String envelopeId)
 record LatestDocSyncResponse(Bool hasDocument, String? status, ChatInteractionResponse? interaction)
 record ChatHistoryItem(String role, String content, String createdAt)
 record ChatHistoryPage(List<ChatHistoryItem> items, Int page, Int limit, Int offset, Bool hasNext)
@@ -66,6 +68,18 @@ class ChatUi {
     static String selectedIds = ""
     static String selectionInitKey = ""
     static String reviewCategory = "FOOD"
+    // Revisão item a item: "|txId=CAT|" por movimentação; prévia antes de salvar.
+    static String itemCategories = ""
+    static Bool reviewPreview = false
+    // Registro da fatura: prévia por caixinha antes de confirmar.
+    static Bool registerPreview = false
+    // "+ Criar caixinha" na revisão: formulário aberto e nome digitado.
+    static Bool newBoxOpen = false
+    // Lixeira do cabeçalho: primeiro clique pede confirmação, o segundo apaga.
+    static Bool confirmClear = false
+    // "Entender meus gastos": categoria filtrada ("" = todas).
+    static String expenseFilter = ""
+    static String newBoxName = ""
     static String manualPeriod = ""
     static Bool interactionBusy = false
     static String interactionError = ""
@@ -146,6 +160,10 @@ ensureSelectionInitialized(ChatInteractionResponse interaction) {
         return
     }
     ChatUi.selectionInitKey = key
+    ChatUi.itemCategories = ""
+    ChatUi.expenseFilter = ""
+    ChatUi.reviewPreview = false
+    ChatUi.registerPreview = false
     ChatUi.interactionError = ""
     ChatUi.interactionInfo = ""
     var buf = ""
@@ -383,6 +401,162 @@ confirmInvoiceRegistrationAction(ChatInteractionResponse interaction) {
         }
     } catch (String e) {
         ChatUi.interactionError = chatOfflineText()
+    }
+    ChatUi.interactionBusy = false
+}
+
+String itemCategory(String id) {
+    val key = "|" + id + "="
+    val at = ChatUi.itemCategories.indexOf(key)
+    if (at < 0) {
+        return ""
+    }
+    val start = at + key.length
+    val end = ChatUi.itemCategories.indexOf("|", start)
+    return ChatUi.itemCategories.substring(start, end)
+}
+
+setItemCategory(String id, String code) {
+    val old = itemCategory(id)
+    if (old != "") {
+        ChatUi.itemCategories = ChatUi.itemCategories.replace("|" + id + "=" + old + "|", "")
+    }
+    ChatUi.itemCategories = ChatUi.itemCategories + "|" + id + "=" + code + "|"
+    ChatUi.interactionError = ""
+}
+
+// Código de categoria escolhido na revisão: fixo ("FOOD") ou caixinha do
+// usuário ("ENV:<id>").
+String envelopeIdFromCode(String code) {
+    if (code.startsWith("ENV:")) {
+        return code.substring(4)
+    }
+    return ""
+}
+
+String categoryNamePt(String code) {
+    val envId = envelopeIdFromCode(code)
+    if (envId != "") {
+        for (var e in envelopeItems()) {
+            if (e.id() == envId) {
+                return e.categoryName()
+            }
+        }
+        return "Caixinha"
+    }
+    if (code == "FOOD") { return "Alimentação" }
+    if (code == "GROCERIES") { return "Mercado" }
+    if (code == "TRANSPORT") { return "Transporte" }
+    if (code == "HOUSING") { return "Moradia" }
+    if (code == "HEALTH") { return "Saúde" }
+    if (code == "LEISURE") { return "Lazer" }
+    if (code == "EDUCATION") { return "Educação" }
+    if (code == "OTHER") { return "Outros" }
+    return code
+}
+
+// Prévia: toda movimentação marcada precisa de categoria escolhida pelo usuário.
+openReviewPreview(ChatInteractionResponse interaction) {
+    val chosen = collectSelectedIds(interaction.items())
+    if (chosen.size == 0) {
+        ChatUi.interactionError = "Selecione pelo menos uma movimentação para revisar."
+        return
+    }
+    for (var id in chosen) {
+        if (itemCategory(id) == "") {
+            ChatUi.interactionError = "Escolha a categoria de cada movimentação marcada antes de ver a prévia."
+            return
+        }
+    }
+    ChatUi.interactionError = ""
+    ChatUi.reviewPreview = true
+}
+
+// Confirmação da revisão item a item: um POST por categoria (endpoint existente),
+// só com os itens marcados. Falha preserva a prévia e mostra o erro no card.
+confirmReviewPerItemAction(ChatInteractionResponse interaction) {
+    if (ChatUi.interactionBusy) {
+        return
+    }
+    val chosen = collectSelectedIds(interaction.items())
+    var docId = ""
+    val rawDocId = interaction.documentId()
+    if (rawDocId != null) {
+        docId = rawDocId.trim()
+    }
+    if (docId == "" || chosen.size == 0) {
+        ChatUi.interactionError = "Não encontrei a referência deste documento."
+        return
+    }
+    var codes: List<String> = listOf()
+    for (var id in chosen) {
+        val c = itemCategory(id)
+        if (!codes.contains(c)) {
+            codes.add(c)
+        }
+    }
+    ChatUi.interactionBusy = true
+    ChatUi.interactionError = ""
+    try {
+        for (var code in codes) {
+            var ids: List<String> = listOf()
+            for (var id in chosen) {
+                if (itemCategory(id) == code) {
+                    ids.add(id)
+                }
+            }
+            val envId = envelopeIdFromCode(code)
+            var payload = json.encode(ReclassifyTxRequest(ids, code))
+            if (envId != "") {
+                payload = json.encode(ReclassifyTxToEnvelopeRequest(ids, "OTHER", envId))
+            }
+            val body = apiPost("/api/documents/" + docId + "/reclassify", payload)
+            if (isApiError(body)) {
+                ChatUi.interactionError = json.decode<ChatApiError>(body).error()
+                ChatUi.interactionBusy = false
+                return
+            }
+        }
+        ChatUi.interactionBusy = false
+        ChatUi.reviewPreview = false
+        sendChatMessage("Organizar caixinhas")
+        return
+    } catch (String e) {
+        ChatUi.interactionError = chatOfflineText()
+    }
+    ChatUi.interactionBusy = false
+}
+
+// "+ Criar caixinha": cria pela API existente (POST /api/envelopes, sem limite)
+// e aplica aos itens marcados que ainda não têm categoria.
+createBoxFromReview(ChatInteractionResponse interaction) {
+    val name = ChatUi.newBoxName.trim()
+    if (name == "" || name.length > 40) {
+        ChatUi.interactionError = msgEnvelopeName()
+        return
+    }
+    ChatUi.interactionBusy = true
+    try {
+        createEnvelope(name, 0.0, "")
+        loadEnvelopes()
+        var newId = ""
+        for (var e in envelopeItems()) {
+            if (e.categoryName().toLowerCase() == name.toLowerCase()) {
+                newId = e.id()
+            }
+        }
+        if (newId != "") {
+            for (var id in collectSelectedIds(interaction.items())) {
+                if (itemCategory(id) == "") {
+                    setItemCategory(id, "ENV:" + newId)
+                }
+            }
+        }
+        ChatUi.newBoxOpen = false
+        ChatUi.newBoxName = ""
+        ChatUi.interactionError = ""
+    } catch (String e) {
+        ChatUi.interactionError = e
     }
     ChatUi.interactionBusy = false
 }

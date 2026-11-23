@@ -5259,6 +5259,54 @@ ChatInteractionPayload buildReviewChecklistPayload(ImportReview rev, ImportFlowS
     )
 }
 
+// "Entender meus gastos": lista cada gasto (compras e operações de crédito) com
+// data, descrição, valor e categoria; o frontend filtra por categoria. Valores
+// e categorias vêm do motor (rev); pendências ficam fora até a revisão.
+ChatInteractionPayload buildExpenseListPayload(ImportReview rev, ImportFlowSummary s, String filename) {
+    var statementPeriod = lookupStatementPeriod(rev.documentId())
+    var periodPt = formatPeriodPt(statementPeriod)
+    var items: List<ChatSelectableItem> = listOf()
+    for (var ctx in rev.transactions()) {
+        var fc = flowClassOf(ctx)
+        var m = ctx.amountMinor()
+        if ((fc == "DESPESA" || fc == "OPERACAO_CREDITO") && m != null && m > 0) {
+            var code = sanitizeCategoryForConfirm(ctx.category())
+            var ptName = categoryLabel(categoryOrNull(code))
+            var sub = ptName
+            var d = ctx.date()
+            if (d != null && d.trim() != "") {
+                sub = d.trim() + " · " + ptName
+            }
+            if (fc == "OPERACAO_CREDITO") {
+                sub = sub + " · no crédito"
+            }
+            items.add(ChatSelectableItem(ctx.id(), canonicalTxDisplayDesc(ctx, "Gasto"), ptName, code, formatBrl(m), minorToIntCents(m), sub, false))
+        }
+    }
+    var tip = "Olhar gasto por gasto mostra os pequenos valores que se repetem e, somados, pesam no mês."
+    if (s.pendingCount() > 0) {
+        tip = tip + " Algumas movimentações ainda aguardam sua revisão e não aparecem aqui."
+    }
+    var options: List<ChatInteractionOption> = listOf()
+    if (s.pendingCount() > 0) {
+        options.add(ChatInteractionOption("opt_review_movements", "Revisar movimentações", "REVIEW_MOVEMENTS", "RECLASSIFICAR_MOVIMENTACOES", "checklist", 0))
+    }
+    options.add(ChatInteractionOption("opt_organize_caixinhas", "Organizar caixinhas", "ORGANIZE_CAIXINHAS", "CONFIRMAR_IMPORTACAO", "wallet", 0))
+    return ChatInteractionPayload(
+        "EXPENSE_LIST",
+        "Filtrar por categoria",
+        textOrNull(rev.documentId()),
+        textOrNull(statementPeriod),
+        textOrNull(periodPt),
+        "Seus gastos",
+        tip,
+        null,
+        null,
+        options,
+        items
+    )
+}
+
 ChatInteractionPayload buildViewCategoriesPayload(ImportReview rev, ImportFlowSummary s, String filename) {
     var cleanName = cleanInteractionFilename(filename, rev.documentId())
     var statementPeriod = lookupStatementPeriod(rev.documentId())
@@ -5529,12 +5577,8 @@ InvoiceChatTurnResult? answerEducationalFinanceTurn(String userId, String rawMsg
             var rev = lookup.review()
             if (rev != null) {
                 var s = summarizeImportReview(rev)
-                var msg = "No arquivo " + latest.filename + ", encontrei " + formatBrl(s.expenseMinor()) + " em compras identificadas. O pagamento da fatura fica separado para evitar contar as compras duas vezes. Ainda há " + formatBrl(s.pendingMinor()) + " em movimentações que precisam da sua confirmação."
-                var previewTop = invoicePreviewTopCategories(rev)
-                if (previewTop != "") {
-                    msg = msg + " Na prévia, os maiores grupos são: " + previewTop + ". Esses valores ainda dependem da sua confirmação."
-                }
-                return InvoiceChatTurnResult(msg, buildInvoiceInteractionPayload(rev, s, latest.filename))
+                var msg = "Aqui estão seus gastos, um por um. Use as categorias para filtrar."
+                return InvoiceChatTurnResult(msg, buildExpenseListPayload(rev, s, latest.filename))
             }
         }
         if (topic == "ENTENDER_GASTOS") {
