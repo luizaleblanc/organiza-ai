@@ -238,6 +238,52 @@ String joinComma(List<String> ids) {
     return out
 }
 
+// DECLARAR_RESERVA: checklist com uma escolha (o usuário decide o destino).
+chooseSingleItem(String id) {
+    ChatUi.selectedIds = "|" + id + "|"
+    ChatUi.interactionError = ""
+}
+
+confirmReserveDeclarationAction(ChatInteractionResponse interaction) {
+    if (ChatUi.interactionBusy) {
+        return
+    }
+    val chosen = collectSelectedIds(interaction.items())
+    if (chosen.size != 1) {
+        ChatUi.interactionError = "Escolha uma opção para eu continuar."
+        return
+    }
+    var proposal = ""
+    val rawProposal = interaction.documentId()
+    if (rawProposal != null) {
+        proposal = rawProposal.trim()
+    }
+    ChatUi.interactionBusy = true
+    ChatUi.interactionError = ""
+    try {
+        val reqJson = json.encode(ConfirmImportDispatchRequest(
+            "DECLARAR_RESERVA",
+            listOf(proposal),
+            ConfirmImportParamsRequest(chosen.get(0), "")
+        ))
+        val body = apiPost("/api/intents/dispatch", reqJson)
+        if (isApiError(body)) {
+            ChatUi.interactionError = json.decode<ChatApiError>(body).error()
+        } else {
+            val res = json.decode<IntentDispatchApiResponse>(body)
+            if (res.status() == "OK") {
+                chatAppend("ASSISTANT", chatEncode(res.message()))
+                cancelInteractiveTemplate()
+            } else {
+                ChatUi.interactionError = res.message()
+            }
+        }
+    } catch (String e) {
+        ChatUi.interactionError = e
+    }
+    ChatUi.interactionBusy = false
+}
+
 cancelInteractiveTemplate() {
     ChatUi.interactionJson = ""
     ChatUi.interactionDetailsOpen = false

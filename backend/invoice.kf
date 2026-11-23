@@ -4207,6 +4207,10 @@ IntentResult dispatchFinanceIntent(String authUserId, IntentRequest req) {
         return IntentResult("UNAUTHORIZED", intent, corrId, false, "Acesso negado: usuario do token diverge do payload.", null, listOf("UNAUTHORIZED"))
     }
 
+    if (intent == "DECLARAR_RESERVA") {
+        return confirmReserveDeclaration(authUserId, req, corrId)
+    }
+
     if (intent == "IMPORTAR_DOCUMENTO_FINANCEIRO") {
         var docId = resolveIntentDocumentId(req)
         if (docId == "") {

@@ -1400,3 +1400,159 @@ String envelopeChatCommand(String userId, String msg, String lastAssistantMsg) {
     }
     return ""
 }
+
+// =========================================================
+// DECLARAR_RESERVA: "tenho R$ 1.491 investidos / guardados / de reserva"
+// =========================================================
+// Education First + autonomia: o valor declarado NUNCA é gravado direto.
+// O chat pergunta o que fazer com ele num checklist (Design System) e
+// recomenda a Reserva acumulada. Só a escolha confirmada grava, vinculada a
+// uma proposta do servidor (id da mensagem do usuário + valor em centavos):
+// "sim" solto ou valor adulterado no cliente não salva nada. Idempotente.
+// O saldo declarado entra como VariableIncome EMERGENCY_FUND, que alimenta
+// reserveCents (Reserva acumulada) e não altera o pulso diário.
+
+String RESERVE_PROPOSAL_PREFIX() = "reserve:"
+
+// Valor em pt-BR: "1.491", "1.491,50", "1491", "R$ 1.491", "1491,5".
+// Ponto seguido de exatamente 3 dígitos é separador de milhar.
+Long reserveAmountCents(String text) {
+    var none: Long = -1
+    for (var w in text.toLowerCase().split(" ")) {
+        var clean = w.replace("r$", "").replace("$", "").replace("?", "").replace("!", "").trim()
+        while (clean.endsWith(".") || clean.endsWith(",")) {
+            clean = clean.substring(0, clean.length() - 1)
+        }
+        if (clean == "") {
+            continue
+        }
+        var intPart = clean
+        var decPart = ""
+        if (clean.contains(",")) {
+            var idx = clean.lastIndexOf(",")
+            intPart = clean.substring(0, idx)
+            decPart = clean.substring(idx + 1)
+        }
+        if (intPart.matches("[0-9]{1,3}(\\.[0-9]{3})+")) {
+            intPart = intPart.replace(".", "")
+        }
+        if (!intPart.matches("[0-9]+") || !(decPart == "" || decPart.matches("[0-9]{1,2}"))) {
+            continue
+        }
+        var reais = intPart.toLong() * 100
+        if (decPart.length() == 1) {
+            reais = reais + decPart.toLong() * 10
+        } else if (decPart.length() == 2) {
+            reais = reais + decPart.toLong()
+        }
+        if (reais > 0) {
+            return reais
+        }
+    }
+    return none
+}
+
+Bool isReserveDeclaration(String lower) {
+    if (lower.contains("?") || lower.contains("gastei") || lower.contains("paguei") || lower.contains("comprei") || lower.contains("quero juntar") || lower.contains("quero guardar") || lower.contains("meta de")) {
+        return false
+    }
+    var hasHolding = lower.contains("tenho") || lower.contains("guardei") || lower.contains("juntei") || lower.contains("investi") || lower.contains("apliquei") || lower.contains("possuo")
+    var hasSavingWord = lower.contains("investido") || lower.contains("investida") || lower.contains("investimento") || lower.contains("guardado") || lower.contains("guardada") || lower.contains("reserva") || lower.contains("poupança") || lower.contains("poupanca") || lower.contains("aplicado") || lower.contains("aplicada") || lower.contains("tesouro") || lower.contains("cdb") || lower.contains("investi") || lower.contains("guardei") || lower.contains("juntei")
+    return hasHolding && hasSavingWord
+}
+
+ChatSelectableItem reserveChoice(String id, String label, String subtitle, String amountText, Long cents) {
+    return ChatSelectableItem(id, label, "Destino", "RESERVE", amountText, cents as Int, subtitle, false)
+}
+
+// Turno do chat: salva a mensagem do usuário e a resposta, e devolve a
+// proposta com o checklist. Null quando a mensagem não é uma declaração.
+InvoiceChatTurnResult? reserveDeclarationTurnFor(String userId, String message) {
+    var lower = message.trim().toLowerCase()
+    if (!isReserveDeclaration(lower)) {
+        return null
+    }
+    var cents = reserveAmountCents(lower)
+    if (cents <= 0) {
+        return null
+    }
+    var amountText = formatBrl(cents)
+    var userMsg = saveChatMessage(ChatMessageEntity("", userId, ChatRole.USER, message, nowIso()))
+    var proposal = RESERVE_PROPOSAL_PREFIX() + userMsg.id + ":" + String.valueOf(cents)
+    var reply = "Que bom que você já tem " + amountText + " guardados! Antes de eu anotar, me diz o que você quer fazer com essa informação. O mais recomendado é colocar na sua Reserva acumulada."
+    saveChatMessage(ChatMessageEntity("", userId, ChatRole.ASSISTANT, reply, nowIso()))
+    var items: List<ChatSelectableItem> = listOf()
+    items.add(reserveChoice("dest_reserve", "Somar à Reserva acumulada", "Recomendado · o valor passa a contar como dinheiro já guardado", amountText, cents))
+    items.add(reserveChoice("dest_goal", "É uma meta, ainda não guardei", "Nada é somado ao seu saldo", "", 0))
+    items.add(reserveChoice("dest_caixinha", "Quero usar numa caixinha", "Te explico como as caixinhas funcionam antes de mexer em algo", "", 0))
+    items.add(reserveChoice("dest_none", "Só queria te contar", "Não salvo nada", "", 0))
+    var interaction = ChatInteractionPayload(
+        "RESERVE_DECLARATION",
+        "O que você quer fazer com esse valor?",
+        proposal,
+        null,
+        null,
+        "Você tem " + amountText + " guardados",
+        "Reserva de emergência é o dinheiro que segura imprevistos sem você precisar de crédito. Registrar o que já está guardado mostra quanto falta para a sua meta.",
+        null,
+        null,
+        listOf(),
+        items)
+    return InvoiceChatTurnResult(reply, interaction)
+}
+
+// Confirmação (POST /api/intents/dispatch, intent DECLARAR_RESERVA).
+// parameters.selectedIds = um destino; attachmentIds[0] = proposta.
+IntentResult confirmReserveDeclaration(String userId, IntentRequest req, String corrId) {
+    var intent = "DECLARAR_RESERVA"
+    var proposal = ""
+    var att = req.attachmentIds()
+    if (att != null && att.size > 0) {
+        proposal = att.get(0).trim()
+    }
+    var choice = ""
+    var params = req.parameters()
+    if (params != null) {
+        choice = params.getOrDefault("selectedIds", "").trim()
+    }
+    if (!proposal.startsWith(RESERVE_PROPOSAL_PREFIX())) {
+        return IntentResult("ERROR", intent, corrId, false, "Não encontrei essa proposta. Me conta de novo o valor que você tem guardado.", null, listOf("NO_PROPOSAL"))
+    }
+    if (choice != "dest_reserve" && choice != "dest_goal" && choice != "dest_caixinha" && choice != "dest_none") {
+        return IntentResult("ERROR", intent, corrId, false, "Escolha uma opção para eu continuar.", null, listOf("NEEDS_CHOICE"))
+    }
+    var parts = proposal.substring(RESERVE_PROPOSAL_PREFIX().length()).split(":")
+    if (parts.size != 2 || !strings.isNumeric(parts[1])) {
+        return IntentResult("ERROR", intent, corrId, false, "Proposta inválida.", null, listOf("NO_PROPOSAL"))
+    }
+    var msgId = parts[0]
+    var cents = parts[1].toLong()
+    // A proposta só vale se a mensagem é deste usuário e declara esse mesmo valor.
+    var found = false
+    for (var m in findRecentChatMessages(userId, 40)) {
+        if (m.id == msgId && m.role == ChatRole.USER && reserveAmountCents(m.content.toLowerCase()) == cents) {
+            found = true
+        }
+    }
+    if (!found) {
+        return IntentResult("ERROR", intent, corrId, false, "Essa proposta expirou. Me conta de novo o valor que você tem guardado.", null, listOf("NO_PROPOSAL"))
+    }
+    var amountText = formatBrl(cents)
+    if (choice == "dest_goal") {
+        return IntentResult("OK", intent, corrId, false, "Combinado: " + amountText + " é uma meta, então não somei nada ao seu saldo. Quando quiser, eu calculo quanto guardar por mês para chegar lá.", null, listOf())
+    }
+    if (choice == "dest_caixinha") {
+        return IntentResult("OK", intent, corrId, false, "Hoje as caixinhas controlam quanto você pode gastar em cada categoria, elas não guardam saldo. Por isso não mexi em nenhuma. Para dinheiro já guardado, o melhor lugar é a Reserva acumulada: é só escolher essa opção.", null, listOf())
+    }
+    if (choice == "dest_none") {
+        return IntentResult("OK", intent, corrId, false, "Anotado só na conversa: não salvei nada.", null, listOf())
+    }
+    var source = "Saldo declarado no chat (" + proposal + ")"
+    for (var inc in findVariableIncomesByUserId(userId)) {
+        if (inc.source == source) {
+            return IntentResult("OK", intent, corrId, false, amountText + " já estava na sua Reserva acumulada. Não somei de novo.", null, listOf())
+        }
+    }
+    saveVariableIncome(VariableIncomeEntity("", userId, centsToReais(cents), source, VariableIncomeDestination.EMERGENCY_FUND, nowIso()))
+    return IntentResult("OK", intent, corrId, false, "Pronto! Somei " + amountText + " à sua Reserva acumulada. Ela aparece no Dashboard e não muda quanto você pode gastar por dia.", null, listOf())
+}

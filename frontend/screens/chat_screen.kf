@@ -493,6 +493,64 @@ View chatInteractionCard(Window w) {
         footerBtns.setId("chat-reg-actions")
         footerBtns.setStyle(chatFooterBtnsCss())
         content.add(footerBtns)
+    } else if (kind == "RESERVE_DECLARATION") {
+        ensureSelectionInitialized(interaction)
+        val items = interaction.items()
+        var prompt = Label(interaction.prompt())
+        prompt.setStyle(chatInteractionSubTitleCss())
+        content.add(prompt)
+        var choiceParts: List<View> = listOf()
+        for (var item in items) {
+            val itemId = item.id()
+            choiceParts.add(selectableCheckRow(
+                w,
+                "chat-reserve-" + itemId,
+                isSelectedItem(itemId),
+                item.label(),
+                item.subtitle(),
+                item.formattedAmount(),
+                () -> {
+                    chooseSingleItem(itemId)
+                    mountScreen(w)
+                }
+            ))
+        }
+        var choices = Column(choiceParts)
+        choices.setId("chat-reserve-items")
+        choices.setStyle(Style("display: flex; flex-direction: column; gap: 8; width: 100%"))
+        content.add(choices)
+        if (ChatUi.interactionError != "") {
+            content.add(errorBanner(ChatUi.interactionError))
+        }
+        var cancelBtn = secondaryButton("Cancelar", "chat-reserve-cancel", false, () -> {
+            cancelInteractiveTemplate()
+            mountScreen(w)
+        })
+        var confirmLabel = "Confirmar escolha"
+        if (ChatUi.interactionBusy) {
+            confirmLabel = "Salvando..."
+            cancelBtn.setDisabled(true)
+        }
+        var confirmBtn = primaryButton(confirmLabel, "chat-reserve-confirm", false, () -> {
+            spawn {
+                confirmReserveDeclarationAction(interaction)
+                invalidateFinancialCaches()
+                mountScreen(w)
+            }
+        })
+        if (ChatUi.interactionBusy || countSelectedItems(items) != 1) {
+            confirmBtn.setDisabled(true)
+        }
+        var cancelWrap = View(screenStyle())
+        cancelWrap.setStyle(chatHalfBtnWrapCss())
+        cancelWrap.bind(cancelBtn)
+        var confirmWrap = View(screenStyle())
+        confirmWrap.setStyle(chatHalfBtnWrapCss())
+        confirmWrap.bind(confirmBtn)
+        var footerBtns = Row(listOf(cancelWrap, confirmWrap))
+        footerBtns.setId("chat-reserve-actions")
+        footerBtns.setStyle(chatFooterBtnsCss())
+        content.add(footerBtns)
     } else if (kind == "REVIEW_CHECKLIST") {
         ensureSelectionInitialized(interaction)
         val items = interaction.items()

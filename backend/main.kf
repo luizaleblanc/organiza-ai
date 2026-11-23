@@ -637,6 +637,11 @@ main() {
             }
             // Fatura/extrato: resposta deterministica (ANALISAR_FATURA, backend/invoice.kf) ANTES do ramo LLM.
             // documentId opcional no corpo; sem ele, usa o ultimo documento EM_REVISAO se a mensagem for sobre fatura.
+            // DECLARAR_RESERVA (coach.kf): checklist de destino antes de gravar qualquer saldo.
+            var reserveTurn = reserveDeclarationTurnFor(userId, msgReq.message)
+            if (reserveTurn != null) {
+                return chatReplyJsonWithInteraction(userId, reserveTurn.reply(), monthStart, reserveTurn.interaction())
+            }
             var invoiceTurn = invoiceChatTurnFor(userId, msgReq.message, chatRaw)
             if (invoiceTurn != null) {
                 saveChatMessage(ChatMessageEntity("", userId, ChatRole.USER, msgReq.message, nowIso()))

@@ -363,8 +363,11 @@ chartToggleAction(Window w, Int which) {
     if (which == 3) { toggleSummaryCard(w) }
 }
 
+// Botão "Personalizar gráficos" + painel de opções. Vive no cabeçalho do card
+// "Prévia do Modelo de Economia" (aba Mês); se o card estiver oculto, aparece
+// sozinho no lugar dele para o usuário poder reexibi-lo.
 View chartPreferenceAction(Window w) {
-    var controls: List<View> = listOf(periodTabs(w))
+    var controls: List<View> = listOf()
     var customize = Button("Personalizar gráficos", () -> toggleChartPreferences(w))
     customize.setId("dash-chart-preferences-toggle")
     customize.setStyle(chartPreferenceButtonCss())
@@ -380,7 +383,8 @@ View chartPreferenceAction(Window w) {
         controls.add(panel)
     }
     var col = Column(controls)
-    if (!AppState.isDesktop) { col.setStyle(Style("display: flex; flex-direction: column; align-items: stretch; gap: 8; width: 100%")) } else { col.setStyle(Style("display: flex; flex-direction: column; align-items: flex-end; gap: 8")) }
+    col.setId("dash-chart-preferences")
+    col.setStyle(Style("display: flex; flex-direction: column; align-items: stretch; gap: 8; width: 100%"))
     return col
 }
 
@@ -843,7 +847,7 @@ View distributionCard(Window w, DashboardResponse d) {
         idLabel("Prévia do Modelo de Economia", "dist-title", titleCss),
         idLabel(modelFriendlyName(d.budgetModel), "dist-model", distributionModelCss())))
     heading.setStyle(distributionHeadingCss())
-    var card = Column(listOf(heading, chartWrap, explain))
+    var card = Column(listOf(heading, chartPreferenceAction(w), chartWrap, explain))
     card.setId("card-distribution")
     card.setStyle(cardCss)
     return card
@@ -1199,7 +1203,7 @@ View yearDocumentsCard(YearDashboard y, String year) {
 }
 
 View yearEmpty(Window w, String year) {
-    var cta = Button("Registrar gastos no chat", () -> navigateTo(w, "chat"))
+    var cta = Button("Conversar com o Organiza AI", () -> navigateTo(w, "chat"))
     cta.setId("year-empty-cta")
     cta.setStyle(yearCtaCss())
     var body: List<View> = listOf()
@@ -1244,11 +1248,8 @@ View dashboardScreen(Window w) {
     }
     var d = dashboardData()
     var items: List<View> = listOf()
-    // Personalizar gráficos só no Mês (aba padrão); Semana e Ano têm conteúdo fixo.
+    // Personalizar gráficos fica no card "Prévia do Modelo de Economia" (aba Mês).
     var headerAction = periodTabs(w)
-    if (DashState.period == "month") {
-        headerAction = chartPreferenceAction(w)
-    }
     items.add(topbar("Dashboard", dashSubtitle(d), headerAction))
     if (AppState.loadError != "") {
         items.add(idLabel(AppState.loadError, "dash-error", errorBannerCss()))
@@ -1272,6 +1273,8 @@ View dashboardScreen(Window w) {
             var cardsToShow: List<View> = listOf()
             if (DashState.showBudgetChart) {
                 cardsToShow.add(distributionCard(w, d))
+            } else {
+                items.add(chartPreferenceAction(w))
             }
             if (DashState.showCategoryChart && (DashState.period == "year" || d.categories.size > 0)) {
                 cardsToShow.add(yearCategoryChart(d))
@@ -1280,7 +1283,7 @@ View dashboardScreen(Window w) {
                 cardsToShow.add(transactionsCard(d))
             }
             if (cardsToShow.size == 0) {
-                cardsToShow.add(idLabel("Nenhum gráfico selecionado. Use Personalizar gráficos no cabeçalho para escolher o que exibir.", "dash-no-charts", captionCss()))
+                cardsToShow.add(idLabel("Nenhum gráfico selecionado. Use Personalizar gráficos acima para escolher o que exibir.", "dash-no-charts", captionCss()))
             }
             if (AppState.isDesktop) {
                 var cards = Row(cardsToShow)

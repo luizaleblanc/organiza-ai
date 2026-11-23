@@ -807,8 +807,6 @@
    já usados em frontend/core/theme.kf (não há cores novas aqui).
    ========================================================================== */
 
-/* O layout segue a largura real (voice_bridge.js); o botão manual vira redundante. */
-#dev-viewport { display: none !important; }
 
 /* Telas dentro do #shell-main rolável não podem encolher: era isso que
    sobrepunha os cards do Dashboard em janelas baixas. */
