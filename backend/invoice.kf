@@ -5072,11 +5072,11 @@ Int minorToIntCents(Long minor) {
 String canonicalTxDisplayDesc(CanonicalTransaction ctx, String fallbackDesc) {
     var norm = ctx.descriptionNormalized()
     if (norm != null && norm.trim() != "") {
-        return norm.trim()
+        return redactNormalizedName(norm.trim(), ctx.kind(), ctx.categoryRule())
     }
     var raw = ctx.descriptionRaw().trim()
     if (raw != "") {
-        return raw
+        return redactExtractedText(raw, ctx.kind(), ctx.categoryRule())
     }
     return fallbackDesc
 }
@@ -5154,7 +5154,7 @@ ChatInteractionDetails buildInvoiceInteractionDetails(ImportReview rev, ImportFl
             if (lr != null) {
                 rNum = lr
             }
-            detailItems.add("Pendente: " + descText + " · " + formatBrl(valMinor) + " (página " + pNum + ", linha " + rNum + ")")
+            detailItems.add("Pendente: " + redactExtractedText("" + descText, "PIX_OUT", "PIX_PF_NEEDS_REVIEW") + " · " + formatBrl(valMinor) + " (página " + pNum + ", linha " + rNum + ")")
         }
     }
     return ChatInteractionDetails("Detalhes da análise", detailItems)
@@ -5793,11 +5793,9 @@ String buildInvoiceChatReplyWithFilename(ImportFlowSummary s, Bool reconciled, S
     } else {
         headline = "Li o arquivo enviado, mas antes de salvar preciso confirmar com você de qual mês e ano são essas movimentações."
     }
-    var outflowsLine = "Saídas: encontrei " + formatBrl(s.confirmableExpenseMinor()) + " em despesas identificadas prontas para organizar nas suas caixinhas."
-    if (s.pendingCount() > 0) {
-        outflowsLine = "Saídas: encontrei " + formatBrl(s.confirmableExpenseMinor()) + " em despesas identificadas e " + formatBrl(s.pendingMinor()) + " em movimentações que precisamos conferir antes de salvar."
-    }
-    return headline + "\n\n" + outflowsLine
+    // Os valores (separados por natureza) ficam no card; o texto só anuncia e
+    // reforça a segurança.
+    return headline + "\n\nPara sua segurança, censurei todos os dados sensíveis que possam comprometer o usuário Organiza 💙"
 }
 
 String buildInvoiceChatReply(ImportFlowSummary s, Bool reconciled) {
