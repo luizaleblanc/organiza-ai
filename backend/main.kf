@@ -1032,16 +1032,19 @@ main() {
         // Deep links usados pelo QA. Cada caminho devolve o mesmo app shell, mas
         // aponta para um bundle cuja tela inicial corresponde ao destino.
         app.get("/login") {
+            setKofUiDocumentHeaders()
             setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
             setHeader("Content-Type", "text/html; charset=utf-8")
             return indexHtmlForScreen(webOut, buildTag, "login")
         }
         app.get("/cadastro") {
+            setKofUiDocumentHeaders()
             setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
             setHeader("Content-Type", "text/html; charset=utf-8")
             return indexHtmlForScreen(webOut, buildTag, "cadastro")
         }
         app.get("/onboarding") {
+            setKofUiDocumentHeaders()
             setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
             setHeader("Content-Type", "text/html; charset=utf-8")
             return indexHtmlForScreen(webOut, buildTag, "onboarding")
@@ -1049,30 +1052,60 @@ main() {
         app.get("/Default-qa-login.mjs") {
             setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
             setHeader("Content-Type", "text/javascript; charset=utf-8")
-            return qaScreenModule(webOut, "login", isMobileUserAgent(header("User-Agent")))
+            return versionedRuntimeModule(qaScreenModule(webOut, "login", isMobileUserAgent(header("User-Agent"))), buildTag)
         }
         app.get("/Default-qa-cadastro.mjs") {
             setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
             setHeader("Content-Type", "text/javascript; charset=utf-8")
-            return qaScreenModule(webOut, "signup", isMobileUserAgent(header("User-Agent")))
+            return versionedRuntimeModule(qaScreenModule(webOut, "signup", isMobileUserAgent(header("User-Agent"))), buildTag)
         }
         app.get("/Default-qa-onboarding.mjs") {
             setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
             setHeader("Content-Type", "text/javascript; charset=utf-8")
-            return qaScreenModule(webOut, "onb_salary", isMobileUserAgent(header("User-Agent")))
+            return versionedRuntimeModule(qaScreenModule(webOut, "onb_salary", isMobileUserAgent(header("User-Agent"))), buildTag)
+        }
+        app.get("/Default.mjs") {
+            setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
+            setHeader("Content-Type", "text/javascript; charset=utf-8")
+            return versionedRuntimeModule(readWebFile(webOut, "Default.mjs"), buildTag)
         }
         app.get("/Default-mobile.mjs") {
             setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
             setHeader("Content-Type", "text/javascript; charset=utf-8")
-            return viewportModule(webOut, true, false)
+            return versionedRuntimeModule(viewportModule(webOut, true, false), buildTag)
         }
         app.get("/Default-dev.mjs") {
             setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
             setHeader("Content-Type", "text/javascript; charset=utf-8")
-            return viewportModule(webOut, false, true)
+            return versionedRuntimeModule(viewportModule(webOut, false, true), buildTag)
         }
-        app.get("/qa/view/:screen") { return qaIndexForShortcut(webOut, buildTag, param("screen"), true) }
-        app.get("/qa/mobile/view/:screen") { return qaIndexForShortcut(webOut, buildTag, param("screen"), false) }
+        app.get("/kof-runtime.mjs") {
+            setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
+            setHeader("Content-Type", "text/javascript; charset=utf-8")
+            return versionedRuntimeModule(readWebFile(webOut, "kof-runtime.mjs"), buildTag)
+        }
+        app.get("/kof-runtime-io.mjs") {
+            setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
+            setHeader("Content-Type", "text/javascript; charset=utf-8")
+            return readWebFile(webOut, "kof-runtime-io.mjs")
+        }
+        app.get("/assets/voice_bridge.js") {
+            setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
+            setHeader("Content-Type", "text/javascript; charset=utf-8")
+            return readWebFile(webOut, "assets/voice_bridge.js")
+        }
+        app.get("/qa/view/:screen") {
+            setKofUiDocumentHeaders()
+            setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
+            setHeader("Content-Type", "text/html; charset=utf-8")
+            return qaIndexForShortcut(webOut, buildTag, param("screen"), true)
+        }
+        app.get("/qa/mobile/view/:screen") {
+            setKofUiDocumentHeaders()
+            setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
+            setHeader("Content-Type", "text/html; charset=utf-8")
+            return qaIndexForShortcut(webOut, buildTag, param("screen"), false)
+        }
         app.get("/qa/dashboard") { return qaIndexForShortcut(webOut, buildTag, "dashboard", true) }
         app.get("/qa/chat") { return qaIndexForShortcut(webOut, buildTag, "chat", true) }
         app.get("/qa/caixinhas") { return qaIndexForShortcut(webOut, buildTag, "envelopes", true) }
@@ -1125,13 +1158,14 @@ main() {
             var screen = "dashboard"
             var requestedScreen = query("screen")
             if (requestedScreen != null) { screen = qaScreenName(requestedScreen) }
-            var desktop = query("desktop") != "false"
-            return qaAuthenticatedModule(webOut, screen, desktop)
+            var mode = query("desktop") != "false"
+            return versionedRuntimeModule(qaAuthenticatedModule(webOut, screen, mode), buildTag)
         }
         // O serveDir do runtime grava "Cache-Control: public, max-age=86400" fixo: o navegador ficava
         // um dia com o app antigo depois de cada deploy. O index.html sai por esta rota, sem cache, e
         // aponta para Default.mjs?v=<inicio do servidor>, entao cada novo boot invalida o bundle.
         app.get("/") {
+            setKofUiDocumentHeaders()
             setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
             setHeader("Content-Type", "text/html; charset=utf-8")
             setHeader("Vary", "User-Agent")
@@ -1139,6 +1173,7 @@ main() {
         }
         // Unico caminho que expoe o controle manual Desktop/Mobile.
         app.get("/dev") {
+            setKofUiDocumentHeaders()
             setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
             setHeader("Content-Type", "text/html; charset=utf-8")
             return indexHtmlWithBundle(webOut, buildTag, "Default-dev.mjs")
@@ -1152,6 +1187,7 @@ main() {
             return indexInlineCss(webOut, isMobileUserAgent(header("User-Agent")))
         }
         app.get("/index.html") {
+            setKofUiDocumentHeaders()
             setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
             setHeader("Content-Type", "text/html; charset=utf-8")
             setHeader("Vary", "User-Agent")
@@ -1294,6 +1330,14 @@ String qaIndexForShortcut(String webOut, String tag, String screen, Bool desktop
         "/Default-qa-shell.mjs?screen=" + screen + "&desktop=" + mode + "&v=" + tag)
 }
 
+String versionedRuntimeModule(String module, String tag) {
+    var out = module.replace("from './kof-runtime.mjs'", "from '/kof-runtime.mjs?v=" + tag + "'")
+    out = out.replace("from \"./kof-runtime.mjs\"", "from \"/kof-runtime.mjs?v=" + tag + "\"")
+    out = out.replace("from './kof-runtime-io.mjs'", "from '/kof-runtime-io.mjs?v=" + tag + "'")
+    out = out.replace("from \"./kof-runtime-io.mjs\"", "from \"/kof-runtime-io.mjs?v=" + tag + "\"")
+    return out
+}
+
 setDefaultDocumentHeaders() {
     headerSet("Content-Security-Policy", "default-src 'self'; frame-ancestors 'none'; base-uri 'self'")
     headerSet("X-Frame-Options", "DENY")
@@ -1302,7 +1346,7 @@ setDefaultDocumentHeaders() {
 }
 
 setKofUiDocumentHeaders() {
-    headerSet("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'")
+    headerSet("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'")
     headerSet("X-Frame-Options", "DENY")
     headerSet("X-Content-Type-Options", "nosniff")
     headerSet("Referrer-Policy", "strict-origin-when-cross-origin")
