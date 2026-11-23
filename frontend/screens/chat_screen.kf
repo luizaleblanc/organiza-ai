@@ -5,6 +5,7 @@ import kof.json
 import core.theme
 import core.app_state
 import core.chat_api
+import core.envelopes_api
 import core.format
 import core.navigation
 import components.topbar
@@ -83,6 +84,49 @@ Style chatSuccessBoxCss()      = themed(Style("display: flex; flex-direction: ro
 Style chatFooterRowCss()       = Style("display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10; width: 100%")
 Style chatFooterBtnsCss()      = Style("display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 10; width: 100%")
 Style chatHalfBtnWrapCss()     = Style("flex: 1 1 180; min-width: 140")
+
+Style chatTrashBtnCss() = themed(Style("outline: none; display: inline-flex; align-items: center; justify-content: center; width: 44; height: 44; padding: 0; box-sizing: border-box; border: 1px solid rgba(220,38,38,.35); border-radius: 10; background: rgba(220,38,38,.06); cursor: pointer; flex-shrink: 0"), Style("outline: none; display: inline-flex; align-items: center; justify-content: center; width: 44; height: 44; padding: 0; box-sizing: border-box; border: 1px solid rgba(255,74,110,.35); border-radius: 10; background: rgba(255,74,110,.08); cursor: pointer; flex-shrink: 0"))
+
+// Lixeira: apaga o histórico do chat (DELETE /api/chat/messages, o mesmo do
+// "Novo chat"). Ação destrutiva: pede confirmação no próprio cabeçalho.
+View chatTrashButton(Window w) {
+    if (ChatUi.confirmClear) {
+        var ask = Label("Apagar a conversa?")
+        ask.setStyle(chatInteractionTextCss())
+        var no = secondaryButton("Cancelar", "chat-clear-cancel", false, () -> {
+            ChatUi.confirmClear = false
+            mountScreen(w)
+        })
+        var yes = primaryButton("Apagar", "chat-clear-confirm", false, () -> {
+            ChatUi.confirmClear = false
+            spawn {
+                clearChatHistory()
+                mountScreen(w)
+            }
+        })
+        var row = Row(listOf(ask, no, yes))
+        row.setId("chat-clear-ask")
+        row.setStyle(Style("display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8"))
+        return row
+    }
+    var btn = View(screenStyle())
+    btn.setId("chat-clear-btn")
+    btn.setAccessibleName("Apagar conversa")
+    btn.setStyle(chatTrashBtnCss())
+    btn.bind(icon("trash", 18, "danger"))
+    btn.on("click", () -> {
+        ChatUi.confirmClear = true
+        mountScreen(w)
+    })
+    return btn
+}
+
+View chatHeaderActions(Window w) {
+    var row = Row(listOf(chatTrashButton(w), newChatTopButton(w)))
+    row.setId("chat-header-actions")
+    row.setStyle(Style("display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8"))
+    return row
+}
 
 View newChatTopButton(Window w) {
     var txt = Label("Novo chat")
@@ -210,7 +254,12 @@ View flowSummaryGroupBox(String boxId, String titleText, String totalText, List<
     headLeft.setStyle(Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 8"))
     var totalLbl = Label(totalText)
     totalLbl.setStyle(chatInteractionAccentCss())
-    var head = Row(listOf(headLeft, totalLbl))
+    var headParts: List<View> = listOf()
+    headParts.add(headLeft)
+    if (totalText.trim() != "") {
+        headParts.add(totalLbl)
+    }
+    var head = Row(headParts)
     head.setStyle(Style("display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 10; width: 100%"))
     var boxItems: List<View> = listOf()
     boxItems.add(head)
@@ -221,6 +270,12 @@ View flowSummaryGroupBox(String boxId, String titleText, String totalText, List<
     } else {
         for (var line in lines) {
             boxItems.add(interactionFlowLine(line.label(), line.formattedAmount(), boxId + "-" + line.label()))
+            val note = line.note()
+            if (note != null && note.trim() != "") {
+                var noteLbl = Label(note.trim())
+                noteLbl.setStyle(chatInteractionMutedCss())
+                boxItems.add(noteLbl)
+            }
         }
     }
     var box = Column(boxItems)
@@ -272,6 +327,10 @@ addOptionButtons(Window w, List<View> content, List<ChatInteractionOptionRespons
     for (var option in options) {
         val actionPrompt = option.label()
         var label = actionPrompt
+        // A tag é só visual: a mensagem enviada ao chat continua sendo o label.
+        if (option.id() == "opt_understand_expenses") {
+            label = label + " (recomendado)"
+        }
         if (option.badgeCount() > 0) {
             label = label + " (" + String.valueOf(option.badgeCount()) + ")"
         }
@@ -287,6 +346,15 @@ addOptionButtons(Window w, List<View> content, List<ChatInteractionOptionRespons
         stack.setStyle(Style("display: flex; flex-direction: column; gap: 8; width: 100%"))
         content.add(stack)
     }
+}
+
+Bool categoryOrNullPt(String name) {
+    for (var code in listOf("FOOD", "GROCERIES", "TRANSPORT", "HOUSING", "HEALTH", "LEISURE", "EDUCATION", "OTHER")) {
+        if (categoryNamePt(code).toLowerCase() == name.toLowerCase()) {
+            return false
+        }
+    }
+    return true
 }
 
 View chatInteractionCard(Window w) {
@@ -415,9 +483,9 @@ View chatInteractionCard(Window w) {
 
         val summary = interaction.summary()
         if (summary != null && summary.pendingCount() > 0) {
-            var warnTitle = Label("Existem " + String.valueOf(summary.pendingCount()) + " movimentação(ões) aguardando revisão (" + summary.pendingText() + "). Elas não são salvas sem você escolher a caixinha.")
+            var warnTitle = Label("Algumas movimentações (" + summary.pendingText() + ") aguardam sua revisão. Elas não são salvas sem você escolher a categoria.")
             warnTitle.setStyle(chatInteractionTextCss())
-            var revBtn = Button("Revisar movimentações (" + String.valueOf(summary.pendingCount()) + ")", () -> submitInteractionPrompt(w, "Revisar movimentações"))
+            var revBtn = Button("Revisar movimentações", () -> submitInteractionPrompt(w, "Revisar movimentações"))
             revBtn.setId("chat-reg-review-shortcut")
             revBtn.setStyle(chatInteractionActionCss())
             var noticeBox = Column(listOf(warnTitle, revBtn))
@@ -462,18 +530,65 @@ View chatInteractionCard(Window w) {
         totalRow.setStyle(chatFooterRowCss())
         content.add(totalRow)
 
-        var cancelBtn = secondaryButton("Cancelar", "chat-reg-cancel", false, () -> {
-            cancelInteractiveTemplate()
+        var cancelLabel = "Cancelar"
+        if (ChatUi.registerPreview) { cancelLabel = "Voltar e corrigir" }
+        var cancelBtn = secondaryButton(cancelLabel, "chat-reg-cancel", false, () -> {
+            if (ChatUi.registerPreview) {
+                ChatUi.registerPreview = false
+            } else {
+                cancelInteractiveTemplate()
+            }
             mountScreen(w)
         })
         if (ChatUi.interactionBusy) {
             cancelBtn.setDisabled(true)
         }
-        var confirmLabel = "Confirmar e registrar fatura"
+        if (ChatUi.registerPreview) {
+            var prevTitle = Label("Prévia: como os gastos vão para as caixinhas")
+            prevTitle.setStyle(chatInteractionSubTitleCss())
+            var prevParts: List<View> = listOf()
+            prevParts.add(prevTitle)
+            var groups: List<String> = listOf()
+            for (var it in items) {
+                if (isSelectedItem(it.id()) && !groups.contains(it.groupLabel())) {
+                    groups.add(it.groupLabel())
+                }
+            }
+            for (var g in groups) {
+                var gCents = 0
+                for (var it in items) {
+                    if (isSelectedItem(it.id()) && it.groupLabel() == g) {
+                        gCents = gCents + it.amountCents()
+                    }
+                }
+                prevParts.add(interactionFlowLine(g, brlFromCents(gCents), "chat-reg-preview-" + g))
+            }
+            var prevNote = Label("Isso organiza seus gastos por categoria. Nenhum dinheiro é transferido.")
+            prevNote.setStyle(chatInteractionMutedCss())
+            prevParts.add(prevNote)
+            var prevBox = Column(prevParts)
+            prevBox.setId("chat-reg-preview")
+            prevBox.setStyle(chatFlowBoxCss())
+            content.add(prevBox)
+        }
+        var confirmLabel = "Ver prévia das caixinhas"
+        if (ChatUi.registerPreview) {
+            confirmLabel = "Confirmar e registrar"
+        }
         if (ChatUi.interactionBusy) {
             confirmLabel = "Salvando nas caixinhas..."
         }
         var confirmBtn = primaryButton(confirmLabel, "chat-reg-confirm", false, () -> {
+            if (!ChatUi.registerPreview) {
+                if (countSelectedItems(interaction.items()) == 0) {
+                    ChatUi.interactionError = "Selecione pelo menos um lançamento."
+                } else {
+                    ChatUi.interactionError = ""
+                    ChatUi.registerPreview = true
+                }
+                mountScreen(w)
+                return
+            }
             spawn {
                 confirmInvoiceRegistrationAction(interaction)
                 invalidateFinancialCaches()
@@ -553,20 +668,27 @@ View chatInteractionCard(Window w) {
         content.add(footerBtns)
     } else if (kind == "REVIEW_CHECKLIST") {
         ensureSelectionInitialized(interaction)
+        if (!EnvState.loaded && !EnvState.loading) {
+            spawn {
+                try { loadEnvelopes() } catch (String e) {}
+                mountScreen(w)
+            }
+        }
         val items = interaction.items()
 
         var prompt = Label(interaction.prompt())
         prompt.setStyle(chatInteractionSubTitleCss())
         content.add(prompt)
 
-        if (items.size > 0) {
+        if (items.size > 0 && !ChatUi.reviewPreview) {
             var revItemsColParts: List<View> = listOf()
             for (var item in items) {
                 val itemId = item.id()
+                val checked = isSelectedItem(itemId)
                 revItemsColParts.add(selectableCheckRow(
                     w,
                     "chat-rev-item-" + itemId,
-                    isSelectedItem(itemId),
+                    checked,
                     item.label(),
                     item.subtitle(),
                     item.formattedAmount(),
@@ -575,23 +697,78 @@ View chatInteractionCard(Window w) {
                         mountScreen(w)
                     }
                 ))
+                // Categoria escolhida pelo usuário para ESTE item (sem palpite pelo nome).
+                if (checked) {
+                    var itemChips: List<View> = listOf()
+                    for (var code in listOf("FOOD", "GROCERIES", "TRANSPORT", "HOUSING", "HEALTH", "LEISURE", "EDUCATION", "OTHER")) {
+                        val c = code
+                        itemChips.add(chip(categoryNamePt(c), "chat-rev-cat-" + itemId + "-" + c, itemCategory(itemId) == c, () -> {
+                            setItemCategory(itemId, c)
+                            mountScreen(w)
+                        }))
+                    }
+                    // Caixinhas criadas pelo usuário (nome livre) também são destino.
+                    for (var env in envelopeItems()) {
+                        if (categoryOrNullPt(env.categoryName())) {
+                            val envCode = "ENV:" + env.id()
+                            itemChips.add(chip(env.categoryName(), "chat-rev-cat-" + itemId + "-env-" + env.id(), itemCategory(itemId) == envCode, () -> {
+                                setItemCategory(itemId, envCode)
+                                mountScreen(w)
+                            }))
+                        }
+                    }
+                    itemChips.add(chip("+ Criar caixinha", "chat-rev-new-box-" + itemId, false, () -> {
+                        ChatUi.newBoxOpen = true
+                        mountScreen(w)
+                    }))
+                    revItemsColParts.add(chipGroup("Para que foi esse gasto?", itemChips, "chat-rev-cats-" + itemId))
+                }
+            }
+            if (ChatUi.newBoxOpen) {
+                var boxField = textField("Nome da caixinha (ex.: Empréstimos)", "text", "chat-rev-new-box-name")
+                boxField.setText(ChatUi.newBoxName)
+                boxField.on("input", () -> {
+                    ChatUi.newBoxName = boxField.text()
+                })
+                var createBtn = primaryButton("Criar caixinha", "chat-rev-new-box-create", false, () -> {
+                    spawn {
+                        createBoxFromReview(interaction)
+                        invalidateEnvelopes()
+                        mountScreen(w)
+                    }
+                })
+                var closeBtn = secondaryButton("Cancelar", "chat-rev-new-box-cancel", false, () -> {
+                    ChatUi.newBoxOpen = false
+                    mountScreen(w)
+                })
+                var boxBtns = Row(listOf(closeBtn, createBtn))
+                boxBtns.setStyle(chatFooterBtnsCss())
+                var boxForm = Column(listOf(labeled("Nova caixinha", boxField), boxBtns))
+                boxForm.setId("chat-rev-new-box")
+                boxForm.setStyle(chatFlowBoxCss())
+                revItemsColParts.add(boxForm)
             }
             var revCol = Column(revItemsColParts)
             revCol.setId("chat-rev-items")
             revCol.setStyle(Style("display: flex; flex-direction: column; gap: 8; width: 100%"))
             content.add(revCol)
-
-            var chipsList: List<View> = listOf(
-                categoryChoiceChip(w, "FOOD", "Alimentação"),
-                categoryChoiceChip(w, "GROCERIES", "Mercado"),
-                categoryChoiceChip(w, "TRANSPORT", "Transporte"),
-                categoryChoiceChip(w, "HOUSING", "Moradia"),
-                categoryChoiceChip(w, "HEALTH", "Saúde"),
-                categoryChoiceChip(w, "LEISURE", "Lazer"),
-                categoryChoiceChip(w, "EDUCATION", "Educação"),
-                categoryChoiceChip(w, "OTHER", "Outros")
-            )
-            content.add(chipGroup("Escolher caixinha de destino", chipsList, "chat-rev-category-chips"))
+        } else if (items.size > 0) {
+            var pvParts: List<View> = listOf()
+            var pvTitle = Label("Prévia antes de salvar")
+            pvTitle.setStyle(chatInteractionSubTitleCss())
+            pvParts.add(pvTitle)
+            for (var item in items) {
+                if (isSelectedItem(item.id())) {
+                    pvParts.add(interactionFlowLine(item.label() + " → " + categoryNamePt(itemCategory(item.id())), item.formattedAmount(), "chat-rev-preview-" + item.id()))
+                }
+            }
+            var pvNote = Label("Depois de confirmar, esses valores passam a contar nos seus gastos e no Dashboard.")
+            pvNote.setStyle(chatInteractionMutedCss())
+            pvParts.add(pvNote)
+            var pvBox = Column(pvParts)
+            pvBox.setId("chat-rev-preview")
+            pvBox.setStyle(chatFlowBoxCss())
+            content.add(pvBox)
         } else {
             var nonePend = Label("Não há movimentações pendentes aguardando classificação neste documento.")
             nonePend.setStyle(chatInteractionMutedCss())
@@ -608,21 +785,33 @@ View chatInteractionCard(Window w) {
         revDivider.setStyle(chatInteractionDividerCss())
         content.add(revDivider)
 
-        var cancelRevBtn = secondaryButton("Cancelar", "chat-rev-cancel", false, () -> {
-            cancelInteractiveTemplate()
+        var cancelRevLabel = "Cancelar"
+        if (ChatUi.reviewPreview) { cancelRevLabel = "Voltar e corrigir" }
+        var cancelRevBtn = secondaryButton(cancelRevLabel, "chat-rev-cancel", false, () -> {
+            if (ChatUi.reviewPreview) {
+                ChatUi.reviewPreview = false
+            } else {
+                cancelInteractiveTemplate()
+            }
             mountScreen(w)
         })
         var cancelRevWrap = View(screenStyle())
         cancelRevWrap.setStyle(chatHalfBtnWrapCss())
         cancelRevWrap.bind(cancelRevBtn)
 
-        var confirmRevLabel = "Classificar selecionadas"
+        var confirmRevLabel = "Ver prévia"
+        if (ChatUi.reviewPreview) { confirmRevLabel = "Confirmar e salvar" }
         if (ChatUi.interactionBusy) {
-            confirmRevLabel = "Organizando..."
+            confirmRevLabel = "Salvando suas alterações..."
         }
         var confirmRevBtn = primaryButton(confirmRevLabel, "chat-rev-confirm", false, () -> {
+            if (!ChatUi.reviewPreview) {
+                openReviewPreview(interaction)
+                mountScreen(w)
+                return
+            }
             spawn {
-                reclassifySelectedItemsAction(interaction)
+                confirmReviewPerItemAction(interaction)
                 invalidateFinancialCaches()
                 mountScreen(w)
             }
@@ -774,7 +963,12 @@ View chatInteractionCard(Window w) {
         val summary = interaction.summary()
         if (summary != null) {
             content.add(flowSummaryGroupBox("chat-entradas-box", "Entradas", summary.totalInflowsText(), summary.entradas(), "Nenhuma entrada neste extrato", true))
-            content.add(flowSummaryGroupBox("chat-saidas-box", "Saídas", summary.totalOutflowsText(), summary.saidas(), "Nenhuma saída identificada ainda", false))
+            var gastosTitle = "Seus gastos"
+            val per = summary.periodLabel().trim()
+            if (per != "" && per != "Período a confirmar") {
+                gastosTitle = "Seus gastos de " + per.split(" ")[0].toLowerCase()
+            }
+            content.add(flowSummaryGroupBox("chat-saidas-box", gastosTitle, "", summary.saidas(), "Nenhum gasto identificado ainda", false))
             if (summary.pendingText() != "" && summary.pendingCount() > 0) {
                 var pending = Label("Aguardando sua revisão: " + summary.pendingText() + " (" + String.valueOf(summary.pendingCount()) + ")")
                 pending.setStyle(chatInteractionMutedCss())
@@ -1025,7 +1219,7 @@ View chatScreen(Window w) {
         mainArea = wsRow
     }
 
-    var col = Column(listOf(topbar("Organiza AI", "Assistente online", newChatTopButton(w)), mainArea))
+    var col = Column(listOf(topbar("Organiza AI", "Assistente online", chatHeaderActions(w)), mainArea))
     col.setId("screen-chat")
     if (AppState.isDesktop) {
         col.setStyle(chatScreenDesktopCss())

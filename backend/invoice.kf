@@ -5123,10 +5123,11 @@ ChatInteractionPayload buildInvoiceInteractionPayload(ImportReview rev, ImportFl
     var details = buildInvoiceInteractionDetails(rev, s, cleanName)
 
     var options: List<ChatInteractionOption> = listOf(
+        // Education First: entender vem antes de organizar (marcado como recomendado no frontend).
+        ChatInteractionOption("opt_understand_expenses", "Entender meus gastos", "UNDERSTAND_EXPENSES", "EXPLICAR_GASTOS", "book", 0),
         ChatInteractionOption("opt_view_expenses", "Ver meus gastos", "VIEW_EXPENSES", "CONSULTAR_GASTOS", "chart", 0),
         ChatInteractionOption("opt_organize_caixinhas", "Organizar caixinhas", "ORGANIZE_CAIXINHAS", "CONFIRMAR_IMPORTACAO", "wallet", 0),
-        ChatInteractionOption("opt_review_movements", "Revisar movimentações", "REVIEW_MOVEMENTS", "RECLASSIFICAR_MOVIMENTACOES", "checklist", 0),
-        ChatInteractionOption("opt_understand_expenses", "Entender meus gastos", "UNDERSTAND_EXPENSES", "EXPLICAR_GASTOS", "book", 0)
+        ChatInteractionOption("opt_review_movements", "Revisar movimentações", "REVIEW_MOVEMENTS", "RECLASSIFICAR_MOVIMENTACOES", "checklist", 0)
     )
 
     var headline = "Consegui organizar seu extrato de " + periodPt.toLowerCase() + "!"
