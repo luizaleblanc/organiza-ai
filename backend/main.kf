@@ -85,9 +85,15 @@ main() {
     var app = web.app()
     logQaMode()
 
+    // KOF 0.6.6 aplica a CSP de segurança depois dos headers da rota. Desliga
+    // o pacote automático e reaplica os headers padrão no middleware; a rota
+    // do KOF UI pode então substituir apenas a CSP pela política de estilos inline.
+    app.policy("*", mapOf("headers", false))
+
     // Middleware global de autenticação: fora das rotas públicas, exige token válido
     // (assinatura, exp, iss e aud via currentClaims). As rotas só leem o usuário.
     app.use {
+        setDefaultDocumentHeaders()
         // Conexao morta (MySQL reiniciado, idle timeout) e reaberta aqui, antes da rota; banco fora = 503
         // sem detalhe. So /api/* usa o banco: o /health faz o proprio ping (abaixo) e os arquivos do
         // frontend sao servidos mesmo com o banco fora.
@@ -1276,6 +1282,7 @@ String qaIndexForShortcut(String webOut, String tag, String screen, Bool desktop
         if (all.size > 0) { demo = all.get(0) }
     }
     if (demo == null) { return status(409, json.encode(ApiError("Execute POST /api/qa/seed primeiro."))) }
+    setKofUiDocumentHeaders()
     setHeader("Cache-Control", "no-cache, no-store, must-revalidate")
     setHeader("Content-Type", "text/html; charset=utf-8")
     var html = indexHtmlWithVersion(webOut, tag)
@@ -1285,6 +1292,20 @@ String qaIndexForShortcut(String webOut, String tag, String screen, Bool desktop
     if (!desktop) { mode = "false" }
     return replaceDefaultBundle(html,
         "/Default-qa-shell.mjs?screen=" + screen + "&desktop=" + mode + "&v=" + tag)
+}
+
+setDefaultDocumentHeaders() {
+    headerSet("Content-Security-Policy", "default-src 'self'; frame-ancestors 'none'; base-uri 'self'")
+    headerSet("X-Frame-Options", "DENY")
+    headerSet("X-Content-Type-Options", "nosniff")
+    headerSet("Referrer-Policy", "no-referrer")
+}
+
+setKofUiDocumentHeaders() {
+    headerSet("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'")
+    headerSet("X-Frame-Options", "DENY")
+    headerSet("X-Content-Type-Options", "nosniff")
+    headerSet("Referrer-Policy", "strict-origin-when-cross-origin")
 }
 
 String qaAuthenticatedModule(String webOut, String screen, Bool desktop) {
