@@ -5,11 +5,10 @@ import core.theme
 import core.app_state
 import core.navigation
 
-// O controle de viewport e exclusivamente de desenvolvimento. O bundle normal
-// mantem este literal falso; a rota /dev troca somente esta inicializacao no
-// modulo JS gerado. Assim, #dev-viewport nem chega a existir no DOM publico.
+// O modo inicial e Mobile. Este controle permite alternar o layout KOF UI
+// quando a pessoa estiver usando uma tela maior ou quiser comparar os modos.
 class ViewportDev {
-    static Bool enabled = false
+    static Bool enabled = true
 }
 
 // =============================================================================
@@ -83,7 +82,7 @@ View viewportIconButton(Window w) {
     return knob
 }
 
-// Wrapper sem id no bundle publico. Somente /dev monta o botao interno.
+// Controle do layout responsivo disponivel no app.
 View viewportControlBar(Window w) {
     var bar = View(screenStyle())
     bar.setStyle(viewportBarFloatCss())

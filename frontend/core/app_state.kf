@@ -12,7 +12,9 @@ package core
 
 class AppState {
     static String currentScreen = "welcome"
-    static Bool isDesktop = true
+    // Mobile-first: o primeiro layout ocupa a largura disponível em celulares.
+    // O modo Desktop continua acessível pelo controle de viewport.
+    static Bool isDesktop = false
     // Tema do app inteiro: "dark" (padrão) ou "light". Só muda em Configurações > Aparência
     // e ao ler a preferência do servidor no login.
     // Ao sair, o tema da sessão fica; o próximo login lê a preferência da conta e aplica.

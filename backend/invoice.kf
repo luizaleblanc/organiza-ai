@@ -5337,6 +5337,86 @@ String persistedSpendingEducationReply(String userId, String rawMsg) {
     return reply + " Quer entender melhor quais compras formam o total de " + label.toLowerCase() + " ou conferir outra categoria?"
 }
 
+Long parseReserveAmountCents(String rawText) {
+    var amount = 0.0
+    for (var tokenRaw in rawText.trim().toLowerCase().split(" ")) {
+        var token = tokenRaw.replace("r$", "").replace("$", "").trim()
+        while (token.startsWith(".") || token.startsWith(",")) { token = token.substring(1) }
+        while (token.endsWith(",") || token.endsWith(".") || token.endsWith("!") || token.endsWith("?") || token.endsWith(";")) {
+            token = token.substring(0, token.length() - 1)
+        }
+        if (token.contains(",")) {
+            token = token.replace(".", "").replace(",", ".")
+        } else if (token.contains(".")) {
+            var dot = token.lastIndexOf(".")
+            var decimals = token.length() - dot - 1
+            if (decimals == 3) { token = token.replace(".", "") }
+        }
+        if (token != "" && strings.isNumeric(token.replace(".", ""))) {
+            try {
+                var parsed = token.toDouble()
+                if (parsed > 0.0) { amount = parsed }
+            } catch (Exception e) {}
+        }
+    }
+    return toCents(amount)
+}
+
+String latestAssistantChatReply(String userId) {
+    var history = findChatHistoryPage(userId, 1, 10, 0)
+    var latest = ""
+    for (var item in history.items) {
+        if (item.role == "ASSISTANT") { latest = item.content }
+    }
+    return latest
+}
+
+InvoiceChatTurnResult? reserveContributionChatTurn(String userId, String rawMsg) {
+    var lower = rawMsg.trim().toLowerCase()
+    var lastAssistant = latestAssistantChatReply(userId)
+    var promptStart = lastAssistant.toLowerCase().indexOf("quer adicionar ")
+    var pendingCents: Long = 0
+    if (promptStart >= 0) {
+        var promptEnd = lastAssistant.toLowerCase().indexOf(" à sua caixinha reserva", promptStart)
+        if (promptEnd < 0) { promptEnd = lastAssistant.toLowerCase().indexOf(" a sua caixinha reserva", promptStart) }
+        if (promptEnd > promptStart) {
+            pendingCents = parseReserveAmountCents(lastAssistant.substring(promptStart + 15, promptEnd))
+        }
+    }
+    if (pendingCents > 0) {
+        var rejected = lower == "não" || lower == "nao" || lower.contains("cancela") || lower.contains("saldo total") || lower.contains("não adicionar") || lower.contains("nao adicionar")
+        if (rejected) {
+            if (lower.contains("saldo total")) {
+                return InvoiceChatTurnResult("Entendi: você está falando do saldo total, não de um depósito novo. Não fiz nenhuma alteração na caixinha Reserva. O saldo registrado continua em " + formatBrl(reserveCents(userId)) + ".", null)
+            }
+            return InvoiceChatTurnResult("Combinado. Não adicionei esse valor à caixinha Reserva; seu saldo permaneceu em " + formatBrl(reserveCents(userId)) + ".", null)
+        }
+        var confirmed = lower == "sim" || lower == "sim!" || lower == "confirmo" || lower.contains("pode adicionar") || lower.contains("pode depositar") || lower.contains("confirmo o depósito") || lower.contains("confirmo o deposito")
+        if (confirmed) {
+            try {
+                recordInitialSavings(userId, centsToReais(pendingCents))
+                return InvoiceChatTurnResult("Adicionei " + formatBrl(pendingCents) + " à caixinha Reserva. Agora o saldo registrado é " + formatBrl(reserveCents(userId)) + ".", null)
+            } catch (String e) {
+                return InvoiceChatTurnResult("Não consegui adicionar o depósito à caixinha Reserva. Por favor, tente novamente.", null)
+            }
+        }
+    }
+
+    var hasReserve = lower.contains("reserva") || lower.contains("caixinha reserva")
+    if (!hasReserve) { return null }
+    var amountCents = parseReserveAmountCents(rawMsg)
+    if (amountCents <= 0) { return null }
+    var currentCents = reserveCents(userId)
+    if (amountCents == currentCents) {
+        return InvoiceChatTurnResult("Esse saldo de " + formatBrl(amountCents) + " já está registrado na caixinha Reserva. Não fiz nenhuma alteração. Quer conferir sua meta?", null)
+    }
+    var note = " Esse valor ainda não aparece na caixinha Reserva."
+    if (currentCents > 0) {
+        note = " Hoje há " + formatBrl(currentCents) + " registrados; ao confirmar, o novo valor será somado a esse saldo."
+    }
+    return InvoiceChatTurnResult("Você mencionou " + formatBrl(amountCents) + " de reserva." + note + " Quer adicionar " + formatBrl(amountCents) + " à sua caixinha Reserva como um novo depósito?", null)
+}
+
 InvoiceChatTurnResult? answerEducationalFinanceTurn(String userId, String rawMsg) {
     var lower = rawMsg.trim().toLowerCase()
     var topic = detectEducationalFinanceTopic(lower)
@@ -5768,6 +5848,9 @@ Bool recentAssistantAskedExplicitSave(String userId) {
 // null = mensagem nao e sobre documento. Roda ANTES do ramo LLM.
 InvoiceChatTurnResult? invoiceChatTurnFor(String userId, String message, String rawBody) {
     var lowerMsg = message.trim().toLowerCase()
+
+    var reserveTurn = reserveContributionChatTurn(userId, message)
+    if (reserveTurn != null) { return reserveTurn }
 
     // 1. Perguntas educativas NUNCA disparam reprocessamento de arquivo (mesmo citando "fatura" ou após falha de upload).
     var eduTurn = answerEducationalFinanceTurn(userId, message)

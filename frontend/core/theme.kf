@@ -187,6 +187,7 @@ Style topbarCss() {
         }
         return themed(Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 16; width: 100%; height: 72; min-height: 72; flex-shrink: 0; box-sizing: border-box; padding-right: 48; border-bottom: 1px solid #E5E7EB"), Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 16; width: 100%; height: 72; min-height: 72; flex-shrink: 0; box-sizing: border-box; padding-right: 48; border-bottom: 1px solid rgba(255,255,255,.1)"))
     }
+    if (AppState.currentScreen == "dashboard") { return themed(Style("display: flex; flex-direction: column; flex-wrap: wrap; align-items: stretch; justify-content: flex-start; gap: 10; width: 100%; height: auto; min-height: 0; flex-shrink: 0; box-sizing: border-box; padding: 0 44px 12px 0; border-bottom: 1px solid #E5E7EB"), Style("display: flex; flex-direction: column; flex-wrap: wrap; align-items: stretch; justify-content: flex-start; gap: 10; width: 100%; height: auto; min-height: 0; flex-shrink: 0; box-sizing: border-box; padding: 0 44px 12px 0; border-bottom: 1px solid rgba(255,255,255,.1)")) }
     return themed(Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 16; width: 100%; height: 72; min-height: 72; flex-shrink: 0; box-sizing: border-box; padding-right: 44; border-bottom: 1px solid #E5E7EB"), Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 16; width: 100%; height: 72; min-height: 72; flex-shrink: 0; box-sizing: border-box; padding-right: 44; border-bottom: 1px solid rgba(255,255,255,.1)"))
 }
 Style topbarTitleCss()     = themed(Style("color: #1A1D2E; font-size: 1.5rem; font-weight: 700; line-height: 1.1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #F0F0F0; font-size: 1.5rem; font-weight: 700; line-height: 1.1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
@@ -256,7 +257,10 @@ Style topbarTextCss()      = Style("display: flex; flex-direction: column; gap: 
 // Topbar: subtítulo com ponto verde de 6 px quando "Assistente online".
 Style topbarSubRowCss()    = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 5; margin-top: 1")
 Style onlineDotCss()       = themed(Style("width: 6; height: 6; min-width: 6; border-radius: 3; background: #10B981; flex-shrink: 0"), Style("width: 6; height: 6; min-width: 6; border-radius: 3; background: #00E5A0; flex-shrink: 0"))
-Style topbarActionCss()    = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: 8; margin-left: auto; flex-shrink: 0; background: transparent; padding: 0")
+Style topbarActionCss() {
+    if (!AppState.isDesktop && AppState.currentScreen == "dashboard") { return Style("display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 8; width: 100%; margin-left: 0; flex-shrink: 1; background: transparent; padding: 0") }
+    return Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: 8; margin-left: auto; flex-shrink: 0; background: transparent; padding: 0")
+}
 // Ícones (components/icons.kf): holder sem altura de linha extra.
 Style iconHolderCss()      = Style("display: flex; align-items: center; justify-content: center; padding: 0; background: transparent; line-height: 0em; flex-shrink: 0")
 // Marca (components/brand_mark.kf): Image do SVG oficial.

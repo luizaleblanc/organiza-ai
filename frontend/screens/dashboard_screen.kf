@@ -29,9 +29,8 @@ Style chartPreferencePanelCss() = themed(Style("display: flex; flex-direction: r
 Style chartPreferenceButtonCss() = themed(Style("outline: none; background: #FFFFFF; color: #2563EB; border: 1px solid #D1D5DB; border-radius: 8; padding: 8px 12px; font-size: 0.8125rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; background: #111827; color: #00D4FF; border: 1px solid rgba(255,255,255,.16); border-radius: 8; padding: 8px 12px; font-size: 0.8125rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 
 // ---- Grids & cards ----------------------------------------------------------
-Style dashGridG3Css()         = Style("display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: stretch; gap: 12; width: 100%; min-height: 156")
-Style dashGridG2Css()         = Style("display: grid; grid-template-columns: 1fr 1fr; align-items: stretch; gap: 14; width: 100%; min-height: 360; flex-grow: 1")
-Style dashMobileG2Css()       = Style("display: grid; grid-template-columns: 1fr 1fr; align-items: stretch; gap: 10; width: 100%")
+Style dashGridG3Css()         = Style("display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); align-items: stretch; gap: 12; width: 100%; min-height: 156")
+Style dashGridG2Css()         = Style("display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); align-items: stretch; gap: 14; width: 100%; min-height: 360; flex-grow: 1")
 Style dashMobileStackCss()    = Style("display: flex; flex-direction: column; gap: 12; width: 100%")
 Style dashPulseCardCss()      = themed(Style("display: flex; flex-direction: column; justify-content: center; gap: 10; padding: 24; box-sizing: border-box; background: linear-gradient(135deg, #FFFFFF, #FFFFFF); border: 1px solid rgba(37,99,235,.15); border-radius: 14; min-width: 0; box-shadow: 0 2px 8px rgba(37,99,235,.06)"), Style("display: flex; flex-direction: column; justify-content: center; gap: 10; padding: 24; box-sizing: border-box; background: linear-gradient(135deg, #12162A, #1A1F3A); border: 1px solid rgba(0,212,255,.15); border-radius: 14; min-width: 0"))
 Style dashPulseHeroCss()      = themed(Style("display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4; padding: 18; box-sizing: border-box; background: linear-gradient(135deg, #FFFFFF, #FFFFFF); border: 1px solid rgba(37,99,235,.12); border-radius: 16; width: 100%; box-shadow: 0 2px 8px rgba(37,99,235,.06)"), Style("display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4; padding: 18; box-sizing: border-box; background: linear-gradient(135deg, #12162A, #1A1F3A); border: 1px solid rgba(0,212,255,.12); border-radius: 16; width: 100%"))
@@ -117,14 +116,35 @@ Style legendNameCss()         = themed(Style("color: #1A1D2E; font-size: 0.875re
 Style legendNameSelCss()      = themed(Style("color: #1A1D2E; font-size: 0.875rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #F0F0F0; font-size: 0.875rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style legendValCss()          = themed(Style("color: #6B7280; font-size: 0.8125rem; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #7B8EAD; font-size: 0.8125rem; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style barChartContainerCss() = Style("display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; gap: 8; padding: 16px 0; box-sizing: border-box")
-Style barChartGridCss()      = Style("display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: center; align-items: flex-end; width: 100%; height: 180; gap: 32; border-bottom: 2px solid rgba(255,255,255,.14); padding-bottom: 0; box-sizing: border-box; background: transparent")
-Style barColCss()            = Style("display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 170; width: 72; flex-shrink: 0; background: transparent; padding: 0; box-sizing: border-box")
-Style barPillarBoxCss()      = Style("display: flex; flex-direction: column; justify-content: flex-end; align-items: center; width: 56; height: 160; background: transparent; padding: 0")
+Style barChartGridCss() {
+    if (!AppState.isDesktop) { return Style("display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: space-around; align-items: flex-end; width: 100%; height: 180; gap: 4; border-bottom: 2px solid rgba(255,255,255,.14); padding-bottom: 0; box-sizing: border-box; background: transparent") }
+    return Style("display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: center; align-items: flex-end; width: 100%; height: 180; gap: 32; border-bottom: 2px solid rgba(255,255,255,.14); padding-bottom: 0; box-sizing: border-box; background: transparent")
+}
+Style barColCss() {
+    if (!AppState.isDesktop) { return Style("display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 170; width: 32%; min-width: 0; flex-shrink: 1; background: transparent; padding: 0; box-sizing: border-box") }
+    return Style("display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 170; width: 72; flex-shrink: 0; background: transparent; padding: 0; box-sizing: border-box")
+}
+Style barPillarBoxCss() {
+    if (!AppState.isDesktop) { return Style("display: flex; flex-direction: column; justify-content: flex-end; align-items: center; width: 100%; height: 160; background: transparent; padding: 0") }
+    return Style("display: flex; flex-direction: column; justify-content: flex-end; align-items: center; width: 56; height: 160; background: transparent; padding: 0")
+}
 Style barSpacerCss()         = Style("width: 100%; background: transparent; padding: 0; min-height: 0")
-Style barPillarAccentCss()   = Style("width: 56; border-radius: 8 8 0 0; background: linear-gradient(180deg, #00D4FF, #0066FF); min-height: 8; padding: 0")
-Style barPillarDesCss()      = Style("width: 56; border-radius: 8 8 0 0; background: linear-gradient(180deg, #0066FF, #0033AA); min-height: 8; padding: 0")
-Style barPillarSuccessCss()  = Style("width: 56; border-radius: 8 8 0 0; background: linear-gradient(180deg, #00E5A0, #009966); min-height: 8; padding: 0")
-Style barPillarWarningCss()  = Style("width: 56; border-radius: 8 8 0 0; background: linear-gradient(180deg, #FFB800, #CC8800); min-height: 8; padding: 0")
+Style barPillarAccentCss() {
+    if (!AppState.isDesktop) { return Style("width: 82%; border-radius: 8 8 0 0; background: linear-gradient(180deg, #00D4FF, #0066FF); min-height: 8; padding: 0") }
+    return Style("width: 56; border-radius: 8 8 0 0; background: linear-gradient(180deg, #00D4FF, #0066FF); min-height: 8; padding: 0")
+}
+Style barPillarDesCss() {
+    if (!AppState.isDesktop) { return Style("width: 82%; border-radius: 8 8 0 0; background: linear-gradient(180deg, #0066FF, #0033AA); min-height: 8; padding: 0") }
+    return Style("width: 56; border-radius: 8 8 0 0; background: linear-gradient(180deg, #0066FF, #0033AA); min-height: 8; padding: 0")
+}
+Style barPillarSuccessCss() {
+    if (!AppState.isDesktop) { return Style("width: 82%; border-radius: 8 8 0 0; background: linear-gradient(180deg, #00E5A0, #009966); min-height: 8; padding: 0") }
+    return Style("width: 56; border-radius: 8 8 0 0; background: linear-gradient(180deg, #00E5A0, #009966); min-height: 8; padding: 0")
+}
+Style barPillarWarningCss() {
+    if (!AppState.isDesktop) { return Style("width: 82%; border-radius: 8 8 0 0; background: linear-gradient(180deg, #FFB800, #CC8800); min-height: 8; padding: 0") }
+    return Style("width: 56; border-radius: 8 8 0 0; background: linear-gradient(180deg, #FFB800, #CC8800); min-height: 8; padding: 0")
+}
 Style barValLabelCss()       = themed(Style("color: #1A1D2E; font-size: 0.875rem; font-weight: 700; margin: 4px 0 0 0; text-align: center; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #F0F0F0; font-size: 0.875rem; font-weight: 700; margin: 4px 0 0 0; text-align: center; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style barNameLabelCss()      = themed(Style("color: #1A1D2E; font-size: 0.8125rem; font-weight: 600; text-align: center; margin: 2px 0 0 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #B8BCC4; font-size: 0.8125rem; font-weight: 600; text-align: center; margin: 2px 0 0 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style barPctLabelCss()       = themed(Style("color: #6B7280; font-size: 0.75rem; font-weight: 500; text-align: center; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #7B8EAD; font-size: 0.75rem; font-weight: 500; text-align: center; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
@@ -343,7 +363,7 @@ View chartPreferenceAction(Window w) {
         controls.add(panel)
     }
     var col = Column(controls)
-    col.setStyle(Style("display: flex; flex-direction: column; align-items: flex-end; gap: 8"))
+    if (!AppState.isDesktop) { col.setStyle(Style("display: flex; flex-direction: column; align-items: stretch; gap: 8; width: 100%")) } else { col.setStyle(Style("display: flex; flex-direction: column; align-items: flex-end; gap: 8")) }
     return col
 }
 
@@ -410,10 +430,10 @@ View tiles(DashboardResponse d) {
         return row
     }
     var hero = tile("pulse", "Pode gastar hoje (prévia)", brl(currentPulse), tileHeroValueCss(), pulseSub, dashPulseHeroCss(), tileHeroLabelCss(), tileHeroSubCss())
-    var pair = Row(listOf(
+    var pair = Column(listOf(
         tile("spent", "Orçamento planejado", brl(currentSpent), tileMobileValueCss(), spentSub, dashCardMobileCss(), tileMobileLabelCss(), tileSubCss()),
         tile("reserve", "Reserva acumulada", brl(displayedReserve(d)), tileMobileSuccessCss(), reserveSub, dashCardMobileCss(), tileMobileLabelCss(), tileSubCss())))
-    pair.setStyle(dashMobileG2Css())
+    pair.setStyle(dashMobileStackCss())
     var col = Column(listOf(hero, pair))
     col.setId("dash-tiles")
     col.setStyle(dashMobileStackCss())
