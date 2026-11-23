@@ -417,6 +417,17 @@ View chatInteractionCard(Window w) {
     headerRow.setStyle(chatInteractionHeaderCss())
     content.add(headerRow)
 
+    val docRef = interaction.documentId()
+    if (docRef != null && docRef.trim() != "" && kind != "RESERVE_DECLARATION") {
+        var lockLbl = Label("Todos os dados sensíveis são censurados para manter a sua segurança.")
+        lockLbl.setStyle(chatInteractionMutedCss())
+        var lockRow = Row(listOf(lockLbl))
+        lockRow.setId("chat-interaction-privacy")
+        lockRow.setAccessibleName("Aviso de segurança: todos os dados sensíveis são censurados")
+        lockRow.setStyle(Style("display: flex; flex-direction: row; align-items: center; gap: 8; width: 100%; padding: 8px 12px; box-sizing: border-box; border-radius: 10; border: 1px solid rgba(0,229,160,.35); background: rgba(0,229,160,.08)"))
+        content.add(lockRow)
+    }
+
     var headline = interaction.headline()
     if (headline != null) {
         val hTrim = headline.trim()
