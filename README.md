@@ -6,9 +6,33 @@ Organiza AI é um organizador de gastos inteligente projetado para separar as fi
 
 ---
 
-## 🔬 Laboratório Científico e Transparência (Work in Progress)
+## Sumário
 
-O **Organiza IA** atua oficialmente como caso de estudo e laboratório de validação para a linguagem **KOF** (KofLang). Guiados pela metodologia de pesquisa técnica rigorosa da equipe criadora e pesquisadores (UFPA), tratamos produtividade, performance e DX (*Developer Experience*) como **hipóteses testáveis** e não como fatos de marketing.
+- [Laboratório de Validação Científica](#-laboratório-de-validação-científica-work-in-progress)
+  - [Frente A: validação da linguagem KOF](#frente-a-validação-da-linguagem-kof)
+  - [Frente B: padrões enganosos em apps de finanças (scrapping-organiza)](#frente-b-padrões-enganosos-em-apps-de-finanças-scrapping-organiza)
+- [Screenshots](#screenshots) · [Diferenciais](#diferenciais) · [Stack](#stack)
+- [Arquitetura Monolítica Modular (KofLith)](#arquitetura-monolítica-modular-koflith)
+- [Modelo de Negócio](#modelo-de-negócio) · [Modelagem de Dados](#modelagem-de-dados) · [Design System](#design-system)
+- [Roadmap & Plano de Ataque MVP 1](#roadmap--plano-de-ataque-mvp-1-spec-driven-development)
+- [Rodar local](#rodar-local) · [QA local](#qa-local) · [Documentação](#documentação-docs)
+- [Como Contribuir](#como-contribuir) · [Guideline de Uso de IA](#guideline-de-uso-de-ia)
+- [Licença](#licença) · [Créditos](#créditos-e-referências-de-padrão-mit) · [Atualizações recentes](#atualizações-de-23112026-chat-education-first-privacidade-e-higienização)
+
+---
+
+## 🔬 Laboratório de Validação Científica (Work in Progress)
+
+O **Organiza IA** é também um laboratório de validação científica, organizado em duas frentes de pesquisa conduzidas com a metodologia da equipe e pesquisadores (UFPA). Nas duas, afirmações são tratadas como **hipóteses testáveis**, não como fatos de marketing.
+
+| Frente | Pergunta de pesquisa | Onde vive |
+|---|---|---|
+| **A. Linguagem KOF** | Produtividade, performance e DX de um monólito full-stack em KOF (KofLith) | Este repositório ([`docs/BENCHMARKS.md`](docs/BENCHMARKS.md), Issues #41 e #42) |
+| **B. Padrões enganosos em finanças pessoais** | Quais críticas os usuários fazem a apps de finanças e educação financeira, e que padrões enganosos aparecem nelas | [luizaleblanc/scrapping-organiza](https://github.com/luizaleblanc/scrapping-organiza) |
+
+### Frente A: validação da linguagem KOF
+
+O Organiza atua como caso de estudo para a linguagem **KOF** (KofLang): produtividade, performance e DX (*Developer Experience*) são hipóteses medidas, não premissas.
 
 **Estado Atual e Limitações (Disclaimer):**
 Atualmente, o projeto possui a *arquitetura monolítica modular* e o *produto funcional* operando em KOF (Domínio e UI). No entanto, **a infraestrutura empírica de medição ainda está em construção**. Ainda não possuímos no repositório (mas estamos implementando em Issues ativas):
@@ -19,6 +43,30 @@ Atualmente, o projeto possui a *arquitetura monolítica modular* e o *produto fu
 - Protocolo de validação científica (hipóteses H1–H4, reprodutibilidade e ameaças à validade) -- em definição na [Issue #42](https://github.com/luizaleblanc/organiza-ai/issues/42).
 
 > ⚠️ Qualquer afirmação técnica sobre "superioridade" de código ou arquitetura gerada por este projeto, sem estar lastreada por esses futuros *benchmarks*, deve ser interpretada como proposta arquitetural e hipótese de design, e não como resultado experimental comprovado.
+
+### Frente B: padrões enganosos em apps de finanças (scrapping-organiza)
+
+O repositório **[scrapping-organiza](https://github.com/luizaleblanc/scrapping-organiza)** é o pipeline de dados da pesquisa sobre **padrões enganosos em apps de finanças pessoais e educação financeira**. Ele dá a base empírica para decisões de produto do Organiza: em vez de supor o que frustra quem usa apps de finanças, partimos das críticas públicas dos próprios usuários.
+
+**O que o pipeline faz** (detalhes em [`docs/pipeline_explicativo.md`](https://github.com/luizaleblanc/scrapping-organiza/blob/main/docs/pipeline_explicativo.md)):
+
+- **Amostra:** busca e tria apps de finanças pessoais e educação financeira na Google Play e na App Store, no Brasil (`br`) e em três mercados internacionais (Estados Unidos `us`, Espanha `es` e México `mx`), com seis buscas (S1–S6) traduzidas por mercado e sem buscas por marca.
+- **Críticas:** coleta avaliações públicas e mantém as **críticas** (nota ≤ 3 e sentimento negativo ou neutro: LeIA em português, VADER em inglês, `pysentimiento` em espanhol).
+- **Codificação qualitativa:** protocolo em [`docs/protocolo_codificacao_qualitativa.md`](https://github.com/luizaleblanc/scrapping-organiza/blob/main/docs/protocolo_codificacao_qualitativa.md).
+- **Censura e dados públicos:** pessoas, apps, marcas, lugares, e-mails, telefones, CPFs, URLs e @ são censurados antes da publicação; só `data/publico/` é versionada, com apps mascarados (`APP_xxx`) e verificação que interrompe a gravação se sobrar dado identificável.
+
+**Como a Frente B se conecta ao produto:**
+
+| Achado buscado na pesquisa | Decisão correspondente no Organiza |
+|---|---|
+| Dados pessoais expostos ou mal tratados | Censura determinística de dados sensíveis de faturas antes de gravar ([`backend/privacy.kf`](backend/privacy.kf)) e aviso de segurança no chat |
+| Números que confundem ou somam coisas diferentes | Resumo financeiro com naturezas separadas (gastos, crédito, pendências) e período real impresso na fatura |
+| Ações automáticas sem consentimento | Prévia + confirmação explícita antes de qualquer gravação; nenhum checkbox pré-marcado em decisões do usuário |
+| Pressão em vez de explicação | **Education First**: "Entender meus gastos" como primeira opção, microexplicações em cada card |
+
+> ⚠️ **Escopo e ética.** A pesquisa usa só avaliações publicamente acessíveis; nome, foto e identificador do avaliador não são coletados, e a chave de máscaras (`data/chave_apps_mascarados_NAO_COMPARTILHAR/`) nunca é compartilhada. O uso do feed RSS da App Store está registrado como risco metodológico a verificar com a orientação. A tabela acima descreve **hipóteses de design** que a pesquisa deve confirmar ou refutar, não resultados já publicados.
+>
+> **Linguagem:** o scrapping-organiza é um projeto de pesquisa separado, em Python (ecossistema de NLP: `google-play-scraper`, LeIA, VADER, `pysentimiento`, `transformers`). Ele **não faz parte do runtime** do Organiza, que é KOF (ver [Arquitetura](#arquitetura-koflith--monólito-100-nativo-sobre-a-jvm-issue-37)). Código MIT © 2026 Luiza Ferraz Leblanc; a licença não cobre os textos das avaliações nem os dados das lojas.
 
 ---
 
@@ -60,7 +108,8 @@ Conheça a interface do Organiza IA:
 | Camada | Tecnologia |
 |---|---|
 | **Arquitetura** | **Monólito Modular (KofLith)** — Unidade de execução coesa com separação estrita por módulos de domínio e de interface |
-| **Monólito Modular Backend** | KOF (`backend/*.kf`) -- Módulos de Domínio (`models.kf`, `auth.kf`, `services.kf`, `coach.kf`, `overview.kf`, `outbound.kf`, `email.kf`, `coach_llm.kf`, `store.kf`, `main.kf`) |
+| **Monólito Modular Backend** | KOF (`backend/*.kf`) -- Módulos de Domínio (`models.kf`, `auth.kf`, `services.kf`, `coach.kf`, `overview.kf`, `invoice.kf`, `privacy.kf`, `outbound.kf`, `email.kf`, `coach_llm.kf`, `qa.kf`, `store.kf`, `main.kf`) |
+| **Ponte do navegador (não-KOF, mínima)** | `frontend/assets/voice_bridge.js`: voz (Web Speech) e upload de arquivo, que ainda não têm equivalente em KOF (lacuna UIW006 do kof-ui-widgets), e as ondas animadas; estilos de responsividade em `frontend/assets/chat_interactions.css` |
 | **Monólito Modular Frontend** | KOF (`kof.ui`, `frontend/*.kf`) -- Módulos de Core (`core/`), Componentes (`components/`) e Telas (`screens/`) |
 | **Back-end Legado (arquivado)** | Java 17, Spring Boot 3.3.x, Spring AI -- arquivado em `archive/legacy-backend-java/` (tag histórica `legacy/java-spring-boot`), mantido apenas como referência histórica |
 | **Banco de Dados** | `kof.orm` em `backend/store.kf`: MySQL 8.4 na Aiven em produção (driver MariaDB Connector/J fixado em `kofdeps`), com o app no Render; H2 em arquivo (`./data`) fora de produção. Persistência concluída e em produção desde 12/10/2026, ver [`.specs/features/persistence-kof-orm/`](.specs/features/persistence-kof-orm/): usuários, envelopes, transações, chat, renda variável e Kakeibo no banco |
@@ -467,5 +516,14 @@ Contribuidores são bem-vindos para implementar as issues documentadas em [`docs
 
 - **Dashboard e Caixinhas (`dashboard_screen.kf`, `envelopes_screen.kf`, `services.kf`, `settings_screen.kf`):** gráfico de distribuição convertido em barras verticais centralizadas (sem aba `Ano` e sem dados simulados estáticos); remoção da trava que impedia renomear caixinhas automáticas; tela de Configurações centralizada em até 680 px sem a etiqueta `"Em breve"`.
 - **Chat, Marca e Microfone (`chat_screen.kf`, `nav_bar.kf`, `theme.kf`, `brand_mark.kf`, `organiza-simbolo.svg`):** saudação inicial mantida fixa no topo do histórico, placeholder atualizado para `"Fale com o Organiza e ele te explicará seus gastos..."`, remoção do mascote legado (`kof-voice.png`) em favor dos ícones oficiais do Design System e remoção do item de notificações na barra lateral no MVP 1.
-- **Parser OCR determinístico e Coach (`scripts/parse_pdf.py`, `backend/invoice.kf`, `frontend/assets/voice_bridge.js`, `backend/coach.kf`, `backend/store.kf`):** leitura determinística de extratos e faturas em PDF (incluindo Adobe UCS/CID via Python/pypdf), DOCX, JPEG, PNG e TXT com persistência dinâmica, máquina de estados conversacional offline em 3 etapas e método `deleteChatMessagesByUserId`.
+- **Parser OCR determinístico e Coach (`backend/invoice.kf`, `frontend/assets/voice_bridge.js`, `backend/coach.kf`, `backend/store.kf`):** leitura determinística de extratos e faturas em PDF, DOCX, JPEG, PNG e TXT com persistência dinâmica, máquina de estados conversacional offline em 3 etapas e método `deleteChatMessagesByUserId`. *Correção (23/11/2026):* o pipeline é 100% KOF em `backend/invoice.kf`; `scripts/parse_pdf.py` não participa do fluxo (o gate5 confere isso) e está marcado para remoção.
+
+### Atualizações de 23/11/2026: chat Education First, privacidade e higienização
+
+- **Chat interativo (`backend/invoice.kf`, `frontend/screens/chat_screen.kf`):** "Entender meus gastos (recomendado)" é sempre a primeira opção e lista cada gasto com filtro por categoria; "Ver meus gastos" reúne **todos** os gastos (registrados + lidos das faturas) pelos subagentes KOF `auditor-faturas` e `triador-gastos`, sem duplicar; cada gasto vem com a caixinha sugerida pelo parser e o usuário confirma ou troca, com prévia antes de registrar; revisão de movimentações item a item, sem contadores, com **+ Criar caixinha**; resumo com naturezas separadas (gastos identificados, operações de crédito, aguardando revisão), sem total misturado.
+- **Período real da fatura:** o subagente `auditor-faturas` lê o período impresso no documento ("Período de 01/11/2026 a 14/11/2026"); só sem ele o período vem das datas das transações.
+- **Privacidade (`backend/privacy.kf`):** CPF, CNPJ, cartão (mantém os 4 finais), telefone, e-mail, conta, chaves Pix, números longos e nomes de pessoas em Pix são censurados de forma determinística **antes de gravar**; o chat avisa: "Para sua segurança, censurei todos os dados sensíveis que possam comprometer o usuário Organiza 💙".
+- **Reserva declarada:** "Tenho R$ X de reserva/investidos" abre um checklist (Reserva acumulada recomendada, meta, caixinha ou só informar), vinculado a uma proposta do servidor e idempotente.
+- **Dashboard responsivo:** gráficos fluidos em telas menores que desktop; "Personalizar gráficos" no card da Prévia do Modelo de Economia, com tipos pizza, barras verticais, horizontais e laterais; aba Ano só com gastos confirmados (vazia e convidando ao chat quando não há dados).
+- **Higienização:** removido o painel interativo duplicado em JavaScript de `voice_bridge.js` (3.576 → 1.529 linhas) e 60 classes CSS sem uso (`chat_interactions.css` 911 → 222 linhas); os cards do chat existem só em KOF.
 - **Rotas diretas, QA local e diretrizes (`backend/main.kf`, `backend/qa.kf`, `docs/AI_FINANCIAL_COACH_GUIDELINE.md`, `docs/PLANO_DE_ATAQUE_E_COMMITS.md`):** rotas diretas (`/organizaai`, `/dashboard`, `/caixinhas`, `/configuracoes`, `/notificacoes`, `/qa/view/:screen`, `/qa/reset-all`), simulação dos 5 modelos de notificação (`/api/qa/notifications/simulate`), limpeza via QA (`/api/qa/clear-chat`, `/api/qa/clear-transactions`), guia de tom de voz/modelos do coach e plano de evolução do chat para a próxima iteração (incluindo triagem contábil em 3 pilares e indicador `... pensando`).
