@@ -4787,7 +4787,7 @@ String catalogActionChoicesBlock() {
 }
 
 String catalogDocumentoNaoFatura() {
-    return "Esse arquivo não consta como uma fatura. Faça o upload de uma fatura para que eu organize a sua grana sem estresse."
+    return "Esse arquivo não consta como uma fatura válida. Nenhum lançamento foi confirmado e nenhum valor foi inventado. Envie uma fatura legível ou me conte seus gastos por texto ou por voz."
 }
 
 String catalogDocumentoIlegivel(String filename) {
@@ -4886,7 +4886,13 @@ String detectEducationalFinanceTopic(String lower) {
     if (lower == "entender melhor meus gastos" || lower == "entender meus gastos" || lower.contains("entender melhor meus gastos")) {
         return "ENTENDER_GASTOS"
     }
+    if (lower.contains("maiores gastos") || lower.contains("maior gasto") || lower.contains("onde gasto mais") || lower.contains("onde estou gastando") || lower.contains("em que gasto mais")) {
+        return "ENTENDER_GASTOS"
+    }
     var isQuestion = lower.contains("?") || lower.contains("o que é") || lower.contains("o que e") || lower.contains("o que são") || lower.contains("o que sao") || lower.contains("qual a diferença") || lower.contains("qual a diferenca") || lower.contains("diferença entre") || lower.contains("diferenca entre") || lower.contains("como funciona") || lower.contains("por que") || lower.contains("porque") || lower.contains("me explica") || lower.contains("explica")
+    if (lower.contains("reserva acumulada") || lower.contains("reserva onboarding")) {
+        return "RESERVA_EMERGENCIA"
+    }
     if (!isQuestion) {
         return ""
     }
@@ -4913,6 +4919,9 @@ String detectEducationalFinanceTopic(String lower) {
     }
     if (lower.contains("planejamento") || lower.contains("planejar") || lower.contains("modelo de economia") || lower.contains("50/30/20") || lower.contains("70/20/10")) {
         return "PLANEJAMENTO_GASTOS"
+    }
+    if (isQuestion && classifyChatExpenseCategory(lower) != Category.OTHER) {
+        return "ENTENDER_GASTOS"
     }
     return ""
 }
@@ -5271,6 +5280,63 @@ ChatInteractionPayload buildInvoiceRegisteredPayload(String docId, String period
     )
 }
 
+String invoicePreviewTopCategories(ImportReview rev) {
+    var groups = rev.transactions().filter((ctx: CanonicalTransaction) -> isConfirmableOutflowTx(ctx)).groupBy((ctx: CanonicalTransaction) -> sanitizeCategoryForConfirm(ctx.category()))
+    var codes = groups.keys().sorted()
+    var totals: List<Long> = listOf()
+    for (var code in codes) {
+        var amount: Long = 0
+        for (var ctx in groups.getOrDefault(code, listOf())) {
+            var m = ctx.amountMinor()
+            if (m != null) { amount = amount + m }
+        }
+        totals.add(amount)
+    }
+    var out = ""
+    var shown = 0
+    var picked: List<Int> = listOf()
+    while (shown < 3 && shown < codes.size) {
+        var best = -1
+        var idx = 0
+        while (idx < totals.size) {
+            if (!picked.contains(idx) && (best < 0 || totals.get(idx) > totals.get(best))) { best = idx }
+            idx = idx + 1
+        }
+        if (best < 0 || totals.get(best) <= 0) { break }
+        if (out != "") { out = out + "; " }
+        out = out + categoryLabelFromCode(codes.get(best)) + " (" + formatBrl(totals.get(best)) + ")"
+        picked.add(best)
+        shown = shown + 1
+    }
+    return out
+}
+
+String persistedSpendingEducationReply(String userId, String rawMsg) {
+    var transactions = findTransactionsByUserIdAndCreatedAtAfter(userId, monthStartIso())
+    var askedCategory = classifyChatExpenseCategory(rawMsg.toLowerCase())
+    if (askedCategory != Category.OTHER) {
+        var categoryRows = transactions.filter((t: TransactionEntity) -> t.category == askedCategory)
+        var categoryTotal = sumAmountCents(categoryRows)
+        if (categoryTotal > 0) {
+            var askedLabel = categoryLabel(askedCategory)
+            return "Neste mês, há " + formatBrl(categoryTotal) + " registrados em " + askedLabel.toLowerCase() + ". Esse total reúne as compras já salvas nessa categoria; ele não explica sozinho por que o gasto aconteceu. Quer revisar os lançamentos que formam esse valor?"
+        }
+        return "Ainda não encontrei despesas confirmadas em " + categoryLabel(askedCategory).toLowerCase() + " neste mês. Isso quer dizer que não há compras salvas nessa categoria no período. Quer verificar outra categoria?"
+    }
+    var totals = categoryTotals(transactions)
+    if (totals.isEmpty()) {
+        return "Ainda não há despesas confirmadas neste mês para eu apontar seus maiores gastos. Despesas confirmadas são compras já registradas no Organiza AI. Quer me contar um gasto ou enviar uma fatura para analisarmos?"
+    }
+    var top = totals.get(0)
+    var label = categoryLabelFromCode(top.category())
+    var reply = "Neste mês, sua maior categoria registrada é " + label + ", com " + formatBrl(toCents(top.total())) + ". Isso ajuda a perceber onde seu dinheiro está sendo mais usado; o valor considera apenas despesas já salvas."
+    if (totals.size > 1) {
+        var second = totals.get(1)
+        reply = reply + " Depois vem " + categoryLabelFromCode(second.category()) + ", com " + formatBrl(toCents(second.total())) + "."
+    }
+    return reply + " Quer entender melhor quais compras formam o total de " + label.toLowerCase() + " ou conferir outra categoria?"
+}
+
 InvoiceChatTurnResult? answerEducationalFinanceTurn(String userId, String rawMsg) {
     var lower = rawMsg.trim().toLowerCase()
     var topic = detectEducationalFinanceTopic(lower)
@@ -5293,7 +5359,12 @@ InvoiceChatTurnResult? answerEducationalFinanceTurn(String userId, String rawMsg
         return InvoiceChatTurnResult("As caixinhas funcionam como envelopes separados para cada área da sua vida (como Alimentação, Moradia, Transporte ou Lazer), cada uma com um limite mensal editável. Assim você enxerga quanto já usou antes de o dinheiro acabar.\n\nExemplo hipotético: se sua caixinha Alimentação tem limite de R$ 400,00 e você registra R$ 100,00, ela fica \"Em dia\" (25%) e mostra que ainda restam R$ 300,00 para o restante do mês.", null)
     }
     if (topic == "RESERVA_EMERGENCIA") {
-        return InvoiceChatTurnResult("A reserva de emergência é um valor guardado aos poucos para proteger você de imprevistos (como um gasto de saúde, conserto urgente ou queda na renda), evitando depender de empréstimos ou juros do cartão.\n\nExemplo hipotético: guardar R$ 100,00 por mês constrói em um ano uma reserva de R$ 1.200,00 pronta para dar tranquilidade nos momentos inesperados.", null)
+        var savedReserve = reserveCents(userId)
+        var reserveText = "O Organiza AI mostra " + formatBrl(savedReserve) + " registrados na sua reserva acumulada."
+        if (savedReserve == 0) {
+            reserveText = "Você comentou que tem uma reserva acumulada, mas ainda não há valor registrado na caixinha de reserva deste cadastro."
+        }
+        return InvoiceChatTurnResult(reserveText + " A reserva é um valor guardado para imprevistos, como um gasto de saúde ou um conserto urgente. Consultar esse saldo não altera sua caixinha. Quer conferir sua meta ou planejar próximos depósitos?", null)
     }
     if (topic == "PLANEJAMENTO_GASTOS") {
         return InvoiceChatTurnResult("Planejar os gastos significa dividir o que você ganha em três grandes partes antes de gastar: o essencial para viver (Necessidades), um espaço para aproveitar sem culpa (Folga ou Desejos) e uma parte para o seu futuro (Poupança).\n\nExemplo hipotético: com uma renda de R$ 3.000,00 na regra 70/20/10, ficam R$ 2.100,00 para necessidades, R$ 600,00 para folga e R$ 300,00 para poupança.", null)
@@ -5306,8 +5377,15 @@ InvoiceChatTurnResult? answerEducationalFinanceTurn(String userId, String rawMsg
             if (rev != null) {
                 var s = summarizeImportReview(rev)
                 var msg = "No arquivo " + latest.filename + ", encontrei " + formatBrl(s.expenseMinor()) + " em compras identificadas. O pagamento da fatura fica separado para evitar contar as compras duas vezes. Ainda há " + formatBrl(s.pendingMinor()) + " em movimentações que precisam da sua confirmação."
+                var previewTop = invoicePreviewTopCategories(rev)
+                if (previewTop != "") {
+                    msg = msg + " Na prévia, os maiores grupos são: " + previewTop + ". Esses valores ainda dependem da sua confirmação."
+                }
                 return InvoiceChatTurnResult(msg, buildInvoiceInteractionPayload(rev, s, latest.filename))
             }
+        }
+        if (topic == "ENTENDER_GASTOS") {
+            return InvoiceChatTurnResult(persistedSpendingEducationReply(userId, rawMsg), null)
         }
         return InvoiceChatTurnResult("Planejar seus gastos ajuda a enxergar para onde o dinheiro vai sem aperto: separamos as contas essenciais (Necessidades), o lazer do dia a dia (Folga) e o valor guardado (Poupança). Você pode me contar um gasto (ex.: \"30 reais em comida\") ou enviar uma fatura para analisarmos juntos.", null)
     }

@@ -217,6 +217,26 @@ Bool isWordChar(String ch) {
     return "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_".contains(ch)
 }
 
+String replaceWordIgnoringCase(String text, String word, String repl) {
+    var out = ""
+    var rest = text
+    var wordLower = word.toLowerCase()
+    var idx = rest.toLowerCase().indexOf(wordLower)
+    while (idx >= 0) {
+        var end = idx + word.length()
+        var beforeOk = idx == 0 || !isWordChar(rest.substring(idx - 1, idx))
+        var afterOk = end >= rest.length() || !isWordChar(rest.substring(end, end + 1))
+        if (beforeOk && afterOk) {
+            out = out + rest.substring(0, idx) + repl
+        } else {
+            out = out + rest.substring(0, end)
+        }
+        rest = rest.substring(end)
+        idx = rest.toLowerCase().indexOf(wordLower)
+    }
+    return out + rest
+}
+
 // Troca `word` por `repl` so quando aparece como palavra inteira (case-sensitive).
 String replaceWord(String text, String word, String repl) {
     var out = ""
@@ -240,10 +260,10 @@ String replaceWord(String text, String word, String repl) {
 String sanitizeCoachReply(String text) {
     var out = text
     for (var m in BudgetModelType.values()) {
-        out = replaceWord(out, m.name(), coachModelLabel(m))
+        out = replaceWordIgnoringCase(out, m.name(), coachModelLabel(m))
     }
     for (var c in Category.values()) {
-        out = replaceWord(out, c.name(), categoryLabel(c))
+        out = replaceWordIgnoringCase(out, c.name(), categoryLabel(c))
     }
     out = replaceWord(out, "NEEDS", "Necessidades")
     out = replaceWord(out, "WANTS", "Desejos")
@@ -291,6 +311,7 @@ String coachSystemPrompt(UserEntity user, Bool kakeiboPending) {
         "CAIXINHAS DO USUÁRIO: " + envelopeNamesText(user.id) + "\n" +
         "Se o usuário citar uma caixinha ao registrar um gasto (ex: \"gastei 40 na caixinha Viagem\"), passe o nome dela no argumento caixinha da tool persistTransaction, junto com a categoria que melhor descreve o gasto. Se a caixinha não existir, a tool devolve um erro com a lista: pergunte ao usuário qual ele quis dizer, sem registrar o gasto.\n" +
         "CATÁLOGO DE AGENTES ANTI-ALUCINAÇÃO (agents/*.md): " + agentsCatalogForPrompt() + "\n"
+    p = p + "\nEDUCATION FIRST: Antes de responder, use o histórico recente para entender a pergunta e as respostas anteriores do usuário. Comece pelo resultado mais relevante, explique um conceito financeiro em linguagem simples e termine com uma pergunta curta ou próxima ação ligada ao assunto. Use somente os dados abaixo para falar dos maiores gastos. Nunca estime ou some valores, trate fala do usuário como registro, nem altere a reserva sem pedido explícito. Se faltar contexto, diga isso e pergunte o que falta.\n" + coachFinancialContext(user.id) + "\n"
     if (kakeiboPending) {
         p = p + "\nO usuário está no KAKEIBO e ainda não respondeu a reflexão desta semana. As 4 perguntas:"
         for (var q in kakeiboQuestions()) {
@@ -299,6 +320,28 @@ String coachSystemPrompt(UserEntity user, Bool kakeiboPending) {
         p = p + "\n"
     }
     return p
+}
+
+String coachFinancialContext(String userId) {
+    var transactions = findTransactionsByUserIdAndCreatedAtAfter(userId, monthStartIso())
+    var totals = categoryTotals(transactions)
+    var context = "CONTEXTO FINANCEIRO PERSISTIDO DO MÊS ATUAL (apenas despesas salvas):\n"
+    if (totals.isEmpty()) {
+        context = context + "Ainda não há despesas confirmadas neste mês. Não invente categorias ou totais.\n"
+    } else {
+        context = context + "Maiores categorias de despesa, em ordem decrescente:\n"
+        var count = 0
+        for (var total in totals) {
+            if (count >= 3) { break }
+            context = context + "- " + categoryLabelFromCode(total.category()) + ": " + formatBrl(toCents(total.total())) + " (" + String.valueOf(total.count()) + " registros)\n"
+            count = count + 1
+        }
+    }
+    var user = findUserById(userId)
+    if (user != null) {
+        context = context + "Reserva acumulada registrada no onboarding/caixinha de reserva: " + formatBrl(reserveCents(userId)) + ". Consulta apenas; não gravar nem alterar automaticamente.\n"
+    }
+    return context
 }
 
 // =========================================================
