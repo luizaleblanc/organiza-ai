@@ -5307,6 +5307,23 @@ ChatInteractionPayload buildExpenseListPayload(ImportReview rev, ImportFlowSumma
     )
 }
 
+ChatInteractionPayload buildAssignCaixinhasPayload(ImportReview rev, ImportFlowSummary s, String filename) {
+    var base = buildExpenseListPayload(rev, s, filename)
+    return ChatInteractionPayload(
+        "ASSIGN_CAIXINHAS",
+        "Em qual caixinha entra cada gasto?",
+        base.documentId(),
+        base.period(),
+        base.periodLabel(),
+        "Seus gastos nas caixinhas",
+        "A caixinha já vem sugerida pelo tipo de estabelecimento. Você decide: troque se não fizer sentido para você.",
+        null,
+        null,
+        listOf(),
+        base.items()
+    )
+}
+
 ChatInteractionPayload buildViewCategoriesPayload(ImportReview rev, ImportFlowSummary s, String filename) {
     var cleanName = cleanInteractionFilename(filename, rev.documentId())
     var statementPeriod = lookupStatementPeriod(rev.documentId())
@@ -6066,8 +6083,8 @@ InvoiceChatTurnResult? invoiceChatTurnFor(String userId, String message, String 
             if (revView != null && revView.status() != "FALHA_EXTRACAO") {
                 var sView = summarizeImportReview(revView)
                 var fnameView = cleanInteractionFilename("", targetViewDocId)
-                var viewReply = "No extrato " + fnameView + ", você tem " + formatBrl(sView.confirmableExpenseMinor()) + " em despesas distribuídas por categoria. Selecione as categorias abaixo para visualizar ou avançar para o registro."
-                return InvoiceChatTurnResult(viewReply, buildViewCategoriesPayload(revView, sView, fnameView))
+                var viewReply = "Confira cada gasto e a caixinha sugerida. Troque o que quiser; eu registro tudo depois da sua confirmação."
+                return InvoiceChatTurnResult(viewReply, buildAssignCaixinhasPayload(revView, sView, fnameView))
             }
         }
     }

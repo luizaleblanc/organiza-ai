@@ -681,6 +681,156 @@ View chatInteractionCard(Window w) {
         footerBtns.setId("chat-reserve-actions")
         footerBtns.setStyle(chatFooterBtnsCss())
         content.add(footerBtns)
+    } else if (kind == "ASSIGN_CAIXINHAS") {
+        ensureSelectionInitialized(interaction)
+        val items = interaction.items()
+        seedSuggestedCategories(items)
+        if (!EnvState.loaded && !EnvState.loading) {
+            spawn {
+                try { loadEnvelopes() } catch (String e) {}
+                mountScreen(w)
+            }
+        }
+        var prompt = Label(interaction.prompt())
+        prompt.setStyle(chatInteractionSubTitleCss())
+        content.add(prompt)
+        if (!ChatUi.registerPreview) {
+            var parts: List<View> = listOf()
+            for (var it in items) {
+                val itemId = it.id()
+                var name = Label(it.label())
+                name.setStyle(chatInteractionTextCss())
+                var sub = Label("")
+                val st = it.subtitle()
+                if (st != null) { sub = Label(st) }
+                sub.setStyle(chatInteractionMutedCss())
+                var left = Column(listOf(name, sub))
+                left.setStyle(Style("display: flex; flex-direction: column; gap: 2; min-width: 0; flex: 1 1 0"))
+                var amt = Label(it.formattedAmount())
+                amt.setStyle(chatInteractionAccentCss())
+                var head = Row(listOf(left, amt))
+                head.setStyle(Style("display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12; width: 100%"))
+                var chips: List<View> = listOf()
+                for (var code in listOf("FOOD", "GROCERIES", "TRANSPORT", "HOUSING", "HEALTH", "LEISURE", "EDUCATION", "OTHER")) {
+                    val c = code
+                    chips.add(chip(categoryNamePt(c), "chat-assign-" + itemId + "-" + c, itemCategory(itemId) == c, () -> {
+                        setItemCategory(itemId, c)
+                        mountScreen(w)
+                    }))
+                }
+                for (var env in envelopeItems()) {
+                    if (categoryOrNullPt(env.categoryName())) {
+                        val envCode = "ENV:" + env.id()
+                        chips.add(chip(env.categoryName(), "chat-assign-" + itemId + "-env-" + env.id(), itemCategory(itemId) == envCode, () -> {
+                            setItemCategory(itemId, envCode)
+                            mountScreen(w)
+                        }))
+                    }
+                }
+                chips.add(chip("+ Criar caixinha", "chat-assign-new-" + itemId, false, () -> {
+                    ChatUi.newBoxOpen = true
+                    mountScreen(w)
+                }))
+                var block = Column(listOf(head, chipGroup("Caixinha", chips, "chat-assign-chips-" + itemId)))
+                block.setId("chat-assign-item-" + itemId)
+                block.setStyle(chatFlowBoxCss())
+                parts.add(block)
+            }
+            if (ChatUi.newBoxOpen) {
+                var boxField = textField("Nome da caixinha (ex.: Empréstimos)", "text", "chat-assign-new-box-name")
+                boxField.setText(ChatUi.newBoxName)
+                boxField.on("input", () -> {
+                    ChatUi.newBoxName = boxField.text()
+                })
+                var createBtn = primaryButton("Criar caixinha", "chat-assign-new-box-create", false, () -> {
+                    spawn {
+                        createBoxFromReview(interaction)
+                        invalidateEnvelopes()
+                        mountScreen(w)
+                    }
+                })
+                var closeBtn = secondaryButton("Cancelar", "chat-assign-new-box-cancel", false, () -> {
+                    ChatUi.newBoxOpen = false
+                    mountScreen(w)
+                })
+                var boxBtns = Row(listOf(closeBtn, createBtn))
+                boxBtns.setStyle(chatFooterBtnsCss())
+                var boxForm = Column(listOf(labeled("Nova caixinha", boxField), boxBtns))
+                boxForm.setId("chat-assign-new-box")
+                boxForm.setStyle(chatFlowBoxCss())
+                parts.add(boxForm)
+            }
+            var col = Column(parts)
+            col.setId("chat-assign-items")
+            col.setStyle(Style("display: flex; flex-direction: column; gap: 10; width: 100%"))
+            content.add(col)
+        } else {
+            // Prévia: soma por caixinha escolhida, antes de salvar.
+            var groups: List<String> = listOf()
+            for (var it in items) {
+                val c = itemCategory(it.id())
+                if (!groups.contains(c)) { groups.add(c) }
+            }
+            var pv: List<View> = listOf()
+            var pvTitle = Label("Prévia: como os gastos vão para as caixinhas")
+            pvTitle.setStyle(chatInteractionSubTitleCss())
+            pv.add(pvTitle)
+            for (var g in groups) {
+                var cents = 0
+                for (var it in items) {
+                    if (itemCategory(it.id()) == g) { cents = cents + it.amountCents() }
+                }
+                pv.add(interactionFlowLine(categoryNamePt(g), brlFromCents(cents), "chat-assign-preview-" + g))
+            }
+            var note = Label("Isso organiza seus gastos por caixinha. Nenhum dinheiro é transferido.")
+            note.setStyle(chatInteractionMutedCss())
+            pv.add(note)
+            var pvBox = Column(pv)
+            pvBox.setId("chat-assign-preview")
+            pvBox.setStyle(chatFlowBoxCss())
+            content.add(pvBox)
+        }
+        if (ChatUi.interactionError != "") {
+            content.add(errorBanner(ChatUi.interactionError))
+        }
+        var backLabel = "Cancelar"
+        if (ChatUi.registerPreview) { backLabel = "Voltar e corrigir" }
+        var backBtn = secondaryButton(backLabel, "chat-assign-cancel", false, () -> {
+            if (ChatUi.registerPreview) {
+                ChatUi.registerPreview = false
+            } else {
+                cancelInteractiveTemplate()
+            }
+            mountScreen(w)
+        })
+        var goLabel = "Ver prévia"
+        if (ChatUi.registerPreview) { goLabel = "Confirmar e registrar" }
+        if (ChatUi.interactionBusy) { goLabel = "Salvando suas alterações..." }
+        var goBtn = primaryButton(goLabel, "chat-assign-confirm", false, () -> {
+            if (!ChatUi.registerPreview) {
+                ChatUi.registerPreview = true
+                mountScreen(w)
+                return
+            }
+            spawn {
+                assignAndRegisterAction(interaction)
+                invalidateFinancialCaches()
+                mountScreen(w)
+            }
+        })
+        if (ChatUi.interactionBusy || items.size == 0) {
+            goBtn.setDisabled(true)
+        }
+        var backWrap = View(screenStyle())
+        backWrap.setStyle(chatHalfBtnWrapCss())
+        backWrap.bind(backBtn)
+        var goWrap = View(screenStyle())
+        goWrap.setStyle(chatHalfBtnWrapCss())
+        goWrap.bind(goBtn)
+        var btns = Row(listOf(backWrap, goWrap))
+        btns.setId("chat-assign-actions")
+        btns.setStyle(chatFooterBtnsCss())
+        content.add(btns)
     } else if (kind == "EXPENSE_LIST") {
         ensureSelectionInitialized(interaction)
         val items = interaction.items()

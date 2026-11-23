@@ -561,6 +561,70 @@ createBoxFromReview(ChatInteractionResponse interaction) {
     ChatUi.interactionBusy = false
 }
 
+// ASSIGN_CAIXINHAS: começa com a caixinha sugerida de cada gasto.
+seedSuggestedCategories(List<ChatSelectableItemResponse> items) {
+    if (ChatUi.itemCategories != "") {
+        return
+    }
+    for (var it in items) {
+        setItemCategory(it.id(), it.categoryCode())
+    }
+}
+
+// Salva só as trocas feitas pelo usuário (endpoint de reclassificação existente)
+// e registra todos os gastos nas caixinhas (CONFIRMAR_IMPORTACAO, idempotente).
+assignAndRegisterAction(ChatInteractionResponse interaction) {
+    if (ChatUi.interactionBusy) {
+        return
+    }
+    var docId = ""
+    val rawDocId = interaction.documentId()
+    if (rawDocId != null) {
+        docId = rawDocId.trim()
+    }
+    if (docId == "") {
+        ChatUi.interactionError = "Não encontrei a referência deste documento."
+        return
+    }
+    var codes: List<String> = listOf()
+    for (var it in interaction.items()) {
+        val c = itemCategory(it.id())
+        if (c != "" && c != it.categoryCode() && !codes.contains(c)) {
+            codes.add(c)
+        }
+    }
+    ChatUi.interactionBusy = true
+    ChatUi.interactionError = ""
+    try {
+        for (var code in codes) {
+            var ids: List<String> = listOf()
+            for (var it in interaction.items()) {
+                if (itemCategory(it.id()) == code && code != it.categoryCode()) {
+                    ids.add(it.id())
+                }
+            }
+            val envId = envelopeIdFromCode(code)
+            var payload = json.encode(ReclassifyTxRequest(ids, code))
+            if (envId != "") {
+                payload = json.encode(ReclassifyTxToEnvelopeRequest(ids, "OTHER", envId))
+            }
+            val body = apiPost("/api/documents/" + docId + "/reclassify", payload)
+            if (isApiError(body)) {
+                ChatUi.interactionError = json.decode<ChatApiError>(body).error()
+                ChatUi.interactionBusy = false
+                return
+            }
+        }
+    } catch (String e) {
+        ChatUi.interactionError = chatOfflineText()
+        ChatUi.interactionBusy = false
+        return
+    }
+    ChatUi.interactionBusy = false
+    selectAllItems(interaction.items())
+    confirmInvoiceRegistrationAction(interaction)
+}
+
 reclassifySelectedItemsAction(ChatInteractionResponse interaction) {
     if (ChatUi.interactionBusy) {
         return
