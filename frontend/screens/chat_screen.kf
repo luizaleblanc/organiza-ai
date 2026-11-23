@@ -5,6 +5,7 @@ import kof.json
 import core.theme
 import core.app_state
 import core.chat_api
+import core.format
 import core.navigation
 import components.topbar
 import components.form_widgets
@@ -51,12 +52,31 @@ Style chatNewTopBtnCss()     = themed(Style("outline: none; display: inline-flex
 Style chatNewTopRowCss()     = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 8; background: transparent; padding: 0")
 Style chatNewTopLabelCss()   = themed(Style("color: #2563EB; font-size: 0.875rem; font-weight: 700; line-height: 1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #00D4FF; font-size: 0.875rem; font-weight: 700; line-height: 1em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style chatInteractionCardCss() = themed(Style("display: flex; flex-direction: column; align-self: flex-start; width: 100%; max-width: 760; box-sizing: border-box; gap: 14; padding: 20; background: #FFFFFF; color: #1A1D2E; border: 1px solid #E5E7EB; border-radius: 16; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("display: flex; flex-direction: column; align-self: flex-start; width: 100%; max-width: 760; box-sizing: border-box; gap: 14; padding: 20; background: #12162A; color: #F0F0F0; border: 1px solid rgba(0,212,255,.18); border-radius: 16; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
-Style chatInteractionHeaderCss() = Style("display: flex; flex-direction: row; align-items: center; gap: 10; width: 100%")
-Style chatInteractionTitleCss() = themed(Style("color: #1A1D2E; font-size: 1rem; font-weight: 700; margin: 0"), Style("color: #F0F0F0; font-size: 1rem; font-weight: 700; margin: 0"))
-Style chatInteractionTextCss() = themed(Style("color: #374151; font-size: 0.9375rem; line-height: 1.5em; margin: 0"), Style("color: #D4D9E5; font-size: 0.9375rem; line-height: 1.5em; margin: 0"))
+Style chatInteractionHeaderCss() = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 10; width: 100%")
+Style chatInteractionBrandRowCss() = Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 10")
+Style chatPeriodBadgeCss()     = themed(Style("background: rgba(37,99,235,.08); color: #2563EB; border: 1px solid #2563EB; border-radius: 20; padding: 4px 10px; font-size: 0.75rem; font-weight: 700; white-space: nowrap; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("background: rgba(0,212,255,.08); color: #00D4FF; border: 1px solid rgba(0,212,255,.45); border-radius: 20; padding: 4px 10px; font-size: 0.75rem; font-weight: 700; white-space: nowrap; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style chatInteractionTitleCss() = themed(Style("color: #1A1D2E; font-size: 1.0625rem; font-weight: 700; line-height: 1.35em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #F0F0F0; font-size: 1.0625rem; font-weight: 700; line-height: 1.35em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style chatInteractionSubTitleCss() = themed(Style("color: #1A1D2E; font-size: 0.9375rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #F0F0F0; font-size: 0.9375rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style chatInteractionTextCss() = themed(Style("color: #1A1D2E; font-size: 0.9375rem; line-height: 1.45em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #F0F0F0; font-size: 0.9375rem; line-height: 1.45em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style chatInteractionMutedCss() = themed(Style("color: #6B7280; font-size: 0.8125rem; line-height: 1.4em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #7B8EAD; font-size: 0.8125rem; line-height: 1.4em; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style chatInteractionAccentCss() = themed(Style("color: #2563EB; font-size: 0.9375rem; font-weight: 700; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #00D4FF; font-size: 0.9375rem; font-weight: 700; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
 Style chatInteractionDividerCss() = themed(Style("height: 1; width: 100%; background: #E5E7EB"), Style("height: 1; width: 100%; background: rgba(255,255,255,.1)"))
-Style chatInteractionActionCss() = themed(Style("outline: none; display: flex; align-items: center; justify-content: center; width: 100%; min-height: 42; box-sizing: border-box; padding: 10px 14px; background: #FFFFFF; color: #4B5563; border: 1px solid #D1D5DB; border-radius: 999; font-size: 0.875rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; display: flex; align-items: center; justify-content: center; width: 100%; min-height: 42; box-sizing: border-box; padding: 10px 14px; background: #12162A; color: #D4D9E5; border: 1px solid rgba(255,255,255,.2); border-radius: 999; font-size: 0.875rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
-Style chatInteractionDetailCss() = themed(Style("outline: none; display: flex; align-items: center; width: 100%; padding: 8px 0; background: transparent; color: #2563EB; border: none; font-size: 0.875rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; display: flex; align-items: center; width: 100%; padding: 8px 0; background: transparent; color: #00D4FF; border: none; font-size: 0.875rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style chatInteractionActionCss() = themed(Style("outline: none; display: flex; align-items: center; justify-content: center; width: 100%; min-height: 44; box-sizing: border-box; padding: 10px 14px; background: #FFFFFF; color: #1A1D2E; border: 1px solid #E5E7EB; border-radius: 999; font-size: 0.875rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; display: flex; align-items: center; justify-content: center; width: 100%; min-height: 44; box-sizing: border-box; padding: 10px 14px; background: #12162A; color: #F0F0F0; border: 1px solid rgba(255,255,255,.1); border-radius: 999; font-size: 0.875rem; font-weight: 600; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style chatInteractionDetailCss() = themed(Style("outline: none; display: flex; align-items: center; width: 100%; padding: 6px 0; background: transparent; color: #2563EB; border: none; font-size: 0.875rem; font-weight: 600; text-align: left; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; display: flex; align-items: center; width: 100%; padding: 6px 0; background: transparent; color: #00D4FF; border: none; font-size: 0.875rem; font-weight: 600; text-align: left; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style chatEduBoxCss()          = themed(Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: flex-start; gap: 10; width: 100%; box-sizing: border-box; padding: 12px 14px; background: #F1F3F9; border: 1px solid #E5E7EB; border-radius: 12"), Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: flex-start; gap: 10; width: 100%; box-sizing: border-box; padding: 12px 14px; background: #1A1F3A; border: 1px solid rgba(0,212,255,.18); border-radius: 12"))
+Style chatFlowBoxCss()         = themed(Style("display: flex; flex-direction: column; gap: 8; width: 100%; box-sizing: border-box; padding: 12px 14px; background: #F8F9FC; border: 1px solid #E5E7EB; border-radius: 12"), Style("display: flex; flex-direction: column; gap: 8; width: 100%; box-sizing: border-box; padding: 12px 14px; background: #1A1F3A; border: 1px solid rgba(255,255,255,.1); border-radius: 12"))
+Style chatDotInCss()           = themed(Style("width: 8; height: 8; min-width: 8; border-radius: 4; background: #10B981"), Style("width: 8; height: 8; min-width: 8; border-radius: 4; background: #00E5A0"))
+Style chatDotOutCss()          = themed(Style("width: 8; height: 8; min-width: 8; border-radius: 4; background: #2563EB"), Style("width: 8; height: 8; min-width: 8; border-radius: 4; background: #00D4FF"))
+Style chatCheckOnCss()         = themed(Style("display: flex; align-items: center; justify-content: center; width: 20; height: 20; min-width: 20; box-sizing: border-box; border-radius: 6; background: #2563EB; border: 1.5px solid #2563EB; padding: 0; flex-shrink: 0"), Style("display: flex; align-items: center; justify-content: center; width: 20; height: 20; min-width: 20; box-sizing: border-box; border-radius: 6; background: #00D4FF; border: 1.5px solid #00D4FF; padding: 0; flex-shrink: 0"))
+Style chatCheckOffCss()        = themed(Style("display: flex; align-items: center; justify-content: center; width: 20; height: 20; min-width: 20; box-sizing: border-box; border-radius: 6; background: #FFFFFF; border: 1.5px solid #9CA3AF; padding: 0; flex-shrink: 0"), Style("display: flex; align-items: center; justify-content: center; width: 20; height: 20; min-width: 20; box-sizing: border-box; border-radius: 6; background: rgba(255,255,255,.04); border: 1.5px solid #4A5578; padding: 0; flex-shrink: 0"))
+Style chatCheckRowCss()        = themed(Style("outline: none; display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 12; width: 100%; box-sizing: border-box; padding: 12px 14px; background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12; cursor: pointer"), Style("outline: none; display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 12; width: 100%; box-sizing: border-box; padding: 12px 14px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); border-radius: 12; cursor: pointer"))
+Style chatCheckRowSelectedCss() = themed(Style("outline: none; display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 12; width: 100%; box-sizing: border-box; padding: 12px 14px; background: rgba(37,99,235,.08); border: 1px solid #2563EB; border-radius: 12; cursor: pointer"), Style("outline: none; display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 12; width: 100%; box-sizing: border-box; padding: 12px 14px; background: rgba(0,212,255,.08); border: 1px solid #00D4FF; border-radius: 12; cursor: pointer"))
+Style chatSelectAllRowCss()    = themed(Style("outline: none; display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 10; width: 100%; box-sizing: border-box; padding: 10px 14px; background: #F8F9FC; border: 1px solid #E5E7EB; border-radius: 10; cursor: pointer"), Style("outline: none; display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 10; width: 100%; box-sizing: border-box; padding: 10px 14px; background: #1A1F3A; border: 1px solid rgba(255,255,255,.1); border-radius: 10; cursor: pointer"))
+Style chatNoticeBoxCss()       = themed(Style("display: flex; flex-direction: column; gap: 8; width: 100%; box-sizing: border-box; padding: 12px 14px; background: #F8F9FC; border: 1px solid #F59E0B; border-radius: 12"), Style("display: flex; flex-direction: column; gap: 8; width: 100%; box-sizing: border-box; padding: 12px 14px; background: #1A1F3A; border: 1px solid #FFB800; border-radius: 12"))
+Style chatSuccessBoxCss()      = themed(Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 10; width: 100%; box-sizing: border-box; padding: 12px 14px; background: #F8F9FC; border: 1px solid #10B981; border-radius: 12"), Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 10; width: 100%; box-sizing: border-box; padding: 12px 14px; background: #1A1F3A; border: 1px solid #00E5A0; border-radius: 12"))
+Style chatFooterRowCss()       = Style("display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10; width: 100%")
+Style chatFooterBtnsCss()      = Style("display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 10; width: 100%")
+Style chatHalfBtnWrapCss()     = Style("flex: 1 1 180; min-width: 140")
 
 View newChatTopButton(Window w) {
     var txt = Label("Novo chat")
@@ -126,73 +146,124 @@ View interactionFlowLine(String label, String amount, String id) {
     return row
 }
 
-View chatInteractionCard(Window w) {
-    val interaction = json.decode<ChatInteractionResponse>(ChatUi.interactionJson)
-    var content: List<View> = listOf()
-    var brand = Row(listOf(brandMark(24, "chat-interaction-brand"), Label("Organiza AI")))
-    brand.setId("chat-interaction-header")
-    brand.setStyle(chatInteractionHeaderCss())
-    content.add(brand)
-    var headline = interaction.headline()
-    if (headline != null && headline.trim() != "") {
-        var title = Label(headline)
-        title.setStyle(chatInteractionTitleCss())
-        content.add(title)
+View checkboxSquare(Bool isChecked) {
+    var box = View(screenStyle())
+    if (isChecked) {
+        box.setStyle(chatCheckOnCss())
+        box.bind(icon("check", 13, "onaccent"))
+    } else {
+        box.setStyle(chatCheckOffCss())
     }
-    val summary = interaction.summary()
-    if (summary != null) {
-        var period = summary.periodLabel()
-        if (period != "") {
-            var label = Label("Resumo de " + period.toLowerCase())
-            label.setStyle(chatInteractionTextCss())
-            content.add(label)
-        }
-        for (var entry in summary.entradas()) {
-            content.add(interactionFlowLine(entry.label(), entry.formattedAmount(), "chat-flow-in-" + entry.label()))
-        }
-        for (var expense in summary.saidas()) {
-            content.add(interactionFlowLine(expense.label(), expense.formattedAmount(), "chat-flow-out-" + expense.label()))
-        }
-        if (summary.pendingText() != "") {
-            var pending = Label(summary.pendingText())
-            pending.setStyle(chatInteractionTextCss())
-            content.add(pending)
+    return box
+}
+
+View selectableCheckRow(Window w, String domId, Bool isChecked, String titleText, String? subtitleText, String rightAmount, () -> Void onToggle) {
+    var cb = checkboxSquare(isChecked)
+    var titleLbl = Label(titleText)
+    titleLbl.setStyle(chatInteractionTextCss())
+    var textParts: List<View> = listOf()
+    textParts.add(titleLbl)
+    if (subtitleText != null) {
+        val subTrim = subtitleText.trim()
+        if (subTrim != "") {
+            var subLbl = Label(subTrim)
+            subLbl.setStyle(chatInteractionMutedCss())
+            textParts.add(subLbl)
         }
     }
-    var tip = interaction.educationTip()
-    if (tip != null && tip.trim() != "") {
-        var note = Label("💡 " + tip)
-        note.setStyle(chatInteractionTextCss())
-        content.add(note)
+    var textCol = Column(textParts)
+    textCol.setStyle(Style("display: flex; flex-direction: column; gap: 2; min-width: 0; flex: 1 1 0"))
+    var leftRow = Row(listOf(cb, textCol))
+    leftRow.setStyle(Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 12; min-width: 0; flex: 1 1 0"))
+    var amtLbl = Label(rightAmount)
+    amtLbl.setStyle(chatInteractionAccentCss())
+    var outer = Row(listOf(leftRow, amtLbl))
+    var card = View(screenStyle())
+    card.setId(domId)
+    card.setAccessibleName(titleText + " " + rightAmount)
+    if (isChecked) {
+        card.setStyle(chatCheckRowSelectedCss())
+    } else {
+        card.setStyle(chatCheckRowCss())
     }
-    var divider = View(screenStyle())
-    divider.setStyle(chatInteractionDividerCss())
-    content.add(divider)
-    var prompt = Label(interaction.prompt())
-    prompt.setStyle(chatInteractionTitleCss())
-    content.add(prompt)
+    card.bind(outer)
+    card.on("click", onToggle)
+    return card
+}
+
+View flowSummaryGroupBox(String boxId, String titleText, String totalText, List<ChatFlowLineItemResponse> lines, String emptyText, Bool isEntradas) {
+    var dot = View(screenStyle())
+    if (isEntradas) {
+        dot.setStyle(chatDotInCss())
+    } else {
+        dot.setStyle(chatDotOutCss())
+    }
+    var tLbl = Label(titleText)
+    tLbl.setStyle(chatInteractionSubTitleCss())
+    var headLeft = Row(listOf(dot, tLbl))
+    headLeft.setStyle(Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 8"))
+    var totalLbl = Label(totalText)
+    totalLbl.setStyle(chatInteractionAccentCss())
+    var head = Row(listOf(headLeft, totalLbl))
+    head.setStyle(Style("display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 10; width: 100%"))
+    var boxItems: List<View> = listOf()
+    boxItems.add(head)
+    if (lines.size == 0) {
+        var emp = Label(emptyText)
+        emp.setStyle(chatInteractionMutedCss())
+        boxItems.add(emp)
+    } else {
+        for (var line in lines) {
+            boxItems.add(interactionFlowLine(line.label(), line.formattedAmount(), boxId + "-" + line.label()))
+        }
+    }
+    var box = Column(boxItems)
+    box.setId(boxId)
+    box.setStyle(chatFlowBoxCss())
+    return box
+}
+
+View categoryChoiceChip(Window w, String code, String labelText) {
+    val active = ChatUi.reviewCategory == code
+    val catCode = code
+    return chip(labelText, "chat-rev-cat-" + code, active, () -> {
+        ChatUi.reviewCategory = catCode
+        ChatUi.interactionError = ""
+        mountScreen(w)
+    })
+}
+
+addDetailsBlock(Window w, List<View> content, ChatInteractionResponse interaction) {
     val details = interaction.details()
-    if (details != null) {
-        var detailLabel = "Detalhes da análise"
-        if (ChatUi.interactionDetailsOpen) { detailLabel = "Ocultar detalhes da análise" }
-        var detailButton = Button(detailLabel, () -> {
-            ChatUi.interactionDetailsOpen = !ChatUi.interactionDetailsOpen
-            mountScreen(w)
-        })
-        detailButton.setId("chat-interaction-details-toggle")
-        detailButton.setStyle(chatInteractionDetailCss())
-        content.add(detailButton)
-        if (ChatUi.interactionDetailsOpen) {
-            for (var item in details.items()) {
-                var detail = Label(item)
-                detail.setStyle(chatInteractionTextCss())
-                content.add(detail)
-            }
+    if (details == null) {
+        return
+    }
+    var detailLabel = details.title()
+    if (detailLabel.trim() == "") {
+        detailLabel = "Detalhes da análise"
+    }
+    if (ChatUi.interactionDetailsOpen) {
+        detailLabel = "Ocultar detalhes da análise"
+    }
+    var detailButton = Button(detailLabel, () -> {
+        ChatUi.interactionDetailsOpen = !ChatUi.interactionDetailsOpen
+        mountScreen(w)
+    })
+    detailButton.setId("chat-interaction-details-toggle")
+    detailButton.setStyle(chatInteractionDetailCss())
+    content.add(detailButton)
+    if (ChatUi.interactionDetailsOpen) {
+        for (var item in details.items()) {
+            var detail = Label(item)
+            detail.setStyle(chatInteractionMutedCss())
+            content.add(detail)
         }
     }
+}
+
+addOptionButtons(Window w, List<View> content, List<ChatInteractionOptionResponse> options) {
     var actions: List<View> = listOf()
-    var index = 0
-    for (var option in interaction.options()) {
+    for (var option in options) {
         val actionPrompt = option.label()
         var label = actionPrompt
         if (option.badgeCount() > 0) {
@@ -203,7 +274,6 @@ View chatInteractionCard(Window w) {
         action.setAccessibleName(option.label())
         action.setStyle(chatInteractionActionCss())
         actions.add(action)
-        index = index + 1
     }
     if (actions.size > 0) {
         var stack = Column(actions)
@@ -211,6 +281,452 @@ View chatInteractionCard(Window w) {
         stack.setStyle(Style("display: flex; flex-direction: column; gap: 8; width: 100%"))
         content.add(stack)
     }
+}
+
+View chatInteractionCard(Window w) {
+    val interaction = json.decode<ChatInteractionResponse>(ChatUi.interactionJson)
+    val kind = interaction.type()
+    var content: List<View> = listOf()
+
+    // Cabeçalho alinhado ao template oficial + Design System
+    var brandTitle = Label("Organiza AI")
+    brandTitle.setStyle(chatInteractionSubTitleCss())
+    var brandLeft = Row(listOf(brandMark(24, "chat-interaction-brand"), brandTitle))
+    brandLeft.setId("chat-interaction-brand-row")
+    brandLeft.setStyle(chatInteractionBrandRowCss())
+    var headerParts: List<View> = listOf()
+    headerParts.add(brandLeft)
+    var periodTagText = ""
+    val pLabel = interaction.periodLabel()
+    val sumForPeriod = interaction.summary()
+    if (pLabel != null) {
+        val pTrim = pLabel.trim()
+        if (pTrim != "") {
+            periodTagText = pTrim
+        }
+    }
+    if (periodTagText == "" && sumForPeriod != null) {
+        val sPeriod = sumForPeriod.periodLabel()
+        if (sPeriod.trim() != "") {
+            periodTagText = sPeriod.trim()
+        }
+    }
+    if (periodTagText != "") {
+        var pPill = Label(periodTagText)
+        pPill.setId("chat-interaction-period")
+        pPill.setStyle(chatPeriodBadgeCss())
+        headerParts.add(pPill)
+    }
+    var headerRow = Row(headerParts)
+    headerRow.setId("chat-interaction-header")
+    headerRow.setStyle(chatInteractionHeaderCss())
+    content.add(headerRow)
+
+    var headline = interaction.headline()
+    if (headline != null) {
+        val hTrim = headline.trim()
+        if (hTrim != "") {
+            var title = Label(hTrim)
+            title.setId("chat-interaction-headline")
+            title.setStyle(chatInteractionTitleCss())
+            content.add(title)
+        }
+    }
+
+    var tip = interaction.educationTip()
+    if (tip != null) {
+        val tTrim = tip.trim()
+        if (tTrim != "") {
+            var tipLbl = Label(tTrim)
+            tipLbl.setStyle(chatInteractionTextCss())
+            var eduRow = Row(listOf(icon("pulse", 16, "accent"), tipLbl))
+            eduRow.setId("chat-interaction-edu")
+            eduRow.setStyle(chatEduBoxCss())
+            content.add(eduRow)
+        }
+    }
+
+    if (kind == "INVOICE_REGISTER") {
+        ensureSelectionInitialized(interaction)
+        val items = interaction.items()
+        val selectedCount = countSelectedItems(items)
+        val allChecked = items.size > 0 && selectedCount == items.size
+
+        var prompt = Label(interaction.prompt())
+        prompt.setStyle(chatInteractionSubTitleCss())
+        content.add(prompt)
+
+        if (items.size > 0) {
+            var masterCb = checkboxSquare(allChecked)
+            var masterText = Label("Selecionar todos os lançamentos")
+            masterText.setStyle(chatInteractionTextCss())
+            var masterLeft = Row(listOf(masterCb, masterText))
+            masterLeft.setStyle(Style("display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 10"))
+            var countBadge = Label(String.valueOf(selectedCount) + " de " + String.valueOf(items.size))
+            countBadge.setStyle(chatInteractionMutedCss())
+            var masterInner = Row(listOf(masterLeft, countBadge))
+            var selectAllRow = View(screenStyle())
+            selectAllRow.setId("chat-reg-select-all")
+            selectAllRow.setAccessibleName("Selecionar todos os lançamentos")
+            selectAllRow.setStyle(chatSelectAllRowCss())
+            selectAllRow.bind(masterInner)
+            selectAllRow.on("click", () -> {
+                if (allChecked) {
+                    clearAllItems()
+                } else {
+                    selectAllItems(items)
+                }
+                mountScreen(w)
+            })
+            content.add(selectAllRow)
+
+            var itemsColParts: List<View> = listOf()
+            for (var item in items) {
+                val itemId = item.id()
+                val checked = isSelectedItem(itemId)
+                itemsColParts.add(selectableCheckRow(
+                    w,
+                    "chat-reg-item-" + itemId,
+                    checked,
+                    item.label(),
+                    item.subtitle(),
+                    item.formattedAmount(),
+                    () -> {
+                        toggleSelectedItem(itemId)
+                        mountScreen(w)
+                    }
+                ))
+            }
+            var itemsCol = Column(itemsColParts)
+            itemsCol.setId("chat-reg-items")
+            itemsCol.setStyle(Style("display: flex; flex-direction: column; gap: 8; width: 100%"))
+            content.add(itemsCol)
+        } else {
+            var emptyItems = Label("Nenhuma despesa pronta para registrar encontrada neste arquivo.")
+            emptyItems.setStyle(chatInteractionMutedCss())
+            content.add(emptyItems)
+        }
+
+        val summary = interaction.summary()
+        if (summary != null && summary.pendingCount() > 0) {
+            var warnTitle = Label("Existem " + String.valueOf(summary.pendingCount()) + " movimentação(ões) aguardando revisão (" + summary.pendingText() + "). Elas não são salvas sem você escolher a caixinha.")
+            warnTitle.setStyle(chatInteractionTextCss())
+            var revBtn = Button("Revisar movimentações (" + String.valueOf(summary.pendingCount()) + ")", () -> submitInteractionPrompt(w, "Revisar movimentações"))
+            revBtn.setId("chat-reg-review-shortcut")
+            revBtn.setStyle(chatInteractionActionCss())
+            var noticeBox = Column(listOf(warnTitle, revBtn))
+            noticeBox.setId("chat-reg-pending-notice")
+            noticeBox.setStyle(chatNoticeBoxCss())
+            content.add(noticeBox)
+        }
+
+        val rawPer = interaction.period()
+        var hasPeriod = false
+        if (rawPer != null) {
+            if (rawPer.trim() != "") {
+                hasPeriod = true
+            }
+        }
+        if (!hasPeriod) {
+            var periodField = textField("Mês e ano da fatura (AAAA-MM, ex.: 2026-11)", "text", "chat-reg-period-input")
+            periodField.setText(ChatUi.manualPeriod)
+            periodField.on("input", () -> {
+                ChatUi.manualPeriod = periodField.text()
+                ChatUi.interactionError = ""
+            })
+            content.add(labeled("Confirmar período da fatura", periodField))
+        }
+
+        addDetailsBlock(w, content, interaction)
+
+        if (ChatUi.interactionError != "") {
+            content.add(errorBanner(ChatUi.interactionError))
+        }
+
+        var divider = View(screenStyle())
+        divider.setStyle(chatInteractionDividerCss())
+        content.add(divider)
+
+        var totalLabel = Label("Total selecionado para caixinhas")
+        totalLabel.setStyle(chatInteractionMutedCss())
+        var totalValue = Label(brlFromCents(sumSelectedCents(items)) + " (" + String.valueOf(selectedCount) + " selecionados)")
+        totalValue.setId("chat-reg-total")
+        totalValue.setStyle(chatInteractionAccentCss())
+        var totalRow = Row(listOf(totalLabel, totalValue))
+        totalRow.setStyle(chatFooterRowCss())
+        content.add(totalRow)
+
+        var cancelBtn = secondaryButton("Cancelar", "chat-reg-cancel", false, () -> {
+            cancelInteractiveTemplate()
+            mountScreen(w)
+        })
+        if (ChatUi.interactionBusy) {
+            cancelBtn.setDisabled(true)
+        }
+        var confirmLabel = "Confirmar e registrar fatura"
+        if (ChatUi.interactionBusy) {
+            confirmLabel = "Salvando nas caixinhas..."
+        }
+        var confirmBtn = primaryButton(confirmLabel, "chat-reg-confirm", false, () -> {
+            spawn {
+                confirmInvoiceRegistrationAction(interaction)
+                invalidateFinancialCaches()
+                mountScreen(w)
+            }
+        })
+        if (ChatUi.interactionBusy) {
+            confirmBtn.setDisabled(true)
+        }
+        var cancelWrap = View(screenStyle())
+        cancelWrap.setStyle(chatHalfBtnWrapCss())
+        cancelWrap.bind(cancelBtn)
+        var confirmWrap = View(screenStyle())
+        confirmWrap.setStyle(chatHalfBtnWrapCss())
+        confirmWrap.bind(confirmBtn)
+        var footerBtns = Row(listOf(cancelWrap, confirmWrap))
+        footerBtns.setId("chat-reg-actions")
+        footerBtns.setStyle(chatFooterBtnsCss())
+        content.add(footerBtns)
+    } else if (kind == "REVIEW_CHECKLIST") {
+        ensureSelectionInitialized(interaction)
+        val items = interaction.items()
+
+        var prompt = Label(interaction.prompt())
+        prompt.setStyle(chatInteractionSubTitleCss())
+        content.add(prompt)
+
+        if (items.size > 0) {
+            var revItemsColParts: List<View> = listOf()
+            for (var item in items) {
+                val itemId = item.id()
+                revItemsColParts.add(selectableCheckRow(
+                    w,
+                    "chat-rev-item-" + itemId,
+                    isSelectedItem(itemId),
+                    item.label(),
+                    item.subtitle(),
+                    item.formattedAmount(),
+                    () -> {
+                        toggleSelectedItem(itemId)
+                        mountScreen(w)
+                    }
+                ))
+            }
+            var revCol = Column(revItemsColParts)
+            revCol.setId("chat-rev-items")
+            revCol.setStyle(Style("display: flex; flex-direction: column; gap: 8; width: 100%"))
+            content.add(revCol)
+
+            var chipsList: List<View> = listOf(
+                categoryChoiceChip(w, "FOOD", "Alimentação"),
+                categoryChoiceChip(w, "GROCERIES", "Mercado"),
+                categoryChoiceChip(w, "TRANSPORT", "Transporte"),
+                categoryChoiceChip(w, "HOUSING", "Moradia"),
+                categoryChoiceChip(w, "HEALTH", "Saúde"),
+                categoryChoiceChip(w, "LEISURE", "Lazer"),
+                categoryChoiceChip(w, "EDUCATION", "Educação"),
+                categoryChoiceChip(w, "OTHER", "Outros")
+            )
+            content.add(chipGroup("Escolher caixinha de destino", chipsList, "chat-rev-category-chips"))
+        } else {
+            var nonePend = Label("Não há movimentações pendentes aguardando classificação neste documento.")
+            nonePend.setStyle(chatInteractionMutedCss())
+            content.add(nonePend)
+        }
+
+        addDetailsBlock(w, content, interaction)
+
+        if (ChatUi.interactionError != "") {
+            content.add(errorBanner(ChatUi.interactionError))
+        }
+
+        var revDivider = View(screenStyle())
+        revDivider.setStyle(chatInteractionDividerCss())
+        content.add(revDivider)
+
+        var cancelRevBtn = secondaryButton("Cancelar", "chat-rev-cancel", false, () -> {
+            cancelInteractiveTemplate()
+            mountScreen(w)
+        })
+        var cancelRevWrap = View(screenStyle())
+        cancelRevWrap.setStyle(chatHalfBtnWrapCss())
+        cancelRevWrap.bind(cancelRevBtn)
+
+        var confirmRevLabel = "Classificar selecionadas"
+        if (ChatUi.interactionBusy) {
+            confirmRevLabel = "Organizando..."
+        }
+        var confirmRevBtn = primaryButton(confirmRevLabel, "chat-rev-confirm", false, () -> {
+            spawn {
+                reclassifySelectedItemsAction(interaction)
+                invalidateFinancialCaches()
+                mountScreen(w)
+            }
+        })
+        if (ChatUi.interactionBusy || items.size == 0) {
+            confirmRevBtn.setDisabled(true)
+        }
+        var confirmRevWrap = View(screenStyle())
+        confirmRevWrap.setStyle(chatHalfBtnWrapCss())
+        confirmRevWrap.bind(confirmRevBtn)
+
+        var revBtns = Row(listOf(cancelRevWrap, confirmRevWrap))
+        revBtns.setId("chat-rev-actions")
+        revBtns.setStyle(chatFooterBtnsCss())
+        content.add(revBtns)
+
+        var gotoRegBtn = Button("Ir para registro da fatura", () -> submitInteractionPrompt(w, "Organizar caixinhas"))
+        gotoRegBtn.setId("chat-rev-goto-register")
+        gotoRegBtn.setStyle(chatInteractionActionCss())
+        content.add(gotoRegBtn)
+    } else if (kind == "VIEW_CATEGORIES") {
+        ensureSelectionInitialized(interaction)
+        val items = interaction.items()
+        val selectedCount = countSelectedItems(items)
+
+        var prompt = Label(interaction.prompt())
+        prompt.setStyle(chatInteractionSubTitleCss())
+        content.add(prompt)
+
+        if (items.size > 0) {
+            var catParts: List<View> = listOf()
+            for (var item in items) {
+                val catId = item.id()
+                catParts.add(selectableCheckRow(
+                    w,
+                    "chat-cat-item-" + catId,
+                    isSelectedItem(catId),
+                    item.label(),
+                    item.subtitle(),
+                    item.formattedAmount(),
+                    () -> {
+                        toggleSelectedItem(catId)
+                        mountScreen(w)
+                    }
+                ))
+            }
+            var catCol = Column(catParts)
+            catCol.setId("chat-cat-items")
+            catCol.setStyle(Style("display: flex; flex-direction: column; gap: 8; width: 100%"))
+            content.add(catCol)
+        }
+
+        addDetailsBlock(w, content, interaction)
+
+        if (ChatUi.interactionError != "") {
+            content.add(errorBanner(ChatUi.interactionError))
+        }
+        if (ChatUi.interactionInfo != "") {
+            var infoLbl = Label(ChatUi.interactionInfo)
+            infoLbl.setStyle(chatInteractionTextCss())
+            var infoBox = Row(listOf(icon("check", 16, "success"), infoLbl))
+            infoBox.setId("chat-cat-info")
+            infoBox.setStyle(chatSuccessBoxCss())
+            content.add(infoBox)
+        }
+
+        var catDivider = View(screenStyle())
+        catDivider.setStyle(chatInteractionDividerCss())
+        content.add(catDivider)
+
+        var catSumLeft = Label("Categorias marcadas")
+        catSumLeft.setStyle(chatInteractionMutedCss())
+        var catSumRight = Label(brlFromCents(sumSelectedCents(items)) + " (" + String.valueOf(selectedCount) + " de " + String.valueOf(items.size) + ")")
+        catSumRight.setId("chat-cat-total")
+        catSumRight.setStyle(chatInteractionAccentCss())
+        var catSumRow = Row(listOf(catSumLeft, catSumRight))
+        catSumRow.setStyle(chatFooterRowCss())
+        content.add(catSumRow)
+
+        var cancelCatBtn = secondaryButton("Fechar", "chat-cat-cancel", false, () -> {
+            cancelInteractiveTemplate()
+            mountScreen(w)
+        })
+        var cancelCatWrap = View(screenStyle())
+        cancelCatWrap.setStyle(chatHalfBtnWrapCss())
+        cancelCatWrap.bind(cancelCatBtn)
+
+        var applyCatBtn = primaryButton("Ver categorias selecionadas", "chat-cat-apply", false, () -> {
+            spawn {
+                applyViewCategoriesAction(interaction)
+                mountScreen(w)
+            }
+        })
+        if (ChatUi.interactionBusy) {
+            applyCatBtn.setDisabled(true)
+        }
+        var applyCatWrap = View(screenStyle())
+        applyCatWrap.setStyle(chatHalfBtnWrapCss())
+        applyCatWrap.bind(applyCatBtn)
+
+        var catBtns = Row(listOf(cancelCatWrap, applyCatWrap))
+        catBtns.setStyle(chatFooterBtnsCss())
+        content.add(catBtns)
+
+        var regCta = Button("Registrar gastos nas caixinhas", () -> submitInteractionPrompt(w, "Organizar caixinhas"))
+        regCta.setId("chat-cat-goto-register")
+        regCta.setStyle(chatInteractionActionCss())
+        content.add(regCta)
+
+        var dashCta = Button("Abrir Dashboard", () -> navigateTo(w, "dashboard"))
+        dashCta.setId("chat-cat-goto-dash")
+        dashCta.setStyle(chatInteractionActionCss())
+        content.add(dashCta)
+    } else if (kind == "INVOICE_REGISTERED") {
+        val summary = interaction.summary()
+        var okText = "Gastos confirmados e salvos nas suas caixinhas."
+        if (summary != null) {
+            okText = "Registrado: " + summary.totalOutflowsText() + " em " + String.valueOf(summary.outflowsCount()) + " lançamento(s) confirmado(s)."
+        }
+        var okLbl = Label(okText)
+        okLbl.setStyle(chatInteractionTextCss())
+        var okBox = Row(listOf(icon("check", 16, "success"), okLbl))
+        okBox.setId("chat-registered-box")
+        okBox.setStyle(chatSuccessBoxCss())
+        content.add(okBox)
+
+        var regDivider = View(screenStyle())
+        regDivider.setStyle(chatInteractionDividerCss())
+        content.add(regDivider)
+
+        var regPrompt = Label(interaction.prompt())
+        regPrompt.setStyle(chatInteractionSubTitleCss())
+        content.add(regPrompt)
+
+        var dashBtn = primaryButton("Abrir Dashboard", "chat-registered-dash", false, () -> navigateTo(w, "dashboard"))
+        var envsBtn = secondaryButton("Ver minhas Caixinhas", "chat-registered-envs", false, () -> navigateTo(w, "envelopes"))
+        var dWrap = View(screenStyle())
+        dWrap.setStyle(chatHalfBtnWrapCss())
+        dWrap.bind(dashBtn)
+        var eWrap = View(screenStyle())
+        eWrap.setStyle(chatHalfBtnWrapCss())
+        eWrap.bind(envsBtn)
+        var regRow = Row(listOf(dWrap, eWrap))
+        regRow.setId("chat-registered-actions")
+        regRow.setStyle(chatFooterBtnsCss())
+        content.add(regRow)
+    } else {
+        // SINGLE_ACTION — Resumo Entradas / Saídas + Detalhes + 4 botões principais
+        val summary = interaction.summary()
+        if (summary != null) {
+            content.add(flowSummaryGroupBox("chat-entradas-box", "Entradas", summary.totalInflowsText(), summary.entradas(), "Nenhuma entrada neste extrato", true))
+            content.add(flowSummaryGroupBox("chat-saidas-box", "Saídas", summary.totalOutflowsText(), summary.saidas(), "Nenhuma saída identificada ainda", false))
+            if (summary.pendingText() != "" && summary.pendingCount() > 0) {
+                var pending = Label("Aguardando sua revisão: " + summary.pendingText() + " (" + String.valueOf(summary.pendingCount()) + ")")
+                pending.setStyle(chatInteractionMutedCss())
+                content.add(pending)
+            }
+        }
+        addDetailsBlock(w, content, interaction)
+        var divider = View(screenStyle())
+        divider.setStyle(chatInteractionDividerCss())
+        content.add(divider)
+        var prompt = Label(interaction.prompt())
+        prompt.setStyle(chatInteractionSubTitleCss())
+        content.add(prompt)
+        addOptionButtons(w, content, interaction.options())
+    }
+
     var card = Column(content)
     card.setId("chat-interaction-card")
     card.setStyle(chatInteractionCardCss())

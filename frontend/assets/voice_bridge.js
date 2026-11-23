@@ -1174,7 +1174,12 @@
     const msg = (userText || "").trim().toLowerCase();
     if (!msg) return;
     if (msg.includes("esse pix foi") || msg.includes("o pix foi") || msg.startsWith("foi ") ||
-        msg === "organizar meus gastos nas caixinhas" || msg === "entender melhor meus gastos" ||
+        msg === "organizar meus gastos nas caixinhas" || msg === "organizar caixinhas" ||
+        msg === "revisar movimentações" || msg === "revisar movimentacoes" ||
+        msg === "ver meus gastos" || msg === "entender meus gastos" ||
+        msg === "entender melhor meus gastos" ||
+        msg === "registrar fatura" || msg === "registrar minha fatura" ||
+        msg === "quero registrar" || msg === "quero registrar a fatura" ||
         msg === "corrigir uma informação" || msg === "corrigir uma informacao") {
       return;
     }

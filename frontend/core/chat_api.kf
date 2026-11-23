@@ -3,6 +3,7 @@ package core
 import kof.json
 import core.app_state
 import core.api_client
+import core.format
 
 // =============================================================================
 // Batch 3 (F2) — API e estado da Tela 10 Organiza AI (chat)
@@ -28,8 +29,16 @@ record ChatInteractionOptionResponse(String id, String label, String action, Str
 record ChatFlowLineItemResponse(String label, String formattedAmount, Int count, String? note)
 record ChatInteractionSummaryResponse(String periodLabel, String totalInflowsText, Int inflowsCount, List<ChatFlowLineItemResponse> entradas, String totalOutflowsText, Int outflowsCount, List<ChatFlowLineItemResponse> saidas, String pendingText, Int pendingCount)
 record ChatInteractionDetailsResponse(String title, List<String> items)
-record ChatInteractionResponse(String type, String prompt, String? documentId, String? period, String? periodLabel, String? headline, String? educationTip, ChatInteractionSummaryResponse? summary, ChatInteractionDetailsResponse? details, List<ChatInteractionOptionResponse> options)
+record ChatSelectableItemResponse(String id, String label, String groupLabel, String categoryCode, String formattedAmount, Int amountCents, String? subtitle, Bool defaultSelected)
+record ChatInteractionResponse(String type, String prompt, String? documentId, String? period, String? periodLabel, String? headline, String? educationTip, ChatInteractionSummaryResponse? summary, ChatInteractionDetailsResponse? details, List<ChatInteractionOptionResponse> options, List<ChatSelectableItemResponse> items)
 record ChatReplyResponse(String reply, Int messagesUsed, Int messagesLimit, ChatInteractionResponse? interaction)
+record ConfirmImportParamsRequest(String selectedIds, String period)
+record ConfirmImportDispatchRequest(String intent, List<String> attachmentIds, ConfirmImportParamsRequest parameters)
+record QueryCategoriesParamsRequest(String period, String categories)
+record QueryCategoriesDispatchRequest(String intent, QueryCategoriesParamsRequest parameters)
+record IntentDispatchApiResponse(String status, String intent, String correlationId, Bool requiresConfirmation, String message, String? dataJson)
+record ReclassifyTxRequest(List<String> txIds, String category)
+record LatestDocSyncResponse(Bool hasDocument, String? status, ChatInteractionResponse? interaction)
 record ChatHistoryItem(String role, String content, String createdAt)
 record ChatHistoryPage(List<ChatHistoryItem> items, Int page, Int limit, Int offset, Bool hasNext)
 record ChatApiError(String error)
@@ -53,6 +62,14 @@ class ChatUi {
     // Payload tipado da última resposta interativa; renderizado em KOF UI.
     static String interactionJson = ""
     static Bool interactionDetailsOpen = false
+    // Estado local dos checkboxes dos templates interativos (nenhuma gravação antes de Confirmar).
+    static String selectedIds = ""
+    static String selectionInitKey = ""
+    static String reviewCategory = "FOOD"
+    static String manualPeriod = ""
+    static Bool interactionBusy = false
+    static String interactionError = ""
+    static String interactionInfo = ""
     // Contador "N de M"; usageKnown = false até a 1ª leitura. limit -1 = Pro.
     static Bool usageKnown = false
     static Int used = 0
@@ -107,6 +124,302 @@ removePendingChatMessage(String text) {
     }
 }
 
+String brlFromCents(Int cents) = brl(cents.toDouble() / 100.0)
+
+resetInteractionSelectionState() {
+    ChatUi.selectedIds = ""
+    ChatUi.selectionInitKey = ""
+    ChatUi.manualPeriod = ""
+    ChatUi.interactionBusy = false
+    ChatUi.interactionError = ""
+    ChatUi.interactionInfo = ""
+}
+
+ensureSelectionInitialized(ChatInteractionResponse interaction) {
+    var docId = ""
+    val rawDocId = interaction.documentId()
+    if (rawDocId != null) {
+        docId = rawDocId
+    }
+    val key = interaction.type() + ":" + docId + ":" + String.valueOf(interaction.items().size)
+    if (ChatUi.selectionInitKey == key) {
+        return
+    }
+    ChatUi.selectionInitKey = key
+    ChatUi.interactionError = ""
+    ChatUi.interactionInfo = ""
+    var buf = ""
+    for (var item in interaction.items()) {
+        if (item.defaultSelected()) {
+            buf = buf + "|" + item.id() + "|"
+        }
+    }
+    ChatUi.selectedIds = buf
+    val p = interaction.period()
+    if (p != null) {
+        ChatUi.manualPeriod = p
+    } else {
+        ChatUi.manualPeriod = ""
+    }
+}
+
+Bool isSelectedItem(String id) {
+    if (id == "") {
+        return false
+    }
+    return ChatUi.selectedIds.contains("|" + id + "|")
+}
+
+toggleSelectedItem(String id) {
+    if (id == "") {
+        return
+    }
+    val tok = "|" + id + "|"
+    if (ChatUi.selectedIds.contains(tok)) {
+        ChatUi.selectedIds = ChatUi.selectedIds.replace(tok, "")
+    } else {
+        ChatUi.selectedIds = ChatUi.selectedIds + tok
+    }
+    ChatUi.interactionError = ""
+}
+
+selectAllItems(List<ChatSelectableItemResponse> items) {
+    var buf = ""
+    for (var item in items) {
+        buf = buf + "|" + item.id() + "|"
+    }
+    ChatUi.selectedIds = buf
+    ChatUi.interactionError = ""
+}
+
+clearAllItems() {
+    ChatUi.selectedIds = ""
+    ChatUi.interactionError = ""
+}
+
+Int countSelectedItems(List<ChatSelectableItemResponse> items) {
+    var count = 0
+    for (var item in items) {
+        if (isSelectedItem(item.id())) {
+            count = count + 1
+        }
+    }
+    return count
+}
+
+Int sumSelectedCents(List<ChatSelectableItemResponse> items) {
+    var total = 0
+    for (var item in items) {
+        if (isSelectedItem(item.id())) {
+            total = total + item.amountCents()
+        }
+    }
+    return total
+}
+
+List<String> collectSelectedIds(List<ChatSelectableItemResponse> items) {
+    var out: List<String> = listOf()
+    for (var item in items) {
+        if (isSelectedItem(item.id())) {
+            out.add(item.id())
+        }
+    }
+    return out
+}
+
+String joinComma(List<String> ids) {
+    var out = ""
+    for (var id in ids) {
+        if (out != "") {
+            out = out + ","
+        }
+        out = out + id
+    }
+    return out
+}
+
+cancelInteractiveTemplate() {
+    ChatUi.interactionJson = ""
+    ChatUi.interactionDetailsOpen = false
+    resetInteractionSelectionState()
+}
+
+confirmInvoiceRegistrationAction(ChatInteractionResponse interaction) {
+    if (ChatUi.interactionBusy) {
+        return
+    }
+    val chosen = collectSelectedIds(interaction.items())
+    if (chosen.size == 0) {
+        ChatUi.interactionError = "Selecione pelo menos um lançamento para registrar a fatura."
+        return
+    }
+    var docId = ""
+    val rawDocId = interaction.documentId()
+    if (rawDocId != null) {
+        docId = rawDocId.trim()
+    }
+    if (docId == "") {
+        ChatUi.interactionError = "Não encontrei a referência deste documento. Envie a fatura novamente."
+        return
+    }
+    var period = ""
+    val rawPeriod = interaction.period()
+    if (rawPeriod != null) {
+        val pTrim = rawPeriod.trim()
+        if (pTrim != "") {
+            period = pTrim
+        }
+    }
+    if (period == "" && ChatUi.manualPeriod.trim() != "") {
+        period = ChatUi.manualPeriod.trim()
+    }
+    if (period == "") {
+        ChatUi.interactionError = "Informe o mês e o ano da fatura (ex.: 2026-11) antes de confirmar."
+        return
+    }
+    val totalCents = sumSelectedCents(interaction.items())
+    ChatUi.interactionBusy = true
+    ChatUi.interactionError = ""
+    ChatUi.interactionInfo = ""
+    try {
+        val reqJson = json.encode(ConfirmImportDispatchRequest(
+            "CONFIRMAR_IMPORTACAO",
+            listOf(docId),
+            ConfirmImportParamsRequest(joinComma(chosen), period)
+        ))
+        val body = apiPost("/api/intents/dispatch", reqJson)
+        if (isApiError(body)) {
+            ChatUi.interactionError = json.decode<ChatApiError>(body).error()
+        } else {
+            val res = json.decode<IntentDispatchApiResponse>(body)
+            if (res.status() == "NEEDS_PERIOD") {
+                ChatUi.interactionError = res.message()
+            } else if (res.status() == "ERROR" || res.status() == "UNAUTHORIZED") {
+                ChatUi.interactionError = res.message()
+            } else {
+                chatAppend("ASSISTANT", chatEncode(res.message()))
+                var periodLabel = period
+                val pl = interaction.periodLabel()
+                if (pl != null) {
+                    val plTrim = pl.trim()
+                    if (plTrim != "") {
+                        periodLabel = plTrim
+                    }
+                }
+                val regSummary = ChatInteractionSummaryResponse(
+                    periodLabel,
+                    "R$ 0,00",
+                    0,
+                    listOf(),
+                    brlFromCents(totalCents),
+                    chosen.size,
+                    listOf(ChatFlowLineItemResponse("Despesas registradas", brlFromCents(totalCents), chosen.size, "Salvas nas suas caixinhas sem duplicidade")),
+                    "R$ 0,00",
+                    0
+                )
+                val regInteraction = ChatInteractionResponse(
+                    "INVOICE_REGISTERED",
+                    "O que você quer acompanhar agora?",
+                    docId,
+                    period,
+                    periodLabel,
+                    "Fatura registrada nas suas caixinhas!",
+                    "Com seus gastos confirmados no mês certo, suas caixinhas e o painel Gastos Calculados passam a refletir seu orçamento real.",
+                    regSummary,
+                    null,
+                    listOf(),
+                    listOf()
+                )
+                resetInteractionSelectionState()
+                ChatUi.interactionDetailsOpen = false
+                ChatUi.interactionJson = json.encode(regInteraction)
+            }
+        }
+    } catch (String e) {
+        ChatUi.interactionError = chatOfflineText()
+    }
+    ChatUi.interactionBusy = false
+}
+
+reclassifySelectedItemsAction(ChatInteractionResponse interaction) {
+    if (ChatUi.interactionBusy) {
+        return
+    }
+    val chosen = collectSelectedIds(interaction.items())
+    if (chosen.size == 0) {
+        ChatUi.interactionError = "Selecione pelo menos uma movimentação pendente para classificar."
+        return
+    }
+    var docId = ""
+    val rawDocId = interaction.documentId()
+    if (rawDocId != null) {
+        docId = rawDocId.trim()
+    }
+    if (docId == "") {
+        ChatUi.interactionError = "Não encontrei a referência deste documento."
+        return
+    }
+    ChatUi.interactionBusy = true
+    ChatUi.interactionError = ""
+    ChatUi.interactionInfo = ""
+    try {
+        val body = apiPost("/api/documents/" + docId + "/reclassify", json.encode(ReclassifyTxRequest(chosen, ChatUi.reviewCategory)))
+        if (isApiError(body)) {
+            ChatUi.interactionError = json.decode<ChatApiError>(body).error()
+        } else {
+            ChatUi.interactionBusy = false
+            sendChatMessage("Organizar caixinhas")
+            return
+        }
+    } catch (String e) {
+        ChatUi.interactionError = chatOfflineText()
+    }
+    ChatUi.interactionBusy = false
+}
+
+applyViewCategoriesAction(ChatInteractionResponse interaction) {
+    if (ChatUi.interactionBusy) {
+        return
+    }
+    val chosen = collectSelectedIds(interaction.items())
+    if (chosen.size == 0) {
+        ChatUi.interactionError = "Selecione pelo menos uma categoria para visualizar."
+        return
+    }
+    var period = "month"
+    val rawPeriod = interaction.period()
+    if (rawPeriod != null) {
+        val pTrim = rawPeriod.trim()
+        if (pTrim != "") {
+            period = pTrim
+        }
+    }
+    val totalSelected = brlFromCents(sumSelectedCents(interaction.items()))
+    ChatUi.interactionBusy = true
+    ChatUi.interactionError = ""
+    ChatUi.interactionInfo = ""
+    try {
+        val reqJson = json.encode(QueryCategoriesDispatchRequest(
+            "CONSULTAR_GASTOS",
+            QueryCategoriesParamsRequest(period, joinComma(chosen))
+        ))
+        val body = apiPost("/api/intents/dispatch", reqJson)
+        if (isApiError(body)) {
+            ChatUi.interactionError = json.decode<ChatApiError>(body).error()
+        } else {
+            val res = json.decode<IntentDispatchApiResponse>(body)
+            if (res.status() == "ERROR" || res.status() == "UNAUTHORIZED") {
+                ChatUi.interactionError = res.message()
+            } else {
+                ChatUi.interactionInfo = res.message() + " Na prévia da fatura selecionada: " + totalSelected + " em " + String.valueOf(chosen.size) + " categoria(s)."
+            }
+        }
+    } catch (String e) {
+        ChatUi.interactionError = chatOfflineText()
+    }
+    ChatUi.interactionBusy = false
+}
+
 // Carrega contador + página 1 do histórico (uma vez por sessão/token).
 loadChat() {
     ChatUi.loading = true
@@ -122,6 +435,7 @@ loadChat() {
     ChatUi.limit = 0
     ChatUi.voiceEnabled = false
     ChatUi.pro = false
+    resetInteractionSelectionState()
     try {
         val tierBody = apiGet("/api/users/tier-status")
         if (isApiError(tierBody)) {
@@ -144,6 +458,17 @@ loadChat() {
             ChatState.messages = ""
             for (var item in page.items()) {
                 chatAppend(item.role(), chatEncode(item.content()))
+            }
+            if (ChatState.messages != "" && ChatUi.interactionJson == "") {
+                val latestBody = apiGet("/api/documents/latest")
+                if (!isApiError(latestBody) && latestBody.contains("\"hasDocument\":true")) {
+                    val latest = json.decode<LatestDocSyncResponse>(latestBody)
+                    val latestStatus = latest.status()
+                    val latestInteraction = latest.interaction()
+                    if (latest.hasDocument() && latestStatus == "EM_REVISAO" && latestInteraction != null) {
+                        ChatUi.interactionJson = json.encode(latestInteraction)
+                    }
+                }
             }
         }
     } catch (String e) {
@@ -179,6 +504,7 @@ sendChatMessage(String text) {
             chatAppend("ASSISTANT", chatEncode(r.reply()))
             ChatUi.interactionJson = ""
             ChatUi.interactionDetailsOpen = false
+            resetInteractionSelectionState()
             if (r.interaction() != null) {
                 ChatUi.interactionJson = json.encode(r.interaction())
             }
@@ -218,6 +544,7 @@ clearChatHistory() {
         ChatState.messages = ""
         ChatUi.interactionJson = ""
         ChatUi.interactionDetailsOpen = false
+        resetInteractionSelectionState()
         ChatUi.draft = ""
         ChatUi.pending = ""
         ChatUi.pendingQueue = ""
