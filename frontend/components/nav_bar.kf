@@ -194,12 +194,21 @@ Style sidebarFooterFixedCss() = themed(Style("display: flex; flex-direction: col
 Style bottomTabFixedCss()     = themed(Style("display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: space-around; align-items: flex-start; width: 100%; height: 74; flex-shrink: 0; padding-top: 10; box-sizing: border-box; background: #FFFFFF; border-top: 1px solid #E5E7EB"), Style("display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: space-around; align-items: flex-start; width: 100%; height: 74; flex-shrink: 0; padding-top: 10; box-sizing: border-box; background: #12162A; border-top: 1px solid rgba(255,255,255,.1)"))
 
 View buildSidebar(Window w) {
+    return buildSidebarWith(w, null)
+}
+
+// extra: bloco opcional abaixo das rotas (ex.: "Seus chats" na tela do chat).
+View buildSidebarWith(Window w, View? extra) {
     var logo = brandMark(120, "sidebar-logo")
     logo.setStyle(sidebarLogoCss())
-    var nav = Column(listOf(
+    var navItems: List<View> = listOf(
         sidebarItem(w, "dashboard", "Dashboard"),
         sidebarItem(w, "chat", "Organiza AI"),
-        sidebarItem(w, "envelopes", "Caixinhas")))
+        sidebarItem(w, "envelopes", "Caixinhas"))
+    if (extra != null) {
+        navItems.add(extra)
+    }
+    var nav = Column(navItems)
     nav.setStyle(sidebarNavScrollCss())
     var footer = Column(listOf(sidebarItem(w, "settings", "Configurações"), userBlock()))
     footer.setStyle(sidebarFooterFixedCss())

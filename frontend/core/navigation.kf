@@ -267,7 +267,7 @@ View buildDesktopLayout(Window w) {
     main.setId("shell-main")
     main.setStyle(shellMainFixedCss())
     var controls = viewportControlBar(w)
-    var root = Row(listOf(buildSidebar(w), main, controls))
+    var root = Row(listOf(buildSidebarWith(w, chatSidebarExtra(w)), main, controls))
     root.setId("shell")
     root.setStyle(shellFrameDesktopCss())
     return root
