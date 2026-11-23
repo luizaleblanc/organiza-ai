@@ -3778,6 +3778,10 @@ DocumentUploadResponse ingestFinancialDocument(String userId, String fileBase64,
         throw se
     }
 
+    var declaredRange = auditorFaturasDeclaredPeriod(indexedLines)
+    if (declaredRange != "") {
+        warnings.add(DECLARED_PERIOD_PREFIX() + declaredRange)
+    }
     var review = buildImportReview(documentId, sha256, detected, indexedLines, warnings)
     var period = detectStatementPeriod(review.transactions(), indexedLines)
     persistDocumentAndReview(documentId, userId, sha256, filename, period, review)
@@ -3883,7 +3887,50 @@ String documentPeriodFromPdf(ImportReview rev) {
     return ""
 }
 
+// =========================================================
+// Subagente auditor-faturas (agents/auditor-faturas.md): período declarado
+// =========================================================
+// Lê o período exatamente como o documento imprime ("Período de 01/11/2026 a
+// 14/11/2026", "01/11/2026 até 14/11/2026", "01/11/2026 - 14/11/2026").
+// Determinístico: só linhas do PDF com "período"/"periodo"/"de ... a ...";
+// nada é inferido. Guardado com o documento em warningsText.
+String DECLARED_PERIOD_PREFIX() = "Período declarado no documento: "
+
+String auditorFaturasDeclaredPeriod(List<IndexedLine> lines) {
+    for (var ln in lines) {
+        var text = normalizeOcrText(ln.text())
+        var low = text.toLowerCase()
+        var dates: List<String> = listOf()
+        for (var raw in text.split(" ")) {
+            var tok = raw.replace(",", "").replace(";", "").replace(".", "").replace("(", "").replace(")", "").trim()
+            if (tok.matches("[0-3][0-9]/[0-1][0-9]/[0-9]{4}")) {
+                dates.add(tok)
+            }
+        }
+        var hasPeriodWord = low.contains("período") || low.contains("periodo") || low.contains(" até ") || low.contains(" ate ") || (low.contains(" a ") && dates.size == 2)
+        if (hasPeriodWord && dates.size >= 2) {
+            return dates.get(0) + " a " + dates.get(1)
+        }
+    }
+    return ""
+}
+
+String declaredPeriodFromReview(ImportReview rev) {
+    for (var w in rev.warnings()) {
+        if (w.startsWith(DECLARED_PERIOD_PREFIX())) {
+            return w.substring(DECLARED_PERIOD_PREFIX().length()).trim()
+        }
+    }
+    return ""
+}
+
 String statementRangeLabel(ImportReview rev, String statementPeriod, String fallback) {
+    // 1º: o período impresso na fatura (subagente auditor-faturas).
+    var declared = declaredPeriodFromReview(rev)
+    if (declared != "") {
+        return "Período de " + declared
+    }
+    // 2º (documento sem período impresso): menor e maior data das transações.
     var minIso = ""
     var maxIso = ""
     for (var ctx in rev.transactions()) {

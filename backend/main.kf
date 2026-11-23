@@ -573,7 +573,7 @@ main() {
             return status(400, invalidBody())
         }
         try {
-            var res = reclassifyDocumentTransactions(currentUserId(), docId, req.txIds(), req.category())
+            var res = reclassifyDocumentTransactionsTo(currentUserId(), docId, req.txIds(), req.category(), req.envelopeId())
             setHeader("Content-Type", "application/json; charset=utf-8")
             return json.encode(res)
         } catch (String e) {
