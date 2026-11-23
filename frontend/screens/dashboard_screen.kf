@@ -974,10 +974,264 @@ String dashSubtitle(DashboardResponse? d) {
         return "Prévia do Planejamento"
     }
     if (DashState.period == "year") {
-        return "Prévia do Planejamento · " + d.from.substring(0, 4)
+        return "Seus gastos confirmados · " + d.from.substring(0, 4)
     }
     return "Prévia do Planejamento · " + monthYearFromIso(d.from)
 }
+
+// =============================================================================
+// Aba Ano: personalizada pelos gastos reais do usuário
+// =============================================================================
+// Fonte: GET /api/dashboard/calculated?period=year. Mostra só o que foi
+// confirmado (registros no chat e faturas lidas e aprovadas). Pendências e
+// fluxos que não são gasto ficam em seções próprias, nunca somados ao total.
+// A única conta local é a média por mês com dados, rotulada como tal.
+
+Style yearHeroCss()           = themed(Style("display: flex; flex-direction: column; gap: 8; padding: 24; box-sizing: border-box; width: 100%; background: linear-gradient(135deg, #FFFFFF, #FFFFFF); border: 1px solid rgba(37,99,235,.15); border-radius: 14; min-width: 0; flex-shrink: 0"), Style("display: flex; flex-direction: column; gap: 8; padding: 24; box-sizing: border-box; width: 100%; background: linear-gradient(135deg, #12162A, #1A1F3A); border: 1px solid rgba(0,212,255,.15); border-radius: 14; min-width: 0; flex-shrink: 0"))
+Style yearStatsCss()          = Style("display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12; width: 100%; flex-shrink: 0")
+Style yearStatCss()           = themed(Style("display: flex; flex-direction: column; gap: 6; padding: 16; box-sizing: border-box; background: #FFFFFF; border: 1px solid rgba(0,0,0,.06); border-radius: 14; min-width: 0"), Style("display: flex; flex-direction: column; gap: 6; padding: 16; box-sizing: border-box; background: #12162A; border: 1px solid rgba(255,255,255,.06); border-radius: 14; min-width: 0"))
+Style yearStatPendingCss()    = themed(Style("display: flex; flex-direction: column; gap: 6; padding: 16; box-sizing: border-box; background: rgba(245,158,11,.06); border: 1px solid rgba(245,158,11,.35); border-radius: 14; min-width: 0"), Style("display: flex; flex-direction: column; gap: 6; padding: 16; box-sizing: border-box; background: rgba(255,184,0,.06); border: 1px solid rgba(255,184,0,.3); border-radius: 14; min-width: 0"))
+Style yearStatValueCss()      = themed(Style("color: #1A1D2E; font-size: 1.25rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #F0F0F0; font-size: 1.25rem; font-weight: 700; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style yearRowCss()            = Style("display: flex; flex-direction: column; gap: 6; width: 100%; padding: 6px 0")
+Style yearDocRowCss()         = Style("display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 10; width: 100%; padding: 8px 0")
+Style yearMonthNameCss()      = themed(Style("color: #1A1D2E; font-size: 0.8125rem; font-weight: 600; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #F0F0F0; font-size: 0.8125rem; font-weight: 600; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style yearMutedCss()          = themed(Style("color: #6B7280; font-size: 0.8125rem; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #7B8EAD; font-size: 0.8125rem; margin: 0; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style yearTrackCss()          = themed(Style("display: flex; flex-direction: row; height: 10; width: 100%; border-radius: 5; background: #E5E7EB; overflow: hidden"), Style("display: flex; flex-direction: row; height: 10; width: 100%; border-radius: 5; background: rgba(255,255,255,.08); overflow: hidden"))
+Style yearFillCss()           = themed(Style("height: 10; border-radius: 5; background: #2563EB; min-width: 0"), Style("height: 10; border-radius: 5; background: linear-gradient(90deg, #00D4FF, #0066FF); min-width: 0"))
+Style yearFillTopCss()        = themed(Style("height: 10; border-radius: 5; background: #10B981; min-width: 0"), Style("height: 10; border-radius: 5; background: linear-gradient(90deg, #00E5A0, #009966); min-width: 0"))
+Style yearChipCss()           = themed(Style("color: #92400E; background: rgba(245,158,11,.12); font-size: 0.6875rem; font-weight: 700; padding: 3px 8px; border-radius: 999; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("color: #FFB800; background: rgba(255,184,0,.12); font-size: 0.6875rem; font-weight: 700; padding: 3px 8px; border-radius: 999; margin: 0; white-space: nowrap; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+Style yearTipCss()            = themed(Style("display: flex; flex-direction: column; gap: 4; padding: 12; border-radius: 10; background: rgba(37,99,235,.06); box-sizing: border-box; width: 100%"), Style("display: flex; flex-direction: column; gap: 4; padding: 12; border-radius: 10; background: rgba(0,212,255,.06); box-sizing: border-box; width: 100%"))
+Style yearCtaCss()            = themed(Style("outline: none; min-height: 44; background: #2563EB; color: #FFFFFF; border: none; border-radius: 10; padding: 10px 18px; align-self: flex-start; font-size: 0.875rem; font-weight: 700; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"), Style("outline: none; min-height: 44; background: #00D4FF; color: #06121C; border: none; border-radius: 10; padding: 10px 18px; align-self: flex-start; font-size: 0.875rem; font-weight: 700; cursor: pointer; font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"))
+
+String countText(Int n, String one, String many) {
+    if (n == 1) { return "1 " + one }
+    return String.valueOf(n) + " " + many
+}
+
+String pctText(Double p) = String.valueOf(math.roundTo(p, 0) as Int) + "%"
+
+View yearCard(String id, String title, List<View> body) {
+    var titleCss = cardTitleMobileCss()
+    var cardCss = dashCardMobileCss()
+    if (AppState.isDesktop) {
+        titleCss = cardTitleCss()
+        cardCss = dashCardCss()
+    }
+    var all: List<View> = listOf()
+    all.add(idLabel(title, id + "-title", titleCss))
+    for (var v in body) { all.add(v) }
+    var card = Column(all)
+    card.setId(id)
+    card.setStyle(cardCss)
+    return card
+}
+
+// Barra horizontal proporcional (fill + resto por flex-basis, como a legenda do donut).
+View yearBar(Double value, Double maxValue, Bool highlight) {
+    var pct = 0
+    if (maxValue > 0.0) { pct = math.roundTo(value * 100.0 / maxValue, 0) as Int }
+    if (value > 0.0 && pct < 2) { pct = 2 }
+    if (pct > 100) { pct = 100 }
+    var fill = View(screenStyle())
+    if (highlight) { fill.setStyle(yearFillTopCss()) } else { fill.setStyle(yearFillCss()) }
+    fill.setFlexBasis(pct * 100)
+    var rest = View(screenStyle())
+    rest.setStyle(sliceRestCss())
+    rest.setFlexBasis((100 - pct) * 100)
+    var track = Row(listOf(fill, rest))
+    track.setStyle(yearTrackCss())
+    return track
+}
+
+View yearStat(String key, String label, String value, String sub, Style cardCss) {
+    var col = Column(listOf(
+        idLabel(label, "year-stat-" + key + "-label", tileLabelCss()),
+        idLabel(value, "year-stat-" + key + "-value", yearStatValueCss()),
+        idLabel(sub, "year-stat-" + key + "-sub", tileSubCss())))
+    col.setId("year-stat-" + key)
+    col.setStyle(cardCss)
+    return col
+}
+
+Int monthsWithData(YearDashboard y) {
+    var n = 0
+    for (var p in y.evolution) {
+        if (p.total > 0.0) { n = n + 1 }
+    }
+    return n
+}
+
+View yearHero(YearDashboard y, String year) {
+    var col = Column(listOf(
+        idLabel("Gastos confirmados em " + year, "year-total-label", tileLabelCss()),
+        idLabel(brl(y.confirmedTotal), "year-total-value", tileAccentCss()),
+        idLabel(countText(y.confirmedCount, "lançamento confirmado", "lançamentos confirmados") + " · registros do chat e faturas aprovadas", "year-total-sub", tileSubCss())))
+    col.setId("year-hero")
+    col.setStyle(yearHeroCss())
+    return col
+}
+
+View yearStats(YearDashboard y) {
+    var stats: List<View> = listOf()
+    val months = monthsWithData(y)
+    if (months > 0) {
+        stats.add(yearStat("avg", "Média por mês", brl(math.roundTo(y.confirmedTotal / (months * 1.0), 2)), "Considerando " + countText(months, "mês com gastos", "meses com gastos"), yearStatCss()))
+    }
+    val top = y.topCategory
+    if (top != null) {
+        stats.add(yearStat("top", "Onde mais gastou", top.label, brl(top.total) + " · " + pctText(top.percentage) + " do ano", yearStatCss()))
+    }
+    if (y.flows.pendingReviewCount > 0) {
+        stats.add(yearStat("pending", "Aguardando sua revisão", brl(y.flows.pendingReviewTotal), countText(y.flows.pendingReviewCount, "movimentação fora do total", "movimentações fora do total"), yearStatPendingCss()))
+    }
+    var grid = Column(stats)
+    grid.setId("year-stats")
+    grid.setStyle(yearStatsCss())
+    return grid
+}
+
+View yearEvolutionCard(YearDashboard y, String year) {
+    var maxV = 0.0
+    var bestKey = ""
+    for (var p in y.evolution) {
+        if (p.total > maxV) {
+            maxV = p.total
+            bestKey = p.key
+        }
+    }
+    var body: List<View> = listOf()
+    body.add(idLabel("Quanto saiu de verdade em cada mês. O mês de maior gasto aparece em verde.", "year-evolution-sub", tileSubCss()))
+    var m = 1
+    while (m <= 12) {
+        var mm = String.valueOf(m)
+        if (m < 10) { mm = "0" + mm }
+        val key = year + "-" + mm
+        var total = 0.0
+        var count = 0
+        for (var p in y.evolution) {
+            if (p.key == key) {
+                total = p.total
+                count = p.count
+            }
+        }
+        var valueText = "Sem registros"
+        var valueCss = yearMutedCss()
+        if (count > 0) {
+            valueText = brl(total)
+            valueCss = txValueCss()
+        }
+        var head = Row(listOf(idLabel(monthName(m), "year-month-" + mm + "-name", yearMonthNameCss()), idLabel(valueText, "year-month-" + mm + "-value", valueCss)))
+        head.setStyle(rowBetweenCss())
+        var row = Column(listOf(head, yearBar(total, maxV, key == bestKey && count > 0)))
+        row.setId("year-month-" + mm)
+        row.setStyle(yearRowCss())
+        body.add(row)
+        m = m + 1
+    }
+    return yearCard("year-evolution", "Mês a mês", body)
+}
+
+View yearCategoriesCard(YearDashboard y) {
+    var maxV = 0.0
+    for (var c in y.categories) {
+        if (c.total > maxV) { maxV = c.total }
+    }
+    var body: List<View> = listOf()
+    var i = 0
+    for (var c in y.categories) {
+        if (i < 8) {
+            var head = Row(listOf(
+                idLabel(c.label, "year-cat-" + i + "-name", yearMonthNameCss()),
+                idLabel(brl(c.total) + " · " + pctText(c.percentage), "year-cat-" + i + "-value", txValueCss())))
+            head.setStyle(rowBetweenCss())
+            var row = Column(listOf(head, yearBar(c.total, maxV, i == 0), idLabel(countText(c.count, "lançamento", "lançamentos"), "year-cat-" + i + "-count", yearMutedCss())))
+            row.setId("year-cat-" + i)
+            row.setStyle(yearRowCss())
+            body.add(row)
+        }
+        i = i + 1
+    }
+    if (body.size == 0) {
+        body.add(idLabel("Nenhuma categoria confirmada neste ano.", "year-cat-empty", tileSubCss()))
+    }
+    return yearCard("year-categories", "Para onde foi seu dinheiro", body)
+}
+
+View yearDocumentsCard(YearDashboard y, String year) {
+    var body: List<View> = listOf()
+    for (var mi in y.availableMonths) {
+        if (mi.key.startsWith(year)) {
+            var parts: List<View> = listOf()
+            parts.add(idLabel(mi.label, "year-doc-" + mi.key + "-name", yearMonthNameCss()))
+            parts.add(idLabel(countText(mi.confirmedCount, "confirmado", "confirmados"), "year-doc-" + mi.key + "-ok", yearMutedCss()))
+            if (mi.pendingCount > 0) {
+                parts.add(idLabel(countText(mi.pendingCount, "pendente", "pendentes"), "year-doc-" + mi.key + "-pending", yearChipCss()))
+            }
+            var row = Row(parts)
+            row.setId("year-doc-" + mi.key)
+            row.setStyle(yearDocRowCss())
+            body.add(row)
+        }
+    }
+    if (body.size == 0) {
+        body.add(idLabel("Nenhum mês com registros ainda.", "year-doc-empty", tileSubCss()))
+    }
+    val f = y.flows
+    var outside: List<View> = listOf()
+    outside.add(idLabel("Não entram no total de gastos", "year-flows-title", tileLabelCss()))
+    if (f.billPaymentsCount > 0) {
+        outside.add(idLabel("Pagamentos de fatura: " + brl(f.billPaymentsTotal) + " (" + countText(f.billPaymentsCount, "operação", "operações") + ")", "year-flows-bill", tileSubCss()))
+    }
+    if (f.creditOperationsCount > 0) {
+        outside.add(idLabel("Operações de crédito: " + brl(f.creditOperationsTotal) + " (" + countText(f.creditOperationsCount, "operação", "operações") + ")", "year-flows-credit", tileSubCss()))
+    }
+    if (f.internalTransfersCount > 0) {
+        outside.add(idLabel("Transferências entre suas contas: " + brl(f.internalTransfersTotal) + " (" + countText(f.internalTransfersCount, "operação", "operações") + ")", "year-flows-internal", tileSubCss()))
+    }
+    if (outside.size > 1) {
+        outside.add(idLabel("💡 Pagar a fatura não é um gasto novo: as compras já foram contadas quando aconteceram. Separar evita contar o mesmo dinheiro duas vezes.", "year-flows-tip", distExplainLineCss()))
+        var tip = Column(outside)
+        tip.setId("year-flows")
+        tip.setStyle(yearTipCss())
+        body.add(tip)
+    }
+    return yearCard("year-documents", "Meses e faturas lidos pelo Organiza AI", body)
+}
+
+View yearEmpty(Window w, String year) {
+    var cta = Button("Registrar gastos no chat", () -> navigateTo(w, "chat"))
+    cta.setId("year-empty-cta")
+    cta.setStyle(yearCtaCss())
+    var body: List<View> = listOf()
+    body.add(idLabel("Esta aba mostra só o que você confirmou: gastos contados ao Organiza AI e faturas lidas e aprovadas. Ainda não há nada confirmado neste ano.", "year-empty-text", distExplainLineCss()))
+    body.add(idLabel("Você pode digitar ou falar um gasto, ou enviar uma fatura em PDF ou foto. Nada é salvo sem a sua confirmação.", "year-empty-hint", tileSubCss()))
+    body.add(cta)
+    return yearCard("year-empty", "Seu " + year + " ainda está em branco", body)
+}
+
+List<View> yearSections(Window w) {
+    var out: List<View> = listOf()
+    val y = yearDashboardData()
+    if (y == null) {
+        out.add(idLabel("Carregando seus gastos do ano…", "year-loading", captionCss()))
+        return out
+    }
+    var year = y.rangeStart
+    if (year.length >= 4) { year = year.substring(0, 4) }
+    if (y.confirmedCount == 0 && y.flows.pendingReviewCount == 0) {
+        out.add(yearEmpty(w, year))
+        return out
+    }
+    out.add(yearHero(y, year))
+    out.add(yearStats(y))
+    var grid = Column(listOf(yearEvolutionCard(y, year), yearCategoriesCard(y)))
+    grid.setId("dash-cards")
+    if (AppState.isDesktop) { grid.setStyle(dashGridG2Css()) } else { grid.setStyle(dashMobileStackCss()) }
+    out.add(grid)
+    out.add(yearDocumentsCard(y, year))
+    return out
+}
+
 
 // ---------------------------------------------------------------- tela
 

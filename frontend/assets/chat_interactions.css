@@ -826,7 +826,8 @@
 
 /* Valores financeiros: números tabulares, sem truncar. */
 [id^="tile-"][id$="-value"], [id^="bar-val-"], [id^="calendar-day-forecast-"],
-[id^="tx-"][id$="-value"], #chat-reg-total, #chat-cat-total {
+[id^="tx-"][id$="-value"], #chat-reg-total, #chat-cat-total,
+[id^="year-stat-"][id$="-value"], #year-total-value, [id^="year-month-"][id$="-value"], [id^="year-cat-"][id$="-value"] {
   font-variant-numeric: tabular-nums;
 }
 
